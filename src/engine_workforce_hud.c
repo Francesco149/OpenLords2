@@ -15,6 +15,7 @@
 #include "io.h"                    /* io_read_file_at */
 #include "gfx_globals.h"            /* the staged cursor / glyph dims the backdrop walk reads */
 #include "gfx_paint.h"              /* gfx_paint_canvas_pixels/width */
+#include "gfx_wrap.h"              /* the standings lines */
 #include "gfx_sprite_render.h"     /* gfx_sprite_render, gfx_sprite_render_
                                        opaque_from_blob, gfx_sprite_render_
                                        set_blob, gfx_sprite_seal_draw */
@@ -92,33 +93,54 @@ static const int k_workforce_row_xy[8][2] = {
 
 /* ─── Runtime state ──────────────────────────────────────────────────────── */
 
-/* Icon-grid output: 8 categories x 25 cells.  engine_workforce_draw_row
- * reads g_workforce_grid only; g_workforce_indicator is computed faithfully
- * (matching retail's DAT_005540aa writes) but has no reader in this
- * closure — see engine_workforce_hud.h's design note. */
-static uint8_t g_workforce_grid[8][25];
-static uint8_t g_workforce_indicator[8][25];
+/* Icon-grid output: 8 categories x 25 cells, read by engine_workforce_draw_row. */
+/* The grid is retail's DAT_005540a0 (8 × 25 bytes, engine_workforce_hud_globals.c); the dual fill's "indicator"
+ * writes land at DAT_005540aa — the SAME grid ten cells on (retail quirk: the indicator overwrites the row's cells
+ * 10..24). */
+#define WF_GRID(cat, cell) g_wf_grid[(cat) * 25 + (cell)]
 
 /* Ancestor-owned seams (see engine_workforce_hud.h). */
-static const uint8_t *g_workforce_icon_sheet;   /* DAT_005530c8 */
-static int             g_workforce_panel_mode;   /* DAT_0053f050 */
+/* the icon sheet: g_wf_icon_sheet (retail DAT_005530c8, read at the draw) */
+/* the panel mode: g_wf_panel_mode (retail DAT_0053f050) */
+/* the standings text (loc grp 0x42 / 0x16) — bound by the caller; NULL loc → skipped */
+static localization_state_t *g_wf_loc;
+static const uint8_t *g_wf_title_font, *g_wf_menu_font, *g_wf_glyph_table;
+static engine_dirty_rect_state_t *g_wf_dirty;     /* FUN_0045270a's rectangle; NULL → no mark */
+static int (*g_wf_ensure_fn)(void);               /* FUN_004997bf (the hybrid host: retail's) */
+static int g_wf_scratch_in_blob;                  /* the vill / villtops sheets + the capture in DAT_004eabec's buffer */
+void engine_workforce_hud_bind_text(localization_state_t *loc, const uint8_t *title_font, const uint8_t *menu_font,
+                                    const uint8_t *glyph_table)
+{
+    g_wf_loc = loc;
+    g_wf_title_font = title_font;
+    g_wf_menu_font = menu_font;
+    g_wf_glyph_table = glyph_table;
+}
+void engine_workforce_hud_bind_retail(engine_dirty_rect_state_t *dirty, int (*ensure)(void))
+{
+    g_wf_dirty = dirty;
+    g_wf_ensure_fn = ensure;
+    g_wf_scratch_in_blob = ensure != NULL;
+}
+
+static const uint8_t *g_wf_system_sheet;   /* &DAT_005bb540 (the seal) */
+void engine_workforce_hud_bind_system_sheet(const uint8_t *sheet) { g_wf_system_sheet = sheet; }
 
 void engine_workforce_hud_bind_icon_sheet(const uint8_t *sheet)
 {
-    g_workforce_icon_sheet = sheet;
+    g_wf_icon_sheet = sheet;
 }
 
 void engine_workforce_hud_set_panel_mode(int mode)
 {
-    g_workforce_panel_mode = mode;
+    g_wf_panel_mode = mode;
 }
 
 /* Scratch sprite-sheet buffers (FUN_004997bf's DAT_0053e918/DAT_005533c4)
  * plus a port-owned buffer for the vill.pl8 sheet + backdrop-capture reuse
  * retail does via the ancestor-owned DAT_004eabec (see engine_workforce_
  * hud.h's design note — no ancestor screen exists yet to own this). */
-static uint8_t *g_workforce_villani1_buf;   /* DAT_0053e918, 250000 B alloc */
-static uint8_t *g_workforce_villani2_buf;   /* DAT_005533c4, 150000 B alloc */
+/* g_wf_villani1 / g_wf_villani2: retail's DAT_0053e918 / DAT_005533c4 (engine_workforce_hud_globals.c) */
 static uint8_t *g_workforce_scratch_buf;    /* port-owned, sized for both
                                               vill.pl8 (120000 B) and the
                                               backdrop capture (120*4*320 =
@@ -135,21 +157,21 @@ int engine_workforce_hud_ensure_buffers(void)
      * verbatim (free-then-realloc has the same net effect without leaking
      * across repeated calls within one process, which retail's raw
      * malloc-over-malloc does not guarantee either way). */
-    free(g_workforce_villani1_buf);
-    free(g_workforce_villani2_buf);
+    free(g_wf_villani1);
+    free(g_wf_villani2);
     free(g_workforce_scratch_buf);
 
-    g_workforce_villani1_buf = malloc(WORKFORCE_VILLANI1_ALLOC);
-    g_workforce_villani2_buf = malloc(WORKFORCE_VILLANI2_ALLOC);
+    g_wf_villani1 = malloc(WORKFORCE_VILLANI1_ALLOC);
+    g_wf_villani2 = malloc(WORKFORCE_VILLANI2_ALLOC);
     g_workforce_scratch_buf  = malloc(WORKFORCE_SCRATCH_ALLOC);
 
-    if (!g_workforce_villani1_buf || !g_workforce_villani2_buf
+    if (!g_wf_villani1 || !g_wf_villani2
         || !g_workforce_scratch_buf) {
-        free(g_workforce_villani1_buf);
-        free(g_workforce_villani2_buf);
+        free(g_wf_villani1);
+        free(g_wf_villani2);
         free(g_workforce_scratch_buf);
-        g_workforce_villani1_buf = NULL;
-        g_workforce_villani2_buf = NULL;
+        g_wf_villani1 = NULL;
+        g_wf_villani2 = NULL;
         g_workforce_scratch_buf  = NULL;
         return 0;
     }
@@ -204,7 +226,7 @@ void engine_workforce_fill_row_linear(int category, int fill_code, int count)
     if (category == 6) fill_code = 2;
     for (int cell = 0; cell < 25; cell++) {
         if (k_workforce_cell_threshold[cell] <= count) {
-            g_workforce_grid[category][cell] = fill_code != 0
+            WF_GRID(category, cell) = fill_code != 0
                 ? (uint8_t)fill_code
                 : (uint8_t)k_workforce_cell_default_color[cell];
         }
@@ -222,17 +244,17 @@ void engine_workforce_fill_row_dual(int category, uint8_t fill_byte,
     if (position < 13 && magnitude < 13) {
         for (int cell = 0; cell < 15; cell++) {
             if (k_workforce_small_pos_threshold[cell] <= position)
-                g_workforce_grid[category][cell] = fill_byte;
+                WF_GRID(category, cell) = fill_byte;
             if (k_workforce_small_mag_threshold[cell] <= magnitude)
-                g_workforce_indicator[category][cell] = indicator_code;
+                WF_GRID(category, cell + 10) = indicator_code;   /* DAT_005540aa[25 · category + cell] */
         }
     } else {
         for (int cell = 0; cell < position; cell++)
-            g_workforce_grid[category][cell] = fill_byte;
+            WF_GRID(category, cell) = fill_byte;
         for (int cell = 24; 24 - magnitude < cell
-                            && g_workforce_grid[category][cell] == 0
+                            && WF_GRID(category, cell) == 0
                             && cell >= 0; cell--) {
-            g_workforce_grid[category][cell] = indicator_code;
+            WF_GRID(category, cell) = indicator_code;
         }
     }
 }
@@ -243,7 +265,7 @@ void engine_workforce_compute_row(int army_key, int category,
     int row = engine_workforce_row_sprite_index(army_key, category);
     int fill_byte = k_workforce_fill_byte[row];
 
-    memset(g_workforce_grid[category], 0, 25);
+    memset(&WF_GRID(category, 0), 0, 25);
 
     if (position == 0 && magnitude == 0) return;
 
@@ -297,32 +319,33 @@ void engine_workforce_compute_rows(int army_key)
 
 const uint8_t *engine_workforce_hud_icon_sheet(void)
 {
-    return g_workforce_icon_sheet;
+    return g_wf_icon_sheet;
 }
 
 uint8_t engine_workforce_hud_grid_cell(int category, int cell)
 {
-    return g_workforce_grid[category][cell];
+    return WF_GRID(category, cell);
 }
 
 void engine_workforce_draw_row(int category, int x_base, int y_base)
 {
-    if (!g_workforce_icon_sheet) return;
+    if (!g_wf_icon_sheet) return;
 
     for (int cell = 0; cell < 25; cell++) {
+        /* The hovered category's highlight (DAT_0053e9a0 = category + 1, its per-cell bytes DAT_00553040): the
+         * next frame. */
         int highlight = 0;
-        /* Retail's hovered-category highlight (DAT_0053e9a0/DAT_00553040):
-         * no producer for either global yet in this port, so this branch
-         * is always false today — kept so a future hover-state chip can
-         * wire it without touching this function again. */
+        if (g_wf_hover_category - 1 == category) {
+            highlight = g_wf_hover_cells[cell] != 0;
+        }
 
-        uint8_t cell_val = g_workforce_grid[category][cell];
+        uint8_t cell_val = WF_GRID(category, cell);
         if (cell_val != 0) {
             int x = x_base + k_workforce_cell_xy[cell][0] - 2;
             int y = y_base + k_workforce_cell_xy[cell][1] - 0x18;
-            gfx_sprite_render_opaque_from_blob(g_workforce_icon_sheet,
-                                               cell_val - 1 + highlight,
-                                               x, y);
+            gfx_sprite_render_from_blob(g_wf_icon_sheet,                  /* FUN_0040a21a */
+                                        cell_val - 1 + highlight,
+                                        x, y);
         }
     }
 }
@@ -339,62 +362,68 @@ void engine_workforce_draw_all_rows(int y_origin)
 void engine_workforce_hud_render(int army_key, uint32_t now_ms,
                                  int full_redraw)
 {
-    if (g_workforce_panel_mode != 1) return;
+    if (g_wf_panel_mode != 1) return;      /* DAT_0053f050 */
 
     if (full_redraw)
-        engine_map_scene_tick(now_ms);
+        engine_map_scene_tick(now_ms);     /* FUN_004050c0 */
 
     io_path_chdir_base();
-    if (!engine_workforce_hud_ensure_buffers()) return;
+    if (g_wf_ensure_fn) {
+        g_wf_ensure_fn();                  /* FUN_004997bf (retail's: its own heap) */
+    } else if (!engine_workforce_hud_ensure_buffers()) {
+        return;
+    }
 
-    io_read_file_at("villani1.pl8", g_workforce_villani1_buf,
-                    WORKFORCE_VILLANI1_ALLOC, 0);
-    io_read_file_at("villani2.pl8", g_workforce_villani2_buf,
-                    WORKFORCE_VILLANI2_ALLOC, 0);
-    /* The icon sheet (DAT_005530c8) is ancestor-bound in retail — see
-     * engine_workforce_hud.h.  Default it to the just-loaded villani1
-     * bank so this render works standalone; a real ancestor screen (once
-     * ported) can still override via engine_workforce_hud_bind_icon_sheet
-     * before calling this. */
-    if (!g_workforce_icon_sheet)
-        g_workforce_icon_sheet = g_workforce_villani1_buf;
-    /* engine_dirty_rect_mark_below_status_bar (FUN_0045270a) — deferred,
-     * see engine_workforce_hud.h. */
+    io_read_file_at("villani1.pl8", g_wf_villani1, 0x249f0, 0);
+    io_read_file_at("villani2.pl8", g_wf_villani2, 0x249f0, 0);
+    /* The icon sheet DAT_005530c8 is the caller's; the standalone defaults it to the villani1 bank. */
+    if (!g_wf_icon_sheet && !g_wf_scratch_in_blob)
+        g_wf_icon_sheet = g_wf_villani1;
+    if (g_wf_dirty)
+        engine_dirty_rect_mark_below_status_bar(g_wf_dirty);   /* FUN_0045270a */
 
-    /* DAT_0053f25c — "standings enabled" (s_slot_0053f25c elsewhere in
-     * this codebase); shifts the whole panel down when on. */
-    int y_origin = (s_slot_0053f25c == 1) ? 0x84 : 0x40;
+    /* DAT_0053f25c — the "standings" option (s_slot_0053f25c); the panel origin DAT_0057c908 moves down with it. */
+    g_wf_y_origin = (s_slot_0053f25c == 1) ? 0x84 : 0x40;
+    int y_origin = g_wf_y_origin;
 
-    io_read_file_at("vill.pl8", g_workforce_scratch_buf, 120000, 0);
-    gfx_sprite_render_set_blob(g_workforce_scratch_buf);
+    /* vill.pl8 → the scratch DAT_004eabec points at (the standalone: its own), drawn as the current sheet. */
+    uint8_t *scratch = g_wf_scratch_in_blob ? (uint8_t *)(uintptr_t)g_gfx_current_blob : g_workforce_scratch_buf;
+    io_read_file_at("vill.pl8", scratch, 0x1d4c0, 0);
+    gfx_sprite_render_set_blob(scratch);
     gfx_sprite_render(0, 0x40, y_origin);
 
-    /* DEFERRED: the "standings" decoration sub-branch (villtops.pl8 +
-     * castle icon + 3 wrapped tax/population numbers) — see
-     * engine_workforce_hud.h. */
+    const uint8_t *rec = ARMY_REC(army_key);
+    if (s_slot_0053f25c == 1) {
+        /* The standings head: the castle kind's banner (villtops.pl8, +0x21b) + its two lines, the tax line. */
+        int kind = rec[0x21b];
+        uint8_t color = kind < 4 ? 0x3f : 0x20;
+        io_read_file_at("villtops.pl8", scratch, 0x25990, 0);
+        gfx_sprite_render(kind, 0x40, 0x40);
+        if (g_wf_loc) {
+            g_gfx_line_x_acc = 0;
+            gfx_wrap_localized_line(g_wf_loc, 0x42, 2 * kind, 0x54, 0x4e, g_wf_title_font, g_wf_glyph_table, color);
+            gfx_wrap_localized_line(g_wf_loc, 0x42, 2 * kind + 1, g_gfx_line_x_acc + 0x54, 0x54, g_wf_menu_font,
+                                    g_wf_glyph_table, color);
+            gfx_wrap_localized_line(g_wf_loc, 0x16, (rd_i32(rec, 0x208) + 100) / 29, 0x54, 0x6e, g_wf_menu_font,
+                                    g_wf_glyph_table, color);
+        }
+    }
 
-    if (ARMY_REC(army_key)[ARMY_FEAT_C_FLAG] != 0)
-        gfx_sprite_render_opaque_from_blob(g_workforce_villani2_buf,
-                                           0x29, 0xac, y_origin + 0xe5);
-    if (ARMY_REC(army_key)[ARMY_FEAT_B_FLAG] != 0)
-        gfx_sprite_render_opaque_from_blob(g_workforce_villani2_buf,
-                                           0x28, 0x4c, y_origin + 0xc);
-    if (ARMY_REC(army_key)[ARMY_FEAT_A_FLAG] != 0)
-        gfx_sprite_render_opaque_from_blob(g_workforce_villani2_buf,
-                                           0x2b, 0x4c, y_origin + 0xc);
+    /* The capital's three feature icons (villani2 sprites 0x29 / 0x28 / 0x2b; FUN_0040a21a). */
+    if (rec[ARMY_FEAT_C_FLAG] != 0)
+        gfx_sprite_render_from_blob(g_wf_villani2, 0x29, 0xac, y_origin + 0xe5);
+    if (rec[ARMY_FEAT_B_FLAG] != 0)
+        gfx_sprite_render_from_blob(g_wf_villani2, 0x28, 0x4c, y_origin + 0xc);
+    if (rec[ARMY_FEAT_A_FLAG] != 0)
+        gfx_sprite_render_from_blob(g_wf_villani2, 0x2b, 0x4c, y_origin + 0xc);
 
     /* stage (0, y_origin) / 0x78 dwords × 0x140 rows, residual stride 0xa0 (480 + 160 = the 640 pitch) */
     g_gfx_cursor_x = 0; g_gfx_cursor_y = y_origin; g_gfx_glyph_w = 0x78; g_gfx_glyph_height_short = 0x140;
-    engine_workforce_hud_capture_backdrop((uint32_t *)g_workforce_scratch_buf, 0xa0);
+    engine_workforce_hud_capture_backdrop((uint32_t *)scratch, 0xa0);
 
     engine_workforce_compute_rows(army_key);
     engine_workforce_draw_all_rows(y_origin);
 
-    /* FUN_0040d1bc — the "click to continue" seal stamp.  Retail reads a
-     * fixed system-sheet global (DAT_005bb540); no bound seam exists yet
-     * in this closure — a future chip should thread the real system
-     * sheet through once this render path gets a live caller wired to
-     * one.  Skipped for now (NULL sheet is a documented no-op per
-     * gfx_sprite_seal_draw's own guard). */
-    gfx_sprite_seal_draw(NULL, 0x180, y_origin + 0x118, 1);
+    /* FUN_0040d1bc(0x180, y + 0x118, 1) — the "click to continue" seal off the system sheet. */
+    gfx_sprite_seal_draw(g_wf_system_sheet, 0x180, y_origin + 0x118, 1);
 }

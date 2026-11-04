@@ -24,31 +24,10 @@
  * override colour when the current stock (an unnamed per-army i32 triple,
  * see ARMY_WF_CUR/MIN/MAX below) falls outside its acceptable band.
  *
- * DEFERRED, not ported here (see engine_workforce_hud.c's render function
- * for the exact skip point):
- *   - The "standings" decoration sub-branch (retail `DAT_0053f25c == 1`):
- *     loads a 4th sheet (villtops.pl8) and draws 2 extra sprites + 3
- *     wrapped-text/number lines (a castle icon + tax/population figures).
- *     Separately gated, not part of the icon-grid itself.
- *   - engine_dirty_rect_mark_below_status_bar's call: needs a live
- *     engine_dirty_rect_state_t this call path doesn't have one of yet
- *     (the hook signature below is a bare army_key, no dirty-rect out-
- *     param) — affects redraw-scheduling only, not pixel output.
- *
- * Retail owns two globals this port can't yet reconstruct a producer for
- * (they belong to the not-yet-ported "manage county" screen these icons
- * are one panel of):
- *   DAT_005530c8  — the "active worker-icon" sprite blob.  Exposed here as
- *                   a bindable seam (engine_workforce_hud_bind_icon_sheet),
- *                   NULL by default (draws become no-ops, matching
- *                   gfx_sprite_render_opaque_from_blob's own NULL-blob
- *                   guard).
- *   DAT_0053f050  — the county-screen's active-tab selector (1 == the
- *                   workforce tab; other values gate unrelated tabs this
- *                   port hasn't touched).  Exposed as
- *                   engine_workforce_hud_set_panel_mode, default 0 (so
- *                   engine_workforce_hud_render no-ops until a caller
- *                   explicitly arms it — mirrors retail's own gate).
+ * The render is retail's whole (the "standings" head with villtops.pl8 and its three lines included); its state
+ * is on retail's layout (the globals below): the icon sheet DAT_005530c8, the tab selector DAT_0053f050 (1 == the
+ * workforce tab; engine_workforce_hud_set_panel_mode), the panel origin DAT_0057c908, the villani banks
+ * DAT_0053e918 / DAT_005533c4, the grid DAT_005540a0.
  *
  * Per-army fields this frontier touches (ARMY_REC(key) = g_per_army_768 +
  * key*0x300, see save.h):
@@ -72,6 +51,27 @@
 #define OPENLORDS2_ENGINE_WORKFORCE_HUD_H
 
 #include <stdint.h>
+
+#include "engine_dirty_rect.h"
+#include "localization.h"
+
+/* --- Retail-layout globals (engine_workforce_hud_globals.c; the hybrid host aliases each at its VA) --- */
+extern uint8_t g_wf_grid[8 * 25];           /* DAT_005540a0 the icon grid (category · 25 + cell) */
+extern const uint8_t *g_wf_icon_sheet;      /* DAT_005530c8 the worker-icon sheet */
+extern uint8_t g_wf_hover_category;         /* DAT_0053e9a0 the hovered category + 1 (0: none) */
+extern uint8_t g_wf_hover_cells[25];        /* DAT_00553040 its per-cell highlight bytes */
+extern int32_t g_wf_panel_mode;             /* DAT_0053f050 the county screen's tab (1: the workforce) */
+extern int32_t g_wf_y_origin;               /* DAT_0057c908 the panel's y origin */
+extern uint8_t *g_wf_villani1;              /* DAT_0053e918 villani1.pl8 (FUN_004997bf allocates it) */
+extern uint8_t *g_wf_villani2;              /* DAT_005533c4 villani2.pl8 */
+
+/* The render's text (the standings lines; NULL loc → skipped), its system sheet (the seal), and — the hybrid host —
+ * the dirty rectangle + retail's buffer allocator FUN_004997bf (bound: the vill.pl8 sheets and the backdrop live in
+ * the buffer DAT_004eabec points at, as retail's). */
+void engine_workforce_hud_bind_text(localization_state_t *loc, const uint8_t *title_font, const uint8_t *menu_font,
+                                    const uint8_t *glyph_table);
+void engine_workforce_hud_bind_system_sheet(const uint8_t *sheet);
+void engine_workforce_hud_bind_retail(engine_dirty_rect_state_t *dirty, int (*ensure)(void));
 
 /* --- Seams the (unported) ancestor "manage county" screen would bind. -- */
 
@@ -123,11 +123,11 @@ void engine_workforce_fill_row_linear(int category, int fill_code, int count);
  * position and a magnitude are nonzero.  category==6 forces both fill
  * bytes to 2 (same quirk as engine_workforce_fill_row_linear).  When both
  * position and magnitude are < 13, uses two small graduated threshold
- * tables (k_workforce_small_pos/mag_threshold) against TWO separate
- * 8x25-cell grids (the "position" grid engine_workforce_draw_row reads,
- * and a second "indicator" grid nothing in this closure reads back —
- * computed faithfully anyway in case a future chip needs it).  Otherwise
- * (either >= 13) falls back to a plain linear fill from each end. */
+ * tables (k_workforce_small_pos/mag_threshold): the position cells at the
+ * row's start, the "indicator" cells at DAT_005540aa — retail's grid
+ * DAT_005540a0 ten cells on (QUIRK: the indicator overwrites the row's
+ * cells 10..24, which the draw then shows).  Otherwise (either >= 13)
+ * falls back to a plain linear fill from each end. */
 void engine_workforce_fill_row_dual(int category, uint8_t fill_byte,
                                     uint8_t indicator_code,
                                     int position, int magnitude);
@@ -171,8 +171,7 @@ const uint8_t *engine_workforce_hud_icon_sheet(void);
  * whether/what to draw.  0 == empty. */
 uint8_t engine_workforce_hud_grid_cell(int category, int cell);
 
-/* Port of FUN_00412143 (core path — see the DEFERRED list above for what's
- * skipped).  `full_redraw` mirrors retail's param_1 (drives one extra
+/* Port of FUN_00412143.  `full_redraw` mirrors retail's param_1 (drives one extra
  * engine_map_scene_tick call when nonzero, matching the one live call
  * site currently known — engine_army_select's workforce_render hook,
  * which always fires with the retail-equivalent of param_1==1).

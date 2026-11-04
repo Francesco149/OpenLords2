@@ -33,6 +33,7 @@
 #include "engine_trade.h"
 #include "engine_armory.h"
 #include "engine_labor.h"
+#include "engine_treasury.h"
 #include "engine_screen_strat.h"
 #include "gfx.h"
 #include "gfx_panel.h"
@@ -68,6 +69,11 @@ A(g_bfr_marker_blob,0x566518) A(g_bfr_marker_player,0x568218) A(g_bfr_marker_adv
 A(g_bfr_type7_blob_low,0x553f6c) A(g_bfr_type7_blob_high,0x522f78) A(g_bfr_creature_blob,0x5530c8)
 A(g_bfr_late_player,0x57c8cc) A(g_bfr_slot_shift,0x566514) A(g_bfr_slot_shift_sign,0x56651c) A(g_bfr_sel_x,0x553f14)
 A(g_bfr_sel_y,0x553f18) A(g_bfr_sel_gate,0x553f84) A(g_bfr_debug_label,0x5bb4a5) A(g_bfr_engine_state,0x52af94)
+/* engine_workforce_hud_globals.c */
+A(g_wf_grid,0x5540a0) A(g_wf_icon_sheet,0x5530c8) A(g_wf_hover_category,0x53e9a0) A(g_wf_hover_cells,0x553040)
+A(g_wf_panel_mode,0x53f050) A(g_wf_y_origin,0x57c908) A(g_wf_villani1,0x53e918) A(g_wf_villani2,0x5533c4)
+/* engine_treasury_globals.c */
+A(g_treasury_buttons,0x4dd928) A(g_treasury_widget_count,0x568468)
 /* engine_trade_globals.c */
 A(g_trade_buttons,0x4dd838) A(g_trade_widget_count,0x553f58)
 /* engine_armory_globals.c */
@@ -200,6 +206,10 @@ static void ed_load(void)
 static void seam_world_dirty(int x, int y, int w, int h)
 { scr_retail_enter(); ((void (__cdecl *)(int, int, int, int))(uintptr_t)0x46c4a3u)(x, y, w, h); scr_retail_leave(); }
 
+/* the workforce render's buffer allocator FUN_004997bf (retail's heap) */
+static int seam_wf_ensure(void)
+{ scr_retail_enter(); int r = ((int (__cdecl *)(void))(uintptr_t)0x4997bfu)(); scr_retail_leave(); return r; }
+
 static void scr_bind(void)
 {
     static int done;
@@ -247,6 +257,9 @@ static void scr_bind(void)
     engine_battlefield_render_bind_world_map_dirty_hook(seam_world_dirty);
     engine_armory_bind_retail_buffers((uint8_t *)(uintptr_t)0x542ce0u);   /* &DAT_00542ce0: the click grid */
     engine_armory_set_dirty_state(engine_territory_dirty_state());
+    engine_workforce_hud_bind_text(&s_loc, FONT_TALL, FONT_DEFAULT, GLYPH_TABLE);
+    engine_workforce_hud_bind_system_sheet(SYSTEM_SHEET);
+    engine_workforce_hud_bind_retail(engine_territory_dirty_state(), seam_wf_ensure);
 }
 #define B(call) do { scr_bind(); call; } while (0)
 #define P(k) ((const uint8_t *)(uintptr_t)a[k])
@@ -437,6 +450,19 @@ static engine_labor_ctx_t *lb_ctx(void)
 }
 #define LB(call) do { engine_labor_ctx_t *lb = lb_ctx(); call; loc_store(); } while (0)
 
+/* ---------------------------------------------------------------- engine_treasury: the context over retail's */
+static engine_treasury_ctx_t s_ts;
+static engine_treasury_ctx_t *ts_ctx(void)
+{
+    scr_bind();
+    s_ts.strategic_block = g_player_strategic_352; s_ts.realm_names = (const uint8_t *)(uintptr_t)0x553d54u;
+    s_ts.local_player = (int)s_slot_0057c8cc; s_ts.chrome = CHROME_SHEET; s_ts.misc_sheet = MISC_SHEET;
+    s_ts.system_sheet = SYSTEM_SHEET; s_ts.title_font = FONT_TALL; s_ts.menu_font = FONT_DEFAULT;
+    s_ts.glyph_table = GLYPH_TABLE; s_ts.glyph_metrics = METRICS_TABLE; s_ts.loc = loc_load();
+    s_ts.dirty = engine_territory_dirty_state();
+    return &s_ts;
+}
+
 #define RH_TABLE RH_HOOKS_SCREENS
 extern hook_t RH_HOOKS_SCREENS[];
 
@@ -467,6 +493,8 @@ enum {
     X_scr_county_population, X_scr_county_happiness, X_scr_county_graph,
     X_scr_labor_castle,
     X_scr_title_filelist, X_scr_title_filelist_content,
+    X_scr_wf_sprite_index, X_scr_wf_fill_linear, X_scr_wf_fill_dual, X_scr_wf_compute_row, X_scr_wf_compute_rows,
+    X_scr_wf_draw_row, X_scr_wf_draw_all, X_scr_wf_render, X_scr_treasury,
 };
 
 /* engine_tooltip.c */
@@ -582,6 +610,18 @@ HOOK_V(scr_labor_castle,        4, LB(engine_labor_castle_block(lb, I(0), I(1), 
 /* engine_title_render.c — the save-file list (page 3; FUN_004149ec's second argument: 1 = the title layout) */
 HOOK_V(scr_title_filelist,      1, TR(engine_title_render_filelist(I(0))))
 HOOK_V(scr_title_filelist_content, 2, TR(engine_title_render_filelist_content(I(0), I(1))))
+/* engine_workforce_hud.c — the icon grid (FUN_00412666 reads its y origin DAT_0057c908) */
+HOOK_R(scr_wf_sprite_index,     2, engine_workforce_row_sprite_index(I(0), I(1)))
+HOOK_V(scr_wf_fill_linear,      3, engine_workforce_fill_row_linear(I(0), I(1), I(2)))
+HOOK_V(scr_wf_fill_dual,        5, engine_workforce_fill_row_dual(I(0), C(1), C(2), I(3), I(4)))
+HOOK_V(scr_wf_compute_row,      4, engine_workforce_compute_row(I(0), I(1), I(2), I(3)))
+HOOK_V(scr_wf_compute_rows,     1, engine_workforce_compute_rows(I(0)))
+HOOK_V(scr_wf_draw_row,         3, B(engine_workforce_draw_row(I(0), I(1), I(2))))
+HOOK_V(scr_wf_draw_all,         0, B(engine_workforce_draw_all_rows((int)G32(0x57c908u))))
+/* FUN_00412143(full redraw): the county is DAT_0057c93c */
+HOOK_V(scr_wf_render,           1, LOC(engine_workforce_hud_render((int)s_slot_0057c93c, 0, I(0))))
+/* engine_treasury.c */
+HOOK_V(scr_treasury,            0, engine_treasury_panel(ts_ctx()); loc_store())
 
 hook_t RH_HOOKS_SCREENS[] = {
     { "scr_tooltip_tick", 0x476e95u, (void *)w_scr_tooltip_tick, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
@@ -679,5 +719,14 @@ hook_t RH_HOOKS_SCREENS[] = {
     { "scr_labor_castle", 0x41dedbu, (void *)w_scr_labor_castle, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
     { "scr_title_filelist", 0x4148e4u, (void *)w_scr_title_filelist, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
     { "scr_title_filelist_content", 0x4149ecu, (void *)w_scr_title_filelist_content, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "scr_wf_sprite_index", 0x4517cau, (void *)w_scr_wf_sprite_index, 0, 0, 0, 0, "", 0, 0 },
+    { "scr_wf_fill_linear", 0x4519cau, (void *)w_scr_wf_fill_linear, 0, 0, 0, 0, "", 0, 0 },
+    { "scr_wf_fill_dual", 0x451a5du, (void *)w_scr_wf_fill_dual, 0, 0, 0, 0, "", 0, 0 },
+    { "scr_wf_compute_row", 0x4518a5u, (void *)w_scr_wf_compute_row, 0, 0, 0, 0, "", 0, 0 },
+    { "scr_wf_compute_rows", 0x45161eu, (void *)w_scr_wf_compute_rows, 0, 0, 0, 0, "", 0, 0 },
+    { "scr_wf_draw_row", 0x4126c9u, (void *)w_scr_wf_draw_row, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "scr_wf_draw_all", 0x412666u, (void *)w_scr_wf_draw_all, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "scr_wf_render", 0x412143u, (void *)w_scr_wf_render, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "scr_treasury", 0x416925u, (void *)w_scr_treasury, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
 };
 const int RH_HOOKS_SCREENS_N = sizeof RH_HOOKS_SCREENS / sizeof *RH_HOOKS_SCREENS;

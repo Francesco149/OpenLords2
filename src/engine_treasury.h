@@ -35,6 +35,7 @@
 #include <stdint.h>
 
 #include "engine_button.h"
+#include "engine_dirty_rect.h"
 #include "localization.h"
 
 /* ── Render context ────────────────────────────────────────────────────
@@ -54,7 +55,15 @@ typedef struct engine_treasury_ctx {
     const uint8_t *glyph_table;
     const unsigned char *glyph_metrics;
     localization_state_t *loc;
+    engine_dirty_rect_state_t *dirty;  /* FUN_0045240a's rectangle; NULL → no mark */
 } engine_treasury_ctx_t;
+
+/* Retail-layout globals (engine_treasury_globals.c; rhost aliases them at their VAs). */
+extern engine_button_rec_t g_treasury_buttons[1];   /* DAT_004dd928 the continue seal button */
+extern int32_t g_treasury_widget_count;             /* DAT_00568468 */
+
+/* ── FUN_00416925 — the panel draw alone (engine_treasury_render adds the lock and the open frame's button) ── */
+void engine_treasury_panel(const engine_treasury_ctx_t *ctx);
 
 /* ── FUN_00416925 — the OPEN render of the Court/Treasury (screen 0x09) ──
  * Draws the panel over the retained merchant frame (NO backdrop/palette),

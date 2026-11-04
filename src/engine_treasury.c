@@ -12,7 +12,8 @@
 
 #include <stdint.h>
 
-#include "engine_button.h"          /* engine_button_render_list (FUN_0040cfd2) */
+#include "engine_button.h"
+#include "engine_dirty_rect.h"          /* engine_button_render_list (FUN_0040cfd2) */
 #include "gfx.h"                     /* lock/unlock canvas */
 #include "gfx_line.h"               /* gfx_line_rect_bevel_dark_br (FUN_00403deb) */
 #include "gfx_panel.h"              /* gfx_panel_draw_bevel (FUN_004093e0) */
@@ -30,23 +31,11 @@ static int32_t rec_i32(const uint8_t *rec, int off)
     return v;
 }
 
-/* DAT_00568468 — the screen-9 router widget count (retail sets it to 1 at
- * the top of FUN_00416925).  Read by the per-frame refresh + the click
- * router. */
-static int g_treasury_widget_count;
-
-/* The single per-frame widget: retail's DAT_004dd928[0] — the "continue"
- * seal button (system2.pl8 sprite 0x40, kind 0x20 = 32×32, type 5
- * press-latch; action FUN_004351c4 = advance to Rankings 0x20, deferred).
- * r2-extracted byte-exact.  Widget count DAT_00568468 is 1, so only this
- * first record renders (the table's 2nd record, FUN_00436141, is unused).
- * MUTABLE like retail's .data table — engine_menu_button_dispatch animates
+/* The screen-9 router widget count DAT_00568468 (retail sets it to 1 at the top of FUN_00416925) and the single
+ * per-frame widget DAT_004dd928[0] — the "continue" seal button (system2.pl8 sprite 0x40, kind 0x20, type 5
+ * press-latch): engine_treasury_globals.c.  MUTABLE like retail's .data table — the menu button dispatch animates
  * the press flash in place and the renderer reads it back. */
-static engine_button_rec_t k_treasury_buttons[1] = {
-    { 0x150, 0x154, 0x40, 0x20, 0x4351c4, 0, 0, 0, 5, 1, 0 },
-};
-
-engine_button_rec_t *engine_treasury_buttons(void) { return k_treasury_buttons; }
+engine_button_rec_t *engine_treasury_buttons(void) { return g_treasury_buttons; }
 int engine_treasury_widget_count(void) { return g_treasury_widget_count; }
 
 /* ── FUN_0041ab67 — decimal value + its grp-8 unit noun ─────────────────
@@ -76,11 +65,8 @@ static void treasury_loc(const engine_treasury_ctx_t *ctx, int grp, int sub,
                             font, ctx->glyph_table, color);
 }
 
-/* ── FUN_00416925 body — the Court/Treasury panel draw ──────────────────
- * Caller holds the canvas lock.  FUN_0045240a (full-screen dirty mark) is
- * OMITTED — seam-owned, as in engine_trade / engine_labor (the port
- * repaints the full frame, so per-widget marks are inert for pixels). */
-static void treasury_panel(const engine_treasury_ctx_t *ctx)
+/* ── FUN_00416925 — the Court/Treasury panel draw (caller holds the canvas lock) ── */
+void engine_treasury_panel(const engine_treasury_ctx_t *ctx)
 {
     const uint8_t *tf = ctx->title_font;    /* fntl2_22, DAT_005b2fa0 */
     const uint8_t *mf = ctx->menu_font;     /* fntl2_14, DAT_005af8f0 */
@@ -160,6 +146,9 @@ static void treasury_panel(const engine_treasury_ctx_t *ctx)
     treasury_loc(ctx, 0x46, 8, 0x64, 0x136, mf, 0x3f);
     treasury_num_units(ctx, rec_i32(strat, 0x15c), 0,
                        gfx_text_line_x_acc() + 0x64, 0x136, mf, 0x3f);
+    if (ctx->dirty) {
+        engine_dirty_rect_mark_full_screen(ctx->dirty);   /* FUN_0045240a */
+    }
 }
 
 void engine_treasury_render(const engine_treasury_ctx_t *ctx)
@@ -168,14 +157,14 @@ void engine_treasury_render(const engine_treasury_ctx_t *ctx)
         return;
     }
     if (gfx_lock_canvas()) {
-        treasury_panel(ctx);
+        engine_treasury_panel(ctx);
         /* Retail's FUN_00416925 does NOT paint the seal button — that is
          * FUN_004ba26e case 9, run every tick.  The port dispatches its
          * per-frame refresh BEFORE the demand seam, so on the OPEN frame the
          * refresh sees widget count 0 (render hasn't set it yet); paint the
          * button here too so the open frame carries it (idempotent with the
          * next tick's refresh, which repaints it over the retained panel). */
-        engine_button_render_list(0, 0, k_treasury_buttons,
+        engine_button_render_list(0, 0, g_treasury_buttons,
                                   g_treasury_widget_count,
                                   ctx->misc_sheet, ctx->system_sheet, NULL);
         gfx_unlock_canvas();
@@ -188,7 +177,7 @@ void engine_treasury_refresh(const engine_treasury_ctx_t *ctx)
         return;
     }
     if (gfx_lock_canvas()) {
-        engine_button_render_list(0, 0, k_treasury_buttons,
+        engine_button_render_list(0, 0, g_treasury_buttons,
                                   g_treasury_widget_count,
                                   ctx->misc_sheet, ctx->system_sheet, NULL);
         gfx_unlock_canvas();

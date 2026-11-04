@@ -1092,7 +1092,8 @@
     "src/engine_sendsupplies.c",
     "src/engine_sendsupplies.h",
     "src/engine_terrain_info.c",
-    "src/engine_terrain_info.h"
+    "src/engine_terrain_info.h",
+    "src/engine_workforce_hud.c"
    ]
   },
   {
@@ -1596,6 +1597,7 @@
     "src/engine_hud_menubar.c",
     "src/engine_hud_menubar.h",
     "src/engine_sendsupplies.c",
+    "src/engine_workforce_hud.c",
     "src/gfx_dispatch.h",
     "src/gfx_sprite_render.c",
     "src/gfx_sprite_render.h",
@@ -6003,7 +6005,6 @@
     "src/engine.c",
     "src/engine_ingame_input.c",
     "src/engine_rankings.h",
-    "src/engine_treasury.c",
     "src/engine_treasury.h"
    ]
   },
@@ -6323,8 +6324,7 @@
    "src": [
     "src/engine.c",
     "src/engine_diplomacy_action.h",
-    "src/engine_noble_faces.h",
-    "src/engine_treasury.c"
+    "src/engine_noble_faces.h"
    ]
   },
   {
@@ -11510,6 +11510,7 @@
     "src/engine_trade.c",
     "src/engine_trade.h",
     "src/engine_treasury.c",
+    "src/engine_treasury.h",
     "src/gfx.c",
     "src/gfx.h",
     "src/main.c"
