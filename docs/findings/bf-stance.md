@@ -83,8 +83,36 @@ DAT_00553e64 the units on a kind-5 cell in formation slot 4 (FUN_004822ed); DAT_
 
 ## Evidence
 
-`rhost.py verify --target wine --only bot3 --hooks '^bf_'` (the siege scenarios bot3-s103-t36, bot3s-s404-t36
-reach the attacker table): see the commit messages. Never reached by the corpus (the AI never defends a castle
-in it): the defender table (FUN_0048d16e … FUN_0048dfbb) and its helpers FUN_0048ce1d / FUN_0048ce81 /
-FUN_0048d013, FUN_0048e774 (attacker stance 4), FUN_00496d76 (via 0x48c3fe). Those are ported from the asm and
-checked by the probe below (poked state), not by the corpus.
+**Corpus** — `rhost.py verify --target wine --only bot3 --hooks '^bf_'` (2026-11-04): the siege scenarios
+bot3-s103-t36 and bot3s-s404-t36 reach the attacker table — 16 of the 28 hooks, 151.0k calls, 0 divergences;
+hybrid PASS over the 14 bot3* scenarios. In both sieges the AI is the ATTACKER (its groups +3 = 0); the player's
+groups (+1 = 1, side +3 = 4) are skipped by 0x489401, so the defender table never runs in the corpus.
+
+**Probe (poked state)** — not in the corpus: the defender table, FUN_0048ce1d / 0048ce81 / 0048d013, FUN_0048e774,
+FUN_00496d76. A `rhbot.py` Session replays bot3-s103-t36 to frame 41400 (the siege battle runs 41200..44800),
+pokes the AI groups g5..g12 and shadows the hooks to the end of the trace:
+- `def`: +3 = 1 (defender table), stances 1..7 round robin; `defhi`: the steps +0x1a started at 12..98 (the
+  later bands); `b`: both breach counters poked (DAT_00553fb0 = 6, DAT_0053e990 = 4) for the breach branches;
+- `att4`: attacker stance 4 on half the groups, stance 3 aimed at a player group (+0xa / +0xc) on the others, and
+  4 footprint cells (DAT_00553c80) planted near that group (the list is empty in this siege).
+
+| run | shadowed | calls | diverge |
+|---|---|---|---|
+| def | 0x48d16e / 48d412 / 48d6fc / 48d9ce / 48db84 / 48ddc7 / 48dfbb | 5575 / 9793 / 9793 / 2397 / 2500 / 4757 / 9793 | 0 |
+| defhi + b | the same 7 | 12088 / 2603 / 9793 / 9793 / 4086 / 9793 / 9793 | 0 |
+| def, defhi, defhi + b (helpers) | 0x48ce81 / 48d013 / 496566 | 37 / 67 / 180 | 0 |
+| att4 | 0x48e774 / 48e4cc | 39172 / 9082 | 0 |
+| att4 (helpers) | 0x48ed95 / 496d76 | 76 / 15 | 0 |
+
+Hybrid on the poked runs: all 28 stance hooks in replace mode end at the same state hash as the pure run
+(state_sem def 426011a4526ca055, defhi + b 6f584ae8352e4aed, defhi 588ab64efb191c45, att4 0414d9d2af29719c).
+bot3s-s404-t36 (siege battle 45800..60800, AI attacking again) poked at 46000 with `defhi + b`: 0x48d013 /
+0x496566 12 / 331 calls, 0 divergences.
+
+**Unverified**: FUN_0048ce1d (100 B: 0x496566(centroid, 40, 4) → 0x48c363) — only FUN_0048d16e's breach branch
+calls it, with DAT_00553f74 > DAT_0056d6ac (0x481b9a recomputes both); no probe reached it (also tried with the
+reserve DAT_0055307c poked to 0). Ported from the asm.
+
+Pitfall met: `rhbot.Session` runs `C:\ol2-rhost\bin\ol2-rhost.exe` in the shared wine root, which `wine_stage`
+overwrites only when older than the caller's build — with agents in parallel worktrees a Session can run another
+agent's build ("FATAL unknown hook"). The probe set `rhost.WEXE` to its own name.
