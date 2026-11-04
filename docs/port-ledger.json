@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 788,
-  "ported": 720,
-  "unported": 939,
+  "ported": 721,
+  "unported": 938,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 1508,
-  "pct_touched": 61.6,
+  "touched": 1509,
+  "pct_touched": 61.7,
   "pct_tested": 32.2,
   "bytes_total": 838629,
-  "bytes_touched": 632055,
-  "pct_bytes_touched": 75.4
+  "bytes_touched": 633591,
+  "pct_bytes_touched": 75.6
  },
  "orphan_refs": [
   "0x004148",
@@ -17347,8 +17347,10 @@
    "name": "FUN_004987b7",
    "size": 1536,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_extern.c"
+   ]
   },
   {
    "va": "0x498dcb",
@@ -19913,6 +19915,7 @@
    "src": [
     "src/config.c",
     "src/engine_armory.c",
+    "src/engine_bf_extern.c",
     "src/engine_county_panels.c",
     "src/engine_labor.c",
     "src/engine_merchant.c",

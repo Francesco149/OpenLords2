@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **1508** (61.6%) — tested 788, ported 720
-- code bytes touched: **75.4%** (632,055 / 838,629 B)
-- unported: **939**
+- touched: **1509** (61.7%) — tested 788, ported 721
+- code bytes touched: **75.6%** (633,591 / 838,629 B)
+- unported: **938**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (788) — ported + host unit suite
@@ -731,7 +731,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4af62c | FUN_004af62c | 73 | strutil.h |
 | 0x4af675 | FUN_004af675 | 84 | engine_load_pump.c, strutil.h |
 | 0x4af6c9 | FUN_004af6c9 | 67 | strutil.h |
-| 0x4af8d9 | FUN_004af8d9 | 381 | config.c, engine_armory.c, engine_county_panels.c (+11) |
+| 0x4af8d9 | FUN_004af8d9 | 381 | config.c, engine_armory.c, engine_bf_extern.c (+12) |
 | 0x4afab9 | FUN_004afab9 | 897 | engine_battlefield_render.h, engine_hud_menubar.c, gfx_panel.c (+2) |
 | 0x4b13ed | FUN_004b13ed | 274 | gfx_globals.c, gfx_globals.h, gfx_paint.c (+1) |
 | 0x4b191e | FUN_004b191e | 981 | engine.c, engine.h, engine_input.c (+2) |
@@ -810,7 +810,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (720) — reimplemented, no host test yet
+## ported (721) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -1457,6 +1457,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x497a34 | FUN_00497a34 | 697 | rl_io.c |
 | 0x4983b7 | FUN_004983b7 | 161 | rl_io.c |
 | 0x498458 | FUN_00498458 | 132 | rl_glue.c |
+| 0x4987b7 | FUN_004987b7 | 1536 | engine_bf_extern.c |
 | 0x498dcb | FUN_00498dcb | 488 | rl_ui2.c |
 | 0x498fb3 | FUN_00498fb3 | 129 | rl_ui2.c |
 | 0x4990f9 | FUN_004990f9 | 101 | rl_io.c |

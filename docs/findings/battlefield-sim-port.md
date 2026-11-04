@@ -102,4 +102,4 @@ Lessons the partitions hit (now in the porting loop):
 | stance | the other stance tables DAT_004d91f8 / DAT_004d91d0 | 28 | 12140 |
 | setup | entering the battlefield: terrain, deployment, spawn (FUN_004778a0) | 50 | 26085 |
 | input | the battlefield input (screens 0x28..0x2a: select, order, control panel) + HUD panels (FUN_0043bf07 …) | 25 | 7856 |
-| extern | retail seams out of scope (audio streams, sprite loads): stubs only | 4 | 2006 |
+| extern | the out-of-scope seams: the tick reset 0x43f304, the click cue 0x499d97, the battle music 0x477b2f, the sprite loads 0x4987b7 (32 table slots by battle kind / nations, misc_bat.PL8 at 0x4daec4 — not 0x4daeb0 misc_cty.pl8, the record before it): all ported | 4 | 2006 |
