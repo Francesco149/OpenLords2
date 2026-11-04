@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 785,
-  "ported": 185,
-  "unported": 1477,
+  "ported": 211,
+  "unported": 1451,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 970,
-  "pct_touched": 39.6,
+  "touched": 996,
+  "pct_touched": 40.7,
   "pct_tested": 32.1,
   "bytes_total": 838629,
-  "bytes_touched": 417916,
-  "pct_bytes_touched": 49.8
+  "bytes_touched": 436864,
+  "pct_bytes_touched": 52.1
  },
  "orphan_refs": [
   "0x004148",
@@ -13576,24 +13576,30 @@
    "name": "FUN_0047095e",
    "size": 1940,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x4710f2",
    "name": "FUN_004710f2",
    "size": 1574,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x471718",
    "name": "FUN_00471718",
    "size": 1287,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x471c1f",
@@ -13630,16 +13636,20 @@
    "name": "FUN_00471f45",
    "size": 738,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x472227",
    "name": "FUN_00472227",
    "size": 363,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x472392",
@@ -15743,88 +15753,110 @@
    "name": "FUN_0048f079",
    "size": 356,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x48f1dd",
    "name": "FUN_0048f1dd",
    "size": 3704,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x49005f",
    "name": "FUN_0049005f",
    "size": 1165,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x4904ec",
    "name": "FUN_004904ec",
    "size": 298,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x490616",
    "name": "FUN_00490616",
    "size": 1033,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x490a44",
    "name": "FUN_00490a44",
    "size": 528,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x490c59",
    "name": "FUN_00490c59",
    "size": 804,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x490fa2",
    "name": "FUN_00490fa2",
    "size": 411,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x491147",
    "name": "FUN_00491147",
    "size": 411,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x4912ec",
    "name": "FUN_004912ec",
    "size": 422,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x491492",
    "name": "FUN_00491492",
    "size": 838,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x4917dd",
@@ -15843,32 +15875,40 @@
    "name": "FUN_00491a34",
    "size": 235,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x491b1f",
    "name": "FUN_00491b1f",
    "size": 969,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x491f17",
    "name": "FUN_00491f17",
    "size": 359,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x49207e",
    "name": "FUN_0049207e",
    "size": 359,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x4921e5",
@@ -15918,8 +15958,10 @@
    "name": "FUN_004928a3",
    "size": 19,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x492951",
@@ -16006,16 +16048,20 @@
    "name": "FUN_00494d08",
    "size": 241,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x494df9",
    "name": "FUN_00494df9",
    "size": 70,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x494e3f",
@@ -16078,8 +16124,10 @@
    "name": "FUN_00496155",
    "size": 374,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x4962cb",
@@ -16180,8 +16228,10 @@
    "name": "FUN_004972f9",
    "size": 318,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x497437",
@@ -19682,8 +19732,10 @@
    "name": "FUN_004b3dcd",
    "size": 132,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_move.c"
+   ]
   },
   {
    "va": "0x4b3e51",
