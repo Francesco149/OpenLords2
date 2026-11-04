@@ -104,7 +104,7 @@ int32_t g_bf_52afb0;
 int32_t g_bf_52eff4;
 int32_t g_bf_53e874[3];
 int32_t g_bf_53e8b8;
-int32_t g_bf_53e8d0;
+int32_t g_bf_53e8d0[10];
 int32_t g_bf_53e8f8;
 uint8_t g_bf_53e930[64];
 int32_t g_bf_53e9ac;

@@ -110,7 +110,7 @@ extern int32_t g_bf_52afb0;                  /* .data 0x52afb0..0x52afb4: dword_
 extern int32_t g_bf_52eff4;                  /* .data 0x52eff4..0x52eff8: dword_52EFF4(rw) */
 extern int32_t g_bf_53e874[3];               /* .data 0x53e874..0x53e880: dword_53E874(w) */
 extern int32_t g_bf_53e8b8;                  /* .data 0x53e8b8..0x53e8bc: dword_53E8B8(rw)  DUP 53e8b8 */
-extern int32_t g_bf_53e8d0;                  /* .data 0x53e8d0..0x53e8d4: dword_53E8D0(w)  DUP 53e8d0 */
+extern int32_t g_bf_53e8d0[10];              /* .data 0x53e8d0..0x53e8f8: dword_53E8D0(w) — the per-player tick table (hand: 10 dwords, 0x43f304)  DUP 53e8d0 */
 extern int32_t g_bf_53e8f8;                  /* .data 0x53e8f8..0x53e8fc: dword_53E8F8(rw) */
 extern uint8_t g_bf_53e930[64];              /* .data 0x53e930..0x53e970: byte_53E930(orw) */
 extern int32_t g_bf_53e9ac;                  /* .data 0x53e9ac..0x53e9b0: dword_53E9AC(w)  DUP 53e9ac */

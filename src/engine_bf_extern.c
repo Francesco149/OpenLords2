@@ -11,7 +11,7 @@ int bf_43f304(void)
 {
     int i;
     for (i = 0; i < 10; i++)
-        AT(int32_t, &g_bf_53e8d0, 0x53e8d0u, 0x53e8d0u + 4 * i) = 0;
+        g_bf_53e8d0[i] = 0;
     g_bf_57c998[0] = 0;
     g_combat_render_dirty = 2;
     return i - 1;

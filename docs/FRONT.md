@@ -41,9 +41,12 @@
    on wood cells, orders 9 / 12–16 (human-traces §A2, or bot v4).
 4. **The remaining reached-unported code**: the render partition (the 0x40f1a0 screen arms, terrain info, the MP
    HUD — ~34 KB, now verifiable) and engine.c's glue (106 ported functions not on retail's layout, 72 KB).
-5. **Standalone**: retail-layout ports (bf_ / rl_) replace engine.c's glue; the screen dispatch grows the battle
-   prompt + battlefield arms; then wire the combat cluster (engine.c sub-state 2 TODO: bf_478952, 0x40490d,
-   bf_488dfe, bf_4822ed, bf_485bb1, bf_489401, bf_4859e5, engine_combat_battlefield_end_tick).
+5. **Standalone** (`docs/findings/standalone-path.md`): retail's data image mapped at its VAs (read from the user's
+   exe) + every bf_ / rl_ / wrapped port + the pointer-slot rewrite + the platform layer — the layout the hybrid
+   verifies (the generated per-access globals only hold there: `g_bf_53e8d0` vs `g_rl_53e8d4`… split one array).
+   Gate: the residual retail code under the full hybrid (`coverage --hook replace:<all>`: 316 non-library functions /
+   125 KB before round 3 → after it ≈ the host level + the CRT); then a `standalone2` build that reports each
+   scenario's first unported gap. engine.c's own-layout glue becomes obsolete.
 6. **Port build `-std=gnu11`** after an x87 sweep (openrecet's c11 long-double literal finding).
 7. **Tooling**: the shadow's movie rows need rh_hook_smk.h (smackw32's heap) — a core rollback would retire it.
    (Fixed 2026-11-04: the bot's battlefield orders are LMB with a selection; a run ending in retail's ExitProcess is
