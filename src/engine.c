@@ -1450,7 +1450,7 @@ static int ti_ui_router(const engine_ingame_input_in_t *din,
              * single-player branch runs FUN_00435211 = engine_ranking_recompute
              * (FUN_0049aa0e) then the per-player aggregate (FUN_0049d1e0) for
              * slots 1..5 — the source metrics the Rankings render reduces to
-             * bars.  FUN_004b3994 (the S035 page-turn WAV cue) is deferred
+             * bars.  0x4b3994 (the S035 page-turn WAV cue) is deferred
              * (audio); the MP FUN_0043eda0 broadcast is deferred (SP drop-in). */
             engine_ranking_recompute(&g_turn_event_queue);
             for (int p = 1; p < 6; p++) {
@@ -1469,7 +1469,7 @@ static int ti_ui_router(const engine_ingame_input_in_t *din,
          * hotspot bands at y [0x1ac,0x1cf] over the baked-in category
          * icons.  A hit runs FUN_0043524e: category (s_slot_0055ce7c) =
          * param + demand 2 (the demand arm re-renders the scene with the
-         * new metric).  FUN_004b3994 (the S035_xx page WAV) is audio —
+         * new metric).  0x4b3994 (the S035_xx page WAV) is audio —
          * deferred like every cue. */
         static const engine_menu_hotspot_t k_rankings_tabs[7] = {
             { 0x02e, 0x1ac, 0x053, 0x1cf, NULL, 1, 0 },
@@ -4816,7 +4816,7 @@ void engine_tick(void)
 
     /* Pre-tick block — retail does (in order): FUN_004b0aaa input
      * poll, FUN_00498458, FUN_004b20ed (← ported), FUN_004bbc80
-     * (← ported), FUN_00481b9a,
+     * (← ported), 0x481b9a,
      * FUN_00482111, FUN_004782c5, FUN_00451f1a (← ported).  Order
      * between independent state updates doesn't matter for
      * behavior, but we keep them in retail order so future bisection

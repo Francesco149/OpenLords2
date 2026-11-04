@@ -51,7 +51,7 @@ void engine_confirm_dialog_open(int msg_id, int ox, int oy, int prev_screen,
     g_confirm_buttons[0] = k_confirm_buttons_template[0];
     g_confirm_buttons[1] = k_confirm_buttons_template[1];
 
-    /* FUN_004b36c0(msg_id) — audio seam ("plays S010_XX.wav"); no NULL
+    /* 0x4b36c0(msg_id) — audio seam ("plays S010_XX.wav"); no NULL
      * hook plumbed yet (matches every other not-yet-wired SFX seam in
      * this codebase). */
 

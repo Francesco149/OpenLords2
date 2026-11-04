@@ -403,5 +403,5 @@ void engine_terrain_info_render(const engine_terrain_info_attr_t *a,
     /* The text + sprite content (FUN_0041c208). */
     render_text(a, ctx, row, pc.off);
 
-    /* if (flags & 0x20) FUN_0041c996() — sub-feature stamp, deferred. */
+    /* if (flags & 0x20) 0x41c996() — sub-feature stamp, deferred. */
 }

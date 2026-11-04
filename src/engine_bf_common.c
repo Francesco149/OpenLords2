@@ -2,6 +2,8 @@
 #include "engine_bf.h"
 #include "engine.h"
 
+#include <windows.h>
+
 /* FUN_00404a46 on retail's globals (the port: engine_rng_step): the LFSR pair DAT_0058fe28 / DAT_0058fe08 and its
  * six masked outputs. A battlefield function that calls the RNG calls this. */
 void bf_rng_step(void)
@@ -17,4 +19,16 @@ void bf_rng_step(void)
     g_bf_5aea5c = (int32_t)o.rng_15bit_b;
     g_bf_58fd60 = (int32_t)o.rng_7bit_b;
     g_bf_58fd6c = (int32_t)o.rng_3bit_b;
+}
+
+/* Sleep(ms) as retail calls it (the MP arms' message spacing). rhost binds retail's own import (its virtual clock
+ * advances); the standalone sleeps. */
+static void (*s_sleep_fn)(uint32_t ms);
+void bf_bind_sleep_fn(void (*fn)(uint32_t ms)) { s_sleep_fn = fn; }
+void bf_sleep(uint32_t ms)
+{
+    if (s_sleep_fn)
+        s_sleep_fn(ms);
+    else
+        Sleep(ms);
 }

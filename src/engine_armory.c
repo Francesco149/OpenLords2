@@ -274,7 +274,7 @@ void engine_armory_render(const engine_armory_ctx_t *ctx)
     }
 
     io_path_chdir_base();                       /* FUN_004af502 */
-    /* FUN_004b11ce (transient palette/canvas prep) + FUN_004996c8 (the
+    /* FUN_004b11ce (transient palette/canvas prep) + 0x4996c8 (the
      * strategic-map teardown + armory buffer alloc) are DEFERRED — the port
      * keeps the map resident and uses the persistent scratch below, exactly
      * as engine_merchant / engine_rankings defer the retail free/malloc. */
