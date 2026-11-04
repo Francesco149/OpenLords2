@@ -1569,8 +1569,9 @@ int rl_4b1310(void)
 }
 
 /* Port of FUN_00409429 (68 B) — a framed panel: the frame (0x409934, style 2) at (x, y) w × h, its title strip
- * (0x409c93) at (x + 16, y), w - 2 by h - 1. TODO(rl-extern): 0x409934; TODO(rl-link): 0x409c93 (engine_armory.c
- * & co. port it on their own render state). */
+ * (0x409c93) at (x + 16, y), w - 2 by h - 1. TODO(rl-link): gfx_panel_draw_border_chrome /
+ * gfx_panel_fill_interior_chrome (gfx_panel.c, linked and on retail's layout since 7965fc7, but they take the chrome
+ * sheet retail bakes in, DAT_0057d3d0, which has no port symbol yet). */
 int rl_409429(int x, int y, int w, int h)
 {
     engine_retail_call(0x409934u, 5, 2u, (uint32_t)x, (uint32_t)y, (uint32_t)w, (uint32_t)h);

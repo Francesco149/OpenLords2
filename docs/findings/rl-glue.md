@@ -24,10 +24,12 @@ write-back, the MP message sender. All 76 functions ported; 74 have rows.
   0x40e3ee / 0x40da1e (engine_menu_input.c), 0x40e6f2 (engine_confirm_dialog.c: retail keeps the callback VA),
   0x472bc5 (engine_event_queue.c), 0x402009 / 0x401f49 (text_input.c), 0x4b3f0a / 0x4b3ec0
   (engine_workforce_hud.c), 0x4050c0, 0x476768, 0x4b1deb, 0x4984dc, 0x4b18e3, 0x41b032, 0x452160 (engine.c & co.),
-  0x477249 (engine_tooltip.c), 0x4af8d9 (io_read_file_at), 0x4af502, 0x4018d7, 0x409c93, 0x4a8426,
+  0x477249 (engine_tooltip.c), 0x4af8d9 (io_read_file_at), 0x4af502, 0x4018d7 (localization.c: a port state),
+  0x409934 / 0x409c93 (gfx_panel.c: linked on retail's layout since 7965fc7, but they take the chrome sheet
+  DAT_0057d3d0, no port symbol yet), 0x4a8426,
   0x45337b / 0x4538f6 / 0x463c06 / 0x463c62 (map terrain drawers), and the event-queue takers
   0x437535 / 0x43b622 / 0x4a8aab / 0x4ab383 (engine_combat.c: `evq` argument). TODO(rl-extern) — unported:
-  0x40df62, 0x40cd58, 0x426d11, 0x42c64f, 0x4788c6, 0x409934, 0x4b209a, 0x4608de / 0x46079d, the MP layer
+  0x40df62, 0x40cd58, 0x426d11, 0x42c64f, 0x4788c6, 0x4b209a, 0x4608de / 0x46079d, the MP layer
   (0x440dd2, 0x43f8ff, 0x43fd2a, 0x43f5c5, 0x4407e5, 0x49b973, 0x43e668, 0x440038, 0x4b90fb, the payload builders
   DAT_004d57f0[]).
 - Other partitions by name: bf_43c634, bf_4778a0, bf_4784ca, bf_47f76d, bf_480f8b, bf_4987b7; rl_4aecf0,
@@ -72,6 +74,8 @@ write-back, the MP message sender. All 76 functions ported; 74 have rows.
 `rhost.py verify --target wine -j 3 --hooks '^rl_'` over the whole corpus (51 scenarios, 2026-11-04 11:12–11:37,
 before the master merge of 7965fc7): **74/74 reached with 0 divergences, 0 never called; hybrid PASS** (all 74
 replaced, `corpus --check`: every state hash and presented frame). 14.34 M shadowed calls; rl_4782c5 skipped 10
-calls whose retail run grew the heap arena (rh_state.c: "arena commit changed", not compared). Never-reached
+calls whose retail run grew the heap arena (rh_state.c: "arena commit changed", not compared). Re-run after
+merging master 0c33e3b (the gfx layer, the whole battlefield port; 11:45–12:10): the same, 74/74, 0 divergences,
+hybrid PASS. Never-reached
 paths (ported from the asm, unverified): the MP arms (every `MP_ON` branch, FUN_0043eda0's send, FUN_00440666's
 link read, FUN_0049b8b0's vote), FUN_0040dd92's no-item close, FUN_004b1310 with a null buffer.
