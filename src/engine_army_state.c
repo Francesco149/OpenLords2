@@ -393,7 +393,7 @@ int engine_army_state_siege_build_step(int idx)
 int engine_army_state_scan_siege_built(void)
 {
     /* Resume from the persistent cursor (reset to 1 at phase-2 entry by the
-     * retail dispatcher's FUN_004a82b9 init) and advance one record at a time;
+     * retail dispatcher's 0x4a82b9 init) and advance one record at a time;
      * stop and report on the first stack whose siege construction just hit
      * 100% (engine_army_state_siege_build_step returns 1), leaving the cursor
      * parked on it for the assault trigger.  Returns 0 once the cursor walks

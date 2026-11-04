@@ -16,7 +16,7 @@
  * Returns ms since the previous frame (always — independent of the
  * rollover branch).  Retail's caller in FUN_004b99c0 discards the
  * return value, but downstream the cumulative FPS / seconds pair gets
- * read by FUN_004b2636 (session diag — reports average FPS over the
+ * read by 0x4b2636 (session diag — reports average FPS over the
  * whole session).
  *
  * Retail global ↔ field mapping (mirror is in engine.c):

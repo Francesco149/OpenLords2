@@ -128,7 +128,7 @@ extern uint32_t g_combat_msg_clock;      /* DAT_004eeae8 — last "battle over" 
  * empty county" branch (FUN_0043ce1a). */
 void engine_combat_set_flag_567d0c(int v);
 
-/* Bind the optional battle-cue hook (retail FUN_00427990 ff_batl.wav); NULL
+/* Bind the optional battle-cue hook (retail 0x427990 ff_batl.wav); NULL
  * (the default) skips the cue.  The cue-playback path is deferred. */
 void engine_combat_bind_battle_sfx(void (*fn)(void));
 
@@ -245,8 +245,8 @@ void engine_combat_halve_garrison(int rec);
 #include "engine_event_queue.h"   /* engine_event_queue_state_t */
 
 /* Bind the optional deferred-audio seams.  All default NULL (silent):
- *   wav_fn   — retail FUN_00427990(name, loop, z): the s080 / ff_lose cues
- *   click_fn — retail FUN_00499aca(): the territory-captured click
+ *   wav_fn   — retail 0x427990(name, loop, z): the s080 / ff_lose cues
+ *   click_fn — retail 0x499aca(): the territory-captured click
  * The battlefield-render clock (retail timeGetTime) used only on the
  * interactive/animation handoff is bound separately; NULL → 0. */
 void engine_combat_bind_wav_fn(void (*fn)(const char *name, int loop, int z));
@@ -463,11 +463,11 @@ void engine_combat_rotate_merc_offers(void);
  *  0x12) and the result screens stay unported: bound seams, default NULL. *
  * ===================================================================== */
 
-/* Bind the battlefield / result-screen callees: siege_result FUN_0042c64f,
- * return_to_map FUN_004788c6, writeback FUN_0047f474 (casualties → records),
- * result_panel FUN_00423241, stop_stream FUN_00426d11(slot), result_movie
- * FUN_0042d91b(k_combat_result_movies[siege][index / 4][index % 4], x, y, z,
- * screen), message FUN_0043eda0(id, arg). */
+/* Bind the battlefield / result-screen callees: siege_result 0x42c64f,
+ * return_to_map 0x4788c6, writeback 0x47f474 (casualties → records),
+ * result_panel 0x423241, stop_stream FUN_00426d11(slot), result_movie
+ * 0x42d91b(k_combat_result_movies[siege][index / 4][index % 4], x, y, z,
+ * screen), message 0x43eda0(id, arg). */
 void engine_combat_bind_battlefield_fns(void (*siege_result)(void), void (*return_to_map)(void),
                                         void (*writeback)(void), void (*result_panel)(void),
                                         void (*stop_stream)(int slot),

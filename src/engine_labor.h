@@ -40,8 +40,8 @@
  * backdrop; the map only shows outside the panel, retained from the
  * 0x02 frame this screen is reached through.
  *
- * DEFERRED (as elsewhere): the sound/anim cues (FUN_00426216 /
- * FUN_00427990 — audio.h no-op) and any multiplayer arm.
+ * DEFERRED (as elsewhere): the sound/anim cues (0x426216 /
+ * 0x427990 — audio.h no-op) and any multiplayer arm.
  *
  * Per-county record fields (rec = g_per_army_768 + county*0x300; retail
  * base DAT_0053f9b0; offsets = DAT_0053fXXX − 0x53f9b0, kept RAW — the

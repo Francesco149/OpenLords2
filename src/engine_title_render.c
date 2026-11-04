@@ -1096,7 +1096,7 @@ void engine_title_render_setup_mark_tabs_dirty(void)    { g_p7_tabs_dirty = 1; }
  * The per-country reload it also runs — stage load 0x4c (0x43eda0),
  * country-data binds (0x46a037 / FUN_00467770), camera reset
  * (0x4298c1), and the AI-roster/preview recompute (FUN_004ae5e2 /
- * FUN_00433cc1) — is deferred until those subsystems land; the scroll
+ * 0x433cc1) — is deferred until those subsystems land; the scroll
  * offset, selected id, and dirty flags are faithful, so the visible list
  * scroll + scrollbar thumb track exactly. */
 int engine_title_render_country_scroll(int dir)
@@ -1434,7 +1434,7 @@ void engine_title_render_setup_screen(void)
  * dispatcher): re-render the country list (FUN_0041f98b) and option tabs
  * (FUN_0041f86d(999) → active = 999 so every tab keeps its bevel) only when
  * their dirty flag is set, then clear it.  The third call in retail's arm,
- * FUN_0041ff75(0), is the multiplayer chat-line ticker; it early-returns
+ * 0x41ff75(0), is the multiplayer chat-line ticker; it early-returns
  * when DAT_00553030 == 0 (single-player), so it is elided here.
  *
  * In retail the gate lives inside FUN_0041f98b / FUN_0041f86d themselves;
@@ -1556,7 +1556,7 @@ void engine_title_render_scene(int screen_state, int page)
  *   page 3 (file list)      → FUN_004149ec → engine_title_render_filelist_buttons
  *   page 4 (choose title)   → FUN_0041f321 → engine_title_render_refresh_choose_title
  *   page 5 ("Play Now!")    → FUN_0041f5e8 → engine_title_render_play_now_buttons
- *   page 7 (game setup)     → FUN_0041f98b + FUN_0041f86d(999) + FUN_0041ff75(0)
+ *   page 7 (game setup)     → FUN_0041f98b + FUN_0041f86d(999) + 0x41ff75(0)
  *                             → engine_title_render_refresh_setup
  *
  * The remaining setup-flow pages (6, 8..0xd) have their own per-frame

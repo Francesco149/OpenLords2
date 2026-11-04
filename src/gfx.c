@@ -169,7 +169,7 @@ int gfx_init(HWND hwnd, int fullscreen)
     if (!hwnd) return 0;
     if (g_dd) {
         /* Already initialised — retail's bring-up is idempotent via
-         * a separate `FUN_004b28cd(0)` teardown call.  We require an
+         * a separate `0x4b28cd(0)` teardown call.  We require an
          * explicit gfx_shutdown() before re-init. */
         log_line("gfx_init: already initialised, refusing re-entry");
         return 0;
@@ -231,9 +231,9 @@ int gfx_init(HWND hwnd, int fullscreen)
  * Release order matches retail exactly: clipper → back → primary →
  * reset back-pitch → (optional) DD instance.  The palette release and
  * the higher-level state resets live one level up in retail's teardown
- * chain (FUN_004b28cd), so they stay in gfx_shutdown() rather than
+ * chain (0x4b28cd), so they stay in gfx_shutdown() rather than
  * here.  No caller passes release_dd == 0 yet — the surface-only path
- * is dead until the mode-switch / FUN_004b28cd(0) wrapper lands — but
+ * is dead until the mode-switch / 0x4b28cd(0) wrapper lands — but
  * the gate is ported now so that seam is already in place. */
 static int gfx_release_surfaces(int release_dd)
 {
@@ -258,7 +258,7 @@ static int gfx_release_surfaces(int release_dd)
          * teardown log line.  Routed through log_line until the
          * structured status logger (0x4afab9) is ported; the exact
          * retail string lives only in the Ghidra DB.  Same disposition
-         * as the deferred FUN_004b26b8 log in gfx_restore(). */
+         * as the deferred 0x4b26b8 log in gfx_restore(). */
         log_line("OK :GFX DirectDraw released.");
     }
     return 1;
@@ -268,7 +268,7 @@ void gfx_shutdown(void)
 {
     /* Reverse order of creation.  The surface + DD teardown is retail's
      * FUN_0042eaa6(1); the palette release and the state resets below
-     * are the wrapper work from FUN_004b28cd. */
+     * are the wrapper work from 0x4b28cd. */
     if (g_palette) {
         IDirectDrawPalette_Release(g_palette);
         g_palette = NULL;
@@ -574,7 +574,7 @@ int gfx_load_background_image(const char *pl8_path)
  *  DEFERRED to the panel-composition chip: the panel sprite-sheet    *
  *  load (`panels2.pl8` → 0x4b25b0 alloc → DAT_004eabec) that the     *
  *  gray stone panel renders from, and the page-1 extras              *
- *  (FUN_004b11ce: a second palette upload + FUN_00451f70).  This      *
+ *  (0x4b11ce: a second palette upload + 0x451f70).  This      *
  *  function only establishes the photographic backdrop + its palette.*
  * ---------------------------------------------------------------- */
 int gfx_title_background_load(int page)

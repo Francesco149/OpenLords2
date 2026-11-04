@@ -57,6 +57,12 @@ session — they outlive the conversation context.
 | [hybrid-batch3.md](hybrid-batch3.md) | **hybrid batch 3** (2026-10-23): army-state machine, battle exits / siege assault, realm events + season passes under rhost — 196 hooks, 162 reached over 36 scenarios, 0 divergences, hybrid PASS; #232–#235; event handlers shadowed by exploration |
 | [hybrid-batch4.md](hybrid-batch4.md) | **hybrid batch 4** (2026-10-24): the economy / UI-action side under rhost — the trade grid, gift / message seals, Send Supplies + county-action tabs, keep build, caravan (models split from renders; entry-patched router actions) — 218 hooks, 201 reached over 43 scenarios, 0 divergences, hybrid PASS on the 37 blessed; #236; `econ-tour` |
 | [battlefield-sim-port.md](battlefield-sim-port.md) | **the battlefield port** (2026-11-04): the tactical battle function by function on retail's layout — `bf_<va>` names, partitions (`tools/bf/parts.py`), pending stubs through `engine_retail_call`, generated `g_bf_<va>` globals, the porting loop |
+| [bf-setup.md](bf-setup.md) | battlefield partition 'setup': entering the battlefield — terrain build, siege / custom maps, deployment + spawn, the per-frame cursor probe (50 functions); quirks |
+| [bf-move.md](bf-move.md) | battlefield partition 'move': the move order FUN_0048f1dd, the path search, the 1×1 / 3×3 steps (26 functions); quirks |
+| [bf-strike.md](bf-strike.md) | battlefield partition 'strike': the fire order, a projectile's flight tick (hits, damage), impact effects (22 functions); the projectile/effect record map; quirks |
+| [bf-stance.md](bf-stance.md) | battlefield partition 'stance': the siege group AI — the defender table DAT_004d91d0 and attacker table DAT_004d91f8 handlers + helpers (28 functions); quirks, probe evidence |
+| [bf-group.md](bf-group.md) | battlefield partition 'group': the group AI driver FUN_00489401, formation / re-target chain, interactive stances, the group aggregator, projectiles pass, fire pass (42 functions); quirks |
+| [bf-unit.md](bf-unit.md) | battlefield partition 'unit': the per-unit driver, movement-state table DAT_004d9140, the animation sequencers, the troop band, terrain attrition (31 functions); stack-residue seams; quirks |
 | [input-replay.md](input-replay.md) | Input recording & replay (JSONL trace format) |
 | [pure-function-diff.md](pure-function-diff.md) | Pure-function differential testing vs retail |
 | [ledger-provenance-audit.md](ledger-provenance-audit.md) | The FUN_-token gotcha — how the derived ledger over-counts, and `tools/audit_provenance.py` |

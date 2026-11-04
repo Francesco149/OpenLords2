@@ -52,7 +52,7 @@ static int32_t rec_i32(const uint8_t *rec, int off)
  * Port-only (no retail counterpart). */
 int g_trade_needs_compute;
 
-/* The arrows' 0 → positive net cue (FUN_00427990; default: silent). */
+/* The arrows' 0 → positive net cue (0x427990; default: silent). */
 static void (*g_trade_wav_fn)(const char *, int, int);
 void engine_trade_bind_wav_fn(void (*fn)(const char *, int, int)) { g_trade_wav_fn = fn; }
 static void trade_cue(const char *name)
@@ -260,7 +260,7 @@ void engine_trade_sell_all(void)
 /* ── FUN_00435286 — commit the transaction (the "Complete?" seal) ───────
  * Single-player applies the buy/sell directly through the shared executor
  * (FUN_004284ce, the same the AI trades through); the caller then returns to
- * the merchant scene.  The multiplayer send (FUN_0043eda0(0x28,0)) is
+ * the merchant scene.  The multiplayer send (0x43eda0(0x28,0)) is
  * deferred.  Returns nothing — the screen flip is the input hook's job. */
 void engine_trade_confirm(void)
 {
@@ -270,13 +270,13 @@ void engine_trade_confirm(void)
                                      g_trade_offer, (int)s_slot_0057c8cc,
                                      (int)s_slot_0057c93c);     /* FUN_004284ce */
     }
-    /* else: MP command FUN_0043eda0(0x28,0) — deferred. */
+    /* else: MP command 0x43eda0(0x28,0) — deferred. */
 }
 
 /* ── FUN_00435286 / FUN_004352f2 in retail layout — the "Complete?" seal and
  * the cancel seal: commit (single player), then back to the merchant scene
  * (DAT_004eac50 = 8) with a full demand redraw (DAT_0057d340 = 2).  The MP
- * send FUN_0043eda0(0x28, 0) is deferred (rhost: DirectPlay is stubbed). */
+ * send 0x43eda0(0x28, 0) is deferred (rhost: DirectPlay is stubbed). */
 void engine_trade_seal_confirm(void)
 {
     engine_trade_confirm();

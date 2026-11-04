@@ -49,7 +49,7 @@ void audio_shutdown(void);
 /* Stop and release the one-shot WAV-cue buffer (port of retail
  * FUN_00427d19 @ 0x427d19).  Guarded on both the IDirectSound
  * interface and the cue buffer being live, so it is a no-op until the
- * cue-playback path (FUN_00427990) lands and starts creating the
+ * cue-playback path (0x427990) lands and starts creating the
  * buffer.  Called by the gameplay cue path and by game-state
  * transitions that need to silence an in-flight cue. */
 void audio_cue_release(void);

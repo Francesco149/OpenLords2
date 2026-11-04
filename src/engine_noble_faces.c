@@ -62,7 +62,7 @@ static int faces_scratch_ready(void)
 /* ── The 6 diplomacy-action buttons (retail DAT_004dd940, r2-extracted) ──
  * x=0x190, y=0x66+i*0x32, sprite 0x40, kind 0x20 (system sheet), type 5
  * (press-latch); the actions are the 0x1a-mode entry functions FUN_00436141
- * … FUN_0043631e (wired when the diplomacy-action screen is ported). */
+ * … 0x43631e (wired when the diplomacy-action screen is ported). */
 static engine_button_rec_t k_noble_buttons[6] = {
     { 0x190, 0x066, 0x40, 0x20, 0x436141, 0, 0, 0, 5, 0, 0 },
     { 0x190, 0x098, 0x40, 0x20, 0x43618b, 0, 0, 0, 5, 0, 0 },

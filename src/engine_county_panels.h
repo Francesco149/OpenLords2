@@ -44,10 +44,10 @@
  * DEFERRED / not ported here:
  *   - The county voice cues (FUN_004b3768 s020_0N.wav on the population
  *     flip; s021_01/02.wav on the rations flip): the WAV cue-playback
- *     path (FUN_00427990) has no port yet (audio.h) — the flips document
+ *     path (0x427990) has no port yet (audio.h) — the flips document
  *     the cue + set the g_combat_audio_latch flag, playback is a no-op
  *     (drop-in audio is off by default anyway).
- *   - The multiplayer arm of the ration set (FUN_0043eda0(0x31,0) when
+ *   - The multiplayer arm of the ration set (0x43eda0(0x31,0) when
  *     DAT_00553030 != 0) — SP drop-in.
  *
  * Per-county record fields (COUNTY(key) = g_per_army_768 + key*0x300,
@@ -192,7 +192,7 @@ int engine_county_rations_input(const engine_county_rations_in_t *in,
  * (press + hold-to-auto-repeat) kind-0x18 (system-sheet 24 px) records,
  * extracted from .rdata:
  *   0x4dd790: up (0xc0,0xa2) spr 0x15 → FUN_0043aa32 (tax rate +1, cap 50)
- *             down (0xe0,0xa2) spr 0x17 → FUN_0043aad5 (tax rate −1, floor 0)
+ *             down (0xe0,0xa2) spr 0x17 → FUN_0043aad5 (ported in engine.c cp_button_action; tax rate −1, floor 0)
  *   0x4dd7c0: up (0x158,0x82) spr 0x15 → FUN_0043a1e9 (wanted level +1, cap 5)
  *             down (0x170,0x82) spr 0x17 → FUN_0043a2b2 (wanted level −1)
  * The tables are exposed MUTABLE (the dispatch animates state/pressed in

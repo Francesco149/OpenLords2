@@ -21,9 +21,9 @@
  *
  * Deferred (verification-neutral): the multiplayer arms (DAT_00553030 !=
  * 0), the in-game save/load dialog states '5'/'6', the missing-file
- * retry (FUN_004af767), the post-load sync wait FUN_004adcf6 (a no-op
+ * retry (0x4af767), the post-load sync wait 0x4adcf6 (a no-op
  * for SP — returns 1 immediately), the load sound cue (s040_01.wav), and
- * the render-neutral UI flags FUN_00451f8a sets.
+ * the render-neutral UI flags 0x451f8a sets.
  */
 
 #ifndef OPENLORDS2_ENGINE_LOAD_PUMP_H

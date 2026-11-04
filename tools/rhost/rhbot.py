@@ -66,7 +66,10 @@ class Session:
             os.makedirs(self.rundir)
             if trace:
                 shutil.copy(trace, os.path.join(self.rundir, "trace.jsonl"))
-            self.proc = subprocess.Popen(["wine", f"{rhost.WROOT}\\bin\\{rhost.WEXE}"] + args, env=rhost.wine_env(),
+            # the session runs ITS tree's build (a copy in its run dir, like a batch): the shared bin\ exe is
+            # replaced only when older, so with parallel worktrees it may be another tree's build
+            shutil.copy2(os.path.join(rhost.BUILD, "rhost.exe"), os.path.join(self.rundir, rhost.WEXE))
+            self.proc = subprocess.Popen(["wine", f"{win_run}\\{rhost.WEXE}"] + args, env=rhost.wine_env(),
                                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         else:
             rhost.ensure_staged()

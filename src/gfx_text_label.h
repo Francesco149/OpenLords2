@@ -73,7 +73,7 @@
  * Shared state:
  *
  *   The 8000-byte format buffer (DAT_0058fda0) is module-private here.
- *   Retail's same buffer is read by 0x4afab9 and FUN_004afeed (the
+ *   Retail's same buffer is read by 0x4afab9 and 0x4afeed (the
  *   save-name copy paths); those callers aren't ported yet and would
  *   need this module to expose the buffer when they are.  See
  *   `gfx_text_label_buffer()` and `gfx_text_label_buffer_size()`.
@@ -140,7 +140,7 @@
 /* The 8000-byte format buffer mirroring retail DAT_0058fda0.  Read-only
  * peek for tests; the formatters write into it.  Retail also reads
  * from this buffer in the save-name copy paths (0x4afab9 /
- * FUN_004afeed) — those wrappers aren't ported yet but will share the
+ * 0x4afeed) — those wrappers aren't ported yet but will share the
  * same storage when they are.  Pointer is stable for the program
  * lifetime. */
 uint8_t      *gfx_text_label_buffer(void);

@@ -69,6 +69,23 @@ FUN_00478952, FUN_004822ed (the per-unit driver: dispatch table → stubs → re
 `verify --only bot3 --hooks '^bf_'`: 4/4 reached, 0 divergences (bf_4822ed 138132 calls / 10 scenarios),
 hybrid PASS.
 
+## Status (2026-11-04, 10:15)
+
+224 of 264 functions ported (every partition but `action`, 36, and the 4 out-of-scope `extern` seams), each
+shadowed by its owner over `bot3*` (14 scenarios, 0 divergences; per-partition evidence in `bf-<part>.md`).
+**Combined hybrid**: all 224 rows `replace` at once, `corpus --check --target wine` over the whole corpus (51
+scenarios): **PASS** — every state hash and every presented frame bit-exact. Unverified (the corpus never calls
+them; ported from the asm, some shadowed on poked state): listed per partition in the merge commits and the docs.
+
+Lessons the partitions hit (now in the porting loop):
+- A global another linked port mirrors (`g_path_dist_dx/dy` 0x591560 / 0x58fea0, `g_cell_cursor_col/row`
+  0x569570 / 0x569578, the dirty-rect gate 0x53e9ac): use the owning port symbol — inside a port call the
+  mirror is the live copy (rhost syncs it to retail only at exit / a retail call); rh_port_sync_out stores a
+  mirror only when the port changed it, so a direct alias write survives, but a READ of the alias is stale.
+- Stack residue: the class 7..10 sequencers store an uninitialized local (unit: `bf_unit_res_*` seams).
+- Callee tokens: name callees by bare hex in comments (`tools/bf/fix_tokens.py` at every merge).
+- A worktree needs untracked symlinks: `vendor`, `docs/decompiled`, `src/gen` (generated headers).
+
 ## Partitions
 
 `python3 tools/bf/status.py [-v]`.

@@ -75,7 +75,7 @@ void engine_ranking_snapshot_player_metrics(void);
 void engine_ranking_recompute_player_aggregate(unsigned player);
 
 /* Bind the optional local-defeat game-over screen used by
- * engine_ranking_check_elimination (retail FUN_0043eda0(0x24, 0)).  NULL (the
+ * engine_ranking_check_elimination (retail 0x43eda0(0x24, 0)).  NULL (the
  * default) runs the elimination logic headless. */
 void engine_ranking_bind_game_over_fn(void (*fn)(void));
 
