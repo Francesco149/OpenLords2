@@ -10,5 +10,4 @@ uint8_t g_rl_4e2a64[0x28] = {79,75,32,58,68,80,32,82,101,108,101,97,115,101,100,
 int32_t g_rl_4ea0f4;
 int32_t g_rl_4ea12c;
 int32_t g_rl_4ea83c;
-int32_t g_rl_4eafac;
 int32_t g_rl_553ec8;

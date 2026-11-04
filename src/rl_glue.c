@@ -1589,7 +1589,7 @@ int rl_40f10f(void)
     t = clock_ms();
     for (int j = 0; j < 10; j++) {
         engine_territory_mark_full_screen_dirty();
-        engine_retail_call(0x452160u, 1, 1u);   /* TODO(rl-link): engine.c's 0x452160 (the repaint) */
+        rl_452160(1);
     }
     g_rl_4d216c = (int32_t)(clock_ms() - t);
     return g_rl_4d216c;

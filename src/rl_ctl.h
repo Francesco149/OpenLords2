@@ -2,6 +2,7 @@
  * Canonical names rl_<va>; a function lives in rl_ctl.c once ported, else in rl_ctl_pending.c
  * (a retail stub). Signatures start at retail's arity with an int return; the owner may refine them. */
 #pragma once
+#include <stdint.h>
 
 int rl_42ff10(void);                             /* 8265 B, coverage 59 */
 int rl_431f59(void);                             /* 712 B, coverage 45 */
@@ -101,3 +102,9 @@ int rl_452775(int a0, int a1, int a2, int a3, int a4); /* 49 B, coverage 52 */
 int rl_4527a6(int a0, int a1, int a2, int a3, int a4); /* 101 B, coverage 59 */
 int rl_4651b9(void);                             /* 91 B, coverage 51 */
 int rl_46521f(void);                             /* 615 B, coverage 53 */
+
+/* 0x46521f's modelled stack residue (rl_ctl.c): the executor 0x465d28's four uninitialized locals as the stack holds
+ * them (in) and as it leaves them when it ran (out); the executor seam (rhost binds the linked port with its queue) */
+extern uint32_t rl_46521f_res[4];
+extern int rl_46521f_moved;
+void rl_ctl_bind_move_run(void (*fn)(uint32_t *res));

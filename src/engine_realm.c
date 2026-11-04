@@ -326,7 +326,7 @@ void engine_realm_clear_turn_scratch(void)
  * unhandled disposition value) returns 0.  Faithful quirks (#147): mode 2
  * never handles disposition 3 and has a dead duplicate `disp == 4` arm whose
  * −24 return is unreachable (the first `disp == 4` arm returns −12). */
-static int realm_mood_delta(int realm)
+int realm_mood_delta(int realm)   /* extern: rl_449d6e (rl_ctl.c) */
 {
     uint8_t disp = ARMY_REC(realm)[0x21e];
     int mode = (int)s_slot_0057c934;
@@ -612,7 +612,7 @@ static const int32_t k_taxsetting_tally_modifier[51] = {
  * Clears the income-summary field +0x15c for players 1..5, then folds each
  * realm's projected income (+0xc0) into its owning player's total (owner byte
  * +0x05 != 0).  Exclusive to engine_realm_recompute_realm_income. */
-static void realm_refresh_player_income_totals(void)
+void realm_refresh_player_income_totals(void)   /* extern: rl_44ba35 */
 {
     for (int p = 1; p < 6; p++)
         *(int32_t *)(STRAT_REC(p) + 0x15c) = 0;
@@ -775,7 +775,7 @@ static int realm_dev_best_cell(int realm, int default_idx)
  * by 6·(+0x1ff) − 3·(+0x201) (both unsigned-byte inputs), clamp it to
  * [-100, 100], and force it to 0 while standings are disabled (s_slot_0053f25c
  * == 0, the same gate the mood machine honours). */
-static void realm_dev_roll_accumulator(int realm)
+void realm_dev_roll_accumulator(int realm)   /* extern: rl_44bfd5 */
 {
     uint8_t *a   = ARMY_REC(realm);
     int32_t *acc = (int32_t *)(a + 0x208);
@@ -802,7 +802,7 @@ static void realm_dev_roll_accumulator(int realm)
  * immediately the default-0 argmax (FUN_0044c53b), overwriting +0x210 before
  * the first result is ever read — so the first call is dead work here.  The
  * port keeps it to match the writes to +0x210. */
-static void realm_dev_spread_pool(int realm)
+void realm_dev_spread_pool(int realm)   /* extern: rl_44c093 */
 {
     uint8_t       *a    = ARMY_REC(realm);
     const int32_t *row  = MISC_ROW(realm);
@@ -1127,7 +1127,7 @@ int engine_realm_player_owns_neighbor(unsigned owner, int realm)
 /* Port of FUN_0044b4d0 — is army `a` already a member of some coalition group?
  * Only groups keyed on `a`'s own owner are scanned; the densely-packed table
  * ends at the first key==0 slot. */
-static int coalition_army_grouped(int a)
+int coalition_army_grouped(int a)   /* extern: rl_44b4d0 */
 {
     uint8_t key = ARMY_REC(a)[5];
     for (int g = 0; g <= 0x10; g++) {
@@ -1143,7 +1143,7 @@ static int coalition_army_grouped(int a)
 /* Port of FUN_0044b391 — try to grow an existing same-owner group with army `a`
  * if `a` is adjacent to any current member; append it to the first empty member
  * slot.  Returns 1 if added. */
-static int coalition_try_join(int a)
+int coalition_try_join(int a)   /* extern: rl_44b391 */
 {
     uint8_t key = ARMY_REC(a)[5];
     for (int g = 0; g <= 0x10; g++) {
@@ -1168,7 +1168,7 @@ static int coalition_try_join(int a)
 /* Port of FUN_0044b302 — seed a new coalition group keyed on army `a`'s owner
  * with `a` as its sole member, in the first key==0 slot.  Returns 1, or 0 if
  * the 17-group table is full. */
-static int coalition_create_group(int a)
+int coalition_create_group(int a)   /* extern: rl_44b302 */
 {
     for (int g = 0; g <= 0x10; g++) {
         if (COAL_KEY(g) == 0) {

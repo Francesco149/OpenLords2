@@ -111,15 +111,15 @@ static int32_t add32(int32_t a, int32_t b) { return (int32_t)((uint32_t)a + (uin
 /* ported, not on retail's layout / not linked in rhost — TODO(rl-link) */
 static int row_sprite(int c, int cat)   /* TODO(rl-link): engine_workforce_row_sprite_index 0x4517ca (engine_workforce_hud.c) */
 { return (int)engine_retail_call(0x4517cau, 2, (uint32_t)c, (uint32_t)cat); }
-static int cell_hit(int x, int y)   /* TODO(rl-link): 0x4398f5 (engine_labor.c / engine_labor_region_grid.h) */
-{ return (int)engine_retail_call(0x4398f5u, 2, (uint32_t)x, (uint32_t)y); }
-static void plan_owner(int owner)   /* TODO(rl-link): 0x448648 (engine_army_select.c's static leaf) */
-{ engine_retail_call(0x448648u, 1, (uint32_t)owner); }
+static int cell_hit(int x, int y)   /* 0x4398f5 (rl_ctl) */
+{ return rl_4398f5(x, y); }
+static void plan_owner(int owner)   /* 0x448648 (rl_ctl) */
+{ rl_448648(owner); }
 static int workforce_hud_render(int a)   /* TODO(rl-link): engine_workforce_hud_render 0x412143 */
 { return (int)engine_retail_call(0x412143u, 1, (uint32_t)a); }
-static void set_camera(int mode) { engine_retail_call(0x451fccu, 1, (uint32_t)mode); }   /* TODO(rl-link): engine_map_init_set_camera 0x451fcc */
+static void set_camera(int mode) { rl_451fcc(mode); }   /* 0x451fcc (rl_ctl) */
 static int  load_season(void) { return (int)engine_retail_call(0x4984dcu, 0); }   /* TODO(rl-link): engine_pl8.c's season loader 0x4984dc */
-static int  present(int full) { return (int)engine_retail_call(0x452160u, 1, (uint32_t)full); }   /* TODO(rl-link): gfx.c's present 0x452160 */
+static int  present(int full) { return rl_452160(full); }   /* 0x452160 (rl_ctl) */
 static int  confirm_open(int kind, int x, int y, uint32_t cb)   /* TODO(rl-link): engine_confirm_dialog_open 0x40e6f2 (retail keeps the callback VA) */
 { return (int)engine_retail_call(0x40e6f2u, 4, (uint32_t)kind, (uint32_t)x, (uint32_t)y, cb); }
 static int  evq_post(int a, int b, int code, int d, int e, int f, int g, int h)   /* TODO(rl-link): engine_event_queue_post 0x472bc5 (posts into a port struct) */
