@@ -260,6 +260,7 @@ DIPLOMACY_ICON, NOBLE, GIFT_MORE, DISPATCH = (622, 447), (415, 118), (200, 255),
 DIPLO_ACTION = {"gift": (415, 118), "compliment": (415, 168), "insult": (415, 218), "terminate": (415, 268),
                 "help": (415, 318), "attack": (415, 368)}
 PLEA_YES = (335, 262)
+MESSAGE_SEND = (302, 308)                  # compliment / insult / terminate: the dispatch thumbs
 
 
 def _portrait(st, realm):
@@ -290,6 +291,10 @@ def diplomacy(s, ui, action, realm=None, crowns=0, county=None):
             s.click(*GIFT_MORE, frames=3)
         s.run(10)
         s.click(*DISPATCH); s.run(30)
+    elif action in ("compliment", "insult", "terminate"):
+        # the message panel's own thumbs (list 0x4dda30: 288..317 x 292..324); without it the RMB below cancels
+        # the message [live 2026-11-04: a compliment's attitude +15 lands only after this click]
+        s.move(*MESSAGE_SEND, frames=4); s.click(*MESSAGE_SEND); s.run(30)
     elif action in ("help", "attack"):
         c = next((x for x in st["counties"] if x["id"] == county), None)
         if s.screen != 0x1a or c is None or not c.get("minimap_click"):
