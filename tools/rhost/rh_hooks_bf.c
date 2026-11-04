@@ -43,8 +43,12 @@ static uint32_t retail_call(uint32_t va, int n, const uint32_t *a)
     return r;
 }
 
+/* retail's own Sleep import (rhost's virtual clock) */
+static void retail_sleep(uint32_t ms) { ((VOID (WINAPI *)(DWORD))G32(0x5cf4acu))(ms); }
+
 /* called once from rh_port_bind_once (rh_hooks_ai.c) */
 void rh_bf_bind_seams(void)
 {
     engine_retail_call_bind(retail_call);
+    bf_bind_sleep_fn(retail_sleep);
 }

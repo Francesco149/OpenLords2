@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 840,
-  "ported": 146,
-  "unported": 1461,
+  "ported": 170,
+  "unported": 1437,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 986,
-  "pct_touched": 40.3,
+  "touched": 1010,
+  "pct_touched": 41.3,
   "pct_tested": 34.3,
   "bytes_total": 838629,
-  "bytes_touched": 406966,
-  "pct_bytes_touched": 48.5
+  "bytes_touched": 413500,
+  "pct_bytes_touched": 49.3
  },
  "orphan_refs": [
   "0x004148",
@@ -3952,16 +3952,20 @@
    "name": "FUN_004238b8",
    "size": 285,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x4239d5",
    "name": "FUN_004239d5",
    "size": 378,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x423b4f",
@@ -7311,16 +7315,20 @@
    "name": "FUN_0043b9a1",
    "size": 136,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43ba29",
    "name": "FUN_0043ba29",
    "size": 208,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43baf9",
@@ -7335,16 +7343,20 @@
    "name": "FUN_0043bb68",
    "size": 111,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43bbd7",
    "name": "FUN_0043bbd7",
    "size": 16,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43bbe7",
@@ -7359,24 +7371,30 @@
    "name": "FUN_0043bd02",
    "size": 101,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43bd67",
    "name": "FUN_0043bd67",
    "size": 102,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43bdcd",
    "name": "FUN_0043bdcd",
    "size": 152,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43be65",
@@ -7418,56 +7436,70 @@
    "name": "FUN_0043bf07",
    "size": 827,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43c247",
    "name": "FUN_0043c247",
    "size": 98,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43c2a9",
    "name": "FUN_0043c2a9",
    "size": 541,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43c4c6",
    "name": "FUN_0043c4c6",
    "size": 150,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43c55c",
    "name": "FUN_0043c55c",
    "size": 33,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43c57d",
    "name": "FUN_0043c57d",
    "size": 183,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43c634",
    "name": "FUN_0043c634",
    "size": 326,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x43c77a",
@@ -14113,8 +14145,10 @@
    "name": "FUN_004784ca",
    "size": 730,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x4787a4",
@@ -14150,16 +14184,20 @@
    "name": "FUN_00478987",
    "size": 1412,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x478f0b",
    "name": "FUN_00478f0b",
    "size": 392,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x479093",
@@ -14222,24 +14260,30 @@
    "name": "FUN_00479a71",
    "size": 231,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x479b58",
    "name": "FUN_00479b58",
    "size": 415,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x479cf7",
    "name": "FUN_00479cf7",
    "size": 277,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x479e0c",
@@ -14262,8 +14306,10 @@
    "name": "FUN_0047a76d",
    "size": 167,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x47a814",
@@ -14541,8 +14587,10 @@
    "name": "FUN_0047f76d",
    "size": 458,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x47f937",
@@ -14681,10 +14729,8 @@
    "name": "FUN_00481b9a",
    "size": 1399,
    "is_thunk": false,
-   "status": "ported",
-   "src": [
-    "src/engine.c"
-   ]
+   "status": "unported",
+   "src": []
   },
   {
    "va": "0x482111",
@@ -16519,8 +16565,10 @@
    "name": "FUN_00499cb1",
    "size": 204,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/engine_bf_input.c"
+   ]
   },
   {
    "va": "0x499d7d",
