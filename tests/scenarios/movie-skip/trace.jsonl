@@ -1,0 +1,30 @@
+# movie-skip: the boot with deterministic Smacker (--movies), each movie cut short by a click: intro.smk, imptitle.smk,
+# credits.smk (screen 0x22 -> 'OK: SMK user ends' 0x42df30), then the title's 'Lords of Magic?' (lom.smk, played from
+# the menu and clicked away), back on the title menu; Single player -> Load a game (page 3) -> its Cancel thumb
+# (menu_action_p3_cancel 0x434308: back to page 2). Authored over rhbot 2026-11-04.
+{"meta": {"step_ms": 17, "vbase": 1000000, "frames": 1274, "movies": true}}
+{"f": 150, "m": 512, "w": 0, "l": 15728960}
+{"f": 152, "m": 513, "w": 1, "l": 15728960}
+{"f": 154, "m": 514, "w": 0, "l": 15728960}
+{"f": 336, "m": 512, "w": 0, "l": 15728960}
+{"f": 338, "m": 513, "w": 1, "l": 15728960}
+{"f": 340, "m": 514, "w": 0, "l": 15728960}
+{"f": 522, "m": 512, "w": 0, "l": 15728960}
+{"f": 524, "m": 513, "w": 1, "l": 15728960}
+{"f": 526, "m": 514, "w": 0, "l": 15728960}
+{"f": 658, "m": 512, "w": 0, "l": 11403584}
+{"f": 660, "m": 513, "w": 1, "l": 11403584}
+{"f": 662, "m": 514, "w": 0, "l": 11403584}
+{"f": 784, "m": 512, "w": 0, "l": 15728960}
+{"f": 786, "m": 513, "w": 1, "l": 15728960}
+{"f": 788, "m": 514, "w": 0, "l": 15728960}
+{"f": 950, "m": 512, "w": 0, "l": 7012672}
+{"f": 952, "m": 513, "w": 1, "l": 7012672}
+{"f": 954, "m": 514, "w": 0, "l": 7012672}
+{"f": 1056, "m": 512, "w": 0, "l": 9371968}
+{"f": 1058, "m": 513, "w": 1, "l": 9371968}
+{"f": 1060, "m": 514, "w": 0, "l": 9371968}
+{"f": 1162, "m": 512, "w": 0, "l": 5898703}
+{"f": 1168, "m": 512, "w": 0, "l": 5898703}
+{"f": 1170, "m": 513, "w": 1, "l": 5898703}
+{"f": 1172, "m": 514, "w": 0, "l": 5898703}
