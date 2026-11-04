@@ -2,10 +2,11 @@
  * layout: engine_bf.h (record accessors, globals). Each function: "Port of FUN_00xxxxxx" + what it does.
  * Findings: docs/findings/bf-setup.md. */
 #include "engine_bf.h"
-#include "engine.h"             /* engine_rng_step_single (FUN_00404b2c) */
-#include "engine_combat.h"      /* g_combat_render_active: DAT_0056d5c8 */
+#include "engine.h"             /* engine_rng_step_single (FUN_00404b2c), g_sim_mp_active, the screen / redraw bridges */
+#include "engine_combat.h"      /* g_combat_render_active / _anim_t0 / _msg_clock: DAT_0056d5c8 / 0053e994 / 004eeae8 */
 #include "engine_map_query.h"   /* g_cell_cursor_col / _row: DAT_00569570 / DAT_00569578 (rhost: a synced mirror) */
 #include "engine_math.h"        /* engine_math_lookup_threshold (FUN_00404e4b) */
+#include "engine_territory.h"   /* the bound dirty state (DAT_0053e9ac …), FUN_0045240a */
 #include "strutil.h"            /* strutil_bounded_copy (FUN_00401136; the port takes (dst, src, n)) */
 
 /* the .data tables in the g_bf_4d9578 block (unit classes 0x4d96d0 / 0x4d97b0, battle-size tiers 0x4d9658 …) */
@@ -717,7 +718,8 @@ int bf_47d816(int k, int edge)
     for (g_cell_cursor_row = 0, g_bf_5533cc = 0; g_cell_cursor_row < 80; g_cell_cursor_row++) \
         for (g_cell_cursor_col = 0; g_cell_cursor_col < 80; g_cell_cursor_col++, g_bf_5533cc += 8)
 
-/* the clamped anchor slot of a deployment marker: the marker's right neighbour's tile +0x10 (byte) − 64, 0..11 */
+/* the clamped anchor slot of a deployment marker: the kind byte (+0) of the cell two to the right (byte_5440F0[off]:
+ * the map stores the slot as code 64 + n there) − 64, 0..11 */
 static int bf_anchor_slot(int o)
 {
     int v = BCELL8(o, 0x5440f0) - 64;
@@ -940,4 +942,897 @@ int bf_47aaa3(int a0)
     engine_retail_call(0x471d30u, 0);
     bf_471da6();
     return bf_46c7fc(0);
+}
+
+/* ------------------------------------------------------------------ the siege map (FUN_0047c4ba) */
+
+/* Port of FUN_0048eefd (72 B) — the 20 (x, y) pairs at DAT_00553c80 (g_footprint_storage_160) cleared. */
+int bf_48eefd(void)
+{
+    for (int i = 0; i < 20; i++) {
+        AT(int32_t, g_footprint_storage_160, 0x553c80, 0x553c80 + 8 * i) = 0;
+        AT(int32_t, g_footprint_storage_160, 0x553c80, 0x553c84 + 8 * i) = 0;
+    }
+    return 19;
+}
+
+/* Port of FUN_0047dc9c (50 B) — siege-map code 0xed at the cursor cell: tile +3 = 0xed, +2 &= 0xe3. */
+int bf_47dc9c(void)
+{
+    BCELL8(g_bf_5533cc, 0x5440e3) = 0xed;
+    BCELL8(g_bf_5533cc, 0x5440e2) &= 0xe3;
+    return g_bf_5533cc;
+}
+
+/* Port of FUN_0047dcce (184 B) — siege-map code 0xee (water) at the cursor cell: s_slot_00553fb0 = 0, the tile
+ * auto-tiled against the kind-11 neighbours (FUN_0047d816 / FUN_0046c2de over 0x4d7610, 49 patterns; tile 0 if none),
+ * +2 = (+2 & 0xe3) | 4, +1 |= 0x10, +7 = 2. Unverified (no corpus scenario reaches it). */
+int bf_47dcce(void)
+{
+    s_slot_00553fb0 = 0;
+    BCELL8(g_bf_5533cc, 0x5440e3) = 0;
+    bf_47d816(11, 1);
+    if (bf_pick_feature(&g_bf_4d7610, 49) != 0)
+        BCELL8(g_bf_5533cc, 0x5440e3) = (uint8_t)(g_bf_568200 + g_bf_57c8a4);
+    BCELL8(g_bf_5533cc, 0x5440e2) &= 0xe3;
+    BCELL8(g_bf_5533cc, 0x5440e2) |= 4;
+    BCELL8(g_bf_5533cc, 0x5440e1) |= 0x10;
+    BCELL8(g_bf_5533cc, 0x5440e7) = 2;
+    return g_bf_5533cc;
+}
+
+/* Port of FUN_0047e1dc (84 B) — siege-map code 0xef at the cursor cell: tile +3 = the single-LFSR output & 0xf,
+ * +2 = (+2 & 0xe3) | 4. */
+int bf_47e1dc(void)
+{
+    BCELL8(g_bf_5533cc, 0x5440e3) = (uint8_t)(g_bf_5c9a84 & 0xf);
+    BCELL8(g_bf_5533cc, 0x5440e2) &= 0xe3;
+    BCELL8(g_bf_5533cc, 0x5440e2) |= 4;
+    return g_bf_5533cc;
+}
+
+/* Port of FUN_00497024 (378 B) — does any of the 8 neighbours of the cell (col, row) at offset `off` have kind
+ * +7 == k (N, E, S, W, NE, SE, SW, NW; off-grid neighbours never)? */
+int bf_497024(int col, int row, int off, int k)
+{
+    if (row > 0 && BCELL8(off, 0x543e67) == k)
+        return 1;
+    if (col < 79 && BCELL8(off, 0x5440ef) == k)
+        return 1;
+    if (row < 79 && BCELL8(off, 0x544367) == k)
+        return 1;
+    if (col > 0 && BCELL8(off, 0x5440df) == k)
+        return 1;
+    if (row > 0 && col < 79 && BCELL8(off, 0x543e6f) == k)
+        return 1;
+    if (col < 79 && row < 79 && BCELL8(off, 0x54436f) == k)
+        return 1;
+    if (row < 79 && col > 0 && BCELL8(off, 0x54435f) == k)
+        return 1;
+    return col > 0 && row > 0 && BCELL8(off, 0x543e5f) == k;
+}
+
+/* Port of FUN_00497247 (178 B) — does any of the 4 orthogonal neighbours of (col, row) / `off` have +1 bit 3? */
+int bf_497247(int col, int row, int off)
+{
+    if (row > 0 && (BCELL8(off, 0x543e61) & 8) != 0)
+        return 1;
+    if (col < 79 && (BCELL8(off, 0x5440e9) & 8) != 0)
+        return 1;
+    if (row < 79 && (BCELL8(off, 0x544361) & 8) != 0)
+        return 1;
+    return col > 0 && (BCELL8(off, 0x5440d9) & 8) != 0;
+}
+
+/* Port of FUN_0049719e (169 B) — are all 4 orthogonal neighbours of (col, row) / `off` (on the grid) of +7 kind 2?
+ * Unverified (no corpus scenario reaches it). */
+int bf_49719e(int col, int row, int off)
+{
+    if (row > 0 && BCELL8(off, 0x543e67) != 2)
+        return 0;
+    if (col < 79 && BCELL8(off, 0x5440ef) != 2)
+        return 0;
+    if (row < 79 && BCELL8(off, 0x544367) != 2)
+        return 0;
+    return col <= 0 || BCELL8(off, 0x5440df) == 2;
+}
+
+/* the siege zone flood fills: repeat a full cell pass (retail's cursor globals) until a pass changes nothing */
+#define BF_UNTIL_STABLE(changed) for (int changed = 1; changed != 0;) \
+    for (changed = 0, g_cell_cursor_row = 0, g_bf_5533cc = 0; g_cell_cursor_row < 80; g_cell_cursor_row++) \
+        for (g_cell_cursor_col = 0; g_cell_cursor_col < 80; g_cell_cursor_col++, g_bf_5533cc += 8)
+
+/* Port of FUN_0047e263 (292 B) — flood zone 6 (+7): a cell of zone 14, or zone 0 with height +4 >= 4, next to
+ * zone 6 (FUN_00496f72) joins it (a zone-14 cell gets height 4). */
+int bf_47e263(void)
+{
+    BF_UNTIL_STABLE(ch) {
+        int z = BCELL8(g_bf_5533cc, 0x5440e7), h = BCELL8(g_bf_5533cc, 0x5440e4);
+        if ((z == 14 || (z == 0 && h >= 4)) && bf_496f72(g_cell_cursor_col, g_cell_cursor_row, g_bf_5533cc, 6) != 0) {
+            BCELL8(g_bf_5533cc, 0x5440e7) = 6;
+            ch = 1;
+            if (z == 14)
+                BCELL8(g_bf_5533cc, 0x5440e4) = 4;
+        }
+    }
+    return 0;
+}
+
+/* Port of FUN_0047e387 (422 B) — flood zone 5: every zone-14 cell, and a zone-0 cell of height <= 1 next to a +1
+ * bit-3 cell (FUN_00497247) or zone 7 / 5 (FUN_00496f72). */
+int bf_47e387(void)
+{
+    BF_UNTIL_STABLE(ch) {
+        int z = BCELL8(g_bf_5533cc, 0x5440e7), h = BCELL8(g_bf_5533cc, 0x5440e4);
+        if (z != 14 && !(z == 0 && h <= 1))
+            continue;
+        if (z == 14 || bf_497247(g_cell_cursor_col, g_cell_cursor_row, g_bf_5533cc) != 0 ||
+            bf_496f72(g_cell_cursor_col, g_cell_cursor_row, g_bf_5533cc, 7) != 0 ||
+            bf_496f72(g_cell_cursor_col, g_cell_cursor_row, g_bf_5533cc, 5) != 0) {
+            BCELL8(g_bf_5533cc, 0x5440e7) = 5;
+            ch = 1;
+        }
+    }
+    return 0;
+}
+
+/* Port of FUN_0047e52d (315 B) — flood zone 4: a zone-0 cell of height != 0 next to zone 5 or 4. */
+int bf_47e52d(void)
+{
+    BF_UNTIL_STABLE(ch) {
+        if (BCELL8(g_bf_5533cc, 0x5440e7) != 0 || BCELL8(g_bf_5533cc, 0x5440e4) == 0)
+            continue;
+        if (bf_496f72(g_cell_cursor_col, g_cell_cursor_row, g_bf_5533cc, 5) != 0 ||
+            bf_496f72(g_cell_cursor_col, g_cell_cursor_row, g_bf_5533cc, 4) != 0) {
+            BCELL8(g_bf_5533cc, 0x5440e7) = 4;
+            ch = 1;
+        }
+    }
+    return 0;
+}
+
+/* Port of FUN_0047e668 (330 B) — flood zone 3: a zone-14 cell, or zone 0 of height 0, with an 8-neighbour of
+ * zone 4 or 3 (FUN_00497024). */
+int bf_47e668(void)
+{
+    BF_UNTIL_STABLE(ch) {
+        int z = BCELL8(g_bf_5533cc, 0x5440e7);
+        if (z != 14 && !(z == 0 && BCELL8(g_bf_5533cc, 0x5440e4) == 0))
+            continue;
+        if (bf_497024(g_cell_cursor_col, g_cell_cursor_row, g_bf_5533cc, 4) != 0 ||
+            bf_497024(g_cell_cursor_col, g_cell_cursor_row, g_bf_5533cc, 3) != 0) {
+            BCELL8(g_bf_5533cc, 0x5440e7) = 3;
+            ch = 1;
+        }
+    }
+    return 0;
+}
+
+/* Port of FUN_0047e7b2 (372 B) — flood zone 1 (outside the walls) from the corners (cell 0 and the bottom-left
+ * cell get zone 1): a cell of zone 0 or 3 (not 1 / 2, <= 3) and height 0 with an 8-neighbour in zone 1
+ * (FUN_00497024), or — zone 0 only — whose 4 neighbours are all zone 2 (FUN_0049719e). */
+int bf_47e7b2(void)
+{
+    BCELL8(0, 0x5440e7) = 1;
+    BCELL8(0, 0x550667) = 1;
+    BF_UNTIL_STABLE(ch) {
+        int z = BCELL8(g_bf_5533cc, 0x5440e7), h = BCELL8(g_bf_5533cc, 0x5440e4);
+        if (z == 1 || z == 2 || z > 3 || h > 0)
+            continue;
+        if (bf_497024(g_cell_cursor_col, g_cell_cursor_row, g_bf_5533cc, 1) != 0) {
+            BCELL8(g_bf_5533cc, 0x5440e7) = 1;
+            ch = 1;
+        }
+        if (z == 3)
+            continue;
+        if (bf_49719e(g_cell_cursor_col, g_cell_cursor_row, g_bf_5533cc) != 0) {
+            BCELL8(g_bf_5533cc, 0x5440e7) = 1;
+            ch = 1;
+        }
+    }
+    return 0;
+}
+
+/* Port of FUN_0047e926 (284 B) — the leftovers: a zone-0 cell next to zone 2 joins zone 3, else next to zone 6
+ * joins 6. */
+int bf_47e926(void)
+{
+    BF_UNTIL_STABLE(ch) {
+        if (BCELL8(g_bf_5533cc, 0x5440e7) != 0)
+            continue;
+        if (bf_496f72(g_cell_cursor_col, g_cell_cursor_row, g_bf_5533cc, 2) != 0) {
+            BCELL8(g_bf_5533cc, 0x5440e7) = 3;
+            ch = 1;
+        } else if (bf_496f72(g_cell_cursor_col, g_cell_cursor_row, g_bf_5533cc, 6) != 0) {
+            BCELL8(g_bf_5533cc, 0x5440e7) = 6;
+            ch = 1;
+        }
+    }
+    return 0;
+}
+
+/* Port of FUN_0047e230 (51 B) — the siege map's zones (+7): the six flood fills, then byte 0 of every cell cleared. */
+int bf_47e230(void)
+{
+    bf_47e263();
+    bf_47e387();
+    bf_47e52d();
+    bf_47e668();
+    bf_47e7b2();
+    bf_47e926();
+    return bf_46c7fc(0);
+}
+
+/* the castle layer file buffer DAT_004eabec (an 80-wide map of marker codes) */
+#define LAYER8(o) (((uint8_t *)(uintptr_t)g_bf_4eabec)[o])
+
+/* Port of FUN_0047d474 (68 B) — a castle-layer marker's type: byte o + 1 (returned), then o + 1 and o + 3 cleared. */
+int bf_47d474(int o)
+{
+    int t = LAYER8(o + 1);
+    LAYER8(o + 1) = 0;
+    LAYER8(o + 3) = 0;
+    return t;
+}
+
+/* Port of FUN_0047d4b8 (140 B) — a 2-bit marker index from the row below (o + 80, o + 81 == 7: bits 1, 0); the
+ * 4 bytes cleared. */
+int bf_47d4b8(int o)
+{
+    int v = 0;
+    if (LAYER8(o + 80) == 7)
+        v = 2;
+    if (LAYER8(o + 81) == 7)
+        v++;
+    LAYER8(o + 80) = 0;
+    LAYER8(o + 81) = 0;
+    LAYER8(o + 82) = 0;
+    LAYER8(o + 83) = 0;
+    return v;
+}
+
+/* Port of FUN_0047d5ec (196 B) — a 4-bit marker index from the row below (o + 80 .. o + 83 == 7: bits 3..0); the
+ * 4 bytes cleared. */
+int bf_47d5ec(int o)
+{
+    int v = 0;
+    if (LAYER8(o + 80) == 7)
+        v = 8;
+    if (LAYER8(o + 81) == 7)
+        v += 4;
+    if (LAYER8(o + 82) == 7)
+        v += 2;
+    if (LAYER8(o + 83) == 7)
+        v++;
+    LAYER8(o + 80) = 0;
+    LAYER8(o + 81) = 0;
+    LAYER8(o + 82) = 0;
+    LAYER8(o + 83) = 0;
+    return v;
+}
+
+/* Port of FUN_0047d6b0 (78 B) — a deployment marker's slot: byte o + 2 − 64 (unclamped); o + 80 / o + 81 cleared. */
+int bf_47d6b0(int o)
+{
+    int v = LAYER8(o + 2) - 64;
+    LAYER8(o + 80) = 0;
+    LAYER8(o + 81) = 0;
+    return v;
+}
+
+/* clamp a deployment slot to 0..11 */
+static int bf_clamp_slot(int v)
+{
+    if (v < 0)
+        v = 0;
+    if (v >= 12)
+        v = 11;
+    return v;
+}
+
+/* Port of FUN_0047cec1 (1459 B) — the castle `castle`'s marker layer (stnfield.pl8 / stnfiel2.pl8 for a custom
+ * battle: a 32-byte index entry +28..30 → 80 × 80 bytes into DAT_004eabec): the siege anchor tables cleared
+ * (s_slot_00554180: 5 × 16 pairs; s_slot_0055cd90: 5 × 4 pairs), then per marker cell (code 4 = the attacker's,
+ * 15 = the defender's; its type FUN_0047d474): the field anchors s_slot_00553150 / +0x60 (types 4 / 15, slot
+ * FUN_0047d6b0) and the siege anchor rows (types 64 / 65 / 68 / 71 → s_slot_00554180 +0 / +0x80 / +0x100 / +0x200 by
+ * FUN_0047d5ec, or s_slot_0055cd90 +0 / +0x20 / +0xa0 / +0x60 by FUN_0047d4b8; type 67 (defender): the four
+ * pairs at +0x40 = (col, row − 2)), each (col + 2, row (+ 2 for the siege rows)). */
+int bf_47cec1(int castle)
+{
+    /* TODO(bf-link): io_path_chdir_base / io_read_file_at (io_path.c / io.c, not linked in rhost) */
+    engine_retail_call(0x4af502u, 0);
+    engine_retail_call(0x4af8d9u, 4, (uint32_t)(uintptr_t)&g_bf_4d9ee8[s_slot_0057a0f0 != 0 ? 0x00 : 0x10],
+                       (uint32_t)g_bf_4eabec, 0x3e8u, 0u);
+    const uint8_t *idx = (const uint8_t *)(uintptr_t)g_bf_4eabec + 32 * castle;
+    uint32_t off = (uint32_t)idx[28] + ((uint32_t)idx[30] << 16) + ((uint32_t)idx[29] << 8);
+    engine_retail_call(0x4af8d9u, 4, (uint32_t)(uintptr_t)&g_bf_4d9ee8[s_slot_0057a0f0 != 0 ? 0x20 : 0x30],
+                       (uint32_t)g_bf_4eabec, 0x1900u, off);
+    for (int i = 0; i < 16; i++)
+        for (int j = 0; j < 5; j++) {
+            SIEGE_ANCHOR(0x554184 + 128 * j + 8 * i) = 0;
+            SIEGE_ANCHOR(0x554180 + 128 * j + 8 * i) = 0;
+        }
+    for (int k = 0; k < 4; k++)
+        for (int m = 0; m < 5; m++) {
+            AT(int32_t, s_slot_0055cd90, 0x55cd90, 0x55cd94 + 32 * m + 8 * k) = 0;
+            AT(int32_t, s_slot_0055cd90, 0x55cd90, 0x55cd90 + 32 * m + 8 * k) = 0;
+        }
+#define DEF_ANCHOR(va) AT(int32_t, s_slot_0055cd90, 0x55cd90, (va))
+    int n = 0;
+    int last = 0;
+    BF_FOR_CELLS {
+        int o = n++;
+        uint8_t c = LAYER8(o);
+        int col = g_cell_cursor_col, row = g_cell_cursor_row;
+        if (c == 4) {
+            int t = bf_47d474(o);
+            last = t;
+            int v;
+            switch (t) {
+            case 4:
+                v = bf_clamp_slot(bf_47d6b0(o));
+                ANCHOR(0x553150 + 8 * v) = col + 2;
+                ANCHOR(0x553154 + 8 * v) = row;
+                break;
+            case 64: v = bf_47d5ec(o); SIEGE_ANCHOR(0x554180 + 8 * v) = col + 2; SIEGE_ANCHOR(0x554184 + 8 * v) = row + 2; break;
+            case 65: v = bf_47d5ec(o); SIEGE_ANCHOR(0x554200 + 8 * v) = col + 2; SIEGE_ANCHOR(0x554204 + 8 * v) = row + 2; break;
+            case 68: v = bf_47d5ec(o); SIEGE_ANCHOR(0x554280 + 8 * v) = col + 2; SIEGE_ANCHOR(0x554284 + 8 * v) = row + 2; break;
+            case 71: v = bf_47d5ec(o); SIEGE_ANCHOR(0x554380 + 8 * v) = col + 2; SIEGE_ANCHOR(0x554384 + 8 * v) = row + 2; break;
+            default: break;
+            }
+        } else if (c == 15) {
+            int t = bf_47d474(o);
+            last = t;
+            int v;
+            switch (t) {
+            case 15:
+                v = bf_clamp_slot(bf_47d6b0(o));
+                ANCHOR(0x5531b0 + 8 * v) = col + 2;
+                ANCHOR(0x5531b4 + 8 * v) = row;
+                break;
+            case 64: v = bf_47d4b8(o); DEF_ANCHOR(0x55cd90 + 8 * v) = col + 2; DEF_ANCHOR(0x55cd94 + 8 * v) = row + 2; break;
+            case 65: v = bf_47d4b8(o); DEF_ANCHOR(0x55cdb0 + 8 * v) = col + 2; DEF_ANCHOR(0x55cdb4 + 8 * v) = row + 2; break;
+            case 67:
+                for (int p = 0; p < 4; p++) {
+                    DEF_ANCHOR(0x55cdd0 + 8 * p) = col;
+                    DEF_ANCHOR(0x55cdd4 + 8 * p) = row - 2;
+                }
+                break;
+            case 68: v = bf_47d4b8(o); DEF_ANCHOR(0x55ce30 + 8 * v) = col + 2; DEF_ANCHOR(0x55ce34 + 8 * v) = row + 2; break;
+            case 71: v = bf_47d4b8(o); DEF_ANCHOR(0x55cdf0 + 8 * v) = col + 2; DEF_ANCHOR(0x55cdf4 + 8 * v) = row + 2; break;
+            default: break;
+            }
+        }
+    }
+#undef DEF_ANCHOR
+    (void)last;
+    return 0;
+}
+
+/* Port of FUN_004787a4 (290 B) — a siege of the current army's castle (DAT_0056822c; army +0x1c3 == 2) resumes
+ * its saved siege state (+0x1e4 / +0x1e6 words, +0x1e8 / +0x1ec dwords, +0x1f0 / +0x1f1 bytes → s_slot_0057a0d8,
+ * s_slot_0056d648, s_slot_0053e990, s_slot_00553fb0, s_slot_0055307c, s_slot_00569588) and reloads the castle's
+ * scenario (castles_read_scenario); any other battle zeroes those army fields. */
+int bf_4787a4(void)
+{
+#define ARMY(T, va) REC(T, g_per_army_768, 0x53f9b0u, 768, S32(s_slot_0056822c), (va))
+    if (ARMY(uint8_t, 0x53fb73) == 2) {
+        S32(s_slot_0057a0d8) = ARMY(int16_t, 0x53fb94);
+        S32(s_slot_0056d648) = ARMY(int16_t, 0x53fb96);
+        S32(s_slot_0053e990) = ARMY(int32_t, 0x53fb98);
+        S32(s_slot_00553fb0) = ARMY(int32_t, 0x53fb9c);
+        s_slot_0055307c = ARMY(uint8_t, 0x53fba0);
+        s_slot_00569588 = ARMY(uint8_t, 0x53fba1);
+        /* TODO(bf-link): castles_read_scenario (save.c, not linked in rhost; the port takes a path) */
+        return (int)engine_retail_call(0x4aea70u, 1, s_slot_0056822c);
+    }
+    ARMY(int16_t, 0x53fb94) = 0;
+    ARMY(int16_t, 0x53fb96) = 0;
+    ARMY(int32_t, 0x53fb98) = 0;
+    ARMY(int32_t, 0x53fb9c) = 0;
+    ARMY(uint8_t, 0x53fba0) = 0;
+    ARMY(uint8_t, 0x53fba1) = 0;
+    return S32(s_slot_0056822c) << 8;
+#undef ARMY
+}
+
+/* Port of FUN_0047c4ba (2567 B) — build a siege battlefield for castle `castle` (a custom battle: s_slot_0056d590,
+ * also into s_slot_0055401c): the cell bytes cleared; the castle map (batfield.pl8 name slot 1 / 3: a 32-byte
+ * index entry +12..14) decoded — pass 1: code 0xee → kind 11 (water), else 1; pass 2: codes 0xed..0xef (one
+ * single-LFSR step each: FUN_0047dc9c / FUN_0047dcce / FUN_0047e1dc), any other code is the tile +3 whose height /
+ * walk flag come from 0x4d7b80 (a stone castle, s_slot_0057c910) or 0x4d7d80, then the height classes (+4) 5..12
+ * become the wall / gate / tower cells (+7 zones 6, 7, 8, 11, 14; the first gate s_slot_00553274, the gatehouse
+ * s_slot_00553ee4 / s_slot_0053e9d4 …); the siege counters reset (s_slot_00553fb0 = 500 …; the castle flags
+ * s_slot_0055307c / g_bf_542cd4 / g_bf_57cb48 from 0x4d4a98 / 0x4d4ad8 / 0x4d4a18 in a custom battle); the tile
+ * scratch; the marker layer (FUN_0047cec1) and the zones (FUN_0047e230); DAT_004eeb64 from the defender's anchor
+ * pair 71 of the gate DAT_0056d6b0; DAT_004eeb6c = an RNG roll below 128·(siege towers) − 20·(rams) − 10·(catapults)
+ * of the attacker; FUN_00471da6, FUN_004787a4, the path scratch again. */
+int bf_47c4ba(int castle)
+{
+    bf_46c7fc(5); bf_46c7fc(6); bf_46c7fc(1); bf_46c7fc(0);
+    bf_46c7fc(3); bf_46c7fc(4); bf_46c7fc(7); bf_46c7fc(2);
+    int file;
+    if (s_slot_0057a0f0 != 0) {
+        s_slot_0055401c = s_slot_0056d590;
+        s_slot_00553528 = s_slot_0056d590;
+        file = 3;
+    } else {
+        S32(s_slot_00553528) = castle;
+        file = 1;
+    }
+    /* TODO(bf-link): io_path_chdir_base / io_read_file_at (io_path.c / io.c, not linked in rhost) */
+    engine_retail_call(0x4af502u, 0);
+    uint32_t name = (uint32_t)(uintptr_t)&g_bf_4d9108[14 * file];
+    engine_retail_call(0x4af8d9u, 4, name, (uint32_t)g_bf_4eabec, 0x3e8u, 0u);
+    const uint8_t *idx = (const uint8_t *)(uintptr_t)g_bf_4eabec + 32 * S32(s_slot_00553528);
+    uint32_t off = ((uint32_t)idx[14] << 16) + ((uint32_t)idx[13] << 8) + (uint32_t)idx[12];
+    engine_retail_call(0x4af8d9u, 4, name, (uint32_t)g_bf_4eabec, 0x1900u, off);
+    s_slot_0057a0d8 = 0;
+    s_slot_0056d648 = 0;
+    bf_48eefd();
+    s_slot_00553fb0 = 500;
+    s_slot_0052af9c = 0;
+    s_slot_00554034 = 0;
+    s_slot_00568da4 = 0;
+    if (s_slot_0057a0f0 != 0)
+        s_slot_0055307c = (uint32_t)AT(int32_t, g_bf_4d4a98, 0x4d4a98, 0x4d4a98 + 4 * S32(s_slot_0056d590));
+    else
+        s_slot_0055307c = s_slot_0055401c == 0 || s_slot_0055401c == 3;
+    if (s_slot_0057a0f0 != 0)
+        g_bf_542cd4 = AT(int32_t, g_bf_4d4a98, 0x4d4a98, 0x4d4ad8 + 4 * S32(s_slot_0056d590));
+    else
+        g_bf_542cd4 = s_slot_0055401c == 1;
+    if (s_slot_0057a0f0 != 0)
+        g_bf_57cb48 = g_bf_4d4a18[S32(s_slot_0056d590)];
+    else
+        g_bf_57cb48 = 0;
+    s_slot_00569588 = 0;
+    s_slot_00553270 = 0;
+    s_slot_0053e990 = 0;
+    s_slot_0053f680 = 0;
+    s_slot_00553f3c = 0;
+    s_slot_005440a8 = 0;
+    s_slot_00553f9c = 0;
+    s_slot_00553ee4 = 0;
+    s_slot_0053e9d4 = 0;
+    s_slot_0055cd74 = 0;
+    s_slot_00553274 = 0;
+    int n = 0;
+    BF_FOR_CELLS
+        BCELL8(g_bf_5533cc, 0x5440e0) = ((const uint8_t *)(uintptr_t)g_bf_4eabec)[n++] == 0xee ? 11 : 1;
+    n = 0;
+    BF_FOR_CELLS {
+        uint8_t c = ((const uint8_t *)(uintptr_t)g_bf_4eabec)[n++];
+        if (c >= 0xed && c <= 0xef) {
+            bf_rng_single();
+            if (c == 0xed)
+                bf_47dc9c();
+            else if (c == 0xee)
+                bf_47dcce();
+            else
+                bf_47e1dc();
+            continue;
+        }
+        int o = g_bf_5533cc;
+        BCELL8(o, 0x5440e3) = c;
+        BCELL8(o, 0x5440e2) &= 0xe3;
+        if (s_slot_0057c910 != 0) {
+            BCELL8(o, 0x5440e4) = AT(uint8_t, g_bf_4d7b80, 0x4d7b80, 0x4d7b80 + 2 * c);
+            if (AT(uint8_t, g_bf_4d7b80, 0x4d7b80, 0x4d7b81 + 2 * c) == 0)
+                BCELL8(o, 0x5440e1) |= 0x10;
+        } else {
+            BCELL8(o, 0x5440e4) = AT(uint8_t, g_bf_4d7d80, 0x4d7d80, 0x4d7d80 + 2 * c);
+            if (AT(uint8_t, g_bf_4d7d80, 0x4d7d80, 0x4d7d81 + 2 * c) == 0)
+                BCELL8(o, 0x5440e1) |= 0x10;
+        }
+        switch (BCELL8(o, 0x5440e4)) {
+        case 5:
+            BCELL8(o, 0x5440e1) = 0;
+            BCELL8(o, 0x5440e1) |= 4;
+            BCELL8(o, 0x5440e4) = 3;
+            break;
+        case 6:
+            if (s_slot_00553274 == 0)
+                S32(s_slot_00553274) = TERR(int8_t, S32(s_slot_00568210), 0x52f0b1) != 0 ? o - 0x280 : o;
+            BCELL8(o, 0x5440e7) = 6;
+            BCELL8(o, 0x5440e1) = 0;
+            BCELL8(o, 0x5440e1) |= 8;
+            BCELL8(o, 0x5440e4) = s_slot_0057c910 != 0 ? 4 : 1;
+            BCELL8(o, 0x5440e2) |= 0x80;
+            break;
+        case 7:
+            BCELL8(o, 0x5440e7) = 7;
+            BCELL8(o, 0x5440e4) = 2;
+            break;
+        case 8:
+            if (s_slot_00553ee4 == 0)
+                S32(s_slot_00553ee4) = o - 0x278;
+            if (++s_slot_0055cd74 == 5)
+                S32(s_slot_0053e9d4) = o - 0x4f0;
+            BCELL8(o, 0x5440e7) = 8;
+            BCELL8(o, 0x5440e1) = 0;
+            BCELL8(o, 0x5440e1) |= 0x20;
+            BCELL8(o, 0x5440e1) |= 4;
+            BCELL8(o, 0x5440e4) = 1;
+            break;
+        case 9:
+            if (s_slot_0053e9d4 == 0)
+                S32(s_slot_0053e9d4) = o - 0x4f0;
+            BCELL8(o, 0x5440e7) = 11;
+            BCELL8(o, 0x5440e1) = 0;
+            BCELL8(o, 0x5440e1) |= 0x40;
+            BCELL8(o, 0x5440e4) = 0;
+            break;
+        case 10:
+            BCELL8(o, 0x5440e7) = 14;
+            BCELL8(o, 0x5440e1) |= 4;
+            BCELL8(o, 0x5440e4) = 0;
+            break;
+        case 11:
+            BCELL8(o, 0x5440e1) = 0;
+            BCELL8(o, 0x5440e1) |= 4;
+            BCELL8(o, 0x5440e4) = 1;
+            break;
+        case 12:
+            BCELL8(o, 0x5440e1) = 0;
+            BCELL8(o, 0x5440e1) |= 4;
+            BCELL8(o, 0x5440e4) = 2;
+            break;
+        default:
+            break;
+        }
+    }
+    /* TODO(bf-link): engine_tile_refresh_path_scratch / _stage_scratch (engine_tile.c, not linked in rhost) */
+    engine_retail_call(0x471c1fu, 0);
+    engine_retail_call(0x471d30u, 0);
+    if (g_bf_57cb48 != 0)
+        s_slot_00553fb0 = 500;
+    g_bf_57cb48 = 0;
+    if (s_slot_0057a0f0 != 0)
+        bf_47cec1(S32(s_slot_0056d590));
+    else
+        bf_47cec1(castle);
+    bf_47e230();
+    g_bf_4eeb64 = 0;
+    int gate = S32(s_slot_0056d6b0);
+    if (AT(int32_t, s_slot_0055cd90, 0x55cd90, 0x55cdf4 + 8 * gate) <= 60) {
+        if (AT(int32_t, s_slot_0055cd90, 0x55cd90, 0x55cdf0 + 8 * gate) >= 40)
+            g_bf_4eeb64 = 2;
+        else
+            g_bf_4eeb64 = 1;
+    }
+    int att = S32(s_slot_00568210);
+    int roll = TERR(int16_t, att, 0x52f22e) != 0 ? 128 : 0;
+    roll -= 20 * TERR(int16_t, att, 0x52f22c);
+    roll -= 10 * TERR(int16_t, att, 0x52f22a);
+    bf_rng_step();
+    g_bf_4eeb6c = g_bf_58fd7c < roll;
+    bf_471da6();
+    bf_4787a4();
+    return (int)engine_retail_call(0x471c1fu, 0);
+}
+
+/* ------------------------------------------------------------------ the custom-battle field (map set 3) */
+
+/* Port of FUN_0042d806 (81 B) — read custom map `m` (80 × 80 codes, 6400 B at 5748 + 6400·m) of the file named at
+ * 0x53f5fc (0x53f1e0 + 0x41c) into `buf`. Unverified (no corpus scenario reaches it). */
+int bf_42d806(int m, int buf)
+{
+    /* TODO(bf-link): io_path_chdir_base / io_read_file_at (io_path.c / io.c, not linked in rhost) */
+    engine_retail_call(0x4af502u, 0);
+    /* retail: `offset byte_53F1E0 + 0x41c` — the custom map file's name buffer 0x53f5fc has no port symbol yet
+     * (the standalone needs one; rhost: g_bf_53f1e0 sits at its VA, so the address is retail's) */
+    uint32_t name = (uint32_t)(uintptr_t)g_bf_53f1e0 + 0x41cu;
+    return (int)engine_retail_call(0x4af8d9u, 4, name, (uint32_t)buf, 0x1900u, (uint32_t)(6400 * m + 5748));
+}
+
+/* the 12 field deployment anchors around a custom map's marker at the cursor: (col, row) + the 12 offsets of
+ * 0x4d9578, clamped to 1..78, into the anchor pairs at `va` */
+static void bf_custom_anchors(int va)
+{
+    for (int j = 0; j < 12; j++) {
+        int x = g_cell_cursor_col + T4D(0x4d9578 + 8 * j);
+        int y = g_cell_cursor_row + T4D(0x4d957c + 8 * j);
+        if (x < 1)
+            x = 1;
+        if (x >= 79)
+            x = 78;
+        if (y < 1)
+            y = 1;
+        if (y >= 79)
+            y = 78;
+        ANCHOR(va + 8 * j) = x;
+        ANCHOR(va + 4 + 8 * j) = y;
+    }
+}
+
+/* Port of FUN_0047b8b2 (3080 B) — FUN_0047aaa3 for a custom battle on a user-made map (s_slot_0053e91c == 3; map
+ * s_slot_0056d590 via FUN_0042d806): its own code table (18 = kind 8 and a 16 one / two rows below becomes 20,
+ * 32 → 3, 80 → 6, unknown → 1), one attacker / defender marker each (kind 20 / 30: the 12 anchors around it
+ * (0x4d9578), the four gate pairs and the six siege pairs all at the marker — RETAIL: the attacker's marker
+ * fills the defender-side tables s_slot_00544050+0x20 and the defender's +0, as listed), kinds 3 / 6 get a
+ * random tile (+32 / +124 + (single-LFSR & 7)). Otherwise FUN_0047aaa3's passes. Unverified (no corpus scenario
+ * plays a custom map). */
+int bf_47b8b2(int a0)
+{
+    (void)a0;
+    bf_46c7fc(5); bf_46c7fc(6); bf_46c7fc(1); bf_46c7fc(0);
+    bf_46c7fc(3); bf_46c7fc(4); bf_46c7fc(7); bf_46c7fc(2);
+    s_slot_00553528 = s_slot_0056d590;
+    engine_retail_call(0x4af502u, 0);   /* TODO(bf-link): io_path_chdir_base (io_path.c, not linked in rhost) */
+    bf_42d806(S32(s_slot_00553528), g_bf_4eabec);
+    int n = 0;
+    BF_FOR_CELLS {
+        int o = g_bf_5533cc, i = n++;
+        uint8_t *buf = (uint8_t *)(uintptr_t)g_bf_4eabec;
+        switch (buf[i]) {
+        case 0: BCELL8(o, 0x5440e0) = 1; break;
+        case 2: BCELL8(o, 0x5440e0) = 4; break;
+        case 16: BCELL8(o, 0x5440e0) = 7; break;
+        case 20: BCELL8(o, 0x5440e0) = 9; break;
+        case 18:
+            BCELL8(o, 0x5440e0) = 8;
+            if (buf[i + 80] == 16)
+                buf[i + 80] = 20;
+            if (buf[i + 160] == 16)
+                buf[i + 160] = 20;
+            break;
+        case 9: BCELL8(o, 0x5440e0) = 11; break;
+        case 4: BCELL8(o, 0x5440e0) = 20; break;
+        case 15: BCELL8(o, 0x5440e0) = 30; break;
+        case 32: BCELL8(o, 0x5440e0) = 3; break;
+        case 80: BCELL8(o, 0x5440e0) = 6; break;
+        case 10: BCELL8(o, 0x5440e0) = 12; break;
+        case 21: BCELL8(o, 0x5440e0) = 13; break;
+        default: BCELL8(o, 0x5440e0) = 1; break;
+        }
+    }
+    for (int i = 0; i < 12; i++) {
+        ANCHOR(0x5531b4 + 8 * i) = 0;
+        ANCHOR(0x5531b0 + 8 * i) = 0;
+        ANCHOR(0x553154 + 8 * i) = 0;
+        ANCHOR(0x553150 + 8 * i) = 0;
+    }
+    BF_FOR_CELLS {
+        int o = g_bf_5533cc, k = BCELL8(o, 0x5440e0);
+        if (k != 20 && k != 30)
+            continue;
+        int s = k == 20 ? 0 : 1;
+        bf_custom_anchors(0x553150 + 0x60 * s);
+        for (int g = 0; g < 4; g++) {
+            AT(int32_t, s_slot_00544050, 0x544050, 0x544070 - 0x20 * s + 8 * g) = g_cell_cursor_col;
+            AT(int32_t, s_slot_00544050, 0x544050, 0x544074 - 0x20 * s + 8 * g) = g_cell_cursor_row;
+        }
+        for (int g = 0; g < 3; g++) {
+            AT(int32_t, s_slot_00522d30, 0x522d30, 0x522d30 + 0x30 * s + 8 * g) = g_cell_cursor_col;
+            AT(int32_t, s_slot_00522d30, 0x522d30, 0x522d34 + 0x30 * s + 8 * g) = g_cell_cursor_row;
+            AT(int32_t, s_slot_00522d30, 0x522d30, 0x522d48 + 0x30 * s + 8 * g) = g_cell_cursor_col;
+            AT(int32_t, s_slot_00522d30, 0x522d30, 0x522d4c + 0x30 * s + 8 * g) = g_cell_cursor_row;
+        }
+        BCELL8(o, 0x5440e0) = 1;
+    }
+    bf_46c40c((int)(uintptr_t)&g_bf_4d7550, 11);
+    bf_46c40c((int)(uintptr_t)&g_bf_4d75c8, 6);
+    bf_46c40c((int)(uintptr_t)&g_bf_4d7610, 49);
+    bf_46c40c((int)(uintptr_t)&g_bf_4d7860, 17);
+    BF_FOR_CELLS {
+        bf_rng_single();
+        int o = g_bf_5533cc;
+        BCELL8(o, 0x5440e2) &= 0xe3;
+        switch (BCELL8(o, 0x5440e0)) {
+        case 1:
+            bf_47d816(4, 0);
+            if (bf_pick_feature(&g_bf_4d75c8, 6) != 0)
+                BCELL8(o, 0x5440e3) = (uint8_t)(g_bf_568200 + g_bf_57c8a4);
+            else
+                BCELL8(o, 0x5440e3) = (uint8_t)(g_bf_5c9a84 & 0xf);
+            break;
+        case 4:
+            bf_47d816(4, 1);
+            if (bf_pick_feature(&g_bf_4d7550, 11) != 0)
+                BCELL8(o, 0x5440e3) = (uint8_t)(g_bf_568200 + g_bf_57c8a4);
+            BCELL8(o, 0x5440e1) |= 0x10;
+            BCELL8(o, 0x5440e1) |= 0x80;
+            break;
+        case 11:
+            bf_47d816(11, 1);
+            if (bf_pick_feature(&g_bf_4d7610, 49) != 0)
+                BCELL8(o, 0x5440e3) = (uint8_t)(g_bf_568200 + g_bf_57c8a4);
+            BCELL8(o, 0x5440e1) |= 0x10;
+            break;
+        case 3:
+            BCELL8(o, 0x5440e3) = (uint8_t)((g_bf_5c9a84 & 7) + 32);
+            BCELL8(o, 0x5440e1) |= 0x10;
+            break;
+        case 6:
+            BCELL8(o, 0x5440e3) = (uint8_t)((g_bf_5c9a84 & 7) + 124);
+            BCELL8(o, 0x5440e1) |= 0x10;
+            break;
+        case 12:
+            bf_47d816(12, 1);
+            if (bf_pick_feature(&g_bf_4d7860, 17) != 0) {
+                if (g_bf_57c8a4 < 16)
+                    BCELL8(o, 0x5440e3) = (uint8_t)(g_bf_568200 + g_bf_57c8a4 + 16);
+                else
+                    BCELL8(o, 0x5440e3) = (uint8_t)(g_bf_57c8a4 - 23);
+                BCELL8(o, 0x5440e7) = 15;
+            }
+            break;
+        case 13:
+            bf_47d816(13, 1);
+            if (bf_pick_feature(&g_bf_4d7860, 17) != 0)
+                BCELL8(o, 0x5440e3) = (uint8_t)(g_bf_568200 + g_bf_57c8a4 - 26);
+            BCELL8(o, 0x5440e1) |= 0x10;
+            break;
+        default:
+            break;
+        }
+    }
+    BF_FOR_CELLS {
+        int o = g_bf_5533cc;
+        switch (BCELL8(o, 0x5440e0)) {
+        case 7:
+            bf_47d6fe(0x8c, 0, 4, 2);
+            BCELL8(o, 0x54435b) = 0xa8;
+            BCELL8(o, 0x544361) |= 0x10;
+            BCELL8(o, 0x544379) |= 0x10;
+            BCELL8(o, 0x544383) = 0xa8;
+            break;
+        case 8:
+            bf_47d6fe(0x94, 0, 4, 1);
+            BCELL8(o, 0x5440db) = 0xa0;
+            BCELL8(o, 0x5440e1) |= 0x10;
+            BCELL8(o, 0x5440f9) |= 0x10;
+            BCELL8(o, 0x544103) = 0xa0;
+            break;
+        case 9:
+            bf_47d6fe(0x98, 0, 4, 2);
+            BCELL8(o, 0x5440db) = 0xb4;
+            BCELL8(o, 0x5440e1) |= 0x10;
+            BCELL8(o, 0x5440f9) |= 0x10;
+            BCELL8(o, 0x544103) = 0xb4;
+            break;
+        default:
+            break;
+        }
+    }
+    /* TODO(bf-link): engine_tile_refresh_path_scratch / _stage_scratch (engine_tile.c, not linked in rhost) */
+    engine_retail_call(0x471c1fu, 0);
+    engine_retail_call(0x471d30u, 0);
+    bf_471da6();
+    return bf_46c7fc(0);
+}
+
+/* ------------------------------------------------------------------ entering the battlefield */
+
+/* DAT_0053e9ac (the below-status-bar redraw flag) is engine_territory's bound dirty state's field (rhost: a synced
+ * mirror — writing the alias would be undone by rh_port_sync_out) */
+static void bf_mark_below_status_redraw(void)
+{
+    engine_dirty_rect_state_t *d = engine_territory_dirty_state();
+    if (d != NULL)
+        d->below_status_redraw = 1;
+}
+
+/* the debug log line FUN_004afab9(msg, 0, 0) */
+static void bf_log(const void *msg)
+{
+    engine_retail_call(0x4afab9u, 3, (uint32_t)(uintptr_t)msg, 0u, 0u);   /* TODO(bf-extern): 0x4afab9 (the log) */
+}
+
+/* Port of FUN_004778a0 (655 B) — enter the battlefield (screen 0x29, sub-state s_slot_0057c8fc = 2): the battle
+ * music (FUN_00499d97 / FUN_00477b2f), the battle clock g_combat_anim_t0 = s_slot_005440c8 + 10, the tick cadence
+ * reset; the gate / side picks s_slot_0056d6b0 (0..3) / s_slot_0053f654 (0..1) — multiplayer: cycled, else the
+ * single-LFSR output's low bits; the per-battle state cleared (the selection strip s_slot_00553400, the 10 words
+ * DAT_00553100, DAT_0053f238 = -1 …); the scroll (32, 33); the sprites (FUN_004987b7); the terrain: a siege
+ * (s_slot_0053e8fc) FUN_0047c4ba(castle s_slot_0055401c), a custom battle of map set 3 FUN_0047b8b2, else
+ * FUN_0047aaa3; the deployment FUN_0047efee, the sprite handles FUN_00480f8b, one unit-driver pass FUN_004822ed,
+ * FUN_0047fc01; the full-screen redraw; multiplayer: FUN_0043f4b7 + FUN_0043fd2a twice; FUN_0043f304;
+ * DAT_00544030 = 1. */
+int bf_4778a0(void)
+{
+    bf_499d97();
+    bf_477b2f();
+    g_combat_anim_t0 = s_slot_005440c8 + 10;
+    g_bf_5440a0 = g_bf_55403c;
+    engine_retail_call(0x40489eu, 0);   /* TODO(bf-link): engine_tick_cadence_reset (engine_tick_cadence.c, not linked) */
+    if (g_sim_mp_active != 0) {
+        if (++S32(s_slot_0056d6b0) > 3)
+            s_slot_0056d6b0 = 0;
+        if (++S32(s_slot_0053f654) > 1)
+            s_slot_0053f654 = 0;
+    } else {
+        bf_rng_single();
+        S32(s_slot_0056d6b0) = g_bf_5c9a84 & 3;
+        S32(s_slot_0053f654) = g_bf_5c9a84 & 1;
+    }
+    AT(int32_t, g_bf_553f14, 0x553f14, 0x553f14) = 0;
+    AT(int32_t, g_bf_553f14, 0x553f14, 0x553f18) = 0;
+    g_bf_553f84 = 0;
+    s_slot_00553070 = 0;
+    s_slot_00553f28 = 0;
+    s_slot_0055322c = 0;
+    s_slot_0053e9d0 = 0;
+    g_combat_msg_clock = 0;
+    for (int i = 0; i < 10; i++)
+        for (int j = 0; j < 24; j++)
+            AT(uint8_t, s_slot_00553400, 0x553400, 0x553400 + 24 * i + j) = 0;
+    for (int k = 0; k < 10; k++)
+        g_bf_553100[k] = 0;
+    g_bf_53f238 = -1;
+    g_bf_56d664 = 0;
+    g_bf_507248 = 0;
+    g_bf_4f037c = g_bf_507248;
+    g_bf_50a450 = g_bf_4f037c;
+    engine_set_current_screen(0x29);
+    s_slot_0057c8fc = 2;
+    s_slot_00568964 = 1;
+    s_slot_0055ce70 = 32;
+    s_slot_005678a0 = 33;
+    bf_4987b7();
+    bf_log(&AT(uint8_t, g_bf_4d9c90, 0x4d9c90, 0x4d9e88));   /* "OK :setup_battle executed." */
+    if (s_slot_0053e8fc != 0)
+        bf_47c4ba(S32(s_slot_0055401c));
+    else if (s_slot_0057a0f0 != 0 && s_slot_0053e91c == 3)
+        bf_47b8b2(S32(s_slot_0056d590));
+    else
+        bf_47aaa3(0);
+    bf_47efee();
+    bf_480f8b();
+    bf_4822ed();
+    bf_47fc01();
+    bf_mark_below_status_redraw();
+    engine_territory_mark_full_screen_dirty();
+    engine_set_demand_redraw(2);
+    if (g_sim_mp_active != 0) {
+        /* TODO(bf-extern): 0x43f4b7 / 0x43fd2a (multiplayer sync; the ledger's "tested" is a comment mention) */
+        engine_retail_call(0x43f4b7u, 0);
+        engine_retail_call(0x43fd2au, 0);
+        engine_retail_call(0x43f4b7u, 0);
+        engine_retail_call(0x43fd2au, 0);
+    }
+    int r = bf_43f304();
+    g_bf_544030 = 1;
+    return r;
+}
+
+/* Port of FUN_00477c89 (371 B) — re-enter a battle restored from a save (FUN_004976a1): screen 0x29, sub-state 2,
+ * DAT_0053f238 = -1; the castle s_slot_0055401c (a custom battle: s_slot_0056d590; else from the current army
+ * DAT_0056822c: +0x1c3 == 1 with +0x1c1 → +0x1c1 − 1, == 2 → +0x1f9, else +0x1c0 − 1) and the stone-castle flag
+ * s_slot_0057c910 (castle >= 2); the sprites, the tile scratch, FUN_00471da6, the sprite handles, +0x180 cleared,
+ * the size-tier parameters (FUN_0047f42d), FUN_0047fc01, the redraw, the music. Unverified (no corpus scenario
+ * restores a battle). */
+int bf_477c89(void)
+{
+    engine_set_current_screen(0x29);
+    s_slot_0057c8fc = 2;
+    g_bf_53f238 = -1;
+    int a = S32(s_slot_0056822c);
+#define ARMY8(va) REC(uint8_t, g_per_army_768, 0x53f9b0u, 768, a, (va))
+    if (s_slot_0057a0f0 != 0)
+        s_slot_0055401c = s_slot_0056d590;
+    else if (ARMY8(0x53fb73) == 1 && ARMY8(0x53fb71) != 0)
+        S32(s_slot_0055401c) = ARMY8(0x53fb71) - 1;
+    else if (ARMY8(0x53fb73) == 2)
+        S32(s_slot_0055401c) = ARMY8(0x53fba9);
+    else
+        S32(s_slot_0055401c) = ARMY8(0x53fb70) - 1;
+#undef ARMY8
+    if (s_slot_0057a0f0 == 0)
+        s_slot_0057c910 = S32(s_slot_0055401c) >= 2;
+    g_combat_render_active = 0;
+    bf_4987b7();
+    /* TODO(bf-link): engine_tile_refresh_path_scratch / _stage_scratch (engine_tile.c, not linked in rhost) */
+    engine_retail_call(0x471c1fu, 0);
+    engine_retail_call(0x471d30u, 0);
+    bf_471da6();
+    bf_log(&AT(uint8_t, g_bf_4d9c90, 0x4d9c90, 0x4d9eb0));   /* "OK :setup_battle reloaded." */
+    bf_480f8b();
+    bf_480f2e();
+    bf_47f42d();
+    bf_47fc01();
+    bf_mark_below_status_redraw();
+    engine_set_demand_redraw(2);
+    bf_477b2f();
+    return bf_499d97();
 }
