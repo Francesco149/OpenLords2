@@ -62,7 +62,7 @@ int bf_477b2f(void)
 #include "engine_bf_extern_globals.h"
 
 static int read_file_at(const void *name, void *buf, uint32_t n)   /* 0x4af8d9 — TODO(rl-link): io_read_file_at */
-{ return (int)engine_retail_call(0x4af8d9u, 4, (uint32_t)(uintptr_t)name, (uint32_t)(uintptr_t)buf, n, 0u); }
+{ return rl_4af8d9((int)(uintptr_t)name, (int)(uintptr_t)buf, (int)n, 0); }
 
 /* Port of FUN_004987b7 (1556 B) — load the battlefield's sprite sheets: the base dir (0x4af502), the panel sheet
  * (0x4b25b0, 75000 B), the strip / palette / name loads (0x49915e, 0x499366, 0x49964c), county screen mode 2
@@ -75,8 +75,8 @@ static int read_file_at(const void *name, void *buf, uint32_t n)   /* 0x4af8d9 �
  * and minimap contexts bound (0x4bc020 / 0x4bc107), "OK: battle data loaded". Returns 1, 0 on the misc sheet's failure. */
 int bf_4987b7(void)
 {
-    engine_retail_call(0x4af502u, 0);                 /* TODO(rl-link): io_path_chdir_base */
-    engine_retail_call(0x4b25b0u, 1, 75000u);         /* TODO(rl-link): gfx_load_panel_sheet */
+    rl_4af502();                                      /* io_path_chdir_base (rl_host) */
+    rl_4b25b0(75000);                                 /* gfx_load_panel_sheet (rl_host) */
     rl_49915e();
     rl_499366();
     rl_49964c();

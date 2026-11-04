@@ -279,8 +279,8 @@ static int wav(const void *name) { return (int)engine_retail_call(0x427990u, 3, 
 /* the confirm dialog 0x40e6f2(msg, x, y, callback VA): retail keeps the callback's ADDRESS — retail's VA here
  * (engine_confirm_dialog.c takes a port function pointer instead: TODO(bf-link)) */
 static int confirm(int msg, uint32_t cb_va) { return (int)engine_retail_call(0x40e6f2u, 4, (uint32_t)msg, 160u, 160u, cb_va); }
-static int cursor_in(int x, int y, int w, int h)   /* 0x4b1deb — TODO(bf-link) */
-{ return (int)engine_retail_call(0x4b1debu, 4, (uint32_t)x, (uint32_t)y, (uint32_t)w, (uint32_t)h); }
+static int cursor_in(int x, int y, int w, int h)   /* 0x4b1deb (rl_host) */
+{ return rl_4b1deb(x, y, w, h); }
 
 /* Port of FUN_00499cb1 (204 B) — a unit voice cue for player `p`'s nation (DAT_0055408c): kind `k` (0 selected,
  * 1 move, 2 attack, 3 …) cycles its take 0..3 (DAT_0053ef60[11 p + nation]; kind 3 always take 0) and plays

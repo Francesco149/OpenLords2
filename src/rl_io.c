@@ -168,8 +168,8 @@ int rl_451f70(void)
 /* Port of FUN_004b11ce (34 B) — 0x4b0ab5(DAT_004e6600), 0x4b1867, then the full-screen redraw 0x451f70. */
 int rl_4b11ce(void)
 {
-    engine_retail_call(0x4b0ab5u, 1, (uint32_t)(uintptr_t)g_rl_4e6600);   /* TODO(rl-extern) */
-    engine_retail_call(0x4b1867u, 0);                                    /* TODO(rl-extern) */
+    rl_4b0ab5((int)(uintptr_t)g_rl_4e6600);
+    rl_4b1867();
     return rl_451f70();
 }
 
@@ -269,7 +269,7 @@ int rl_4ae2bd(void)
     if (g_rl_53f204 == 2028) {
         g_rl_53f5ec++;
     } else {
-        r = (int)engine_retail_call(0x4ae310u, 0);   /* TODO(rl-extern) */
+        r = rl_4ae310();
         g_rl_53f5ec = 0;
         s_slot_0053f258 = 0;
     }
@@ -479,11 +479,11 @@ static int rl_strcmp(const char *a, const char *b)
     }
 }
 /* the extension scratch DAT_004eafa4 (4 B) and its writer 0x4af54a (strutil.c's strutil_ext_save keeps a
- * module-static scratch, not retail's) — TODO(rl-link): strutil_ext_save */
+ * module-static scratch, not retail's): rl_4af54a (rl_host) */
 static char *ext_scratch(void) { return (char *)g_rl_4eafa4; }
-static void ext_save(int path) { engine_retail_call(0x4af54au, 1, (uint32_t)path); }
-/* back to the launch directory DAT_0058fe30 (0x4af502; io_path.c keeps its own copy) — TODO(rl-link): io_path_chdir_base */
-static int chdir_base(void) { return (int)engine_retail_call(0x4af502u, 0); }
+static void ext_save(int path) { rl_4af54a(path); }
+/* back to the launch directory DAT_0058fe30 (0x4af502 = rl_4af502; io_path.c keeps its own copy) */
+static int chdir_base(void) { return rl_4af502(); }
 #define STR(va) RS(g_rl_4df3e0, 0x4df3e0u, va)   /* the remap's string table DAT_004df3e0.. */
 
 /* Port of FUN_004af116 (508 B) — the CD tree: a .PL8 / .256 / .WAV / .SMK file (its extension, upper-cased into
@@ -680,7 +680,7 @@ int rl_4ae1b8(void)
         strutil_bounded_copy(g_rl_4ea130, RS(g_rl_4df160, 0x4df160u, 0x4df168u), 13);   /* "Lords2" */
     g_rl_4ea1a0 = 0;
     g_rl_4e65dc = 0;
-    engine_retail_call(0x4ae310u, 0);   /* TODO(rl-extern) */
+    rl_4ae310();
     rl_4ae2ab(g_rl_53f208);
     int fd = rl_plat_open(RS(g_rl_4df160, 0x4df160u, 0x4df170u), 0x8404, 0);   /* "lords2.inf" */
     if (fd == -1)

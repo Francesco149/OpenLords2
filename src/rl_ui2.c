@@ -974,10 +974,10 @@ int rl_41ef42(void)
 static void evq_init(void) { engine_retail_call(0x472ae0u, 0); }   /* TODO(rl-link): engine_event_queue_init 0x472ae0 (a port struct) */
 static int  load_misc_sheet(void) { return (int)engine_retail_call(0x499034u, 0); }   /* TODO(rl-link): gfx_load_misc_sheet 0x499034 */
 static int  load_system_sheet(int k) { return (int)engine_retail_call(0x499a1cu, 1, (uint32_t)k); }   /* TODO(rl-link): gfx_load_system_sheet_select 0x499a1c */
-static int  chdir_base(void) { return (int)engine_retail_call(0x4af502u, 0); }   /* TODO(rl-link): io_path_chdir_base 0x4af502 */
-static int  load_panel_sheet(int n) { return (int)engine_retail_call(0x4b25b0u, 1, (uint32_t)n); }   /* TODO(rl-link): gfx_load_panel_sheet 0x4b25b0 */
-static int  read_file_at(const void *name, void *dst, uint32_t n, uint32_t off)   /* TODO(rl-link): io_read_file_at 0x4af8d9 */
-{ return (int)engine_retail_call(0x4af8d9u, 4, (uint32_t)(uintptr_t)name, (uint32_t)(uintptr_t)dst, n, off); }
+static int  chdir_base(void) { return rl_4af502(); }   /* io_path_chdir_base 0x4af502 (rl_host) */
+static int  load_panel_sheet(int n) { return rl_4b25b0(n); }   /* gfx_load_panel_sheet 0x4b25b0 (rl_host) */
+static int  read_file_at(const void *name, void *dst, uint32_t n, uint32_t off)   /* io_read_file_at 0x4af8d9 (rl_host) */
+{ return rl_4af8d9((int)(uintptr_t)name, (int)(uintptr_t)dst, (int)n, (int)off); }
 /* engine_retail_call takes up to 8 arguments: an 11-argument retail call goes through this cdecl adapter (bracketed
  * like any retail call; the standalone stops) */
 typedef uint32_t (__cdecl *r11_t)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t,

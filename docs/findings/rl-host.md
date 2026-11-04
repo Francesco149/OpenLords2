@@ -112,6 +112,11 @@ debug keys of 0x4b29be (F3..F9, F12: DAT_0053f684), 0x4b284e's surface-failure p
   0x40f7d3 / 0x41a734 (the HUD panels), 0x423b4f / 0x41f15a (the MP HUD), 0x476e95 (the tooltip).
 - TODO(rl-extern) (unported, in no partition): 0x4a599d, 0x4ae539, 0x41f4a1, 0x4bbf89, 0x4bbfd2, 0x4247f5,
   0x4b26b8, 0x42e50d, 0x42e3ba, 0x4b2730, 0x43f7e3 (and rl_42eaa6 / rl_42dfe2 / rl_425d35 / rl_4b7180: quit, by name).
+- Replaced in the done partitions (one-line seams → rl_<va>): rl_glue (0x4b1deb, 0x4b18e3, 0x4a8426, 0x4af502),
+  rl_skirmish / rl_render / rl_ui2 (0x4af502, 0x4af8d9, 0x4b25b0, 0x4b0ab5, 0x4b1867), rl_ui3 (0x4af8d9, 0x4a9f72),
+  rl_io (0x4b0ab5, 0x4b1867, 0x4ae310 ×2, 0x4af54a, 0x4af502), engine_bf_extern (0x4af8d9, 0x4af502, 0x4b25b0),
+  engine_bf_input (0x4b1deb). Left: rl_glue's two-line 0x4af8d9 calls (rl_40ae12), rl_ui3's 0x4b2922, and
+  engine_bf_setup.c's 0x4af502 / 0x4af8d9 calls (the file does not include rl.h).
 - Other partitions by name: rl_472bc5 / rl_472ae0 / rl_46f68e / rl_46f700 / rl_46ff43 / rl_4701ac / rl_470678 /
   rl_4707be / rl_46f2ae / rl_46d2a3 / rl_472e46 (terr), rl_401136 / rl_404dc1 / rl_404d6b / rl_40da1e / rl_40e3ee /
   rl_40e5e7 / rl_40e6f2 / rl_40ccfa / rl_4017bf / rl_4020ae / rl_401f49 / rl_40210c / rl_401246 / rl_42f1df /

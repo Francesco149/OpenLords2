@@ -67,8 +67,8 @@ static void editor_length(void) { engine_retail_call(0x401f49u, 0); }   /* text_
 static int  cue_release(void) { return (int)engine_retail_call(0x427d19u, 0); }   /* audio_cue_release 0x427d19 (audio.c) */
 static int  palette_full(void) { return (int)engine_retail_call(0x4b2922u, 0); }  /* gfx_set_palette_full_range 0x4b2922 (gfx.c) */
 static int  read_file_at(int name, void *buf, int n, int off)   /* io_read_file_at 0x4af8d9 (io.c) */
-{ return (int)engine_retail_call(0x4af8d9u, 4, (uint32_t)name, (uint32_t)(uintptr_t)buf, (uint32_t)n, (uint32_t)off); }
-static int  roster_slot(int p) { return (int)engine_retail_call(0x4a9f72u, 1, (uint32_t)p); }   /* spawn_pick_roster_slot 0x4a9f72 (engine_combat.c: static) */
+{ return rl_4af8d9(name, (int)(uintptr_t)buf, n, off); }
+static int  roster_slot(int p) { return rl_4a9f72(p); }   /* spawn_pick_roster_slot 0x4a9f72 (rl_host) */
 /* unported — TODO(rl-extern) */
 static int  stream_stop(int a) { return (int)engine_retail_call(0x426d11u, 1, (uint32_t)a); }   /* 0x426d11: the music stream stop */
 
