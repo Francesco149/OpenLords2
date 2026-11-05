@@ -21,6 +21,7 @@ __asm__(RH_RL_UI4_ALIASES);
 
 #define RH_TABLE RH_HOOKS_RL_UI4
 extern hook_t RH_HOOKS_RL_UI4[];
+#include "rh_hook_smk.h"   /* HOOK_SMK: rows whose call opens a movie (the title menu click → lom.smk) */
 /* row indices (must follow the table's order) */
 enum {
     X_rl_401000, X_rl_401085, X_rl_4010da, X_rl_401136, X_rl_4011b0, X_rl_4011ea, X_rl_401246, X_rl_4012a2,
@@ -85,7 +86,7 @@ HOOK_R(rl_404f4c, 4, rl_404f4c(I(0), I(1), I(2), I(3)))
 HOOK_V(rl_408fcb, 2, rl_408fcb(I(0), I(1)))
 HOOK_V(rl_40ccfa, 0, rl_40ccfa())
 HOOK_R(rl_40da1e, 4, rl_40da1e(I(0), I(1), I(2), I(3)))
-HOOK_R(rl_40e3ee, 4, rl_40e3ee(I(0), I(1), I(2), I(3)))
+HOOK_SMK(rl_40e3ee, 4, rl_40e3ee(I(0), I(1), I(2), I(3)))   /* a click can open a movie (movie-skip f662: lom.smk — the SMACK handle differed without the rollback) */
 HOOK_R(rl_40e5e7, 4, rl_40e5e7(I(0), I(1), I(2), I(3)))
 HOOK_V(rl_40e6f2, 4, rl_40e6f2(I(0), I(1), I(2), I(3)))   /* EAX: 0x4b36c0's (HOOK_V in rl_io) */
 HOOK_R(rl_40e7e4, 0, rl_40e7e4())
