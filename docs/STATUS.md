@@ -602,14 +602,18 @@ claims are unverified until rhost re-checks them (`docs/audits/2026-10-23-method
   (`tools/bot/battle.py`), long custom games (events roll only for odd counties) → 11 scenarios; coverage
   49.1% → **63.5%**. Its games exposed a binding gap (the AI score table) and #237 — fixed, 0 divergences.
   Pointer-table hooks (entry patch + trampoline) landed.
-  **2026-11-04 (overnight, parallel agents):** the **battlefield ported — 260/260**; rl partitions io / glue / render /
-  misc / skirmish — **every function the corpus reaches is ported** (ui2 in flight); render verifiable under rhost
-  (gfx layer on retail's layout, pixel shadow; mapview 64 + screens 104 renderer rows, 42 port bugs fixed). Coverage
-  63.5% → 74.9% (8 authored scenarios). **924 hooks: 841 verified (0 divergences, 54 scenarios), all 924 replaced
-  at once PASS.** Ledger (honest) 57.5% touched / 72.5% of bytes.
-- **Top blocker:** none for logic parity. Smacker movies are skipped in rhost (retail tolerates it). The
-  standalone's UI is far behind the hybrid (engine_screen_dispatch: title + strategic map only) — the battlefield
-  cannot be wired into the standalone until the battle prompt / battlefield screens' dispatch is.
+  **2026-11-04/05 (overnight, parallel agents):** the **battlefield ported — 260/260** (+ its 4 seams); the rl
+  partitions — rounds 1–2 (io / glue / render / misc / skirmish / ui2 / ui3: every function the corpus reached that had
+  no port) and **round 3** (ui4 / ctl / terr / turn / host: the 400 reached functions whose OLD ports were never on
+  retail's layout — 400 retail-layout ports, 95 of them wraps of linked old ports) + cov3 / quit: **1028 functions
+  in 21 partitions, 0 pending** (`tools/bf/status.py`). Render verifiable under rhost (pixel shadow; mapview 64 +
+  screens 104 rows). Coverage 63.5% → **75.8%** (64 scenarios: UI tours, battlefield orders, sieges, game exit, custom
+  France "strong", the movie skip). **1475 hook rows; whole-corpus verify: see docs/rhost-evidence.json.**
+  rhost: RH_SH_HOST (host-level rows: proven by the hybrid pass), RH_SH_FULL (the copy shadow for rows whose subtree
+  reads stack residue the paged shadow's fault frames overwrite), smackw32 / DirectDraw rollbacks, handle reuse.
+- **Top blocker:** none for logic parity. The hybrid's residual retail code is ≈ the host level + the CRT
+  (`docs/findings/standalone-path.md`); the standalone needs the data-image build (★5). Multiplayer stays unverifiable
+  (DirectPlay / serial: rhost stubs it).
 
 ## Where to read next
 

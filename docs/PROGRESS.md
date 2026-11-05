@@ -7,6 +7,35 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-11-05 — Round 3: every reached function on retail's layout (1028 in 21 partitions); 1475 rows; the standalone path
+
+Overnight continuation (coordinator + 9 agents in worktrees). Design unchanged (`docs/findings/battlefield-sim-port.md`).
+- **Ported**: the battlefield's last seam (the sprite loads 0x4987b7) → bf 260 + extern 4; **round 3** — the 400
+  functions the corpus reached whose OLD ports (engine*.c, game_init, gfx, strutil …) had never been on retail's
+  layout: ui4 99, ctl 98, terr 71, turn 62, host 70 (95 wrap linked old ports, 305 fresh; per-partition
+  `docs/findings/rl-<part>.md`); **quit** 8 (the game exit), **cov3** 11. `tools/bf/status.py`: 1028 functions, 0
+  pending. Old-port bugs found on the way: save.c's castle file read / write, strutil's to_lower_char / atoi caps,
+  engine_territory's scroll clamp and dropped scratch globals, gfx.c's present gates, the AI tribute clamp.
+- **Evidence**: 1475 hook rows; the whole-corpus verify (wine, 64 scenarios) — docs/rhost-evidence.json (see FRONT).
+  Before round 3 merged: 1017/1062 reached with 0 divergences, hybrid PASS (one run stalled: eco_eval_candidate's
+  130 k shadowed calls in one frame → sampled).
+- **Coverage**: scenarios game-quit, custom-strong, siege-castles, movie-skip, custom-garrison (+26 functions);
+  **75.8%** of retail code bytes, 1527 functions over 64 scenarios. What no scenario reaches (172 KB): multiplayer,
+  dead code, AI knight garrisons, DirectDraw errors (`docs/findings/coverage-round3.md`). Bot v4 games (two, ~$0.02)
+  added nothing; the bot's battlefield orders (LMB with a selection) and its diplomatic messages (never sent) fixed.
+- **rhost**: RH_SH_HOST rows (host-level functions — window, DirectDraw / DirectSound create / release, the wndproc:
+  never shadowed, proven by the hybrid pass); RH_SH_FULL rows (the paged shadow's write faults push exception frames
+  where the march executor 0x465d28 reads its uninitialized locals — retail's own run moved an army differently
+  inside the shadow); smackw32 rollback (the bump pointer, the decommitted spans; io on the shared rh_hook_smk.h);
+  DirectDraw surface serial rollback; fake handles reused once 8192 are spent (the ratings screen re-reads two files a
+  frame); a run ending in retail's ExitProcess is finished.
+- **The standalone path** (`docs/findings/standalone-path.md`): the generated per-access globals only hold at retail's
+  VAs (one array under several symbols) — so the standalone maps retail's data image there (from the user's exe) and
+  runs only port code; the residual retail code under the full hybrid was 316 non-library functions before round 3
+  (301 of them round 3's).
+- **Open**: one residue model for 0x465d28 (0x46521f vs the army-state handlers 2..4, which have no row); the host
+  rows of ui4; the TODO(rl-link) seams; the data-image build.
+
 ## 2026-11-04 — The battlefield ported (260 functions); every reached function ported; render verifiable; 924 hooks
 
 Overnight, coordinator + ~20 parallel agents in git worktrees (one partition / batch each; merged here). Design:
