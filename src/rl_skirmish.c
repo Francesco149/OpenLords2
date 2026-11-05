@@ -157,13 +157,13 @@ static void mark_full(void) { engine_territory_mark_full_screen_dirty(); }   /* 
 
 /* ---------------------------------------------------------------- seams (callees outside the partition) */
 /* ported, not on retail's layout / not linked in rhost — TODO(rl-link) */
-static void chdir_base(void) { engine_retail_call(0x4af502u, 0); }   /* TODO(rl-link): io_path_chdir_base */
-static void read_file_at(const void *name, const void *dst, uint32_t n, uint32_t off)   /* TODO(rl-link): io_read_file_at 0x4af8d9 */
-{ engine_retail_call(0x4af8d9u, 4, (uint32_t)(uintptr_t)name, (uint32_t)(uintptr_t)dst, n, off); }
+static void chdir_base(void) { rl_4af502(); }   /* io_path_chdir_base (rl_host) */
+static void read_file_at(const void *name, const void *dst, uint32_t n, uint32_t off)   /* io_read_file_at 0x4af8d9 (rl_host) */
+{ rl_4af8d9((int)(uintptr_t)name, (int)(uintptr_t)dst, (int)n, (int)off); }
 static void load_background(const void *name, int h)   /* gfx_load_background_image 0x408fcb (rl ui4) */
 { rl_408fcb((int)(uintptr_t)name, h); }
-static void load_panel_sheet(int n) { engine_retail_call(0x4b25b0u, 1, (uint32_t)n); }   /* TODO(rl-link): gfx_load_panel_sheet */
-static void set_palette(const void *pal) { engine_retail_call(0x4b0ab5u, 1, (uint32_t)(uintptr_t)pal); }   /* TODO(rl-link): gfx.c's palette set 0x4b0ab5 */
+static void load_panel_sheet(int n) { rl_4b25b0(n); }   /* gfx_load_panel_sheet (rl_host) */
+static void set_palette(const void *pal) { rl_4b0ab5((int)(uintptr_t)pal); }   /* the palette set 0x4b0ab5 (rl_host) */
 static void panel_box(int x, int y, int cols, int rows)   /* TODO(rl-link): 0x409397 = gfx_panel_draw_border_chrome(mode 0) + gfx_panel_fill_interior_chrome (a static in several modules) */
 { engine_retail_call(0x409397u, 4, (uint32_t)x, (uint32_t)y, (uint32_t)cols, (uint32_t)rows); }
 static void bf_minimap_scroll(int a) { engine_retail_call(0x4bc1d1u, 1, (uint32_t)a); }   /* TODO(rl-link): engine_battlefield_render_minimap_scroll */

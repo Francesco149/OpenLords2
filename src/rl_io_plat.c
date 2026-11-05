@@ -304,3 +304,17 @@ int rl_plat_remove(const char *path)
 { return s_bound ? CRT(remove, int (__cdecl *)(const char *))(path) : remove(path); }
 int rl_plat_rename(const char *from, const char *to)
 { return s_bound ? CRT(rename, int (__cdecl *)(const char *, const char *))(from, to) : rename(from, to); }
+/* host */
+BOOL rl_plat_GetCursorPos(POINT *p)
+{ return IMP(GetCursorPos, BOOL (WINAPI *)(POINT *), GetCursorPos)(p); }
+char *rl_plat_getcwd(char *buf, int n)
+{ return s_bound ? CRT(getcwd, char *(__cdecl *)(char *, int))(buf, n) : _getcwd(buf, n); }
+LRESULT rl_plat_DefWindowProcA(HWND w, UINT m, WPARAM wp, LPARAM lp)
+{ return IMP(DefWindowProcA, LRESULT (WINAPI *)(HWND, UINT, WPARAM, LPARAM), DefWindowProcA)(w, m, wp, lp); }
+BOOL rl_plat_IsIconic(HWND w) { return IMP(IsIconic, BOOL (WINAPI *)(HWND), IsIconic)(w); }
+HDC rl_plat_BeginPaint(HWND w, PAINTSTRUCT *ps) { return IMP(BeginPaint, HDC (WINAPI *)(HWND, PAINTSTRUCT *), BeginPaint)(w, ps); }
+BOOL rl_plat_EndPaint(HWND w, const PAINTSTRUCT *ps)
+{ return IMP(EndPaint, BOOL (WINAPI *)(HWND, const PAINTSTRUCT *), EndPaint)(w, ps); }
+void rl_plat_PostQuitMessage(int code) { IMP(PostQuitMessage, void (WINAPI *)(int), PostQuitMessage)(code); }
+BOOL rl_plat_GetClientRect(HWND w, RECT *r) { return IMP(GetClientRect, BOOL (WINAPI *)(HWND, RECT *), GetClientRect)(w, r); }
+BOOL rl_plat_ClientToScreen(HWND w, POINT *p) { return IMP(ClientToScreen, BOOL (WINAPI *)(HWND, POINT *), ClientToScreen)(w, p); }

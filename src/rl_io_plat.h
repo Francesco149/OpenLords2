@@ -39,7 +39,9 @@
     X(GetWindowLongA, 0x5cf51cu) X(SetWindowLongA, 0x5cf4ecu) X(SetRect, 0x5cf594u) X(GetMenu, 0x5cf4fcu)       \
     X(AdjustWindowRectEx, 0x5cf508u) X(SetWindowPos, 0x5cf4f8u) X(SystemParametersInfoA, 0x5cf504u)            \
     X(GetWindowRect, 0x5cf500u) X(PeekMessageA, 0x5cf4f0u) X(GetMessageA, 0x5cf58cu)                           \
-    X(TranslateMessage, 0x5cf590u) X(DispatchMessageA, 0x5cf510u)
+    X(TranslateMessage, 0x5cf590u) X(DispatchMessageA, 0x5cf510u) \
+    /* host */ X(GetCursorPos, 0x5cf57cu) X(DefWindowProcA, 0x5cf558u) X(IsIconic, 0x5cf54cu) X(BeginPaint, 0x5cf4e8u)   \
+    X(EndPaint, 0x5cf4f4u) X(PostQuitMessage, 0x5cf554u) X(GetClientRect, 0x5cf544u) X(ClientToScreen, 0x5cf548u)
 
 /* X(name, retail VA) — retail's CRT functions with state */
 #define RL_PLAT_CRT(X)                                                                                           \
@@ -48,7 +50,8 @@
     X(exit, 0x4bf6f0u) X(CrtCheckMemory, 0x4c0cf0u) X(CrtIsValidHeapPointer, 0x4c1170u)                          \
     X(CrtDbgReport, 0x4c3950u) X(CheckBytes, 0x4c0c60u) X(free_base, 0x4c4370u)                              \
     X(filelength, 0x4cf490u)                                                                                     \
-    /* turn */ X(remove, 0x4c22c0u) X(rename, 0x4c2260u)
+    /* turn */ X(remove, 0x4c22c0u) X(rename, 0x4c2260u) \
+    /* host */ X(getcwd, 0x4c1b10u)
 
 void rl_plat_bind_retail(void);   /* rhost: every shim call goes through retail's IAT slot / retail's CRT */
 int  rl_plat_bound(void);
@@ -142,7 +145,17 @@ int      rl_plat_CrtDbgReport(int type, const char *file, int line, const char *
 int      rl_plat_CheckBytes(const void *p, int c, int n);
 void     rl_plat_free_base(void *block);
 int      rl_plat_alloc_hook(uint32_t hook, int type, void *data, int size, int use, int req, const char *file,
-                            int line);
+                            int line);   /* call _pfnAllocHook DAT_004e4610 (retail's default hook = 1) */
 /* turn */
 int      rl_plat_remove(const char *path);
-int      rl_plat_rename(const char *from, const char *to);   /* call _pfnAllocHook DAT_004e4610 (retail's default hook = 1) */
+int      rl_plat_rename(const char *from, const char *to);
+/* host */
+BOOL     rl_plat_GetCursorPos(POINT *p);
+char    *rl_plat_getcwd(char *buf, int n);
+LRESULT  rl_plat_DefWindowProcA(HWND w, UINT m, WPARAM wp, LPARAM lp);
+BOOL     rl_plat_IsIconic(HWND w);
+HDC      rl_plat_BeginPaint(HWND w, PAINTSTRUCT *ps);
+BOOL     rl_plat_EndPaint(HWND w, const PAINTSTRUCT *ps);
+void     rl_plat_PostQuitMessage(int code);
+BOOL     rl_plat_GetClientRect(HWND w, RECT *r);
+BOOL     rl_plat_ClientToScreen(HWND w, POINT *p);

@@ -25,13 +25,10 @@
     BFA(g_rl_522f8f,0x522f8f) \
     BFA(g_rl_52afe0,0x52afe0) \
     BFA(g_rl_53e9c0,0x53e9c0) \
-    BFA(g_rl_53f070,0x53f070) \
     BFA(g_rl_543fd0,0x543fd0) \
-    BFA(g_rl_5440a4,0x5440a4) \
     BFA(g_rl_5440ac,0x5440ac) \
     BFA(g_rl_553280,0x553280) \
     BFA(g_rl_553510,0x553510) \
-    BFA(g_rl_553550,0x553550) \
     BFA(g_rl_553ec4,0x553ec4) \
     BFA(g_rl_553ee0,0x553ee0) \
     BFA(g_rl_55ce54,0x55ce54) \

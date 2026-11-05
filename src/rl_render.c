@@ -473,18 +473,18 @@ int rl_410c71(int a, int x, int y)
 /* seams of the screen arms */
 static void panel_box(int x, int y, int cols, int rows)   /* TODO(rl-link): 0x409397 = gfx_panel_draw_border_chrome(mode 0) + gfx_panel_fill_interior_chrome(x + 16, y + 16, cols - 2, rows - 2); a static in engine_armory / county_panels / labor / terrain_info */
 { engine_retail_call(0x409397u, 4, (uint32_t)x, (uint32_t)y, (uint32_t)cols, (uint32_t)rows); }
-static void chdir_base(void) { engine_retail_call(0x4af502u, 0); }   /* TODO(rl-link): io_path_chdir_base */
-static void read_file_at(const void *name, const void *dst, uint32_t n, uint32_t off)   /* TODO(rl-link): io_read_file_at 0x4af8d9 */
-{ engine_retail_call(0x4af8d9u, 4, (uint32_t)(uintptr_t)name, (uint32_t)(uintptr_t)dst, n, off); }
+static void chdir_base(void) { rl_4af502(); }   /* io_path_chdir_base (rl_host) */
+static void read_file_at(const void *name, const void *dst, uint32_t n, uint32_t off)   /* io_read_file_at 0x4af8d9 (rl_host) */
+{ rl_4af8d9((int)(uintptr_t)name, (int)(uintptr_t)dst, (int)n, (int)off); }
 static void unit_noun(int n, int str, int x, int y, const uint8_t *font, int color)   /* TODO(rl-link): armory_unit_noun 0x41ac3e */
 { engine_retail_call(0x41ac3eu, 6, (uint32_t)n, (uint32_t)str, (uint32_t)x, (uint32_t)y, (uint32_t)(uintptr_t)font, (uint32_t)color); }
 static int  num_units(int n, int str, int x, int y, const uint8_t *font, int color)   /* TODO(rl-link): labor_num_units 0x41ab67 */
 { return (int)engine_retail_call(0x41ab67u, 6, (uint32_t)n, (uint32_t)str, (uint32_t)x, (uint32_t)y, (uint32_t)(uintptr_t)font, (uint32_t)color); }
 static void load_background(const void *name, int h)   /* gfx_load_background_image 0x408fcb (rl ui4) */
 { rl_408fcb((int)(uintptr_t)name, h); }
-static void load_panel_sheet(int n) { engine_retail_call(0x4b25b0u, 1, (uint32_t)n); }   /* TODO(rl-link): gfx_load_panel_sheet */
-static int  set_palette(const void *pal) { return (int)engine_retail_call(0x4b0ab5u, 1, (uint32_t)(uintptr_t)pal); }   /* TODO(rl-link): gfx.c's palette set 0x4b0ab5 */
-static void clear_back_buffer(void) { engine_retail_call(0x4b1867u, 0); }   /* TODO(rl-link): engine_screen_strat.c's 0x4b1867 */
+static void load_panel_sheet(int n) { rl_4b25b0(n); }   /* gfx_load_panel_sheet (rl_host) */
+static int  set_palette(const void *pal) { return rl_4b0ab5((int)(uintptr_t)pal); }   /* the palette set 0x4b0ab5 (rl_host) */
+static void clear_back_buffer(void) { rl_4b1867(); }   /* the back-buffer clear 0x4b1867 (rl_host) */
 static void load_season(void) { rl_4984dc(); }   /* the season loader 0x4984dc (rl turn) */
 static int  strat_render(int full) { return rl_40f5fd(full); }   /* engine_screen_strat_render (rl ui4) */
 static void filelist_content(int a, int b) { engine_retail_call(0x4149ecu, 2, (uint32_t)a, (uint32_t)b); }   /* TODO(rl-link): engine_title_render_filelist_content */

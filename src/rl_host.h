@@ -60,7 +60,7 @@ int rl_4b25b0(int a0);                           /* 76 B, coverage 59 */
 int rl_4b27bf(void);                             /* 143 B, coverage 59 */
 int rl_4b284e(void);                             /* 127 B, coverage 59 */
 int rl_4b2922(void);                             /* 156 B, coverage 59 */
-int rl_4b29be(void);                             /* 2962 B, coverage 59 */
+int rl_4b29be(int hwnd, int msg, int wparam, int lparam);   /* 2962 B, coverage 59 — __stdcall (the window procedure; was a 0-argument guess) */
 int rl_4b35c1(int a0, int a1);                   /* 255 B, coverage 54 */
 int rl_4b3768(int a0);                           /* 84 B, coverage 1 */
 int rl_4b3e51(int a0, int a1);                   /* 111 B, coverage 59 */
