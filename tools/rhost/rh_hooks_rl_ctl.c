@@ -124,7 +124,7 @@ HOOK_V(rl_43a846, 0, rl_43a846())
 HOOK_V(rl_43a5a9, 3, rl_43a5a9(I(0), I(1), I(2)))
 HOOK_V(rl_43b04c, 0, rl_43b04c())
 
-HOOK_V(rl_42ff10, 0, rl_42ff10())
+HOOK_SMK_V(rl_42ff10, 0, rl_42ff10())   /* a movie row: a click skips the movie (0x42df30 closes it, opens the next — movie-skip) */
 HOOK_R(rl_4398f5, 2, rl_4398f5(I(0), I(1)))
 HOOK_R(rl_45183a, 2, rl_45183a(I(0), I(1)))
 HOOK_R(rl_439df0, 0, rl_439df0())
