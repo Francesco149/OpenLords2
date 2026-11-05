@@ -28,7 +28,7 @@ of the actual instruction volume is ported.
 
 ## Runtime verification (rhost — the truth axis since 2026-10-23)
 
-**1432 function(s) rhost-verified** (shadow: 0 divergences over the corpus), 1 diverging, 41 never called, of 1474 hooked. Depth = the shadow pass that reached the hook (a hook nested in another runs retail there).
+**1435 function(s) rhost-verified** (shadow: 0 divergences over the corpus), 1 diverging, 38 never called, of 1474 hooked. Depth = the shadow pass that reached the hook (a hook nested in another runs retail there).
 
 Hybrid (all 1474 hooks replaced at once, wine, 2026-11-05): corpus --check **PASS** on all 64 scenarios.
 

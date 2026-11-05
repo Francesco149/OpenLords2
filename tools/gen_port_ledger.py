@@ -70,7 +70,8 @@ def evidence_block() -> str:
     except (OSError, ValueError):
         return "No rhost evidence recorded yet (`python3 tools/rhost/rhost.py verify`)."
     hooks, hyb = ev.get("hooks", ev), ev.get("hybrid")
-    ok = {k: v for k, v in hooks.items() if v.get("calls", 0) > 0 and v.get("diverge", 1) == 0}
+    # reached = shadowed calls, or (RH_SH_HOST rows: host level, never shadowed — the hybrid pass is their evidence) sampled ones
+    ok = {k: v for k, v in hooks.items() if (v.get("calls", 0) > 0 or v.get("sampled", 0) > 0) and v.get("diverge", 1) == 0}
     bad = {k: v for k, v in hooks.items() if v.get("diverge", 0) > 0}
     rows = [f"| `{k}` | `{v.get('va', '?')}` | {v.get('depth', '?')} | {v['calls']} | {v['scenarios']} | {v['diverge']} | "
             f"{v.get('date', '?')} |" for k, v in sorted(hooks.items())]
