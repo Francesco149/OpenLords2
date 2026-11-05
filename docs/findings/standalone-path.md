@@ -41,8 +41,16 @@ hook rows). 2026-11-04, 60 scenarios, before round 3 landed (script: the session
   scenario reaches — multiplayer (DirectPlay / serial: rhost stubs it) the largest part, then dead code, then what
   new scenarios can reach (coverage round 3 in flight).
 
+**After round 3 (2026-11-05)**, same measurement: 327 functions hit — 239 hooked (address-taken false hits), 79 library
+(22 KB), **9 non-library (3.7 KB)**: WinMain 0x40e9ab, create_main_window 0x4b2258, the army-state handlers 0x465486 /
+0x465622 / 0x465761 and the frame guard 0x40e890 / 0x40e8bb (all five ported; no row — FRONT ★1 / ★2), 0x4c5dc0 /
+0x4cc930 (CRT). On the corpus the hybrid runs almost no retail code: what is left for the standalone is the host level,
+the CRT (the shim replaces it), the TODO(rl-link) seams (they run retail only when reached) and the 939 unreached
+functions (multiplayer the largest part).
+
 ## Next steps
-1. Land round 3; re-measure the residual; port WinMain / the window creation as plain code (no row: host level).
+1. ~~Land round 3; re-measure the residual~~ (done: 9 non-library functions). Port WinMain / the window creation as
+   plain code (no row: host level); rows for the handlers 2..4 (one residue model) and the frame guard.
 2. A `standalone2` build: the data-image loader + the pointer-slot rewrite + every bf_ / rl_ / wrapped port + the
    platform layer; run the corpus traces and report the first gap per scenario (the standalone's own coverage
    report). Its frames should hash like rhost's hybrid (same layout, same code) — the final gate.

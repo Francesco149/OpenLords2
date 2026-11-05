@@ -16,9 +16,15 @@ Overnight continuation (coordinator + 9 agents in worktrees). Design unchanged (
   `docs/findings/rl-<part>.md`); **quit** 8 (the game exit), **cov3** 11. `tools/bf/status.py`: 1028 functions, 0
   pending. Old-port bugs found on the way: save.c's castle file read / write, strutil's to_lower_char / atoi caps,
   engine_territory's scroll clamp and dropped scratch globals, gfx.c's present gates, the AI tribute clamp.
-- **Evidence**: 1475 hook rows; the whole-corpus verify (wine, 64 scenarios) — docs/rhost-evidence.json (see FRONT).
-  Before round 3 merged: 1017/1062 reached with 0 divergences, hybrid PASS (one run stalled: eco_eval_candidate's
-  130 k shadowed calls in one frame → sampled).
+- **Evidence** (docs/rhost-evidence.json, wine, 64 scenarios, 11 nesting passes): **1474 rows, 1435 reached with 0
+  divergences, 38 never called; all 1474 replaced at once: corpus --check PASS; 0 failed runs** (199.5 M calls
+  shadowed, 1.09 G sampled). The one divergence (rl_40e3ee, a click that opens lom.smk: smackw32 not rolled back for
+  that row) fixed after: 1.57 M calls / 64 scenarios, 0 divergences. Earlier tonight (before round 3 merged):
+  1017/1062, hybrid PASS (custom-tour stalled: eco_eval_candidate's 130 k shadowed calls in one frame → sampled).
+- **Residual retail code under the full hybrid** (`coverage --hook replace:<all>`): **9 non-library functions, 3.7 KB**
+  — WinMain 0x40e9ab, the window 0x4b2258, the army-state handlers 0x465486 / 0x465622 / 0x465761 and the frame guard
+  0x40e890 / 0x40e8bb (ported, no row), two CRT helpers — + the statically linked CRT (79 functions / 22 KB). Before
+  round 3: 316 / 125 KB.
 - **Coverage**: scenarios game-quit, custom-strong, siege-castles, movie-skip, custom-garrison (+26 functions);
   **75.8%** of retail code bytes, 1527 functions over 64 scenarios. What no scenario reaches (172 KB): multiplayer,
   dead code, AI knight garrisons, DirectDraw errors (`docs/findings/coverage-round3.md`). Bot v4 games (two, ~$0.02)

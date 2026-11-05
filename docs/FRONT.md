@@ -27,11 +27,15 @@
   retail's layout — 400 retail-layout ports, 95 of them wraps of linked old ports) + cov3 / quit: **1028 functions
   in 21 partitions, 0 pending** (`tools/bf/status.py`). Render verifiable under rhost (pixel shadow; mapview 64 +
   screens 104 rows). Coverage 63.5% → **75.8%** (64 scenarios: UI tours, battlefield orders, sieges, game exit, custom
-  France "strong", the movie skip). **1475 hook rows; whole-corpus verify: see docs/rhost-evidence.json.**
+  France "strong", the movie skip). **Whole-corpus verify (wine, 64 scenarios, 1474 rows): 1435 reached with 0
+  divergences, 38 never called, all 1474 replaced at once: hybrid PASS, 0 failed runs** (the 1 divergence — rl_40e3ee,
+  a movie-opening click: smackw32 not rolled back — fixed after: 1.57 M calls, 0 divergences). **Residual retail code
+  under the full hybrid: 9 non-library functions / 3.7 KB** (WinMain, the window, the army-state handlers 2..4 and the
+  frame guard — ported, no row —, two CRT helpers) + the statically linked CRT (79 / 22 KB); 316 / 125 KB before round 3.
   rhost: RH_SH_HOST (host-level rows: proven by the hybrid pass), RH_SH_FULL (the copy shadow for rows whose subtree
   reads stack residue the paged shadow's fault frames overwrite), smackw32 / DirectDraw rollbacks, handle reuse.
-- **Top blocker:** none for logic parity. The hybrid's residual retail code is ≈ the host level + the CRT
-  (`docs/findings/standalone-path.md`); the standalone needs the data-image build (★5). Multiplayer stays unverifiable
+- **Top blocker:** none for logic parity. On the corpus the hybrid runs almost no retail code (above); the standalone
+  needs the data-image build (★3, `docs/findings/standalone-path.md`). Multiplayer stays unverifiable
   (DirectPlay / serial: rhost stubs it).
 <!-- status:end -->
 
