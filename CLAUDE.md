@@ -104,3 +104,11 @@ capture (the **viewer** stays for human eyes).
 `docs/FRONT.md` · `docs/audits/2026-10-23-methodology-reset.md` · `tools/rhost/README.md` ·
 `docs/findings/in-process-retail-host.md` · `docs/findings/INDEX.md` · `docs/STATUS.md` (derived) ·
 `docs/PROGRESS.md`.
+
+## Storage on maximus (2026-11-06)
+
+- **On cold, not local:** `/mnt/ephemeral/openlords2/rhost-runs/` and `rhost-wine/root/runs/` (~62 GB of run
+  output). The rest of `/mnt/ephemeral/openlords2/` (decompiled-ida, rhost-wine bin/game, prefixes) and the
+  GOG install `/mnt/ephemeral/gog/` stay local. `/mnt/ephemeral/lords2-decomp/` is parked whole.
+- **Park run output aggressively:** once a batch is no longer needed day to day (the work it was evidence for is committed), `offload park --fast <batch dirs>` — the copy in and out of cold is cheap (~100–250 MB/s), local disk is not.
+- Before recreating any of it (re-running a batch, re-extracting, re-exporting, re-downloading), check cold: the stub `OFFLOADED.md` at the old path, `offload where <path>`, `offload list`; `offload fetch <path>` brings back the whole thing or any sub-path (the cold copy stays, so re-parking is cheap). `/mnt/ephemeral` is now a symlink to `~/data` on maximus rootfs (the btrfs array is retired); cold mirrors it 1:1 at `cold:/gigavault/staging/maximus-ephemeral/<same path>`. Policy: maximus `/opt/src/maximus/AGENTS.md` "Disk space".
