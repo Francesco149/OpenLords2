@@ -24,6 +24,7 @@
 #include "gfx_wrap.h"
 #include "localization.h"
 #include "rl_io_plat.h"
+#include "rl_main.h"
 #include "strutil.h"
 
 #include <string.h>
@@ -793,7 +794,8 @@ int rl_40e7e4(void)
  * (docs/findings/rl-ui4.md). */
 int rl_40e890(void)
 {
-    rl_4b99c0();
+    if (rl_frame_driver) rl_frame_driver();   /* rhost: its frame boundary (0x4b99c0 by address) */
+    else rl_4b99c0();
     if (g_engine_state >= 9) g_rl_5c9274 = 1;
     return 0;
 }

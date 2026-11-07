@@ -51,9 +51,12 @@
     X(CrtDbgReport, 0x4c3950u) X(CheckBytes, 0x4c0c60u) X(free_base, 0x4c4370u)                              \
     X(filelength, 0x4cf490u)                                                                                     \
     /* turn */ X(remove, 0x4c22c0u) X(rename, 0x4c2260u) \
-    /* host */ X(getcwd, 0x4c1b10u)
+    /* host */ X(getcwd, 0x4c1b10u) X(getdrive, 0x4c1cf0u)
 
 void rl_plat_bind_retail(void);   /* rhost: every shim call goes through retail's IAT slot / retail's CRT */
+/* rhost --standalone: imports through retail's IAT slots, the CRT the host's (no retail code), its file paths through
+ * `path` (rhost's overlay resolver) */
+void rl_plat_bind_imports(const char *(*path)(const char *p, int want_write, char *buf, unsigned n));
 int  rl_plat_bound(void);
 
 /* imports */
@@ -148,6 +151,7 @@ int      rl_plat_alloc_hook(uint32_t hook, int type, void *data, int size, int u
                             int line);   /* call _pfnAllocHook DAT_004e4610 (retail's default hook = 1) */
 /* turn */
 int      rl_plat_remove(const char *path);
+int      rl_plat_getdrive(void);                 /* _getdrive (1 = A:) */
 int      rl_plat_rename(const char *from, const char *to);
 /* host */
 BOOL     rl_plat_GetCursorPos(POINT *p);

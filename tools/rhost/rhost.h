@@ -67,6 +67,9 @@ typedef struct {
     uint32_t cap_from, cap_count;   /* --cap FROM:COUNT */  /* --heap-trace A-B: every HeapAlloc / HeapFree in this frame window */
     const char *bot;           /* host:port of a decision server (bot mode) */
     const char *stop_on;        /* stop condition (e.g. "screen=0x13") */
+    int standalone;             /* --standalone: NO retail code — only the data sections are mapped (the code range is
+                                   INT3 + a jmp thunk into port code at every hook row's entry); the entry is the port's
+                                   rl_crt_start; <rundir>\standalone_audit.txt proves it (docs/findings/standalone-path.md) */
 } rh_opts_t;
 
 extern rh_opts_t O;
@@ -84,6 +87,9 @@ void *iat_lookup(const char *name);
 int  redirect_calls(uint32_t va, void *hook);
 uint32_t rh_patch_entry(uint32_t va, void *hook);   /* jmp hook at va; returns the trampoline that runs the original */
 void *rh_fixed_alloc(size_t n);
+/* --standalone: the jmp thunks rh_hooks_install wrote into the (INT3-filled) retail code range */
+typedef struct { uint32_t va; void *target; const char *name; } rh_thunk_t;
+int  rh_hooks_thunks(const rh_thunk_t **out);
 int  rh_in_shadow(void);
 
 /* rh_heap.c */
@@ -105,6 +111,7 @@ int rh_host_in(unsigned v);
 /* rh_files.c */
 void rh_files_install(void);
 const char *rh_files_resolve(const char *path, int want_write, char *out, size_t n);
+const char *rh_files_resolve_keep(const char *path, int want_write, char *out, unsigned n);
 
 /* rh_handles.c */
 void rh_handles_install(void);

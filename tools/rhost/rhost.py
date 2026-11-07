@@ -918,6 +918,70 @@ def cmd_play_test(a):
     return cmd_play_status(a)
 
 
+
+# ---------------------------------------------------------------- the standalone's own coverage report
+IDA_FUNCS = os.path.join(EPH, "decompiled-ida", "functions_ida.tsv")
+
+
+def ida_func_index():
+    """[(va, size, name)] sorted (the IDA export), for naming a gap and its caller"""
+    out = []
+    if os.path.exists(IDA_FUNCS):
+        for l in open(IDA_FUNCS).read().splitlines()[1:]:
+            c = l.split("\t")
+            out.append((int(c[0], 16), int(c[1]), c[2]))
+    return sorted(out)
+
+
+def ida_name(idx, va):
+    import bisect
+    i = bisect.bisect_right(idx, (va, 1 << 30, "")) - 1
+    if i >= 0 and idx[i][0] <= va < idx[i][0] + max(idx[i][1], 1):
+        return idx[i][2] + ("" if idx[i][0] == va else f"+{va - idx[i][0]:#x}")
+    return "?"
+
+
+def cmd_standalone(a):
+    """the corpus under --standalone (no retail code): per scenario how far it runs, the first gap (the retail function
+    it reached + the caller), and — for a run that completes — frame / tick / RNG / fb (every presented frame) against
+    the blessed pure-retail values (state_sem is not compared: the CRT is the host's, PORT-DEBT(crt))"""
+    names = all_scenarios(a.only)
+    a.fb_hash = True
+    a.extra = ((a.extra or "") + " --standalone").strip()
+    runs = resolve_runs(names)
+    batch, bdir, res, out = run_batch(a, runs, "standalone")
+    idx = ida_func_index()
+    cur, gaps = None, {}
+    for line in out.splitlines():
+        if line.startswith("=== "):
+            cur = line[4:].strip()
+        m = re.search(r"reached retail code at ([0-9a-f]{8}) \(no port for it yet; return address ([0-9a-f]{8})\) frame (\d+)", line)
+        if cur and m:
+            gaps[cur] = (int(m.group(1), 16), int(m.group(2), 16), int(m.group(3)))
+    tgt = getattr(a, "target", "win")
+    full, same, rows = 0, 0, []
+    for n in names:
+        r = res.get(n, {})
+        ep = os.path.join(SCEN, n, "expected.json" if tgt == "win" else f"expected.{tgt}.json")
+        exp = json.load(open(ep)) if os.path.exists(ep) else {}
+        if n in gaps:
+            va, ret, f = gaps[n]
+            line = f"{n:28s} GAP   f={f:>6}/{exp.get('frame', '?'):>6}  {va:08x} {ida_name(idx, va)}  from {ret:08x} {ida_name(idx, ret)}"
+        elif r.get("status") in FINISHED:
+            full += 1
+            keys = [k for k in ("frame", "tick", "rng", "fb") if exp.get(k) != r.get(k)]
+            same += not keys
+            line = f"{n:28s} DONE  f={r.get('frame'):>6}  {'= pure retail (frame tick rng fb)' if not keys else 'differs: ' + ', '.join(f'{k} {exp.get(k)}→{r.get(k)}' for k in keys)}"
+        else:
+            note = " | ".join(res.get(n + "#notes", [])[:2])
+            line = f"{n:28s} {str(r.get('status')).upper():5s} f={r.get('frame', '?'):>6}  {note}"
+        rows.append(line)
+        print(line)
+    print(f"STANDALONE: {len(names)} scenarios — {full} ran to the end ({same} equal to pure retail in frame / tick / RNG / "
+          f"every presented frame), {len(gaps)} stopped at a gap; distinct gaps: {len({g[0] for g in gaps.values()})}")
+    return 0
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -962,6 +1026,7 @@ def main():
     sp = sub.add_parser("diff"); sp.add_argument("a"); sp.add_argument("b"); sp.add_argument("--show-n", type=int, default=40); sp.set_defaults(fn=cmd_diff)
     sp = sub.add_parser("record"); common(sp); sp.add_argument("name"); sp.add_argument("--from", dest="from_scen")
     sp.add_argument("--force", action="store_true"); sp.set_defaults(fn=cmd_record)
+    sp = sub.add_parser("standalone"); common(sp); sp.add_argument("--only"); sp.set_defaults(fn=cmd_standalone)
     sub.add_parser("play-install").set_defaults(fn=cmd_play_install)
     sp = sub.add_parser("play-status"); sp.add_argument("--root", default=PLAY); sp.set_defaults(fn=cmd_play_status)
     sp = sub.add_parser("play-fetch"); sp.add_argument("--root", default=PLAY); sp.add_argument("session", nargs="*")

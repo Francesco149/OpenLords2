@@ -48,9 +48,45 @@ hook rows). 2026-11-04, 60 scenarios, before round 3 landed (script: the session
 the CRT (the shim replaces it), the TODO(rl-link) seams (they run retail only when reached) and the 939 unreached
 functions (multiplayer the largest part).
 
+## The standalone under rhost (2026-11-07): `--standalone`, no retail code
+Owner (2026-11-07): the port build may load DATA from the user's exe while proving no original code runs (as
+OpenSummoners does), toward a later fully documented port that loads nothing from it.
+- **Map** (`tools/rhost/retail_map.h` `retail_map(…, data_only)`): the PE headers + every section without
+  `CNT_CODE | MEM_EXECUTE` copied to its VA; `.text` 0x401000..0x4d0000 (whole pages: the GOG patch's code past
+  VirtualSize included) is 0xCC — never a byte of it read from the file. The IAT (`.idata`, data) is resolved as in every
+  rhost run (rhost's virtual layers; the real APIs underneath).
+- **Thunks** (`rh_hooks.c` `sa_install`): every hook row → REPLACE + a 5-byte `jmp` at its retail entry into its wrapper
+  (1472 thunks; 4 VAs carry two rows — an old port and its rl_ successor — the first table's wins, logged). So calls by
+  address (the window procedure, pointer tables, `engine_retail_call` seams, the stream timer) land in port code; any
+  other code byte is INT3 → `sa_veh`: `GAP retail VA ret RET` + FATAL.
+- **Entry** (`src/rl_main.c`): `rl_crt_start` (start 0x4c3370's game-facing half: the version globals, the command-line
+  tail, nShowCmd, GetModuleHandleA) → `rl_40e9ab` (WinMain) → `rl_4b2258` (create_main_window) → the loop → the frame
+  guard `rl_40e8bb` → `rl_40e890` → `rl_frame_driver` (rhost's frame boundary, which calls 0x4b99c0 by address → its
+  thunk). Every Win32 call of these goes through retail's IAT slot (one code path for rhost and a real-platform
+  standalone). Rows `rl_40e9ab` / `rl_4b2258` (RH_SH_HOST, `rh_hooks_rl_main.c`) put them in the hybrid too.
+- **CRT** — the host's: `rl_plat_bind_imports` (imports through retail's slots, CRT unbound; the host CRT's file paths
+  through rhost's overlay `rh_files_resolve_keep`; `time` / `localtime` from retail's GetLocalTime /
+  GetTimeZoneInformation slots — rhost's virtual clock). PORT-DEBT(crt): retail's CRT (79 functions reached, 22 KB:
+  the debug heap, `_ioinit`, the mbctable, low-level I/O, time) ported over its own `.data` → state hashes = pure retail.
+- **Audit** (`<rundir>\standalone_audit.txt`, written after the seal, before the first port instruction): every range
+  taken from the file (`copied` only for non-code sections), every thunk, `code_range … other 0` (every non-thunk code
+  byte INT3), `retail_text_windows_compared 1809 identical 0`, the protections (`exec_outside_code_range 0`), smackw32
+  (RAD's DLL from the game dir, only with `--movies`), `verdict OK`; a failed audit refuses to run.
+- **Report**: `rhost.py standalone [--only RE] [--target wine]` — per scenario: GAP (VA, IDA name, the caller) or DONE
+  with frame / tick / RNG / fb (every presented frame) against the blessed pure-retail values.
+
+**Result (2026-11-07, wine, 64 scenarios): 64 run to the end, 0 gaps; 63 equal pure retail in frame, tick, RNG and every
+presented frame** (Windows: the 6 sampled likewise). The 64th, `bot-s16-t20`, diverges at f21114 (a click: retail opens
+screen 0x10, the port stays on 0x00) — and so does the full hybrid at HEAD (every row replaced, rhost's own build), so it
+is a hybrid divergence the standalone inherits, not a standalone one (below). State: after the boot to the title
+(1500 frames) the only VALUE differences vs pure retail are in the CRT's own `.data` (0x4e45xx..0x4e5cxx: mbctable,
+ioinfo, the debug heap's totals, asctime's buffer) and 0x5cee4c.. (command line / environment pointers); the rest are
+heap pointers shifted by the CRT's allocations (retail's CRT allocates before WinMain).
+
 ## Next steps
 1. ~~Land round 3; re-measure the residual~~ (done: 9 non-library functions). Port WinMain / the window creation as
    plain code (no row: host level); rows for the handlers 2..4 (one residue model) and the frame guard.
-2. A `standalone2` build: the data-image loader + the pointer-slot rewrite + every bf_ / rl_ / wrapped port + the
-   platform layer; run the corpus traces and report the first gap per scenario (the standalone's own coverage
-   report). Its frames should hash like rhost's hybrid (same layout, same code) — the final gate.
+2. ~~A `standalone2` build~~ — done as `rhost --standalone` (above; the pointer-slot rewrite is unnecessary: code
+   pointers in data keep retail's VAs and land on thunks). Next: the CRT port (state = pure retail, then the standalone
+   joins `corpus --check`); a real-platform product exe (`--live`: real window / DirectDraw / DirectSound behind the same
+   IAT slots, as OpenSummoners' `opensummoners-standalone.exe`); the static prover (`tools/standalone/`).

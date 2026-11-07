@@ -21,6 +21,9 @@
  *   x87     control word 0x027F at entry (what Windows gives a thread; mingw's CRT sets 0x037F).
  * Output: <rundir>\rhost.log; last line "RESULT key=value ..." (parsed by rhost.py). */
 #include "rhost.h"
+#include "rl_main.h"
+#include "rl_io_plat.h"
+void rh_port_bind_once(void);   /* rh_hooks_ai.c */
 
 rh_opts_t O;
 volatile uint32_t g_frame;
@@ -611,6 +614,7 @@ static void parse(int argc, char **argv)
         else if (!strcmp(a, "--scale")) O.scale = (int)strtoul(ARG(), 0, 0);
         else if (!strcmp(a, "--realtime")) O.realtime = 1;
         else if (!strcmp(a, "--movies")) O.movies = 1;
+        else if (!strcmp(a, "--standalone")) O.standalone = 1;
         else if (!strcmp(a, "--hook")) O.hooks = ARG();
         else if (!strcmp(a, "--shadow-full")) O.shadow_full = 1;
         else if (!strcmp(a, "--hook-entry")) O.hook_entry = 1;
@@ -700,6 +704,128 @@ static DWORD WINAPI watchdog(LPVOID p)
     }
 }
 
+/* ---- --standalone: the trap for retail code, the seal, the audit (OpenSummoners origin) ---- */
+static char g_audit[MAX_PATH];
+static void sa_audit(const char *fmt, ...)
+{
+    FILE *f = fopen(g_audit, "a"); if (!f) return;
+    va_list ap; va_start(ap, fmt); vfprintf(f, fmt, ap); va_end(ap); fclose(f);
+}
+static LONG CALLBACK sa_veh(EXCEPTION_POINTERS *e)
+{
+    uint32_t code = e->ExceptionRecord->ExceptionCode, at = (uint32_t)(uintptr_t)e->ExceptionRecord->ExceptionAddress;
+    if (code == EXCEPTION_BREAKPOINT && at >= RT_TEXT_LO && at < RT_TEXT_LO + RT_TEXT_SZ) {
+        uint32_t ret = *(uint32_t *)(uintptr_t)e->ContextRecord->Esp;
+        rh_log("GAP retail %08x ret %08x frame %u\n", at, ret, g_frame);
+        rh_fatal("standalone: the game reached retail code at %08x (no port for it yet; return address %08x) frame %u", at, ret, g_frame);
+    }
+    if (code == EXCEPTION_ACCESS_VIOLATION && e->ExceptionRecord->ExceptionInformation[0] == 8 && at >= RT_IMG_LO && at < RT_IMG_HI)
+        rh_fatal("standalone: execution of mapped game DATA at %08x (DEP) frame %u", at, g_frame);
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+/* sealed before the first port instruction runs: the code range (INT3 + the thunks) execute / read, everything taken
+ * from the file read / write and never executable; the audit re-derives every claim from memory and from the file and
+ * a failed audit refuses to run */
+static void sa_seal(const char *exe_abs, const retail_image_t *img)
+{
+    DWORD old;
+    uint32_t code_hi = (RT_TEXT_LO + RT_TEXT_SZ + 0xfffu) & ~0xfffu;
+    if (!VirtualProtect((void *)(uintptr_t)RT_IMG_LO, RT_IMG_HI - RT_IMG_LO, PAGE_READWRITE, &old) ||
+        !VirtualProtect((void *)(uintptr_t)RT_TEXT_LO, code_hi - RT_TEXT_LO, PAGE_EXECUTE_READ, &old))
+        rh_fatal("standalone: cannot seal the image (%lu)", GetLastError());
+    snprintf(g_audit, sizeof g_audit, "%s\\standalone_audit.txt", O.rundir);
+    DeleteFileA(g_audit);
+    sa_audit("# OpenLords2 standalone audit: every byte taken from the game's files, and the code range\n");
+    sa_audit("exe %s image %08x..%08x\n", exe_abs, RT_IMG_LO, RT_IMG_HI);
+    int bad = 0;
+    for (int i = 0; i < img->nr; i++) {
+        const retail_range_t *r = &img->r[i];
+        sa_audit("range %-8s %08x..%08x ch %08x %s\n", r->name, r->va, r->va + r->len, r->ch,
+                 r->copied ? "copied" : "CODE-not-copied");
+        if (r->copied && RETAIL_SEC_CODE(r->ch)) { sa_audit("FAIL copied a code section %s\n", r->name); bad++; }
+    }
+    /* the code range: INT3 everywhere but the thunks */
+    const rh_thunk_t *t; int nt_ = rh_hooks_thunks(&t);
+    uint8_t *mark = VirtualAlloc(NULL, code_hi - RT_TEXT_LO, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    for (int i = 0; i < nt_; i++) {
+        const uint8_t *e = (const uint8_t *)(uintptr_t)t[i].va;
+        int32_t rel = (int32_t)((uint32_t)(uintptr_t)t[i].target - (t[i].va + 5));
+        if (e[0] != 0xE9 || *(const int32_t *)(e + 1) != rel) { sa_audit("FAIL thunk %08x %s altered\n", t[i].va, t[i].name); bad++; }
+        for (int k = 0; k < 5; k++) mark[t[i].va - RT_TEXT_LO + k] = 1;
+        sa_audit("thunk %08x -> %08x %s\n", t[i].va, (uint32_t)(uintptr_t)t[i].target, t[i].name);
+    }
+    uint32_t int3 = 0, other = 0, notcopied = 0;
+    for (int r = 0; r < img->nr; r++) {
+        if (img->r[r].copied) continue;
+        const uint8_t *code = (const uint8_t *)(uintptr_t)img->r[r].va;
+        notcopied += img->r[r].len;
+        for (uint32_t i = 0; i < img->r[r].len; i++) {
+            uint32_t va = img->r[r].va + i;
+            if (va >= RT_TEXT_LO && va < code_hi && mark[va - RT_TEXT_LO]) continue;
+            if (code[i] == 0xCC) int3++;
+            else if (other++ < 16) sa_audit("FAIL code byte %08x = %02x\n", va, code[i]);
+        }
+    }
+    VirtualFree(mark, 0, MEM_RELEASE);
+    bad += other != 0;
+    /* against the file: no 16-byte window of retail's code (all-INT3 windows aside) is present in memory */
+    uint32_t windows = 0, same = 0;
+    HANDLE f = CreateFileA(exe_abs, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    HANDLE m = f != INVALID_HANDLE_VALUE ? CreateFileMappingA(f, NULL, PAGE_READONLY, 0, 0, NULL) : NULL;
+    const uint8_t *v = m ? MapViewOfFile(m, FILE_MAP_READ, 0, 0, 0) : NULL;
+    if (v) {
+        IMAGE_NT_HEADERS32 *fn = (void *)(v + ((IMAGE_DOS_HEADER *)v)->e_lfanew);
+        IMAGE_SECTION_HEADER *sec = IMAGE_FIRST_SECTION(fn);
+        for (int i = 0; i < fn->FileHeader.NumberOfSections; i++) {
+            if (!RETAIL_SEC_CODE(sec[i].Characteristics)) continue;
+            const uint8_t *ft = v + sec[i].PointerToRawData, *mt = (const uint8_t *)(uintptr_t)(RT_IMG_LO + sec[i].VirtualAddress);
+            for (uint32_t o = 0; o + 16 <= sec[i].SizeOfRawData; o += 16) {
+                int all_cc = 1;
+                for (int k = 0; k < 16; k++) if (mt[o + k] != 0xCC) { all_cc = 0; break; }
+                if (all_cc) continue;
+                windows++;
+                if (!memcmp(mt + o, ft + o, 16)) same++;
+            }
+        }
+        UnmapViewOfFile(v);
+    } else { sa_audit("FAIL cannot re-read %s\n", exe_abs); bad++; }
+    if (m) CloseHandle(m);
+    if (f != INVALID_HANDLE_VALUE) CloseHandle(f);
+    bad += same != 0;
+    sa_audit("code_range %08x..%08x bytes %u (all sections not copied: %u) thunks %d (%d bytes) int3 %u other %u\n",
+             RT_TEXT_LO, code_hi, code_hi - RT_TEXT_LO, notcopied, nt_, 5 * nt_, int3, other);
+    sa_audit("retail_text_windows_compared %u identical %u\n", windows, same);
+    /* the protections: nothing executable in the image but the code range */
+    uint32_t a = RT_IMG_LO, xout = 0;
+    while (a < RT_IMG_HI) {
+        MEMORY_BASIC_INFORMATION mi;
+        if (!VirtualQuery((void *)(uintptr_t)a, &mi, sizeof mi)) break;
+        uint32_t lo = (uint32_t)(uintptr_t)mi.BaseAddress, hi = lo + (uint32_t)mi.RegionSize;
+        if (hi > RT_IMG_HI) hi = RT_IMG_HI;
+        int x = (mi.Protect & (PAGE_EXECUTE | PAGE_EXECUTE_READ | PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY)) != 0;
+        sa_audit("protect %08x..%08x %04lx%s\n", lo, hi, (unsigned long)mi.Protect, x ? " exec" : "");
+        if (x && (lo < RT_TEXT_LO || hi > code_hi)) xout++;
+        a = hi;
+    }
+    bad += xout != 0;
+    sa_audit("exec_outside_code_range %u\n", xout);
+    sa_audit("libraries smackw32=%s (RAD's Smacker DLL from the game dir, not Lords2.exe: only with --movies)\n",
+             O.movies ? "loaded" : "not-loaded");
+    sa_audit("verdict %s\n", bad ? "FAIL" : "OK");
+    rh_log("standalone: %d thunks, code range %u bytes (%u INT3, %u other), retail code windows identical %u/%u, "
+           "exec outside the code range %u — audit %s (%s)\n", nt_, code_hi - RT_TEXT_LO, int3, other, same, windows, xout,
+           bad ? "FAIL" : "OK", g_audit);
+    if (bad) rh_fatal("standalone: the audit failed (%s)", g_audit);
+}
+/* the standalone's entry: the port's CRT entry → WinMain; its return is retail's exit(code) → ExitProcess */
+static void sa_entry(void)
+{
+    rh_port_bind_once();   /* the port's seams (engine_retail_call → a VA: a thunk, or a gap) and table binds */
+    int code = rl_crt_start();
+    ((void (WINAPI *)(UINT))iat_lookup("ExitProcess"))((UINT)code);
+}
+static int sa_frame_driver(void) { frame_wrap(); return 0; }
+
 RETAIL_HOLE_DEFINE
 
 int main(int argc, char **argv)
@@ -722,7 +848,8 @@ int main(int argc, char **argv)
     char exe_abs[MAX_PATH]; GetFullPathNameA(O.exe, sizeof exe_abs, exe_abs, NULL);
     if (!SetCurrentDirectoryA(g_gamedir_abs)) rh_fatal("cannot cd to %s", g_gamedir_abs);
     retail_image_t img;
-    if (retail_map(exe_abs, &img)) rh_fatal("map %s failed", exe_abs);
+    if (O.standalone && (O.coverage || g_ntrap)) rh_fatal("--standalone maps no retail code: nothing to cover / trap");
+    if (retail_map(exe_abs, &img, O.standalone)) rh_fatal("map %s failed", exe_abs);
     layout_from_pe();
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
     SetUnhandledExceptionFilter(rh_crash_filter);
@@ -767,9 +894,13 @@ int main(int argc, char **argv)
     rh_mm_install();
     rh_win_install();
     rh_smack_install();                      /* last: smackw32's imports bind to every layer above */
-    int nf = redirect_calls(L2_FRAME_FN, (void *)frame_wrap);
-    if (nf < 1) rh_fatal("frame driver %08x: no call sites", L2_FRAME_FN);
-    rh_log("hooks: frame driver %08x <- %d call site(s)\n", L2_FRAME_FN, nf);
+    if (O.standalone) rl_plat_bind_imports(O.no_overlay ? NULL : rh_files_resolve_keep);   /* no retail CRT: the host's */
+    rl_frame_driver = sa_frame_driver;       /* the port's frame guard (rl_40e890): this frame boundary */
+    if (!O.standalone) {                     /* (standalone: no call sites — the port's 0x40e890 calls rl_frame_driver) */
+        int nf = redirect_calls(L2_FRAME_FN, (void *)frame_wrap);
+        if (nf < 1) rh_fatal("frame driver %08x: no call sites", L2_FRAME_FN);
+        rh_log("hooks: frame driver %08x <- %d call site(s)\n", L2_FRAME_FN, nf);
+    }
     load_volatile();
     rh_hooks_install();
     if (O.coverage) cov_install();
@@ -779,11 +910,12 @@ int main(int argc, char **argv)
         for (int i = 0; i < g_ntrap; i++) { g_torig[i] = G8(g_tva[i]); G8(g_tva[i]) = 0xCC; }
     }
     if (!O.frames) O.frames = (O.record || O.bot) ? 0xfffffff0u : O.trace ? rh_trace_last_frame() + O.tail : 3000u;
-    rh_log("rhost: frames<=%u step=%ums vbase=%u creep_after=%u realtime=%d show=%d movies=%d arena=%d overlay=%d\n",
-           O.frames, O.step_ms, O.vbase, O.creep_after, O.realtime, O.show, O.movies, !O.no_arena, !O.no_overlay);
+    rh_log("rhost: frames<=%u step=%ums vbase=%u creep_after=%u realtime=%d show=%d movies=%d arena=%d overlay=%d standalone=%d\n",
+           O.frames, O.step_ms, O.vbase, O.creep_after, O.realtime, O.show, O.movies, !O.no_arena, !O.no_overlay, O.standalone);
+    if (O.standalone) { AddVectoredExceptionHandler(1, sa_veh); sa_seal(exe_abs, &img); }
     rh_bot_install();                        /* bot mode: serves the controller until its first `run` */
     if (!O.record && !O.show && !O.bot && O.stall_wall_ms) CloseHandle(CreateThread(NULL, 0, watchdog, NULL, 0, NULL));
-    call_on_stack((void *)(uintptr_t)img.entry, MAIN_STACK_LO, MAIN_STACK_HI - 192);   /* CRT entry: never returns */
+    call_on_stack(O.standalone ? (void *)sa_entry : (void *)(uintptr_t)img.entry, MAIN_STACK_LO, MAIN_STACK_HI - 192);   /* CRT entry: never returns */
     finish("entry-returned");
     return 0;
 }

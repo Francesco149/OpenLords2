@@ -34,37 +34,56 @@
   frame guard — ported, no row —, two CRT helpers) + the statically linked CRT (79 / 22 KB); 316 / 125 KB before round 3.
   rhost: RH_SH_HOST (host-level rows: proven by the hybrid pass), RH_SH_FULL (the copy shadow for rows whose subtree
   reads stack residue the paged shadow's fault frames overwrite), smackw32 / DirectDraw rollbacks, handle reuse.
-- **Top blocker:** none for logic parity. On the corpus the hybrid runs almost no retail code (above); the standalone
-  needs the data-image build (★3, `docs/findings/standalone-path.md`). Multiplayer stays unverifiable
-  (DirectPlay / serial: rhost stubs it).
+  **2026-11-07: the standalone runs** (`rhost --standalone`, `docs/findings/standalone-path.md`): only the exe's data
+  sections mapped, `.text` INT3 + 1472 entry thunks, entry = the port's CRT half → WinMain → window (`src/rl_main.c`),
+  audit per run + `tools/standalone/prove_no_retail_code.py` (14/14 PASS). **Corpus (wine, 64): 64 run to the end with
+  no retail code, 63 equal pure retail in frame / tick / RNG / every presented frame**; deterministic, Windows ≡ wine.
+  Data image: `tools/data_ledger.py` → `docs/data-ledger.md` (99 KB from the exe; 4.1% of its non-zero bytes
+  documented). Free-play capture: Desktop "Lords II capture" (`rhost.py play-*`).
+- **Top blocker:** none for logic parity. The standalone's state differs from retail's only in the CRT (the host's:
+  ★3). Multiplayer stays unverifiable (DirectPlay / serial: rhost stubs it).
 <!-- status:end -->
 
 ## ★ Next micro-tasks
 
-1. **One residue model for the march executor 0x465d28**: 0x46521f (ctl) passes its four uninitialized locals as stack
-   residue (rl_46521f_res, rh_res_get / put); the army-state handlers 2..4 0x465486 / 0x465622 / 0x465761 (terr) run
-   engine_army_move_run on its globals. Unify, then give the handlers RH_SH_FULL | RH_SH_SAMPLE rows (today: no row —
-   verified under --shadow-full on terr's branch; with a row the hybrid pass fails with 46521f's, 0x465622 14 divergences).
-2. **Host-level rows**: ui4's 0x42e5c0 / 0x42ec91 / 0x42f1df passed replace-only corpus --check with temporary rows —
-   give them RH_SH_HOST rows; the frame guard 0x40e890 / 0x40e8bb needs a hook through rhost's frame wrapper; WinMain
-   0x40e9ab and the window 0x4b2258 (plain code, no row) for the standalone.
-3. **Standalone** (`docs/findings/standalone-path.md`): the data-image build — retail's .data/.rdata/.bss mapped at its
-   VAs from the user's exe, every bf_ / rl_ / wrapped port, the code-pointer slot rewrite, the platform layer
-   (`src/rl_io_plat.h`); report each scenario's first unported gap; then wire WinMain → the frame tick. Agents listed
-   the per-access globals that only hold at retail's VAs (g_bf_542ce0, g_rl_4dc428, g_rl_53f2b8, g_bf_543fe0, the
-   move-cost grid, the button / hotspot tables, DUP pairs g_tr_* / g_rl_*) — moot under the data image.
-4. **The TODO(rl-link) seams** (rl_ functions calling engine_retail_call where a linked old port takes a port struct /
+1. **One residue model for the march executor 0x465d28** — now a live divergence: `bot-s16-t20` under
+   `--hook replace:move_run,replace:rl_4b99c0` (either alone: PASS) diverges at f21114 (a click: retail opens screen
+   0x10, the port stays on 0x00; ddmin over all 1476 rows → these two), and so does the standalone. move_run reads stack
+   residue whose value depends on what the frame driver's frames left (retail vs port). 0x46521f (ctl) passes its four
+   uninitialized locals as residue (rl_46521f_res, rh_res_get / put); the army-state handlers 2..4 0x465486 / 0x465622 /
+   0x465761 (terr) run engine_army_move_run on its globals. Model the residue as explicit state, then rows for the
+   handlers (RH_SH_FULL | RH_SH_SAMPLE). The whole-corpus "hybrid PASS" of 2026-11-05 did not catch it: re-check how the
+   verify's hybrid pass builds its spec.
+2. **Host-level rows**: ui4's 0x42e5c0 / 0x42ec91 / 0x42f1df (RH_SH_HOST rows; they passed replace-only with temporary
+   rows). Done 2026-11-07: WinMain 0x40e9ab / the window 0x4b2258 (rows `rh_hooks_rl_main.c`), the frame guard through
+   `rl_frame_driver` (rhost's frame boundary).
+3. **The CRT port** (the standalone's state = pure retail's → it joins `corpus --check`): retail's statically linked
+   MSVC debug CRT — the 79 functions the corpus reaches (22 KB: the debug heap `_heap_alloc_dbg` / `_free_dbg` / sbh,
+   `_ioinit` / `__pioinfo`, low-level I/O open / read / write / lseek / close, the mbctable, time / localtime / asctime,
+   getcwd / getdrive / chdir, remove / rename) on retail's layout over its `.data`, every OS call through retail's IAT
+   slots; rows → REPLACE-verified under rhost like any port; `rl_plat` then binds them in the standalone (today: the host
+   CRT, `rl_plat_bind_imports`). OpenSummoners did the same (`src/msvc_crt.c`). Then **`--live`**: a product exe on the
+   real platform (real window / DirectDraw / DirectSound behind the same IAT slots).
+4. **The standalone's static gaps** (`tools/standalone/prove_no_retail_code.py --gaps-only`): 213 retail entries the
+   port calls with no thunk — the payload builders 0x4d57f0[100] (rl_glue.c:1414), the delayed-action handlers
+   0x4d5c98[50] (rl_ctl.c:2547), 63 seams (the DLGPROCs 0x4b7f78 / 0x4b8335 / 0x4b8439 / 0x4b85b7, gfx_restore
+   0x4b2730, 0x4b26b8, the MP save pump 0x49792e …). Each = a port + a row (most are the TODO(rl-link) seams, ★5).
+5. **The TODO(rl-link) seams** (rl_ functions calling engine_retail_call where a linked old port takes a port struct /
    context: the event-queue posters 0x49b2a3 / 0x448819 / 0x449889 / 0x4acbd4 / 0x44aa41 / 0x44ae3c / 0x4508de, combat
    0x4ac3c6 / 0x4abb36 / 0x43b622, county panels 0x4110b1 / 0x41152f / 0x4116fb / 0x411b72, the screens' binders …;
    per-partition lists in docs/findings/rl-*.md): port them on retail's layout (they run retail under rhost today).
-5. **Unreached code**: 939 functions / 172 KB no scenario reaches (`docs/findings/coverage-round3.md`): multiplayer
+6. **Unreached code**: 939 functions / 172 KB no scenario reaches (`docs/findings/coverage-round3.md`): multiplayer
    (DirectPlay / serial — a fake transport in rhost would open it), dead code (zoom-1 / zoom-16 drawers, unwritten
    orders 0 / 7 / 13 / 15 / 16), AI knight garrisons, DirectDraw errors (a fault-injection switch for 0x42f60e's
    HRESULT table), the human queue (below).
-6. **Tooling**: `tools/bf/dedup_globals.py` misses a duplicate whose two definitions differ in type / attributes
+7. **Tooling**: `tools/bf/dedup_globals.py` misses a duplicate whose two definitions differ in type / attributes
    (g_rl_4dc428, g_rl_4ea180, g_rl_4d8a58 fixed by hand at merge); whole-corpus `--hooks '^rl_'` verifies take ~2 h on a
    loaded box — the per-frame rows dominate (RH_SH_SAMPLE them).
-7. **Port build `-std=gnu11`** after an x87 sweep (openrecet's c11 long-double literal finding).
+8. **Data-image documentation** (`docs/data-ledger.md`, catalog `docs/data/catalog.tsv`): document each item with
+   evidence (the bot exercises what it needs: a scenario that reads the item, a probe of its consumer); largest open:
+   the string tables (every unreferenced non-zero byte is a string), 0x4e3260 (2244 B, 0x4bb978), 0x4d3200 (0x43c2a9), the
+   draw tables 0x4e3bf4 / 0x4e4034, the menu / button records 0x4dc360..0x4de000. Goal: a port that loads nothing.
+9. **Port build `-std=gnu11`** after an x87 sweep (openrecet's c11 long-double literal finding).
 
 ## Phase 0 checklist
 - [x] rhost core (fake DDraw / DSound / window / heap / handles / files), Windows + wine targets
@@ -90,8 +109,8 @@
    `docs/findings/coverage-round3.md`): an AI castle **defended by knights** and assaulted on the field (0x48e774), an
    AI **besieging you with knights** (halve_garrison 0x4ad8cc), an **ally that raises a new army** and marches its lord
    (0x4a599d), a long campaign with stone castles.
-2. **Review the standalone design** (`docs/findings/standalone-path.md`): retail's data image mapped at its VAs from
-   your own Lords2.exe (read at startup, never shipped) + all-port code — how the hybrid becomes the standalone. A yes /
-   no on that direction before the `standalone2` build starts.
+Resolved 2026-11-07 (owner): the standalone loads its DATA from the user's exe with proof no original code runs (as
+OpenSummoners), toward a fully documented port that loads nothing from it; lean on the bot to exercise what the data
+documentation needs; more targeted traces stay deferred (the free-play shortcut instead).
 
 Resolved 2026-10-23: direction approved (audit §8 P1); lords2/sotes/ys6-decomp containers stopped.

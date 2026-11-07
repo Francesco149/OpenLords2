@@ -87,6 +87,42 @@ static hook_t *find_hook(const char *name)
     return NULL;
 }
 
+/* --standalone: the retail code range holds INT3 (retail_map data_only) and, at every row's entry, a 5-byte `jmp rel32`
+ * to its wrapper — written here, never copied from the file. Every row is REPLACE (no retail side to shadow). */
+#define SA_MAX 4096
+static rh_thunk_t g_sa[SA_MAX]; static int g_nsa;
+static void sa_thunk(uint32_t va, void *to, const char *name)
+{
+    for (int i = 0; i < g_nsa; i++)
+        if (g_sa[i].va == va) {
+            /* two rows for one function (an old port and its retail-layout successor, both verified): the first
+             * table's wins (rh_hooks.h order), the other is logged */
+            if (g_sa[i].target != to) rh_log("standalone: %s and %s share the entry %08x: %s kept\n", g_sa[i].name, name, va, g_sa[i].name);
+            return;
+        }
+    if (va < RT_TEXT_LO || va + 5 > RT_TEXT_LO + RT_TEXT_SZ) rh_fatal("standalone: %s at %08x is outside the code range", name, va);
+    if (g_nsa == SA_MAX) rh_fatal("standalone: more than %d thunks", SA_MAX);
+    uint8_t *e = (uint8_t *)(uintptr_t)va;
+    e[0] = 0xE9; *(int32_t *)(e + 1) = (int32_t)((uint32_t)(uintptr_t)to - (va + 5));
+    g_sa[g_nsa].va = va; g_sa[g_nsa].target = to; g_sa[g_nsa++].name = name;
+}
+static int sa_cmp(const void *a, const void *b) { uint32_t x = ((const rh_thunk_t *)a)->va, y = ((const rh_thunk_t *)b)->va; return x < y ? -1 : x > y; }
+int rh_hooks_thunks(const rh_thunk_t **out) { *out = g_sa; return g_nsa; }
+static void sa_install(void)
+{
+    for (int k = 0; k < NTAB; k++) for (int i = 0; i < TABLES[k].n; i++) {
+        hook_t *h = &TABLES[k].t[i];
+        h->mode = H_REPLACE;
+        sa_thunk(h->va, h->wrapper, h->name);
+    }
+    qsort(g_sa, (size_t)g_nsa, sizeof *g_sa, sa_cmp);
+    for (int i = 1; i < g_nsa; i++)
+        if (g_sa[i].va - g_sa[i - 1].va < 5)
+            rh_fatal("standalone: thunks %s %08x / %s %08x overlap", g_sa[i - 1].name, g_sa[i - 1].va, g_sa[i].name, g_sa[i].va);
+    FlushInstructionCache(GetCurrentProcess(), (void *)(uintptr_t)RT_TEXT_LO, RT_TEXT_SZ);
+    rh_log("standalone: %d entry thunks into port code (every row REPLACE)\n", g_nsa);
+}
+
 void rh_hooks_install(void)
 {
     H_RNG = &CORE_HOOKS[0];
@@ -97,6 +133,11 @@ void rh_hooks_install(void)
         (void)k;
     }
     for (int k = 0; k < NTAB; k++) for (int i = 0; i < TABLES[k].n; i++) TABLES[k].t[i].entry = TABLES[k].t[i].va;
+    if (O.standalone) {
+        if (O.hooks && *O.hooks && O.hooks[0] != '@') rh_fatal("--standalone: every row is REPLACE (no --hook)");
+        sa_install();
+        return;
+    }
     if (!O.hooks || !*O.hooks) return;
     /* every row replaced at once is > 11 KB of spec (506 rows, 2026-11-04): an 8 KB buffer cut the tail off */
     static char spec[1 << 17];

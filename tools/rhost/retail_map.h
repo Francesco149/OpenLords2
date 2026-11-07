@@ -16,12 +16,19 @@
 #define RETAIL_HOLE_DEFINE \
     __attribute__((aligned(4096))) char g_retail_hole[0x480000];
 
+/* every byte range a map took from the FILE (the standalone's audit: none may be code) */
+typedef struct { char name[9]; uint32_t va, len, ch; int copied; } retail_range_t;
+#define RETAIL_MAX_RANGES 16
 typedef struct {
     uint8_t *base;
     uint32_t size;
     uint32_t entry;
     int n_imports_resolved, n_imports_host, n_imports_stubbed;
+    retail_range_t r[RETAIL_MAX_RANGES]; int nr;   /* the headers + each section: copied, or not (code) */
 } retail_image_t;
+
+/* a section that holds or may run code: never copied by a data-only map */
+#define RETAIL_SEC_CODE(ch) (((ch) & (IMAGE_SCN_CNT_CODE | IMAGE_SCN_MEM_EXECUTE)) != 0)
 
 /* host policy: return a host function for (dll, name|ordinal), or NULL to resolve from the
  * real DLL; *skip_dll = 1 means never LoadLibrary this DLL (every import must come from the host) */
@@ -33,7 +40,9 @@ static void __cdecl retail_unresolved_import(void)
     ExitProcess(99);
 }
 
-static int retail_map(const char *path, retail_image_t *out)
+/* data_only (--standalone): the PE headers + every NON-code section; each code section (rounded up to whole pages: the
+ * GOG patch's code lies past .text's VirtualSize) is 0xCC — never a byte of it read from the file */
+static int retail_map(const char *path, retail_image_t *out, int data_only)
 {
     FILE *f = fopen(path, "rb");
     if (!f) { fprintf(stderr, "open %s failed\n", path); return -1; }
@@ -56,8 +65,20 @@ static int retail_map(const char *path, retail_image_t *out)
         return -1;
     }
     memcpy(base, file, nt->OptionalHeader.SizeOfHeaders);
+    out->nr = 0;
+    retail_range_t *hr = &out->r[out->nr++];
+    snprintf(hr->name, sizeof hr->name, "(hdr)"); hr->va = ib; hr->len = nt->OptionalHeader.SizeOfHeaders; hr->ch = 0; hr->copied = 1;
     IMAGE_SECTION_HEADER *sec = IMAGE_FIRST_SECTION(nt);
     for (int i = 0; i < nt->FileHeader.NumberOfSections; i++) {
+        if (out->nr < RETAIL_MAX_RANGES) {
+            uint32_t al = nt->OptionalHeader.SectionAlignment;
+            retail_range_t *r = &out->r[out->nr++];
+            memcpy(r->name, sec[i].Name, 8); r->name[8] = 0;
+            r->va = ib + sec[i].VirtualAddress; r->ch = sec[i].Characteristics;
+            r->len = (sec[i].Misc.VirtualSize + al - 1) & ~(al - 1);
+            r->copied = !(data_only && RETAIL_SEC_CODE(sec[i].Characteristics));
+            if (!r->copied) { memset(base + sec[i].VirtualAddress, 0xCC, r->len); continue; }
+        }
         /* the loader maps whole pages: raw bytes past VirtualSize but inside its last page are code too
          * (Lords2's GOG patch appended FUN_004cfb08 there without growing .text's VirtualSize) */
         uint32_t al = nt->OptionalHeader.SectionAlignment, raw = sec[i].SizeOfRawData;

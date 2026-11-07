@@ -55,6 +55,8 @@ static const char *resolve(const char *path, int want_write, int keep, char *out
     return out;
 }
 const char *rh_files_resolve(const char *path, int want_write, char *out, size_t n) { return resolve(path, want_write, 0, out, n); }
+/* the port's host CRT under --standalone (rl_plat_bind_imports): a write keeps the content (O_RDWR / append opens) */
+const char *rh_files_resolve_keep(const char *path, int want_write, char *out, unsigned n) { return resolve(path, want_write, want_write, out, n); }
 
 
 /* ---- the shadow's file rollback (rh_state.c meta_save / meta_restore) ----
