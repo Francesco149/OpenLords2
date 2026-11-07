@@ -1,0 +1,20 @@
+va	size	name	type	meaning	evidence
+004d2784	7	s_eng_file	char[7]	WinMain: the l2.eng file name (120000 B read into 0x591580)	src/rl_main.c rl_40e9ab; docs/findings/winmain-and-bootstrap.md
+004d278c	30	s_log_no_window	char[30]	WinMain: status-log line when create_main_window fails	src/rl_main.c rl_40e9ab (rl_4afab9 0x4d278c)
+004d27ac	10	s_setup_wav	char[10]	WinMain: the setup sound (setup.wav) passed to 0x4263ad	src/rl_main.c rl_40e9ab
+004d27b8	25	s_log_partially_set	char[25]	WinMain: the 'partially set' status-log line	src/rl_main.c rl_40e9ab (rl_4afab9 0x4d27b8)
+004d27d4	31	s_log_ddraw_fail_a	char[31]	WinMain: status-log line when DirectDraw init 0x4975d3 fails	src/rl_main.c rl_40e9ab (rl_4afab9 0x4d27d4)
+004d27f4	31	s_log_ddraw_fail_b	char[31]	WinMain: status-log line when 0x497500 fails	src/rl_main.c rl_40e9ab (rl_4afab9 0x4d27f4)
+004d2814	22	s_log_fully_set	char[22]	WinMain: the 'fully set' status-log line	src/rl_main.c rl_40e9ab (rl_4afab9 0x4d2814)
+004d282c	11	s_help_file	char[11]	WinMain exit: the help-file name passed to WinHelp(HELP_QUIT)	src/rl_main.c rl_40e9ab (WinHelp 0x4d282c)
+004d6108	512	k_realm_event_deck	u16[256]	seasonal realm-event deck: index (2*rng7 + county) mod 256; 26 non-zero entries, all at v = 7 mod 8	docs/findings/game-state-map.md "Realm events"; src/engine_realm_events.c
+004d63d8	208	k_taxsetting_tally_modifier	i32[52]	per-tax-setting order-tally modifier (low byte read), live range 0..50; entry 51 zero; never written	src/engine_realm.c k_taxsetting_tally_modifier; engine-quirks.md (0x4d63d8)
+004d64a8	120	k_tax_approval_tbl	i32[6][5]	tax-policy x standing-band approval adjustment; policy 6 reads into 0x4d6520 (quirk #149)	src/engine_realm.c k_tax_approval_tbl; engine-quirks.md #149
+004d6520	40	k_tax_band_threshold	{i32 cutoff, i32 band}[5]	standing-band thresholds for engine_math_lookup_threshold	src/engine_realm.c k_tax_approval_tbl[30..39]; engine-quirks.md #149
+004d6738	48	k_supply_table	{i32 divisor, i32 mult}[6]	ration-level cost table (levels 0..5); level 6 reads the next table 0x4d6768	src/engine_army_economy.c k_supply_table; engine-quirks.md (0x4d6738)
+004da050	1280	k_pl8_bank_table	{char name[16]; u32 size}[64]	strategic-map .pl8 bank name / size table of the season loader 0x4984dc	tools/extract_pl8_table.py; docs/findings/map-render.md
+004de960	1800	g_save_schema	{void *ptr; u32 size}[225]	save-file schema: the 225 (pointer, size) blocks a .sav serializes, in order	tools/rhost/rh_hooks_ai.c rh_port_bind_once; docs/findings/save-schema-table.csv; save-format.md
+004df588	37	s_log_header	char[37]	create_main_window: the status-log header line	src/rl_main.c rl_4b2258 (rl_4afab9 0x4df588)
+004df5b0	15	s_wndclass	char[15]	create_main_window: window class name (RegisterClass)	src/rl_main.c rl_4b2258
+004df5c0	7	s_wndtitle	char[7]	create_main_window: window title (CreateWindowEx)	src/rl_main.c rl_4b2258
+004df5c8	15	s_wndclass2	char[15]	create_main_window: the class name again (CreateWindowEx's copy)	src/rl_main.c rl_4b2258
