@@ -27,7 +27,7 @@ uint32_t bf_unit_res_48804a;      /* 0x48804a [ebp-0xc] = e0-0x10 */
  * residue model (engine_bf_action.c) needs the order handler's ebp — a 1-argument call leaves it in the sequencers'
  * slot, and a unit the path step removed then gets its low byte as the sprite frame. Fixed depths: driver e0 - 0x18 =
  * the state handler's e0 (push ebp, a local, ebx / esi / edi, the call); state e0 - 0x14 = the order handler's e0
- * (push ebp / ebx / esi / edi, the call), its ebp 4 lower. Set by the hook adapters (0 in the standalone). */
+ * (push ebp / ebx / esi / edi, the call), its ebp 4 lower. Set by the hook adapters (retail's value under the port's frame guard: quirk #239). */
 uint32_t bf_unit_e0_4822ed;
 uint32_t bf_unit_e0_state;
 extern uint32_t bf_action_res_ebp;   /* engine_bf_action.c */

@@ -1471,7 +1471,7 @@ int rl_472e46(void)
  * the call and stored back. The executor 0x465d28 reads its uninitialized waypoint locals (quirk #229) through
  * g_army_move_* (a row loads them from the residue below the handler's e0). */
 static engine_event_queue_state_t s_terr_evq;
-static engine_event_queue_state_t *terr_evq_load(void)
+engine_event_queue_state_t *rl_evq_load(void)
 {
     memcpy(&s_terr_evq.scratch, g_rl_553510, sizeof s_terr_evq.scratch);
     memcpy(s_terr_evq.ring, g_misc_128, 128);
@@ -1482,7 +1482,7 @@ static engine_event_queue_state_t *terr_evq_load(void)
     s_terr_evq.consumer_cooldown = g_rl_57c954;
     return &s_terr_evq;
 }
-static void terr_evq_store(void)
+void rl_evq_store(void)
 {
     if (memcmp(g_rl_553510, &s_terr_evq.scratch, sizeof s_terr_evq.scratch))
         memcpy(g_rl_553510, &s_terr_evq.scratch, sizeof s_terr_evq.scratch);
@@ -1496,9 +1496,9 @@ static void terr_evq_store(void)
 }
 static void terr_move_run(void)
 {
-    engine_event_queue_state_t *q = terr_evq_load();
+    engine_event_queue_state_t *q = rl_evq_load();
     engine_army_move_run(q, g_sim_mp_active);
-    terr_evq_store();
+    rl_evq_store();
 }
 #define FACING_MARCH(f) AT(int32_t, g_rl_4d6a78, 0x4d6a78u, 0x4d6a78 + 4 * (int32_t)(f))
 #define FACING_IDLE(f)  AT(int32_t, g_rl_4d6ab8, 0x4d6ab8u, 0x4d6ab8 + 4 * (int32_t)(f))
@@ -1519,9 +1519,9 @@ int rl_465486(void)
     TER8(a, 0x52f0b7) += (uint8_t)FACING_MARCH(TER8(a, 0x52f0cb));
     int key = CELL8(TER32(a, 0x52f0bc), 0x522f97u);
     if ((int)TER8(a, 0x52f0c0) != key) engine_realm_collect_territory_income();
-    engine_event_queue_state_t *q = terr_evq_load();
+    engine_event_queue_state_t *q = rl_evq_load();
     engine_combat_army_settle_region(g_army_state_index, (unsigned)key, q, g_sim_mp_active);
-    terr_evq_store();
+    rl_evq_store();
     a = g_army_state_index;
     if (TER32(a, 0x52f210) > 0) TER32(a, 0x52f210)--;
     if (TER8(a, 0x52f1fc) == 2) terr_move_run();

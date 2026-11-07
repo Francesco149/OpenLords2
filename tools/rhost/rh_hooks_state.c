@@ -28,6 +28,8 @@ enum {
     X_state_find_settle_spot,
 };
 
+/* entered from retail code only (the port's frame driver calls engine_army_state_run directly, with the window
+ * engine_army_state_res_ai_step models): the window is the real residue */
 static void state_run_res(void)
 {
     for (int k = 0; k < 5; k++) g_army_state_res[k] = rh_res_get(0x30 + 4 * k);

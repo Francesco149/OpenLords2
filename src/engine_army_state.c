@@ -109,11 +109,32 @@ uint8_t g_army_state_abort;         /* DAT_0050a49e */
  * -0x3c under a state-3/4 one: an idle stack after a marching one reads the
  * marcher's outcome code and waypoint column as its waypoint (quirk #232).
  * g_army_state_res[k] = the dword at (driver entry esp) - 0x30 - 4k; the
- * executor's four locals move through it around each call.  What the other
- * callees' frames (enter / settle region, income, unit remove) leave in these
- * slots is not modelled. */
+ * executor's four locals move through it around each call.  A state-1 region
+ * change leaves 0x4ad6c0's four locals there (handler_march).  What the other
+ * callees' frames (settle region, unit remove) leave is not modelled.
+ *
+ * At the driver's entry the window is the AI step's imprint (quirk #238): the
+ * driver's only caller, the frame driver 0x4b99c0, calls 0x49a010 right before
+ * it at the same esp, and 0x49a010's callees' frames rewrite the window on
+ * nearly every pass (saved ebx / esi / edi, return addresses, frame pointers:
+ * large positive values; the executor only compares a waypoint with a map
+ * coordinate, engine_path_direction_8way, so any large value behaves alike). */
 uint32_t g_army_state_res[5];
 static engine_army_move_fn g_move_fn;
+
+/* the AI step 0x49a010's imprint on the window (driver e0 -0x30 .. -0x40): retail's
+ * dominant values under rhost (its frame loop's ebx / esi / edi saved by 0x49a010's
+ * callees: 13,787 of 13,965 passes of bot-s16-t20; the waypoint slots -0x38 / -0x3c /
+ * -0x40 large in 13,947).  Not modelled: the siege scan's step (0x4a84ba → 0x4a8507)
+ * leaves its loop bound 0x96 at -0x38 (18 passes). */
+void engine_army_state_res_ai_step(void)
+{
+    g_army_state_res[0] = 6;          /* -0x30: never read before written */
+    g_army_state_res[1] = 0x14a000;   /* -0x34: never read before written */
+    g_army_state_res[2] = 0x13ff84c;  /* -0x38: a state-3/4 waypoint column */
+    g_army_state_res[3] = 0x1400000;  /* -0x3c: waypoint column (1/2) / row (3/4) */
+    g_army_state_res[4] = 0x1400000;  /* -0x40: a state-1/2 waypoint row */
+}
 
 static void run_move(int shallow, engine_event_queue_state_t *evq, int mp_active)
 {
@@ -161,6 +182,17 @@ static void handler_march(engine_event_queue_state_t *evq, int mp_active)
     if (r[A_REGION] != (uint8_t)region) {
         engine_combat_army_enter_region(g_army_state_index, (unsigned)region, evq);
         engine_realm_collect_territory_income();
+        /* FUN_004ad6c0's locals (sub esp,0x10 at the executor's depth) overwrite
+         * its four slots last: the loop counters j = 151 / k = 17 (var_C reused:
+         * the region byte, then k), army 150's owner (movsx) and that army's
+         * county's owner (src/rl_ctl.c rl_46521f, docs/findings/rl-ctl.md) */
+        const uint8_t *a150 = AREC(150);
+        uint32_t *w = &g_army_state_res[1];
+        w[0] = 151;
+        w[1] = (uint32_t)(int32_t)(int8_t)a150[A_OWNER];
+        w[2] = 17;
+        w[3] = g_per_army_768[a150[A_REGION] * 0x300 + 5];   /* county +5 (0x53f9b5) */
+        r = AREC(g_army_state_index);
     }
 
     if (*(int32_t *)(r + A_TIMER) > 0)

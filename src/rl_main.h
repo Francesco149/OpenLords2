@@ -3,6 +3,9 @@
 #pragma once
 #include <windows.h>
 
+/* 1 while the port's frame guard rl_40e890 runs a frame: the frame driver's entry esp is then the port's, not the
+ * one retail's WinMain chain gives it (rhost's row models retail's for the residue models: quirk #239) */
+extern int rl_frame_port_guard;
 extern int (*rl_frame_driver)(void);   /* 0x40e890's frame call: rhost's frame boundary; NULL = rl_4b99c0 */
 int rl_4b2258(HINSTANCE inst);
 int __stdcall rl_40e9ab(HINSTANCE inst, HINSTANCE prev, LPSTR cmdline, int show);

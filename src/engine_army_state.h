@@ -35,6 +35,8 @@ extern uint8_t g_army_state_abort;         /* DAT_0050a49e — seam-set early-ex
  * quirks #229 / #232).  Kept across calls; the hybrid host loads it from
  * retail's stack before each driver call and stores it back after. */
 extern uint32_t g_army_state_res[5];
+/* the AI step 0x49a010's imprint on the executor residue window (the driver runs right after it) */
+void engine_army_state_res_ai_step(void);
 
 /* Port of FUN_004650b0 (265 B, __cdecl void).  Walk all 150 occupant records
  * (g_per_territory_420, stride 0x1a4, index 1..150) and, for each live one

@@ -26,6 +26,7 @@
 #include "engine_map_query.h"         /* g_cell_cursor_col / _row: DAT_00569570 / 78 (rhost: a synced mirror) */
 #include "engine_territory.h"         /* the dirty state (DAT_0053e9ac …: rhost mirrors) */
 #include "engine_army_move.h"         /* engine_army_move_terrain_passable (0x469e0e) */
+#include "engine_army_state.h"        /* engine_army_state_res_ai_step: the driver's residue window */
 #include "engine_trade.h"             /* g_trade_buttons / g_trade_widget_count (DAT_004dd838 / DAT_00553f58) */
 #include "engine_treasury.h"          /* g_treasury_buttons / g_treasury_widget_count */
 #include "engine_noble_faces.h"       /* g_noble_buttons / g_noble_action_count */
@@ -1751,7 +1752,7 @@ int rl_4ba9c8(void)
 /* the per-unit driver 0x4822ed models a siege order's stack residue from its retail entry esp (engine_bf_unit.c
  * bf_unit_e0_4822ed: the order handler's ebp, a removed unit's sprite frame); its hook adapter sets it, a port-to-port
  * call must: 4b99c0's e0 - 0x1c (push ebp, 8 B of locals, ebx / esi / edi, the call). rl_host_e0_4b99c0 = the frame
- * driver's retail entry esp — set by its row's adapter (rhost), 0 in the standalone. Without it field-orders'
+ * driver's retail entry esp — set by its row's adapter (rhost; under the port's frame guard: retail's value, quirk #239). Without it field-orders'
  * hybrid ended on another state (shadow --shadow-all: f8789 / f9601, a unit's +0x10 0x88 vs 0xd0). */
 uint32_t rl_host_e0_4b99c0;
 extern uint32_t bf_unit_e0_4822ed;   /* engine_bf_unit.c */
@@ -1820,7 +1821,9 @@ int rl_4b99c0(void)
         if ((int)s_slot_0057c8fc == 0 && steps != 0) {
             rl_40490d();
             rl_49a010();
-            engine_retail_call(0x4650b0u, 0);   /* TODO(rl-link): engine_army_state_run (engine_army_state.c, its residue binder) */
+            engine_army_state_res_ai_step();    /* 0x49a010's frames: the driver's residue window (quirk #238) */
+            engine_army_state_run(rl_evq_load(), g_sim_mp_active);   /* 0x4650b0 (row state_run) */
+            rl_evq_store();
         } else if ((int)s_slot_0057c8fc == 2 && steps != 0) {
             bf_478952();
             if (engine_current_screen() < 0x2b) {

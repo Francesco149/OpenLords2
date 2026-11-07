@@ -59,6 +59,22 @@ static uint32_t s_e0_11;
 /* the frame driver 0x4b99c0: HOOK_SMK_V (it plays the movies) + its retail entry esp for the battle chain's residue
  * model (src/rl_host.c rl_host_e0_4b99c0 → bf_unit_e0_4822ed before its port-to-port call of 0x4822ed) */
 extern uint32_t rl_host_e0_4b99c0;
+/* retail's entry esp of 0x4b99c0 in a pure run: rhost's frame_wrap (the pinned main stack, MAIN_STACK_HI - 192, retail's
+ * start → WinMain → 0x40e8bb → 0x40e890 chain, frame_wrap's own frame). Under the port's frame guard (rl_40e890: the
+ * port's WinMain chain, rl_frame_port_guard) the real esp is the port's; the residue models take retail's (quirk #239).
+ * A retail-guard run that sees another e0 (rhost's frame_wrap or stack changed) logs it once: update the constant. */
+#define RH_RETAIL_E0_4B99C0 0x58fffdccu
+extern int rl_frame_port_guard;
+static uint32_t e0_4b99c0_model(uint32_t e0)
+{
+    static int warned;
+    if (rl_frame_port_guard) return RH_RETAIL_E0_4B99C0;
+    if (e0 != RH_RETAIL_E0_4B99C0 && !warned) {
+        warned = 1;
+        rh_log("warning: frame driver 0x4b99c0 entered at esp %08x under retail's frame guard, not %08x (RH_RETAIL_E0_4B99C0)\n", e0, RH_RETAIL_E0_4B99C0);
+    }
+    return e0;
+}
 #define HOOK_SMK_V_E0(NAME, N, CALL) \
     static uint32_t p_##NAME(const uint32_t *a) \
     { (void)a; if (RH_TABLE[X_##NAME].mode == H_SHADOW && s_smk) smk_rewind(s_smk); CALL; return 0; } \
@@ -66,7 +82,7 @@ extern uint32_t rl_host_e0_4b99c0;
     static __attribute__((used, noinline)) uint32_t __cdecl b_##NAME(uint32_t e0) \
     { \
         uint32_t o_ = rl_host_e0_4b99c0, r; \
-        rl_host_e0_4b99c0 = e0; \
+        rl_host_e0_4b99c0 = e0_4b99c0_model(e0); \
         if (RH_TABLE[X_##NAME].mode != H_SHADOW || rh_in_shadow()) { \
             r = rh_port_run(&RH_TABLE[X_##NAME], (void *)w_##NAME, p_##NAME, 0, e0); \
             rl_host_e0_4b99c0 = o_; \

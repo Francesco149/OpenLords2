@@ -37,7 +37,7 @@
   **2026-11-07: the standalone runs** (`rhost --standalone`, `docs/findings/standalone-path.md`): only the exe's data
   sections mapped, `.text` INT3 + 1472 entry thunks, entry = the port's CRT half → WinMain → window (`src/rl_main.c`),
   audit per run + `tools/standalone/prove_no_retail_code.py` (14/14 PASS). **Corpus (wine, 64): 64 run to the end with
-  no retail code, 63 equal pure retail in frame / tick / RNG / every presented frame**; deterministic, Windows ≡ wine.
+  no retail code, 64 equal pure retail in frame / tick / RNG / every presented frame** (bot-s16-t20 fixed: quirk #238); deterministic, Windows ≡ wine.
   Data image: `tools/data_ledger.py` → `docs/data-ledger.md` (99 KB from the exe; 4.1% of its non-zero bytes
   documented). Free-play capture: Desktop "Lords II capture" (`rhost.py play-*`).
 - **Top blocker:** none for logic parity. The standalone's state differs from retail's only in the CRT (the host's:
@@ -46,14 +46,12 @@
 
 ## ★ Next micro-tasks
 
-1. **One residue model for the march executor 0x465d28** — now a live divergence: `bot-s16-t20` under
-   `--hook replace:move_run,replace:rl_4b99c0` (either alone: PASS) diverges at f21114 (a click: retail opens screen
-   0x10, the port stays on 0x00; ddmin over all 1476 rows → these two), and so does the standalone. move_run reads stack
-   residue whose value depends on what the frame driver's frames left (retail vs port). 0x46521f (ctl) passes its four
-   uninitialized locals as residue (rl_46521f_res, rh_res_get / put); the army-state handlers 2..4 0x465486 / 0x465622 /
-   0x465761 (terr) run engine_army_move_run on its globals. Model the residue as explicit state, then rows for the
-   handlers (RH_SH_FULL | RH_SH_SAMPLE). The whole-corpus "hybrid PASS" of 2026-11-05 did not catch it: re-check how the
-   verify's hybrid pass builds its spec.
+1. ~~One residue model for the march executor~~ — done 2026-11-07 (quirks #238 / #239): the driver's residue window =
+   the AI step 0x49a010's imprint (`engine_army_state_res_ai_step`), rl_4b99c0 calls the driver port directly (was an
+   `engine_retail_call` seam: in the hybrid a seam runs RETAIL even when the VA has a row — only call sites are patched;
+   the standalone thunks every entry); the battlefield's frame-pointer residue takes retail's frame-driver e0 under the
+   port's frame guard. Full hybrid 64/64 (bot-s16-t20, field-orders failed), standalone 64/64. Open: the other
+   `engine_retail_call(VA)` seams with a row run retail in the hybrid — sweep them (★5).
 2. **Host-level rows**: ui4's 0x42e5c0 / 0x42ec91 / 0x42f1df (RH_SH_HOST rows; they passed replace-only with temporary
    rows). Done 2026-11-07: WinMain 0x40e9ab / the window 0x4b2258 (rows `rh_hooks_rl_main.c`), the frame guard through
    `rl_frame_driver` (rhost's frame boundary).

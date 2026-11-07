@@ -98,7 +98,16 @@ HOOK_V(rl_497e65, 0, rl_497e65())
 HOOK_V(rl_497ced, 0, rl_497ced())
 HOOK_V(rl_4976a1, 0, rl_4976a1())
 HOOK_R(rl_49caaa, 0, rl_49caaa())
-HOOK_V(rl_49a010, 0, rl_49a010())
+/* 0x49a010's frames leave the driver's residue window (the driver 0x4650b0 runs next at the same esp, quirk #238):
+ * replace mode writes the model (rh_res_set: not compared, retail's imprint varies with the path) */
+#include "engine_army_state.h"
+static void ai_step_res(void)
+{
+    rl_49a010();
+    engine_army_state_res_ai_step();
+    for (int k = 0; k < 5; k++) rh_res_set(0x30 + 4 * k, g_army_state_res[k]);
+}
+HOOK_V(rl_49a010, 0, ai_step_res())
 HOOK_V(rl_476aa7, 0, rl_476aa7())
 HOOK_V(rl_4a277d, 1, rl_4a277d(I(0)))
 HOOK_V(rl_4a29b2, 3, rl_4a29b2(I(0), I(1), I(2)))

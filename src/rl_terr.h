@@ -74,3 +74,7 @@ int rl_472ae0(void);                             /* 96 B, coverage 57 */
 int rl_472b40(int a0);                           /* 133 B, coverage 57 */
 int rl_472bc5(int a0, int a1, int a2, int a3, int a4, int a5, int a6, int a7); /* 560 B, coverage 57 */
 int rl_472e46(void);                             /* 600 B, coverage 59 */
+/* the port's event-queue struct over retail's six queue globals: load before a linked port that posts, store after */
+#include "engine_event_queue.h"
+engine_event_queue_state_t *rl_evq_load(void);
+void rl_evq_store(void);

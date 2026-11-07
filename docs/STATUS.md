@@ -1550,7 +1550,7 @@ claims are unverified until rhost re-checks them (`docs/audits/2026-10-23-method
   **2026-11-07: the standalone runs** (`rhost --standalone`, `docs/findings/standalone-path.md`): only the exe's data
   sections mapped, `.text` INT3 + 1472 entry thunks, entry = the port's CRT half → WinMain → window (`src/rl_main.c`),
   audit per run + `tools/standalone/prove_no_retail_code.py` (14/14 PASS). **Corpus (wine, 64): 64 run to the end with
-  no retail code, 63 equal pure retail in frame / tick / RNG / every presented frame**; deterministic, Windows ≡ wine.
+  no retail code, 64 equal pure retail in frame / tick / RNG / every presented frame** (bot-s16-t20 fixed: quirk #238); deterministic, Windows ≡ wine.
   Data image: `tools/data_ledger.py` → `docs/data-ledger.md` (99 KB from the exe; 4.1% of its non-zero bytes
   documented). Free-play capture: Desktop "Lords II capture" (`rhost.py play-*`).
 - **Top blocker:** none for logic parity. The standalone's state differs from retail's only in the CRT (the host's:

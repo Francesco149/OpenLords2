@@ -76,9 +76,14 @@ OpenSummoners does), toward a later fully documented port that loads nothing fro
   with frame / tick / RNG / fb (every presented frame) against the blessed pure-retail values.
 
 **Result (2026-11-07, wine, 64 scenarios): 64 run to the end, 0 gaps; 63 equal pure retail in frame, tick, RNG and every
-presented frame** (Windows: the 6 sampled likewise). The 64th, `bot-s16-t20`, diverges at f21114 (a click: retail opens
-screen 0x10, the port stays on 0x00) — and so does the full hybrid at HEAD (every row replaced, rhost's own build), so it
-is a hybrid divergence the standalone inherits, not a standalone one (below). State: after the boot to the title
+presented frame** (Windows: the 6 sampled likewise). The 64th, `bot-s16-t20`, diverged at f21114 (a click: retail opens
+screen 0x10, the port stays on 0x00) — and so did the full hybrid. **Fixed the same day (quirk #238): 64/64**; the
+march executor's waypoint residue is the AI step 0x49a010's frame imprint (saved registers: "large"), which the port's
+frames did not leave. The hybrid also showed why the 2026-11-05 "hybrid PASS" missed it: an `engine_retail_call(VA)`
+seam runs RETAIL in the hybrid even when VA has a row (only call sites are patched; the standalone thunks every
+entry), so the hybrid is weaker than the standalone there. Also fixed: field-orders' hybrid state (quirk #239: a
+battlefield sprite frame = the low byte of a frame pointer under rhost's stack; the port's WinMain moves the stack).
+Full hybrid 64/64, standalone 64/64. State: after the boot to the title
 (1500 frames) the only VALUE differences vs pure retail are in the CRT's own `.data` (0x4e45xx..0x4e5cxx: mbctable,
 ioinfo, the debug heap's totals, asctime's buffer) and 0x5cee4c.. (command line / environment pointers); the rest are
 heap pointers shifted by the CRT's allocations (retail's CRT allocates before WinMain).

@@ -8185,3 +8185,53 @@ FUN_0046dd34) — new-game map setup only, which no hook reaches; write them whe
 
 > 📍 `src/engine_territory_globals.c` (`g_cell_sweep_counter`, aliased at 0x53e974 by `tools/rhost/rh_hooks_ai.c`),
 > `src/engine_territory.c`, `src/engine_map_init.c`.
+
+## 238 — the march executor's waypoint residue is the AI step's frame imprint: saved registers, not the last waypoint
+
+Extends #229 / #232.  The army-state driver FUN_004650b0 has one caller, the frame driver FUN_004b99c0 (0x4b9c0f),
+which calls the AI step FUN_0049a010 at the same esp right before it.  0x49a010's callees' frames rewrite the
+driver's residue window (driver e0 −0x30..−0x40) on nearly every pass: measured in pure retail (bot-s16-t20, 13,965
+passes, an observer row that runs retail under `rh_call_at` and logs the 16 dwords below e0), the three waypoint
+slots −0x38 / −0x3c / −0x40 hold large values in 13,947 passes — the frame loop's ebx / esi / edi saved by
+0x49a010's callees' prologues, their return addresses, frame pointers; the small exceptions: the siege scan
+0x4a84ba → 0x4a8507 leaves 0x96 at −0x38 (18 passes).  So an executor on a disarmed pass mostly walks toward a
+"waypoint" of saved registers (direction 3, south-east: `engine_path_direction_8way` compares only, any large
+positive value behaves alike), and a waypoint survives only within a driver pass (#232).  The values themselves are
+host-dependent (rhost's frame loop registers; real Windows has others): only their class (exact small / large) is
+behaviour.
+
+The port's frames under the port's frame driver leave other values there: bot-s16-t20 f20034 army 5 read waypoint
+row 0x27 (army 3's) where retail read 0x1400000 — facing 5 vs 4 (+0x1b), +0x149 0x0b vs 0x09, then at f21114 a click
+opened screen 0x10 in retail, not in the port (the standalone and the full hybrid both diverged).
+
+Port: `engine_army_state_res_ai_step` sets `g_army_state_res` to the imprint (retail's dominant values); the frame
+driver `rl_4b99c0` calls it after `rl_49a010` and then the driver port directly (`engine_army_state_run`, was an
+`engine_retail_call` seam); the `rl_49a010` row writes the imprint below its e0 in replace mode (rh_res_set).  The
+driver's march handler also leaves FUN_004ad6c0's locals after a region change (as `rl_46521f` did).  rhost note: a
+retail call through `rh_call_at` (shadow, the observer) runs with the hook machinery's ebx / esi / edi, so saved-register
+residue differs from a pure run's (0x58fbf7b4 … instead of 0x13ff84c …); the class is the same here.
+
+Evidence (wine): standalone 64/64 equal to pure retail (was 63); full hybrid (every row replaced) bot-s16-t20 PASS;
+`corpus --check --hook replace:state_run,replace:rl_49a010` 64/64 PASS.
+
+> 📍 `src/engine_army_state.c/.h` (engine_army_state_res_ai_step, handler_march), `src/rl_host.c` (rl_4b99c0),
+> `tools/rhost/rh_hooks_rl_turn.c` (row rl_49a010), `tools/rhost/rh_hooks_state.c` (row state_run).
+
+## 239 — the battlefield siege orders' sprite-frame residue is a frame pointer: its value comes from the host's stack
+
+The class 7..10 sequencers (0x488793 / 0x488436 / 0x48895e) store an unset local as a unit's sprite frame (+0x10) for a
+unit of another class; after a 1-argument call that local is the order handler's saved ebp (engine_bf_action.c
+§the siege orders' stack residue).  That ebp is a fixed depth below the frame driver 0x4b99c0's entry esp, and in a
+pure rhost run that esp is 0x58fffdcc: rhost's pinned main stack, retail's start → WinMain → 0x40e8bb → 0x40e890
+chain, and rhost's frame_wrap frame (it calls 0x4b99c0).  So the sprite frame is the low byte of a host stack address
+(0x80 under rhost; real Windows gives another).  Under the port's WinMain (the full hybrid, the standalone) the real
+esp is the port's: field-orders f9601 units 15 / 16 got 0xa0 where retail has 0x80 (0x555de0 / 0x555f90, the only
+two differing dwords at the end).
+
+Port: rl_40e890 marks its frame (`rl_frame_port_guard`); rhost's rl_4b99c0 row then gives the residue models retail's
+e0 (`RH_RETAIL_E0_4B99C0`), else the real one, logging once if a retail-guard run ever sees another (rhost's
+frame_wrap or stack changed).  Evidence (wine): full hybrid 64/64 PASS (field-orders failed before); Windows:
+field-orders / bot-s16-t20 hybrid PASS.
+
+> 📍 `src/rl_ui4.c` (rl_40e890), `src/rl_main.c/.h` (rl_frame_port_guard), `tools/rhost/rh_hooks_rl_host.c`
+> (e0_4b99c0_model), `src/engine_bf_unit.c` / `src/engine_bf_action.c` (the model).

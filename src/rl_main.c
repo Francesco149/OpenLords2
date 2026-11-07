@@ -19,6 +19,7 @@
 /* the frame driver the frame guard's 0x40e890 calls: rhost points it at its frame boundary (frame_wrap, which calls
  * 0x4b99c0 by address); unset = the port's rl_4b99c0 */
 int (*rl_frame_driver)(void);
+int rl_frame_port_guard;
 
 /* ---------------------------------------------------------------- create_main_window 0x4b2258 */
 /* Port of FUN_004b2258 (797 B) — the instance init: the two LFSR seeds 0x58fe28 / 0x58fe08 and 0x591564, the input
