@@ -50,8 +50,9 @@
    the AI step 0x49a010's imprint (`engine_army_state_res_ai_step`), rl_4b99c0 calls the driver port directly (was an
    `engine_retail_call` seam: in the hybrid a seam runs RETAIL even when the VA has a row — only call sites are patched;
    the standalone thunks every entry); the battlefield's frame-pointer residue takes retail's frame-driver e0 under the
-   port's frame guard. Full hybrid 64/64 (bot-s16-t20, field-orders failed), standalone 64/64. Open: the other
-   `engine_retail_call(VA)` seams with a row run retail in the hybrid — sweep them (★5).
+   port's frame guard. Full hybrid 64/64 (bot-s16-t20, field-orders failed), standalone 64/64. Fixed after (rh_hooks.c): replace mode
+   now entry-patches every row too, so the 92 `engine_retail_call(VA)` seams whose VA has a row (of 144) run the port
+   in the hybrid as in the standalone: full hybrid still 64/64.
 2. **Host-level rows**: ui4's 0x42e5c0 / 0x42ec91 / 0x42f1df (RH_SH_HOST rows; they passed replace-only with temporary
    rows). Done 2026-11-07: WinMain 0x40e9ab / the window 0x4b2258 (rows `rh_hooks_rl_main.c`), the frame guard through
    `rl_frame_driver` (rhost's frame boundary).

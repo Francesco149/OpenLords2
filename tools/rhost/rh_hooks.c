@@ -159,7 +159,10 @@ void rh_hooks_install(void)
         h->mode = mode;
         if (mode == H_OFF) continue;
         int n = O.hook_entry ? 0 : redirect_calls(h->va, h->wrapper);
-        if (n && rh_is_addr_taken(h->va)) {   /* also reached through a pointer: patch the entry too (retail side: trampoline) */
+        /* also reached through a pointer, or replaced (a port seam that calls the VA by address, engine_retail_call, must
+         * land in the port as in the standalone, whose thunks cover every entry): patch the entry too (retail side:
+         * trampoline) */
+        if (n && (rh_is_addr_taken(h->va) || mode == H_REPLACE)) {
             h->entry = rh_patch_entry(h->va, h->wrapper);
             rh_log("hook %s:%s %08x <- %d call site(s) + entry patch (address taken; trampoline %08x)\n", t, h->name, h->va, n, h->entry);
             continue;
