@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **1518** (62.0%) — tested 788, ported 730
-- code bytes touched: **75.7%** (634,732 / 838,629 B)
-- unported: **929**
+- touched: **1599** (65.3%) — tested 788, ported 811
+- code bytes touched: **78.4%** (657,561 / 838,629 B)
+- unported: **848**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (788) — ported + host unit suite
@@ -810,7 +810,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (730) — reimplemented, no host test yet
+## ported (811) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -1542,6 +1542,87 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bbe51 | FUN_004bbe51 | 86 | rl_misc.c |
 | 0x4bbea7 | FUN_004bbea7 | 110 | rl_misc.c |
 | 0x4bbf15 | FUN_004bbf15 | 116 | rl_misc.c |
+| 0x4bf620 | _strlen | 123 | rl_crt.c |
+| 0x4bf6a0 | __cinit | 66 | rl_crt.c |
+| 0x4bf6f0 | _exit | 27 | rl_crt.c |
+| 0x4bf770 | doexit | 251 | rl_crt.c |
+| 0x4bf870 | __initterm | 49 | rl_crt.c |
+| 0x4bfa00 | _malloc | 40 | rl_crt.c |
+| 0x4bfa30 | __malloc_dbg | 46 | rl_crt.c |
+| 0x4bfa90 | __nh_malloc_dbg | 101 | rl_crt.c |
+| 0x4bfb30 | __heap_alloc_dbg | 818 | rl_crt.c |
+| 0x4bfea0 | __calloc_dbg | 110 | rl_crt.c |
 | 0x4c0580 | FUN_004c0580 | 25 | rl_io.c |
 | 0x4c05a0 | __free_dbg | 1057 | rl_io.c |
+| 0x4c09f0 | __msize_dbg | 358 | rl_crt.c |
+| 0x4c0c60 | _CheckBytes | 140 | rl_crt.c |
+| 0x4c1070 | __CrtSetDbgFlag | 48 | rl_crt.c |
+| 0x4c1110 | __CrtIsValidPointer | 92 | rl_crt.c |
+| 0x4c1170 | __CrtIsValidHeapPointer | 182 | rl_crt.c |
+| 0x4c1b10 | __getcwd | 43 | rl_crt.c |
+| 0x4c1b40 | __getdcwd | 312 | rl_crt.c |
+| 0x4c1cf0 | __getdrive | 98 | rl_crt.c |
+| 0x4c2080 | FUN_004c2080 | 7 | rl_crt.c |
+| 0x4c2170 | _strcmp | 129 | rl_crt.c |
+| 0x4c2200 | _memset | 88 | rl_crt.c |
+| 0x4c2260 | FID_conflict:__wrename | 96 | rl_crt.c |
+| 0x4c22c0 | FID_conflict:_remove | 92 | rl_crt.c |
+| 0x4c2340 | _asctime | 345 | rl_crt.c |
+| 0x4c24a0 | store_dt | 63 | rl_crt.c |
+| 0x4c24e0 | _localtime | 597 | rl_crt.c |
+| 0x4c2740 | _time | 390 | rl_crt.c |
+| 0x4c3370 | entry | 494 | rl_crt.c |
+| 0x4c3760 | __heap_alloc_base | 99 | rl_crt.c |
+| 0x4c4070 | FUN_004c4070 | 21 | rl_crt.c |
+| 0x4c4370 | __free_base | 105 | rl_crt.c |
+| 0x4c4480 | __heap_init | 93 | rl_crt.c |
+| 0x4c45b0 | ___sbh_new_region | 508 | rl_crt.c |
+| 0x4c49d0 | ___sbh_find_block | 162 | rl_crt.c |
+| 0x4c4a80 | ___sbh_free_block | 136 | rl_crt.c |
+| 0x4c4b10 | ___sbh_alloc_block | 1207 | rl_crt.c |
+| 0x4c4fe0 | ___sbh_alloc_block_from_page | 763 | rl_crt.c |
+| 0x4c57f0 | _toupper | 313 | rl_crt.c |
+| 0x4c5930 | __dosmaperr | 177 | rl_crt.c |
+| 0x4c5a30 | ___tzset | 35 | rl_crt.c |
+| 0x4c5a60 | __tzset | 861 | rl_crt.c |
+| 0x4c5dc0 | __isindst | 859 | rl_crt.c |
+| 0x4c6130 | cvtdate | 515 | rl_crt.c |
+| 0x4c6340 | _gmtime | 487 | rl_crt.c |
+| 0x4c6530 | ___loctotime_t | 274 | rl_crt.c |
+| 0x4c8990 | __setmbcp | 815 | rl_crt.c |
+| 0x4c8cc0 | getSystemCP | 121 | rl_crt.c |
+| 0x4c8e90 | ___initmbctable | 21 | rl_crt.c |
+| 0x4c9260 | __ismbblead | 32 | rl_crt.c |
+| 0x4c92f0 | x_ismbbtype | 110 | rl_crt.c |
+| 0x4c9360 | __setenvp | 318 | rl_crt.c |
+| 0x4c94a0 | __setargv | 204 | rl_crt.c |
+| 0x4c9570 | parse_cmdline | 958 | rl_crt.c |
+| 0x4c9bf0 | ___crtGetEnvironmentStringsA | 602 | rl_crt.c |
+| 0x4c9e50 | __ioinit | 808 | rl_crt.c |
+| 0x4cbfc0 | _getenv | 227 | rl_crt.c |
+| 0x4cc0b0 | __write | 744 | rl_crt.c |
+| 0x4cc3b0 | __lseek | 285 | rl_crt.c |
+| 0x4cc5e0 | ___initstdio | 338 | rl_crt.c |
+| 0x4cc740 | ___endstdio | 36 | rl_crt.c |
+| 0x4cc930 | $E2 | 21 | rl_crt.c |
+| 0x4cc950 | $E1 | 45 | rl_crt.c |
+| 0x4cca20 | FUN_004cca20 | 28 | rl_crt.c |
+| 0x4cccc0 | __alloc_osfhnd | 333 | rl_crt.c |
+| 0x4cce10 | __set_osfhnd | 234 | rl_crt.c |
+| 0x4ccf10 | __free_osfhnd | 263 | rl_crt.c |
+| 0x4cd030 | __get_osfhandle | 118 | rl_crt.c |
+| 0x4cd270 | _fflush | 126 | rl_crt.c |
+| 0x4cd2f0 | __flush | 186 | rl_crt.c |
+| 0x4cd3b0 | __flushall | 26 | rl_crt.c |
+| 0x4cd3d0 | flsall | 247 | rl_crt.c |
+| 0x4cd4f0 | __onexit | 181 | rl_crt.c |
+| 0x4cd5b0 | _atexit | 48 | rl_crt.c |
+| 0x4cd5e0 | ___onexitinit | 85 | rl_crt.c |
+| 0x4ce640 | __close | 267 | rl_crt.c |
+| 0x4cea00 | __open | 67 | rl_crt.c |
+| 0x4cea50 | __sopen | 1355 | rl_crt.c |
+| 0x4ceff0 | __read | 1156 | rl_crt.c |
+| 0x4cf490 | __filelength | 190 | rl_crt.c |
+| 0x4cf550 | __chdir | 226 | rl_crt.c |
+| 0x4cf8f0 | __mbctoupper | 188 | rl_crt.c |
 

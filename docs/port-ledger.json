@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 788,
-  "ported": 730,
-  "unported": 929,
+  "ported": 811,
+  "unported": 848,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 1518,
-  "pct_touched": 62.0,
+  "touched": 1599,
+  "pct_touched": 65.3,
   "pct_tested": 32.2,
   "bytes_total": 838629,
-  "bytes_touched": 634732,
-  "pct_bytes_touched": 75.7
+  "bytes_touched": 657561,
+  "pct_bytes_touched": 78.4
  },
  "orphan_refs": [
   "0x004148",
@@ -22549,24 +22549,30 @@
    "name": "_strlen",
    "size": 123,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4bf6a0",
    "name": "__cinit",
    "size": 66,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4bf6f0",
    "name": "_exit",
    "size": 27,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4bf710",
@@ -22597,16 +22603,20 @@
    "name": "doexit",
    "size": 251,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4bf870",
    "name": "__initterm",
    "size": 49,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4bf8b0",
@@ -22621,16 +22631,20 @@
    "name": "_malloc",
    "size": 40,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4bfa30",
    "name": "__malloc_dbg",
    "size": 46,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4bfa60",
@@ -22645,8 +22659,10 @@
    "name": "__nh_malloc_dbg",
    "size": 101,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4bfb00",
@@ -22661,8 +22677,10 @@
    "name": "__heap_alloc_dbg",
    "size": 818,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4bfe70",
@@ -22677,8 +22695,10 @@
    "name": "__calloc_dbg",
    "size": 110,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4bff10",
@@ -22753,8 +22773,10 @@
    "name": "__msize_dbg",
    "size": 358,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c0b60",
@@ -22785,8 +22807,10 @@
    "name": "_CheckBytes",
    "size": 140,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c0cf0",
@@ -22801,8 +22825,10 @@
    "name": "__CrtSetDbgFlag",
    "size": 48,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c10a0",
@@ -22817,16 +22843,20 @@
    "name": "__CrtIsValidPointer",
    "size": 92,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c1170",
    "name": "__CrtIsValidHeapPointer",
    "size": 182,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c1240",
@@ -22897,16 +22927,20 @@
    "name": "__getcwd",
    "size": 43,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c1b40",
    "name": "__getdcwd",
    "size": 312,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c1c80",
@@ -22921,8 +22955,10 @@
    "name": "__getdrive",
    "size": 98,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c1d60",
@@ -22961,8 +22997,10 @@
    "name": "FUN_004c2080",
    "size": 7,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c2090",
@@ -22977,32 +23015,40 @@
    "name": "_strcmp",
    "size": 129,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c2200",
    "name": "_memset",
    "size": 88,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c2260",
    "name": "FID_conflict:__wrename",
    "size": 96,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c22c0",
    "name": "FID_conflict:_remove",
    "size": 92,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c2320",
@@ -23017,32 +23063,40 @@
    "name": "_asctime",
    "size": 345,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c24a0",
    "name": "store_dt",
    "size": 63,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c24e0",
    "name": "_localtime",
    "size": 597,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c2740",
    "name": "_time",
    "size": 390,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c28d0",
@@ -23225,8 +23279,10 @@
    "name": "entry",
    "size": 494,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c35c0",
@@ -23281,8 +23337,10 @@
    "name": "__heap_alloc_base",
    "size": 99,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c37d0",
@@ -23337,8 +23395,10 @@
    "name": "FUN_004c4070",
    "size": 21,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c4090",
@@ -23361,8 +23421,10 @@
    "name": "__free_base",
    "size": 105,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c43e0",
@@ -23385,8 +23447,10 @@
    "name": "__heap_init",
    "size": 93,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c44e0",
@@ -23417,8 +23481,10 @@
    "name": "___sbh_new_region",
    "size": 508,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c47c0",
@@ -23441,32 +23507,40 @@
    "name": "___sbh_find_block",
    "size": 162,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c4a80",
    "name": "___sbh_free_block",
    "size": 136,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c4b10",
    "name": "___sbh_alloc_block",
    "size": 1207,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c4fe0",
    "name": "___sbh_alloc_block_from_page",
    "size": 763,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c52e0",
@@ -23505,16 +23579,20 @@
    "name": "_toupper",
    "size": 313,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c5930",
    "name": "__dosmaperr",
    "size": 177,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c59f0",
@@ -23529,48 +23607,60 @@
    "name": "___tzset",
    "size": 35,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c5a60",
    "name": "__tzset",
    "size": 861,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c5dc0",
    "name": "__isindst",
    "size": 859,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c6130",
    "name": "cvtdate",
    "size": 515,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c6340",
    "name": "_gmtime",
    "size": 487,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c6530",
    "name": "___loctotime_t",
    "size": 274,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c6650",
@@ -23785,16 +23875,20 @@
    "name": "__setmbcp",
    "size": 815,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c8cc0",
    "name": "getSystemCP",
    "size": 121,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c8d50",
@@ -23825,8 +23919,10 @@
    "name": "___initmbctable",
    "size": 21,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c8eb0",
@@ -23913,8 +24009,10 @@
    "name": "__ismbblead",
    "size": 32,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c9280",
@@ -23937,32 +24035,40 @@
    "name": "x_ismbbtype",
    "size": 110,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c9360",
    "name": "__setenvp",
    "size": 318,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c94a0",
    "name": "__setargv",
    "size": 204,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c9570",
    "name": "parse_cmdline",
    "size": 958,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c9930",
@@ -23977,16 +24083,20 @@
    "name": "___crtGetEnvironmentStringsA",
    "size": 602,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c9e50",
    "name": "__ioinit",
    "size": 808,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4ca180",
@@ -24217,24 +24327,30 @@
    "name": "_getenv",
    "size": 227,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4cc0b0",
    "name": "__write",
    "size": 744,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4cc3b0",
    "name": "__lseek",
    "size": 285,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4cc4d0",
@@ -24257,16 +24373,20 @@
    "name": "___initstdio",
    "size": 338,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4cc740",
    "name": "___endstdio",
    "size": 36,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4cc770",
@@ -24297,16 +24417,20 @@
    "name": "$E2",
    "size": 21,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4cc950",
    "name": "$E1",
    "size": 45,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4cc980",
@@ -24321,8 +24445,10 @@
    "name": "FUN_004cca20",
    "size": 28,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4cca40",
@@ -24385,32 +24511,40 @@
    "name": "__alloc_osfhnd",
    "size": 333,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4cce10",
    "name": "__set_osfhnd",
    "size": 234,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4ccf10",
    "name": "__free_osfhnd",
    "size": 263,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4cd030",
    "name": "__get_osfhandle",
    "size": 118,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4cd0b0",
@@ -24433,32 +24567,40 @@
    "name": "_fflush",
    "size": 126,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4cd2f0",
    "name": "__flush",
    "size": 186,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4cd3b0",
    "name": "__flushall",
    "size": 26,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4cd3d0",
    "name": "flsall",
    "size": 247,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4cd4d0",
@@ -24473,24 +24615,30 @@
    "name": "__onexit",
    "size": 181,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4cd5b0",
    "name": "_atexit",
    "size": 48,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4cd5e0",
    "name": "___onexitinit",
    "size": 85,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4cd640",
@@ -24577,8 +24725,10 @@
    "name": "__close",
    "size": 267,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4ce750",
@@ -24609,40 +24759,50 @@
    "name": "__open",
    "size": 67,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4cea50",
    "name": "__sopen",
    "size": 1355,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4ceff0",
    "name": "__read",
    "size": 1156,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4cf490",
    "name": "__filelength",
    "size": 190,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4cf550",
    "name": "__chdir",
    "size": 226,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4cf640",
@@ -24657,8 +24817,10 @@
    "name": "__mbctoupper",
    "size": 188,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4cf9c0",

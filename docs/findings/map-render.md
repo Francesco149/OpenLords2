@@ -247,7 +247,7 @@ The "cell value" array iterated by the row helpers.  Layout:
   - Iteration starts at `(camera_row = DAT_005651b8, camera_col = DAT_005651b4)`
     and walks `DAT_0053e8ac` columns per row.
 
-### Palette tables — six 128-byte tables at `0x4d8108..0x4d8388`
+### Palette tables — six 128-byte tables at `0x4d8108..0x4d8408`
 
 Three view-modes (zoom-out, zoom-mid, zoom-in — selected by
 `DAT_0057cb18` ∈ {0, 1, 2}), each with an X-displacement table and a
