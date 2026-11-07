@@ -772,6 +772,152 @@ def cmd_record(a):
     print(f"wrote {d}/trace.jsonl ({len(lines) - 1} events)")
 
 
+
+# ---------------------------------------------------------------- free-play capture (the Desktop shortcut)
+# The owner plays on the Windows desktop through C:\ol2-rhost\play\play.cmd (win/play.ps1): pure retail in rhost,
+# --record --movies, one session per launch, the game's own writes (saves) carried to the next session.
+PLAY = WROOT + "\\play"
+PLAY_FILES = [os.path.join(HERE, "win", f) for f in ("play.ps1", "play.cmd")] + [f for f in (VOLATILE,) if os.path.exists(f)]
+SHORTCUT = "Lords II capture"
+PLAY_LOCAL = os.path.join(LOCAL_RUNS, "play")
+
+
+def play_install(root):
+    """freeze the current rhost build in ROOT\\bin\\<sha> (never pruned, untouched by later stages) + the scripts → sha"""
+    import hashlib
+    ensure_staged()
+    exe = os.path.join(BUILD, "rhost.exe")
+    sha = hashlib.sha256(open(exe, "rb").read()).hexdigest()[:12]
+    ssh_win(f"New-Item -ItemType Directory -Force '{root}\\bin\\{sha}','{root}\\sessions' | Out-Null; "
+            f"if (!(Test-Path '{root}\\bin\\{sha}\\{WEXE}')) {{ Copy-Item '{WROOT}\\bin\\{WEXE}' '{root}\\bin\\{sha}\\{WEXE}.tmp'; "
+            f"Move-Item '{root}\\bin\\{sha}\\{WEXE}.tmp' '{root}\\bin\\{sha}\\{WEXE}' }}; exit 0")
+    # the staged copy must be this build (ensure_staged just staged it)
+    got = ssh_win(f"(Get-FileHash '{root}\\bin\\{sha}\\{WEXE}' -Algorithm SHA256).Hash").strip().lower()
+    if not got.startswith(sha):
+        raise SystemExit(f"play-install: {root}\\bin\\{sha} holds {got[:12]}, not this build")
+    up = root.replace(chr(92), "/")
+    for f in PLAY_FILES:
+        if f.endswith((".cmd", ".ps1")):   # CRLF for cmd.exe / PowerShell
+            tmp = os.path.join(BUILD, os.path.basename(f))
+            open(tmp, "w", newline="\r\n").write(open(f).read())
+            f = tmp
+        scp(f, f"{WIN}:{up}/{os.path.basename(f)}")
+    errs = ssh_win("$t = $null; $x = $null; "
+                   f"[void][System.Management.Automation.Language.Parser]::ParseFile('{root}\\play.ps1', [ref]$t, [ref]$x); "
+                   "foreach ($i in $x) { \"play.ps1:$($i.Extent.StartLineNumber): $($i.Message)\" }; exit 0").strip()
+    if errs:
+        raise SystemExit("play.ps1 does not parse:\n" + errs)
+    return sha
+
+
+def cmd_play_install(a):
+    """freeze this rhost build as the launcher's, upload the scripts, (re)create the Desktop shortcut"""
+    sha = play_install(PLAY)
+    ssh_win(f"Set-Content '{PLAY}\\current.txt' '{sha}'; "
+            "$d = [Environment]::GetFolderPath('Desktop'); $w = New-Object -ComObject WScript.Shell; "
+            f"$l = $w.CreateShortcut((Join-Path $d '{SHORTCUT}.lnk')); $l.TargetPath = '{PLAY}\\play.cmd'; "
+            f"$l.WorkingDirectory = '{PLAY}'; $l.IconLocation = '{WROOT}\\game\\Lords2.exe,0'; "
+            "$l.Description = 'Lords of the Realm II: play and record (OpenLords2 rhost)'; $l.Save(); exit 0")
+    print(f"play-install: rhost {sha} frozen in {PLAY}\\bin\\{sha}; Desktop shortcut '{SHORTCUT}' → {PLAY}\\play.cmd")
+    return 0
+
+
+PS_SESSIONS = ("Get-ChildItem '@ROOT@\\sessions' -Directory -ErrorAction SilentlyContinue | ForEach-Object { "
+               "$m = Join-Path $_.FullName 'meta.json'; $o = @{ session = $_.Name; done = (Test-Path $m) }; "
+               "if (Test-Path $m) { $o.meta = Get-Content $m -Raw | ConvertFrom-Json }; "
+               "$o | ConvertTo-Json -Depth 6 -Compress }")
+
+
+def win_sessions(root=PLAY):
+    out = ssh_win(PS_SESSIONS.replace("@ROOT@", root))
+    return [json.loads(l) for l in out.splitlines() if l.strip().startswith("{")]
+
+
+def play_scen(session):
+    return "hp-" + session
+
+
+def cmd_play_status(a):
+    ss = win_sessions(a.root)
+    if not ss:
+        print(f"no capture sessions under {a.root}\\sessions"); return 0
+    for s in ss:
+        m = s.get("meta") or {}
+        r = m.get("result") or {}
+        have = os.path.exists(os.path.join(SCEN, play_scen(s["session"]), "trace.jsonl"))
+        print(f"{s['session']}  {'done' if s['done'] else 'in progress / killed':20s} f={r.get('frame', '-'):>8} "
+              f"{m.get('wall_s', '-')!s:>6}s  {r.get('reason', '-'):14s} start={','.join(m.get('start_files') or []) or '-'}"
+              f"  {'imported' if have else ''}")
+    return 0
+
+
+def cmd_play_fetch(a):
+    """import finished sessions as tests/scenarios/hp-<stamp>/ (+ _saves/ for the start files) and self-check each:
+    a headless replay (wine) must end on the recording's frame and state hash"""
+    ss = [s for s in win_sessions(a.root) if s["done"] and (s.get("meta") or {}).get("result")]
+    if a.session:
+        ss = [s for s in ss if s["session"] in a.session]
+    todo = [s for s in ss if a.force or not os.path.exists(os.path.join(SCEN, play_scen(s["session"]), "trace.jsonl"))]
+    if not todo:
+        print("play-fetch: nothing new"); return 0
+    runs, recorded = [], {}
+    for s in todo:
+        st, m = s["session"], s["meta"]
+        loc = os.path.join(PLAY_LOCAL, st)
+        os.makedirs(loc, exist_ok=True)
+        wd = f"{a.root}\\sessions\\{st}".replace(chr(92), "/")
+        for f in ("trace.jsonl", "meta.json", "rhost.log"):
+            scp(f"{WIN}:{wd}/{f}", os.path.join(loc, f))
+        name = play_scen(st)
+        d = os.path.join(SCEN, name)
+        os.makedirs(d, exist_ok=True)
+        saves = []
+        for f in m.get("start_files") or []:
+            os.makedirs(os.path.join(d, "_saves"), exist_ok=True)
+            scp(f"{WIN}:{wd}/start/{f}", os.path.join(d, "_saves", f))
+            saves.append(f"_saves/{f}")
+        lines = open(os.path.join(loc, "trace.jsonl")).read().splitlines()
+        hdr = [f"# {name}: free play recorded {m.get('started')} by a human in rhost (Desktop '{SHORTCUT}', build {m.get('bin')}), "
+               f"{m.get('wall_s')} s wall"]
+        if saves:
+            hdr.append("# starts with the files the previous session's game wrote (its saves): _saves/ (user data, gitignored)")
+            hdr.append(json.dumps({"meta": {"saves": saves}}))
+        open(os.path.join(d, "trace.jsonl"), "w").write("\n".join(hdr + lines) + "\n")
+        print(f"wrote {d}/trace.jsonl ({len(lines)} lines)")
+        runs.append((name, os.path.join(d, "trace.jsonl"), trace_meta(os.path.join(d, "trace.jsonl"))))
+        recorded[name] = m["result"]
+    if a.no_check:
+        return 0
+    a.target, a.frames = "wine", None
+    for k in ("hook", "dump_at", "shot_at", "shot_every", "hash_every", "log_every", "step_ms", "vbase", "extra"):
+        setattr(a, k, None)
+    a.fb_hash = a.show = False
+    a.jobs = a.jobs or 4
+    batch, bdir, res, out = run_batch(a, runs, "play-check")
+    bad = 0
+    for name, *_ in runs:
+        r, rec = res.get(name, {}), recorded[name]
+        ok = r.get("frame") == rec.get("frame") and r.get("state_sem") == rec.get("state_sem") and r.get("rng") == rec.get("rng")
+        bad += not ok
+        print(f"{name}: recorded f={rec.get('frame')} sem={rec.get('state_sem')} | replay f={r.get('frame')} "
+              f"sem={r.get('state_sem')} → {'PASS' if ok else 'FAIL'}")
+    return 1 if bad else 0
+
+
+def cmd_play_test(a):
+    """the launcher end to end, headless: play.ps1 from ssh (session 0: the window is off-screen) in
+    C:\\ol2-rhost\\playtest, --frames N with no input; run twice so the second session starts from the first's carry"""
+    root = WROOT + "\\playtest"
+    sha = play_install(root)
+    ssh_win(f"Remove-Item '{root}\\sessions\\*','{root}\\carry' -Recurse -Force -ErrorAction SilentlyContinue; exit 0")
+    for i in range(2):
+        print(ssh_win(f"powershell -NoProfile -ExecutionPolicy Bypass -File {root}\\play.ps1 -Root '{root}' -Bin '{sha}' "
+                      f"-TestArgs '--frames {a.frames or 1500}'", check=False))
+        time.sleep(1.1)   # distinct session stamps
+    a.root = root
+    return cmd_play_status(a)
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -816,6 +962,12 @@ def main():
     sp = sub.add_parser("diff"); sp.add_argument("a"); sp.add_argument("b"); sp.add_argument("--show-n", type=int, default=40); sp.set_defaults(fn=cmd_diff)
     sp = sub.add_parser("record"); common(sp); sp.add_argument("name"); sp.add_argument("--from", dest="from_scen")
     sp.add_argument("--force", action="store_true"); sp.set_defaults(fn=cmd_record)
+    sub.add_parser("play-install").set_defaults(fn=cmd_play_install)
+    sp = sub.add_parser("play-status"); sp.add_argument("--root", default=PLAY); sp.set_defaults(fn=cmd_play_status)
+    sp = sub.add_parser("play-fetch"); sp.add_argument("--root", default=PLAY); sp.add_argument("session", nargs="*")
+    sp.add_argument("--force", action="store_true"); sp.add_argument("--no-check", dest="no_check", action="store_true")
+    sp.add_argument("-j", "--jobs", type=int, default=None); sp.set_defaults(fn=cmd_play_fetch)
+    sp = sub.add_parser("play-test"); sp.add_argument("--frames", type=int); sp.set_defaults(fn=cmd_play_test)
     a = p.parse_args()
     if getattr(a, "jobs", 0) is None:
         a.jobs = int(os.environ.get("RHOST_JOBS", "0") or 0) or (3 if getattr(a, "target", "win") == "win" else 8)   # RHOST_JOBS: parallel agents

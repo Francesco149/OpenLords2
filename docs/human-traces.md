@@ -9,6 +9,9 @@ Record: `python3 tools/rhost/rhost.py record NAME [--from SCEN]` — a normal wi
 first and records from where it ends (e.g. `--from newgame-playnow`, `--from bot-s32-t24` for a mid-game
 start). The trace lands in `tests/scenarios/NAME/` and replays bit-exactly with no human.
 
+**Free play (any time):** the Windows Desktop shortcut **"Lords II capture"** records a whole session with no
+setup (`tools/rhost/README.md` §Free-play capture); agents pull them with `rhost.py play-fetch` → `tests/scenarios/hp-*`.
+
 Status: **open** = no trace yet · **partial** = some coverage · **synth** = the bot / a script covers it.
 
 ## A. Hard to reproduce without a human — record these first

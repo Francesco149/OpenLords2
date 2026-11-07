@@ -473,8 +473,9 @@ void rh_win_install(void)
     if (O.out_trace) {   /* every injected event (trace prefix, human, bot): the replayable record of this run */
         g_recf = fopen(O.out_trace, "w");
         if (!g_recf) rh_fatal("cannot write %s", O.out_trace);
-        fprintf(g_recf, "{\"meta\": {\"game\": \"lords2\", \"step_ms\": %u, \"vbase\": %u, \"source\": \"%s\"}}\n",
-                O.step_ms, O.vbase, O.record ? "human" : O.bot ? "bot" : "replay");
+        fprintf(g_recf, "{\"meta\": {\"game\": \"lords2\", \"step_ms\": %u, \"vbase\": %u, \"source\": \"%s\"%s}}\n",
+                O.step_ms, O.vbase, O.record ? "human" : O.bot ? "bot" : "replay",
+                O.movies ? ", \"movies\": true" : "");   /* rhost.py replays with --movies */
     }
     /* frame-0 events: queued before retail starts (dispatched by its first pump) */
     while (g_iev < g_nev && g_ev[g_iev].f == 0) { ev_t *e = &g_ev[g_iev++]; inject(0, e->m, e->w, e->l); }

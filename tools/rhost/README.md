@@ -18,6 +18,8 @@ python3 tools/rhost/rhost.py verify                                       # ever
 python3 tools/rhost/rhost.py corpus --check --hook replace:rng_step       # hybrid: port REPLACES retail
 python3 tools/rhost/rhost.py shots endturn-2 --at 1800:3600:300           # PNG + exact .idx index planes
 python3 tools/rhost/rhost.py record my-play [--from endturn-2]            # HUMAN PLAY on the Windows desktop
+python3 tools/rhost/rhost.py play-install                                # Desktop shortcut "Lords II capture" (free play, below)
+python3 tools/rhost/rhost.py play-status / play-fetch                     # list the owner's sessions / import + self-check them
 python3 tools/rhost/rhost.py run X --extra "--watch-write 57c934@1800"    # who writes this dword (+ EBP callers)
 python3 tools/rhost/rhost.py run X --extra "--trap 404a46"                # registers + stack args at an instruction
 python3 tools/rhost/rhbot.py "run 600; click 320 107; run 100; shot m" --montage /tmp/m.png   # live control
@@ -31,6 +33,17 @@ Results: `/mnt/ephemeral/openlords2/rhost-runs/<batch>/<run>/` (wine: `…/rhost
 `tools/rhost/*` or linked `src/` files change (`RHOST_NO_BUILD=1`: never). Every batch runs its own copy of
 `build/rhost.exe` (in the batch dir), so a rebuild — another agent, the next `verify` pass — never swaps the
 binary under a running batch; `build.sh` holds a lock and renames the finished exe into place.
+
+## Free-play capture (the Desktop shortcut)
+
+`play-install` freezes the current rhost build in `C:\ol2-rhost\play\bin\<sha>` and puts **"Lords II capture"** on
+the Windows desktop (`win/play.cmd` → `win/play.ps1`). Each double-click = one session `play\sessions\<yyyyMMdd-HHmmss>\`:
+pure retail (no hooks), `--record trace.jsonl --movies --dump-at end`, realtime with sound, a normal window. What the
+game wrote in the newest finished session (its saves, castles.dat; not status.txt) is `play\carry\` and is copied into
+the next session's run dir (and kept as its `start\`), so "Load game" continues a campaign across sessions.
+`play-fetch` imports finished sessions as `tests/scenarios/hp-<stamp>/` (start files → `_saves/`, gitignored, meta
+`saves`) and replays each on wine: same frame, RNG and state hash as the recording, else FAIL. Imported scenarios are not
+blessed into the corpus automatically. `play-test` runs the launcher twice headless (session 0) in `C:\ol2-rhost\playtest`.
 
 ## Sharing the Windows box
 

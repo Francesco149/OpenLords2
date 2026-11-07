@@ -79,6 +79,9 @@
 - [ ] re-verify earlier "1:1" claims under rhost (batches)
 
 ## Human queue (ranked by what it unblocks)
+0. **Free play, whenever you have a moment:** double-click **"Lords II capture"** on cutestation's desktop and play
+   (close the window to finish; the next session can Load your save). Nothing else to do — agents import the sessions
+   (`rhost.py play-fetch`).
 1. **Record human traces** for what the bot can't reproduce — `docs/human-traces.md` §A first: real
    battlefield tactics (formations, archers held back, castle walls, siege engines on the field, defending your
    castle; the lord captured), a late-game campaign to a victory, natural mouse dynamics:

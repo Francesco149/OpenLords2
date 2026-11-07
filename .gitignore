@@ -72,3 +72,6 @@ tools/trace_studio_v3/**/*.bmp
 # Trace Studio v3 per-machine "current trace" pointer (written by olv3_capture.py;
 # read by the OpenLords2 Trace Studio desktop/Start-Menu shortcut).
 tools/trace_studio_v3/.studio_current
+
+# user data: the saves a scenario starts from (rhost.py meta "saves", play-fetch)
+tests/scenarios/*/_saves/

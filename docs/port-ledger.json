@@ -20911,7 +20911,8 @@
     "src/engine.c",
     "src/engine.h",
     "src/engine_rng.c",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_main.c"
    ]
   },
   {

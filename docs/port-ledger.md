@@ -738,7 +738,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b1de0 | FUN_004b1de0 | 11 | engine.c, engine_armory.c, engine_confirm_dialog.c (+7) |
 | 0x4b1deb | FUN_004b1deb | 92 | engine.c, engine_county_panels.c, rl_host.c |
 | 0x4b20ed | FUN_004b20ed | 68 | engine.c, engine.h, engine_delta.c (+1) |
-| 0x4b2258 | FUN_004b2258 | 797 | audio.h, engine.c, engine.h (+2) |
+| 0x4b2258 | FUN_004b2258 | 797 | audio.h, engine.c, engine.h (+3) |
 | 0x4b2730 | FUN_004b2730 | 143 | gfx.c, gfx.h, main.c |
 | 0x4b27bf | FUN_004b27bf | 143 | engine.c, engine.h, engine_camera.h (+3) |
 | 0x4b2922 | FUN_004b2922 | 156 | gfx.c, gfx.h, main.c (+1) |
