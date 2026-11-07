@@ -6820,6 +6820,10 @@ hand-maintained: do NOT re-run the generator blind; if you do, restore with
 
 ## 195 — the sub-step duty-cycle LUT (`DAT_004e3260`) is 11 rows but MP hints ≥ 110 index rows 11..14 — an as-shipped OOB read into the next .data object
 
+> **Correction (2026-11-07, data catalog):** the table is **15 rows** (0x960 B, 0x4e3260..0x4e3bc0): rows 10..14 hold
+> 8 / 4 / 2 / 1 / 0 ones, the text starts at row 15. Hint ≤ 140 → row ≤ 14 never leaves the table: no OOB read. The
+> port images the bytes verbatim, so behaviour was never affected. (`docs/data/catalog.tsv` k_sim_duty_lut.)
+
 The rate controller `FUN_004bb978` gates each sim sub-step on
 `DAT_004e3260[phase + (hint/10)*0xa0]` after clamping the scenario hint to
 0x8c (140) — so the row index reaches 14, while the shipped duty table is

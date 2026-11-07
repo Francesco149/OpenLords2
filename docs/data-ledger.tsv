@@ -8,7 +8,7 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 400268	408	headers	header	named	0	0	0		0		0	0		header padding	
 4d0000	84	.rdata	header	named	27	0	0		0		0	0		IMAGE_DEBUG_DIRECTORY	
 4d0054	4	.rdata	zero	unreferenced	0	0	0		0		0	0			
-4d0058	208	.rdata	table	referenced	192	0	0		1	4b8243	0	0			
+4d0058	208	.rdata	table	documented	192	0	0		1	4b8243	0	0			k_dx_iids
 4d0128	8	.rdata	string	referenced	6	0	0	6	0		1	0			
 4d0130	8	.rdata	string	referenced	6	0	0	6	0		1	0			
 4d0138	4	.rdata	scalar	referenced	3	0	0		0		1	0			
@@ -237,13 +237,9 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4d24e8	40	.data	string	unreferenced	40	0	0	40	0		0	0			
 4d2510	1	.data	zero	referenced	0	0	0		1	40bccd	0	0			
 4d2511	63	.data	string	unreferenced	63	0	0	9	0		0	0			
-4d2550	104	.data	table	referenced	72	0	0		1	40bdf1	0	0			
-4d25b8	104	.data	string	unreferenced	104	0	0	40	0		0	0			
-4d2620	48	.data	string	unreferenced	48	0	0	48	0		0	0			
-4d2650	192	.data	table	referenced	192	0	0		1	40bdf1	0	0			
-4d2710	56	.data	string	unreferenced	56	0	0	56	0		0	0			
-4d2748	1	.data	scalar	referenced	1	0	0		1	40da1e	0	2	g_rl_4d2748		
-4d2749	47	.data	string	unreferenced	24	0	0	7	0		0	0			
+4d2550	256	.data	table	documented	224	0	0		1	40bdf1	0	0			k_lzh_d_code
+4d2650	256	.data	table	documented	256	0	0		2	40bdf1,40da1e	0	2	g_rl_4d2748		k_lzh_d_len
+4d2750	40	.data	table	documented	17	0	0		0		0	0			k_btn_repeat_gate
 4d2778	4	.data	scalar	referenced	1	0	0		1	40cd58	0	3	g_rl_4d2778		
 4d277c	4	.data	scalar	referenced	1	0	0		1	40cd58	0	1			
 4d2780	4	.data	scalar	referenced	1	0	0		1	40cd58	0	1			
@@ -335,11 +331,7 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4d315c	140	.data	table	referenced	56	0	0		2	41fdd6,433ce4	0	2			
 4d31e8	4	.data	zero	referenced	0	0	0		1	420d40	0	3	g_rl_4d31e8		
 4d31ec	4	.data	zero	referenced	0	0	0		1	420d40	0	1	g_rl_4d31ec		
-4d31f0	4	.data	scalar	referenced	1	0	0		1	4238b8	0	3	g_bf_4d31f0		
-4d31f4	4	.data	scalar	referenced	2	0	0		3	4238b8,4239d5,43c2a9	0	0			
-4d31f8	4	.data	scalar	referenced	1	0	0		3	4238b8,4239d5,43c2a9	0	0			
-4d31fc	4	.data	scalar	referenced	1	0	0		1	43c2a9	0	0			
-4d3200	2840	.data	table	referenced	673	0	0		1	43c2a9	0	0			
+4d31f0	2856	.data	table	documented	678	0	0		3	4238b8,4239d5,43c2a9	0	3	g_bf_4d31f0		k_bf_roster_slots
 4d3d18	28	.data	string	referenced	25	0	0	25	1	40f5fd	0	3	g_rl_4d3d18		
 4d3d34	4	.data	scalar	referenced	1	0	0		1	40f7d3	0	1			
 4d3d38	4	.data	scalar	referenced	1	0	0		1	40f7d3	0	0			
@@ -954,17 +946,17 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4d57e4	4	.data	scalar	referenced	4	0	0		1	4b7250	0	1	g_rl_4d57e4		
 4d57e8	4	.data	scalar	referenced	3	0	0		1	4b7250	0	1	g_rl_4d57e8		
 4d57ec	4	.data	scalar	referenced	4	0	0		1	4b7250	0	1	g_rl_4d57ec		
-4d57f0	400	.data	ptr(code)	referenced	299	100	0		1	43eda0	0	2	g_rl_4d57f0		
-4d5980	400	.data	ptr(code)	referenced	299	100	0		1	43eac1	0	1			
+4d57f0	400	.data	ptr(code)	documented	299	100	0		1	43eda0	0	2	g_rl_4d57f0		k_mp_send_builders
+4d5980	400	.data	ptr(code)	documented	299	100	0		1	43eac1	0	1			k_mp_recv_handlers
 4d5b10	4	.data	zero	referenced	0	0	0		2	43faa4,43fd2a	0	0			
 4d5b14	4	.data	zero	referenced	0	0	0		2	43faa4,43fd2a	0	0			
 4d5b18	40	.data	table	referenced	10	0	0		2	43faa4,43fd2a	0	0			
 4d5b40	4	.data	scalar	referenced	1	0	0		1	43fc58	0	0			
 4d5b44	4	.data	scalar	referenced	2	0	0		1	43fc58	0	0			
 4d5b48	72	.data	table	referenced	28	0	8		1	43fc58	0	0			
-4d5b90	256	.data	table	referenced	245	0	0		2	43eac1,43eda0	0	1	g_rl_4d5b90		
+4d5b90	256	.data	table	documented	245	0	0		2	43eac1,43eda0	0	1	g_rl_4d5b90		k_mp_packet_size
 4d5c90	8	.data	zero	referenced	0	0	0		1	43de70	0	2	g_rl_4d5c90		
-4d5c98	200	.data	ptr(code)	referenced	149	50	0		1	4472ce	0	2	g_rl_4d5c98		
+4d5c98	200	.data	ptr(code)	documented	149	50	0		1	4472ce	0	2	g_rl_4d5c98		k_delayed_action_handlers
 4d5d60	16	.data	string	referenced	12	0	0	12	1	43e668	0	1			
 4d5d70	24	.data	string	referenced	23	0	0	23	1	43e6a2	0	0			
 4d5d88	28	.data	string	referenced	26	0	0	26	1	43e6a2	0	0			
@@ -1023,8 +1015,9 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4d63d8	208	.data	table	documented	124	0	0		1	44b80b	0	1			k_taxsetting_tally_modifier
 4d64a8	120	.data	table	documented	77	0	0		1	44bd9f	0	1			k_tax_approval_tbl
 4d6520	40	.data	table	documented	9	0	0		1	44bd9f	0	1			k_tax_band_threshold
-4d6548	24	.data	table	referenced	10	0	0		1	44bd9f	0	1			
-4d6560	472	.data	table	referenced	128	0	0		1	44d60d	0	1			
+4d6548	24	.data	table	documented	10	0	0		1	44bd9f	0	1			k_tax_band_modifier
+4d6560	24	.data	table	documented	17	0	0		1	44d60d	0	1			k_stock_a_rate
+4d6578	448	.data	table	unreferenced	111	0	0		0		0	0			
 4d6738	48	.data	table	documented	11	0	0		1	44df5f	0	0			k_supply_table
 4d6768	24	.data	table	referenced	5	0	0		2	4502ca,450639	0	2	g_rl_4d6768		
 4d6780	32	.data	table	referenced	7	0	0		1	4517ca	0	1			
@@ -1033,7 +1026,8 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4d6830	32	.data	table	referenced	25	0	0		1	4519ca	0	0			
 4d6850	16	.data	table	referenced	15	0	0		1	451a5d	0	0			
 4d6860	496	.data	table	referenced	51	0	0		1	451a5d	0	0			
-4d6a50	40	.data	table	referenced	24	8	0		1	4650b0	0	0			
+4d6a50	24	.data	table	documented	15	5	0		1	4650b0	0	0			k_army_state_handlers
+4d6a68	16	.data	table	documented	9	3	0		0		0	0			k_army_state_handlers_x
 4d6a78	20	.data	table	referenced	3	0	0		2	46521f,465486	0	4	g_rl_4d6a78		
 4d6a8c	44	.data	table	referenced	9	0	0		1	47309e	0	4	g_rl_4d6a8c		
 4d6ab8	64	.data	table	referenced	13	0	0		2	465622,465761	0	3	g_rl_4d6ab8		
@@ -1126,37 +1120,23 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4d7257	10	.data	string	unreferenced	10	0	0	9	0		0	0			
 4d7261	15	.data	string	unreferenced	10	0	0	7	0		0	0			
 4d7270	160	.data	string	unreferenced	71	0	0	6	0		0	0			
-4d7310	576	.data	table	referenced	282	0	0		1	46dbf5	0	3	g_rl_4d7310		
-4d7550	120	.data	table	referenced	88	0	0		2	47aaa3,47b8b2	0	3	g_bf_4d7550		
-4d75c8	72	.data	table	referenced	52	0	0		2	47aaa3,47b8b2	0	2	g_bf_4d75c8		
-4d7610	576	.data	table	referenced	372	0	0		4	47aaa3,47b8b2,47dcce,47dd86	0	2	g_bf_4d7610		
-4d7850	16	.data	zero	unreferenced	0	0	0		0		0	0			
-4d7860	208	.data	table	referenced	137	0	0		2	47aaa3,47b8b2	0	2	g_bf_4d7860		
-4d7930	576	.data	table	referenced	372	0	0		1	47dfe0	0	1	g_bf_4d7930		
-4d7b70	16	.data	zero	unreferenced	0	0	0		0		0	0			
-4d7b80	1	.data	scalar	referenced	1	0	0		1	47c4ba	0	2	g_bf_4d7b80		
-4d7b81	511	.data	table	referenced	347	0	0		1	47c4ba	0	1			
-4d7d80	1	.data	scalar	referenced	1	0	0		1	47c4ba	0	2	g_bf_4d7d80		
-4d7d81	863	.data	table	referenced	481	0	0		1	47c4ba	0	1			
+4d7310	576	.data	table	documented	282	0	0		1	46dbf5	0	3	g_rl_4d7310		k_terr_feature_rules
+4d7550	120	.data	table	documented	88	0	0		2	47aaa3,47b8b2	0	3	g_bf_4d7550		k_bf_rules_kind4
+4d75c8	72	.data	table	documented	52	0	0		2	47aaa3,47b8b2	0	2	g_bf_4d75c8		k_bf_rules_kind1
+4d7610	588	.data	table	documented	372	0	0		4	47aaa3,47b8b2,47dcce,47dd86	0	2	g_bf_4d7610		k_bf_rules_water
+4d785c	4	.data	zero	unreferenced	0	0	0		0		0	0			
+4d7860	204	.data	table	documented	137	0	0		2	47aaa3,47b8b2	0	2	g_bf_4d7860		k_bf_rules_kind12
+4d792c	4	.data	zero	unreferenced	0	0	0		0		0	0			
+4d7930	588	.data	table	documented	372	0	0		1	47dfe0	0	1	g_bf_4d7930		k_bf_rules_rubble
+4d7b7c	4	.data	zero	unreferenced	0	0	0		0		0	0			
+4d7b80	512	.data	table	documented	348	0	0		1	47c4ba	0	2	g_bf_4d7b80		k_bf_castle_tiles_stone
+4d7d80	512	.data	table	documented	349	0	0		1	47c4ba	0	2	g_bf_4d7d80		k_bf_castle_tiles_other
+4d7f80	352	.data	table	unreferenced	133	0	0		0		0	0			
 4d80e0	8	.data	scalar	referenced	3	0	0		2	46a578,46ac22	0	4	g_rl_4d80e0		
 4d80e8	16	.data	table	referenced	8	0	0		2	46a790,46ac22	0	1			
 4d80f8	16	.data	table	referenced	15	0	0		2	46a9c7,46ac22	0	1			
-4d8108	81	.data	table	referenced	56	0	0		1	408438	0	3			
-4d8159	31	.data	string	unreferenced	28	0	0	7	0		0	0			
-4d8178	16	.data	zero	unreferenced	0	0	0		0		0	0			
-4d8188	4	.data	scalar	referenced	3	0	0		1	408438	0	1			
-4d818c	96	.data	string	unreferenced	56	0	0	5	0		0	0			
-4d81ec	28	.data	string	unreferenced	25	0	0	5	0		0	0			
-4d8208	67	.data	table	referenced	44	0	0		1	408438	0	1			
-4d824b	32	.data	string	unreferenced	28	0	0	6	0		0	0			
-4d826b	13	.data	string	unreferenced	12	0	0	6	0		0	0			
-4d8278	16	.data	zero	unreferenced	0	0	0		0		0	0			
-4d8288	115	.data	table	referenced	72	0	0		1	408438	0	1			
-4d82fb	13	.data	string	unreferenced	12	0	0	6	0		0	0			
-4d8308	81	.data	table	referenced	53	0	0		1	408438	0	1			
-4d8359	31	.data	string	unreferenced	27	0	0	6	0		0	0			
-4d8378	16	.data	zero	unreferenced	0	0	0		0		0	0			
-4d8388	512	.data	table	referenced	306	0	0		1	408438	0	1			
+4d8108	768	.data	table	documented	482	0	0		1	408438	0	3			k_map_unit_disp
+4d8408	384	.data	table	referenced	240	0	0		0		0	1			
 4d8588	32	.data	table	referenced	23	0	0		2	471da6,4972f9	0	1	g_bf_4d8588		
 4d85a8	4	.data	scalar	referenced	1	0	0		3	412666,43958a,43982c	0	3	g_rl_4d85a8		
 4d85ac	60	.data	table	referenced	17	0	0		3	412666,43958a,43982c	0	1			
@@ -1180,41 +1160,7 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4d8a28	20	.data	table	referenced	5	0	0		1	4198aa	0	1			
 4d8a3c	4	.data	zero	referenced	0	0	0		2	47309e,4a551b	0	5	g_rl_4d8a3c		
 4d8a40	24	.data	table	referenced	6	0	0		1	4a551b	0	1			
-4d8a58	4	.data	scalar	referenced	1	0	0		1	49dd01	0	4	g_rl_4d8a58		
-4d8a5c	4	.data	scalar	referenced	1	0	0		1	49d638	0	0			
-4d8a60	4	.data	scalar	referenced	1	0	0		1	4a29b2	0	0			
-4d8a64	4	.data	scalar	referenced	2	0	0		2	4a3551,4a38db	0	0			
-4d8a68	4	.data	scalar	referenced	1	0	0		1	4a0c1d	0	0			
-4d8a6c	4	.data	scalar	referenced	1	0	0		1	4a0c1d	0	0			
-4d8a70	16	.data	zero	unreferenced	0	0	0		0		0	0			
-4d8a80	8	.data	scalar	referenced	2	0	0		1	49f977	0	0			
-4d8a88	16	.data	table	referenced	2	0	0		3	49f977,4a3551,4a38db	0	0			
-4d8a98	16	.data	table	referenced	1	0	0		1	49f977	0	0			
-4d8aa8	4	.data	zero	referenced	0	0	0		1	49e77d	0	0			
-4d8aac	4	.data	scalar	referenced	1	0	0		1	49e77d	0	0			
-4d8ab0	4	.data	scalar	referenced	1	0	0		1	49e77d	0	0			
-4d8ab4	4	.data	scalar	referenced	1	0	0		1	49e77d	0	0			
-4d8ab8	4	.data	scalar	referenced	1	0	0		1	49e77d	0	0			
-4d8abc	4	.data	scalar	referenced	1	0	0		1	49e77d	0	0			
-4d8ac0	8	.data	scalar	referenced	2	0	0		1	49f977	0	0			
-4d8ac8	4	.data	scalar	referenced	2	0	0		1	49f12f	0	0			
-4d8acc	4	.data	scalar	referenced	1	0	0		1	4a0015	0	0			
-4d8ad0	4	.data	scalar	referenced	2	0	0		1	49e39b	0	0			
-4d8ad4	8	.data	scalar	referenced	1	0	0		1	49e39b	0	0			
-4d8adc	4	.data	scalar	referenced	1	0	0		1	49e39b	0	0			
-4d8ae0	4	.data	scalar	referenced	1	0	0		1	49e39b	0	0			
-4d8ae4	4	.data	scalar	referenced	1	0	0		1	49e39b	0	0			
-4d8ae8	12	.data	table	referenced	1	0	0		1	49edc7	0	0			
-4d8af4	4	.data	scalar	referenced	1	0	0		1	49f431	0	0			
-4d8af8	4	.data	scalar	referenced	1	0	0		1	4a7eb5	0	2	g_rl_4d8af8		
-4d8afc	36	.data	zero	unreferenced	0	0	0		0		0	0			
-4d8b20	4	.data	scalar	referenced	2	0	0		1	49edc7	0	1			
-4d8b24	4	.data	scalar	referenced	1	0	0		1	49edc7	0	0			
-4d8b28	4	.data	zero	referenced	0	0	0		1	49edc7	0	0			
-4d8b2c	4	.data	scalar	referenced	2	0	0		1	49edc7	0	0			
-4d8b30	4	.data	zero	referenced	0	0	0		1	49edc7	0	0			
-4d8b34	724	.data	table	referenced	119	0	0		1	49edc7	0	0			
-4d8e08	16	.data	zero	unreferenced	0	0	0		0		0	0			
+4d8a58	960	.data	table	documented	155	0	0		14	49d638,49dd01,49e39b,49e77d,49edc7,49f12f,49f431,49f977,…	0	6	g_rl_4d8a58,g_rl_4d8af8		k_ai_personality
 4d8e18	4	.data	scalar	referenced	1	0	0		1	499e5d	0	5	g_rl_4d8e18		
 4d8e1c	4	.data	zero	referenced	0	0	0		1	499e5d	0	0			
 4d8e20	4	.data	scalar	referenced	2	0	0		1	499e5d	0	0			
@@ -1238,11 +1184,11 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4d9116	14	.data	string	unreferenced	12	0	0	12	0		0	0			
 4d9124	14	.data	string	unreferenced	12	0	0	12	0		0	0			
 4d9132	14	.data	string	unreferenced	12	0	0	12	0		0	0			
-4d9140	48	.data	table	referenced	33	11	0		1	4822ed	0	1			
-4d9170	72	.data	ptr(code)	referenced	54	18	0		11	4825d1,4826b0,482789,482862,48293b,482a14,482aed,482bc6,…	0	0			
-4d91b8	24	.data	table	referenced	15	5	0		1	489401	0	0			
-4d91d0	40	.data	table	referenced	27	9	0		1	489401	0	0			
-4d91f8	48	.data	table	referenced	33	11	0		1	489401	0	0			
+4d9140	48	.data	table	documented	33	11	0		1	4822ed	0	1			k_bf_move_state_handlers
+4d9170	72	.data	ptr(code)	documented	54	18	0		11	4825d1,4826b0,482789,482862,48293b,482a14,482aed,482bc6,…	0	0			k_bf_order_handlers
+4d91b8	24	.data	table	documented	15	5	0		1	489401	0	0			k_bf_stance_field
+4d91d0	40	.data	table	documented	27	9	0		1	489401	0	0			k_bf_stance_siege_a
+4d91f8	48	.data	table	documented	33	11	0		1	489401	0	0			k_bf_stance_siege_d
 4d9228	16	.data	string	referenced	11	0	0	11	1	477b2f	0	2	g_bf_4d9228		
 4d9238	16	.data	string	unreferenced	11	0	0	11	0		0	0			
 4d9248	16	.data	string	unreferenced	11	0	0	11	0		0	0			
@@ -1791,72 +1737,77 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4dc330	16	.data	string	referenced	12	0	0	12	1	49b973	0	0			
 4dc340	16	.data	string	referenced	12	0	0	12	1	49b973	0	0			
 4dc350	16	.data	string	referenced	12	0	0	12	1	49b973	0	0			
-4dc360	48	.data	table	referenced	19	4	0		0		1	0			
-4dc390	64	.data	table	referenced	24	5	0		0		1	0			
-4dc3d0	88	.data	table	referenced	34	7	0		0		1	0			
-4dc428	168	.data	table	referenced	44	6	3		2	419c78,42ff10	0	2	g_rl_4dc428		
-4dc4d0	96	.data	table	referenced	42	4	0		1	438990	0	2	g_rl_4dc4d0		
-4dc530	48	.data	table	referenced	21	2	0		1	438990	0	1			
-4dc560	2	.data	scalar	referenced	1	0	0		2	41b19d,437002	0	2	g_rl_4dc560		
-4dc562	22	.data	table	referenced	9	1	0		1	41b19d	0	2	g_rl_4dc562		
-4dc578	2	.data	scalar	referenced	1	0	0		1	41b19d	0	1	g_rl_4dc578		
-4dc57a	22	.data	table	referenced	9	1	0		1	41b19d	0	1	g_rl_4dc57a		
-4dc590	2	.data	scalar	referenced	1	0	0		1	41b19d	0	1	g_rl_4dc590		
-4dc592	22	.data	table	referenced	9	1	0		1	41b19d	0	1	g_rl_4dc592		
-4dc5a8	72	.data	table	referenced	30	3	0		1	437002	0	1	g_rl_4dc5a8		
-4dc5f0	48	.data	table	referenced	20	2	0		1	437107	0	1			
-4dc620	96	.data	table	referenced	31	4	0		1	43292d	0	1	g_rl_4dc620		
-4dc680	144	.data	table	referenced	47	6	0		1	432967	0	6	g_rl_4dc680		
-4dc710	216	.data	table	referenced	73	9	0		1	4329a4	0	2	g_rl_4dc710		
-4dc7e8	48	.data	table	referenced	18	2	0		1	4ba9c8	0	3	g_rl_4dc7e8		
-4dc818	120	.data	table	referenced	59	5	0		1	4ba9c8	0	1			
-4dc890	168	.data	table	referenced	79	7	0		1	4ba9c8	0	1			
-4dc938	216	.data	table	referenced	112	9	0		1	4ba9c8	0	1			
-4dca10	264	.data	table	referenced	114	11	0		1	4ba9c8	0	1			
-4dcb18	48	.data	table	referenced	24	2	0		1	4ba9c8	0	2	g_rl_4dcb18		
-4dcb48	96	.data	table	referenced	40	4	0		1	4ba9c8	0	1			
-4dcba8	120	.data	table	referenced	51	5	0		1	4ba9c8	0	1			
-4dcc20	168	.data	table	referenced	73	7	0		1	4ba9c8	0	1			
-4dccc8	48	.data	table	referenced	21	2	0		1	4ba9c8	0	1			
-4dccf8	48	.data	table	referenced	20	2	0		1	4ba9c8	0	1			
-4dcd28	96	.data	table	referenced	41	4	0		1	4ba9c8	0	1			
-4dcd88	168	.data	table	referenced	80	7	0		1	4ba9c8	0	1			
-4dce30	288	.data	table	referenced	153	12	0		1	4ba9c8	0	1			
-4dcf50	480	.data	table	referenced	243	20	0		1	4ba9c8	0	1	g_rl_4dcf50		
-4dd130	452	.data	table	referenced	232	19	0		1	4ba9c8	0	2	g_rl_4dd130		
-4dd2f4	28	.data	zero	unreferenced	0	0	0		0		0	0			
-4dd310	48	.data	table	referenced	17	2	0		2	4ba26e,4ba9c8	0	4	g_rl_4dd310		
-4dd340	72	.data	table	named	30	3	0		2	4ba26e,4ba9c8	0	0	g_arm_overlay_buttons		
-4dd388	432	.data	table	referenced	177	18	0		2	4ba26e,4ba9c8	0	2	g_rl_4dd388		
-4dd538	264	.data	table	referenced	109	11	0		2	4ba26e,4ba9c8	0	2	g_rl_4dd538		
-4dd640	336	.data	table	referenced	116	14	0		2	41da2f,438a91	0	3	g_rl_4dd640		
-4dd790	48	.data	table	referenced	16	2	0		2	4ba26e,4ba9c8	0	4	g_rl_4dd790		
-4dd7c0	72	.data	table	referenced	26	3	0		2	4ba26e,4ba9c8	0	3	g_rl_4dd7c0		
-4dd808	48	.data	table	referenced	20	2	0		2	4ba26e,4ba9c8	0	2	g_rl_4dd808		
-4dd838	144	.data	table	named	50	6	0		2	4ba26e,4ba9c8	0	0	g_trade_buttons		
-4dd8c8	96	.data	table	referenced	33	4	0		2	4ba26e,4ba9c8	0	2	g_rl_4dd8c8		
-4dd928	24	.data	table	named	11	1	0		2	4ba26e,4ba9c8	0	0	g_treasury_buttons		
-4dd940	144	.data	table	named	56	6	0		2	4ba26e,4ba9c8	0	0	g_noble_buttons		
-4dd9d0	96	.data	table	referenced	38	4	0		2	4ba26e,4ba9c8	0	2	g_rl_4dd9d0		
-4dda30	48	.data	table	referenced	21	2	0		2	4ba26e,4ba9c8	0	2	g_rl_4dda30		
-4dda60	48	.data	table	referenced	19	2	0		2	4ba26e,4ba9c8	0	2	g_rl_4dda60		
-4dda90	48	.data	table	referenced	19	2	0		2	47309e,47685d	0	3	g_rl_4dda90		
-4ddac0	48	.data	table	referenced	19	2	0		3	47309e,475e07,47685d	0	2			
-4ddaf0	48	.data	table	referenced	19	2	0		2	475e07,47685d	0	2			
-4ddb20	48	.data	table	referenced	19	2	0		2	475e07,47685d	0	2			
-4ddb50	48	.data	table	referenced	21	2	0		2	47309e,47685d	0	2			
-4ddb80	48	.data	table	referenced	21	2	0		2	4ba26e,4ba9c8	0	3	g_rl_4ddb80		
-4ddbb0	48	.data	table	referenced	19	2	0		2	4ba26e,4ba9c8	0	2	g_rl_4ddbb0		
-4ddbe0	48	.data	table	referenced	16	2	0		2	4ba26e,4ba9c8	0	2	g_rl_4ddbe0		
-4ddc10	96	.data	table	referenced	36	4	0		2	4ba26e,4ba9c8	0	2	g_rl_4ddc10		
-4ddc70	72	.data	table	referenced	27	3	0		2	4ba26e,4ba9c8	0	3	g_rl_4ddc70		
-4ddcb8	48	.data	table	referenced	18	2	0		2	4ba26e,4ba9c8	0	3	g_rl_4ddcb8		
-4ddce8	144	.data	table	referenced	52	6	0		2	4ba26e,4ba9c8	0	2	g_rl_4ddce8		
-4ddd78	96	.data	table	referenced	43	4	0		2	4ba26e,4ba9c8	0	4	g_rl_4ddd78		
-4dddd8	312	.data	table	referenced	112	13	0		2	4ba26e,4ba9c8	0	3	g_rl_4dddd8		
-4ddf10	144	.data	table	referenced	55	6	0		2	4ba26e,4ba9c8	0	2	g_rl_4ddf10		
-4ddfa0	96	.data	table	referenced	38	4	0		2	4ba26e,4ba9c8	0	2	g_rl_4ddfa0		
-4de000	1088	.data	table	referenced	425	44	2		2	4ba26e,4ba9c8	0	2	g_rl_4de000		
+4dc360	48	.data	table	documented	19	4	0		0		1	0			k_menu_items_1
+4dc390	60	.data	table	documented	24	5	0		0		1	0			k_menu_items_2
+4dc3cc	4	.data	zero	unreferenced	0	0	0		0		0	0			
+4dc3d0	84	.data	table	documented	34	7	0		0		1	0			k_menu_items_3
+4dc424	4	.data	zero	unreferenced	0	0	0		0		0	0			
+4dc428	48	.data	table	documented	21	0	3		2	419c78,42ff10	0	2	g_rl_4dc428		k_menubar_titles
+4dc458	120	.data	table	documented	23	6	0		0		0	2			k_menu_items_x
+4dc4d0	72	.data	table	documented	32	3	0		1	438990	0	2	g_rl_4dc4d0		k_hs_county_panel
+4dc518	24	.data	table	documented	10	1	0		0		0	0			k_hs_county_panel_x
+4dc530	48	.data	table	documented	21	2	0		1	438990	0	1			k_hs_county_panel_b
+4dc560	72	.data	table	documented	30	3	0		2	41b19d,437002	0	3	g_rl_4dc560,g_rl_4dc562,g_rl_4dc578,g_rl_4dc57a,g_rl_4dc590,g_rl_4dc592		k_hs_army_panel
+4dc5a8	72	.data	table	documented	30	3	0		1	437002	0	1	g_rl_4dc5a8		k_hs_army_panel_castle
+4dc5f0	48	.data	table	documented	20	2	0		1	437107	0	1			k_hs_army_hover
+4dc620	96	.data	table	documented	31	4	0		1	43292d	0	1	g_rl_4dc620		k_hs_hud_topright
+4dc680	144	.data	table	documented	47	6	0		1	432967	0	6	g_rl_4dc680		k_hs_hud_strip
+4dc710	120	.data	table	documented	34	5	0		1	4329a4	0	2	g_rl_4dc710		k_hs_hud_bottomright
+4dc788	96	.data	table	documented	39	4	0		0		0	0			k_hs_x_4dc788
+4dc7e8	48	.data	table	documented	18	2	0		1	4ba9c8	0	3	g_rl_4dc7e8		k_hs_send_supplies
+4dc818	120	.data	table	documented	59	5	0		1	4ba9c8	0	1			k_hs_castle_tiers
+4dc890	168	.data	table	documented	79	7	0		1	4ba9c8	0	1			k_hs_rankings_tabs
+4dc938	216	.data	table	documented	112	9	0		1	4ba9c8	0	1			k_hs_armory_view
+4dca10	144	.data	table	documented	60	6	0		1	4ba9c8	0	1			k_hs_smithy
+4dcaa0	120	.data	table	documented	54	5	0		0		0	0			k_hs_x_4dcaa0
+4dcb18	48	.data	table	documented	24	2	0		1	4ba9c8	0	2	g_rl_4dcb18		k_hs_siege_choice
+4dcb48	96	.data	table	documented	40	4	0		1	4ba9c8	0	1			k_hs_title_main
+4dcba8	120	.data	table	documented	51	5	0		1	4ba9c8	0	1			k_hs_title_options
+4dcc20	168	.data	table	documented	73	7	0		1	4ba9c8	0	1			k_hs_title_choose
+4dccc8	48	.data	table	documented	21	2	0		1	4ba9c8	0	1			k_hs_title_page6
+4dccf8	48	.data	table	documented	20	2	0		1	4ba9c8	0	1			k_hs_title_play_now
+4dcd28	96	.data	table	documented	41	4	0		1	4ba9c8	0	1			k_hs_title_setup_btns
+4dcd88	168	.data	table	documented	80	7	0		1	4ba9c8	0	1			k_hs_title_countries
+4dce30	288	.data	table	documented	153	12	0		1	4ba9c8	0	1			k_hs_title_option_grid
+4dcf50	480	.data	table	documented	243	20	0		1	4ba9c8	0	1	g_rl_4dcf50		k_hs_skirmish_setup
+4dd130	480	.data	table	documented	232	19	0		1	4ba9c8	0	2	g_rl_4dd130		k_hs_skirmish_setup_b
+4dd310	48	.data	table	documented	17	2	0		2	4ba26e,4ba9c8	0	4	g_rl_4dd310		k_btn_confirm
+4dd340	72	.data	table	documented	30	3	0		2	4ba26e,4ba9c8	0	0	g_arm_overlay_buttons		g_arm_overlay_buttons
+4dd388	432	.data	table	documented	177	18	0		2	4ba26e,4ba9c8	0	2	g_rl_4dd388		k_btn_split
+4dd538	144	.data	table	documented	61	6	0		2	4ba26e,4ba9c8	0	2	g_rl_4dd538		k_btn_send_supplies
+4dd5c8	120	.data	table	documented	48	5	0		0		0	0			k_btn_x_4dd5c8
+4dd640	24	.data	table	documented	10	1	0		2	41da2f,438a91	0	3	g_rl_4dd640		k_btn_castle_builder
+4dd658	312	.data	table	documented	106	13	0		0		0	0			k_btn_x_4dd658
+4dd790	48	.data	table	documented	16	2	0		2	4ba26e,4ba9c8	0	4	g_rl_4dd790		k_btn_tax
+4dd7c0	48	.data	table	documented	18	2	0		2	4ba26e,4ba9c8	0	3	g_rl_4dd7c0		k_btn_rations
+4dd7f0	24	.data	table	documented	8	1	0		0		0	0			k_btn_x_4dd7f0
+4dd808	48	.data	table	documented	20	2	0		2	4ba26e,4ba9c8	0	2	g_rl_4dd808		k_btn_merchant
+4dd838	144	.data	table	documented	50	6	0		2	4ba26e,4ba9c8	0	0	g_trade_buttons		g_trade_buttons
+4dd8c8	96	.data	table	documented	33	4	0		2	4ba26e,4ba9c8	0	2	g_rl_4dd8c8		k_btn_assign
+4dd928	24	.data	table	documented	11	1	0		2	4ba26e,4ba9c8	0	0	g_treasury_buttons		g_treasury_buttons
+4dd940	144	.data	table	documented	56	6	0		2	4ba26e,4ba9c8	0	0	g_noble_buttons		g_noble_buttons
+4dd9d0	96	.data	table	documented	38	4	0		2	4ba26e,4ba9c8	0	2	g_rl_4dd9d0		k_btn_gift
+4dda30	48	.data	table	documented	21	2	0		2	4ba26e,4ba9c8	0	2	g_rl_4dda30		k_btn_diplo_msg
+4dda60	48	.data	table	documented	19	2	0		2	4ba26e,4ba9c8	0	2	g_rl_4dda60		k_btn_diplo_b
+4dda90	48	.data	table	documented	19	2	0		2	47309e,47685d	0	3	g_rl_4dda90		k_btn_popup_0a
+4ddac0	48	.data	table	documented	19	2	0		3	47309e,475e07,47685d	0	2			k_btn_popup_0b
+4ddaf0	48	.data	table	documented	19	2	0		2	475e07,47685d	0	2			k_btn_popup_fa
+4ddb20	48	.data	table	documented	19	2	0		2	475e07,47685d	0	2			k_btn_popup_fb
+4ddb50	48	.data	table	documented	21	2	0		2	47309e,47685d	0	2			k_btn_popup_11
+4ddb80	48	.data	table	documented	21	2	0		2	4ba26e,4ba9c8	0	3	g_rl_4ddb80		k_btn_castle_seal
+4ddbb0	48	.data	table	documented	19	2	0		2	4ba26e,4ba9c8	0	2	g_rl_4ddbb0		k_btn_battle_prompt
+4ddbe0	48	.data	table	documented	16	2	0		2	4ba26e,4ba9c8	0	2	g_rl_4ddbe0		k_btn_number_box
+4ddc10	96	.data	table	documented	36	4	0		2	4ba26e,4ba9c8	0	2	g_rl_4ddc10		k_btn_adv_options
+4ddc70	72	.data	table	documented	27	3	0		2	4ba26e,4ba9c8	0	3	g_rl_4ddc70		k_btn_sound_options
+4ddcb8	48	.data	table	documented	18	2	0		2	4ba26e,4ba9c8	0	3	g_rl_4ddcb8		k_btn_display_options
+4ddce8	144	.data	table	documented	52	6	0		2	4ba26e,4ba9c8	0	2	g_rl_4ddce8		k_btn_help_options
+4ddd78	96	.data	table	documented	43	4	0		2	4ba26e,4ba9c8	0	4	g_rl_4ddd78		k_btn_filelist
+4dddd8	48	.data	table	documented	26	2	0		2	4ba26e,4ba9c8	0	2	g_rl_4dddd8		k_btn_page13_scroll
+4dde08	264	.data	table	documented	86	11	0		0		0	1			k_btn_x_4dde08
+4ddf10	144	.data	table	documented	55	6	0		2	4ba26e,4ba9c8	0	2	g_rl_4ddf10		k_btn_siege_engines
+4ddfa0	96	.data	table	documented	38	4	0		2	4ba26e,4ba9c8	0	2	g_rl_4ddfa0		k_btn_screen68
+4de000	1056	.data	table	documented	412	44	0		2	4ba26e,4ba9c8	0	2	g_rl_4de000		k_btn_skirmish_custom
+4de420	32	.data	table	documented	13	0	2		0		0	0			k_x_4de420
 4de440	16	.data	table	referenced	4	0	0		2	4a80db,4a8507	0	0			
 4de450	16	.data	string	referenced	12	0	0	12	1	4aabd8	0	3	g_rl_4de450		
 4de460	16	.data	string	unreferenced	12	0	0	12	0		0	0			
@@ -2857,19 +2808,15 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4e3074	36	.data	string	referenced	32	0	0	32	1	4b984f	0	1			
 4e3098	68	.data	table	referenced	5	0	0		1	4b99c0	0	2	g_rl_4e3098		
 4e30dc	212	.data	zero	unreferenced	0	0	0		0		0	0			
-4e31b0	72	.data	table	referenced	33	0	0		1	4bb978	0	2	g_rl_4e31b0		
-4e31f8	24	.data	table	referenced	13	0	0		1	4b99c0	0	1			
-4e3210	48	.data	zero	unreferenced	0	0	0		0		0	0			
-4e3240	32	.data	table	referenced	10	0	0		1	4bb978	0	1			
-4e3260	2244	.data	table	referenced	895	0	0		1	4bb978	0	2			
-4e3b24	156	.data	zero	unreferenced	0	0	0		0		0	0			
+4e31b0	72	.data	table	documented	33	0	0		1	4bb978	0	2	g_rl_4e31b0		k_screen_sim_gate
+4e31f8	72	.data	table	documented	13	0	0		1	4b99c0	0	1			k_screen_endturn_panel
+4e3240	32	.data	table	documented	10	0	0		1	4bb978	0	1			k_popup_mp_sim_gate
+4e3260	2400	.data	table	documented	895	0	0		1	4bb978	0	2			k_sim_duty_lut
 4e3bc0	4	.data	zero	referenced	0	0	0		1	4bbf89	0	1			
 4e3bc4	4	.data	zero	referenced	0	0	0		1	4bbfd2	0	0			
 4e3bc8	40	.data	string	referenced	34	0	0	34	1	4b99c0	0	1	g_rl_4e3bc8		
-4e3bf0	4	.data	zero	referenced	0	0	0		3	4bdc31,4be4df,4be7be	0	1			
-4e3bf4	1084	.data	table	referenced	480	0	0		3	4bdc31,4be4df,4be7be	0	0			
-4e4030	4	.data	zero	referenced	0	0	0		5	4bdc31,4be070,4be4df,4be7be,4beab9	0	0			
-4e4034	1084	.data	table	referenced	450	0	0		5	4bdc31,4be070,4be4df,4be7be,4beab9	0	0			
+4e3bf0	1088	.data	table	documented	480	0	0		3	4bdc31,4be4df,4be7be	0	1			k_bf_anim_off_z16
+4e4030	1088	.data	table	documented	450	0	0		5	4bdc31,4be070,4be4df,4be7be,4beab9	0	0			k_bf_anim_off_z32
 4e4470	4	.data	scalar	referenced	4	0	0		1	4beed4	0	0			
 4e4474	124	.data	table	referenced	58	0	0		1	4beed4	0	0			
 4e44f0	48	.data	string	referenced	45	0	0	45	1	4bdc31	0	1			
@@ -2918,9 +2865,9 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4e4e2c	4	.data	ptr(data)	referenced	3	0	1		3	4c47c0,4c4b10,4c54a0	0	0			
 4e4e30	4	.data	zero	referenced	0	0	0		2	4c4850,4c4a80	0	0			
 4e4e34	4	.data	scalar	referenced	2	0	0		5	4c3760,4c4090,4c4160,4c4540,4c4560	0	0			
-4e4e38	10	.data	table	referenced	6	0	2		6	4c18b0,4c1df0,4c1f30,4c5710,4c57f0,4c68f0	0	0			
-4e4e42	258	.data	table	referenced	128	0	0		1	4c92f0	2	0			
-4e4f44	256	.data	zero	unreferenced	0	0	0		0		0	0			
+4e4e38	8	.data	ptr(data)	referenced	6	0	2		6	4c18b0,4c1df0,4c1f30,4c5710,4c57f0,4c68f0	0	0			
+4e4e40	514	.data	table	documented	128	0	0		1	4c92f0	2	0			_ctype
+4e5042	2	.data	zero	unreferenced	0	0	0		0		0	0			
 4e5044	12	.data	table	referenced	3	0	0		6	4c18b0,4c1df0,4c1f30,4c57f0,4cbbf0,4cc770	0	0			
 4e5050	4	.data	scalar	referenced	1	0	0		1	4c5930	0	0			
 4e5054	364	.data	table	referenced	90	0	0		1	4c5930	0	0			

@@ -406,7 +406,7 @@ int rl_438990(void)
     return 0;
 }
 
-/* Port of FUN_00438a91 (59 B) — the battle prompt's buttons: DAT_00568474 button records at DAT_004dd640,
+/* Port of FUN_00438a91 (59 B) — the county panel castle box's builder-army button (0x438acc): DAT_00568474 button records at DAT_004dd640,
  * origin (8, 32) (0x40da1e). Returns whether one fired. */
 int rl_438a91(void)
 {

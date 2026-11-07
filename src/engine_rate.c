@@ -528,12 +528,10 @@ void engine_compute_scenario_hint(const engine_scenario_hint_in_t *in,
  * In SP the scenario hint is constant 1 (FUN_0043de70's SP branch) → hint/10
  * == 0 → ONLY ROW 0 is ever read, and row 0 is all-ones, so SP steps every
  * iteration that clears the slider gate (the rate is gate/freeze-limited, NOT
- * LUT-limited).  Rows 1..10 serve the MP throttle ladders.  The shipped duty
- * table is 11 rows (0x6e0 bytes); MP hints ≥ 110 index rows 11..14, READING
- * PAST IT into the adjacent .data (the ASCII "ERR:…"/i32 bytes in rows 11..14
- * below — engine-quirks #195).  We image the full 0xe60-byte object
- * (23 × 0xa0; only rows 0..14 are reachable — hint clamps at 140 → row 14 —
- * the trailing rows are verbatim .data padding) so the OOB read is identical.
+ * LUT-limited).  Rows 1..14 serve the MP throttle ladders.  The duty table is
+ * 15 rows (0x960 bytes, rows 10..14 = 8/4/2/1/0 ones; the hint clamps at 140 →
+ * row 14, so no read leaves it — engine-quirks #195's correction).  We image a
+ * 0xe60-byte span (23 × 0xa0; rows 15.. are the next .data objects, unreachable).
  *
  * Re-extracted 2026-06-10 (session 5) DIRECTLY from VA 0x4e3260 in
  * vendor/original/Lords2.exe — the prior image had a BOGUS row 0 (`1,1,0,…`

@@ -199,8 +199,8 @@ int bf_488dfe(void)
 
 /* ---------------------------------------------------------------- the group AI driver and its formation chain */
 
-/* the stance tables 0x489401 dispatches through (group +8): DAT_004d91b8 interactive (DAT_0053e8fc == 0),
- * DAT_004d91f8 auto-resolve, DAT_004d91d0 auto-resolve for a group with +3 set */
+/* the stance tables 0x489401 dispatches through (group +8): DAT_004d91b8 field battle (the siege flag DAT_0053e8fc
+ * == 0), DAT_004d91f8 siege with group +3 clear, DAT_004d91d0 siege with group +3 set (engine_bf_stance.c) */
 static int (*const k_bf_stance_b8[5])(void) = { bf_48a9c7, bf_48a9d2, bf_48acd2, bf_48b02b, bf_48b02b };
 static int (*const k_bf_stance_f8[11])(void) = {
     bf_48a9c7, bf_48e097, bf_48e39c, bf_48e4cc, bf_48e774, bf_48a9c7, bf_48a9c7, bf_48a9c7, bf_48e8b8, bf_48e234,

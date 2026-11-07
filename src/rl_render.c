@@ -1094,7 +1094,7 @@ int rl_417cef(int a1)
     return 0;
 }
 
-/* Port of FUN_0040cd58 (433 B) — the number entry box (screen 0x24): a 15x7 chrome panel at (DAT_0058fe20 - 16,
+/* Port of FUN_0040cd58 (433 B) — the number entry box (screen 33 = 0x21, rl_4ba26e): a 15x7 chrome panel at (DAT_0058fe20 - 16,
  * DAT_0058fe24 - 16), the seal, the prompt (group 12, DAT_0058fe1c) and footer, a 3x1 well and the value
  * *DAT_005cd410 by the mode DAT_005aeb74 (1: tenths, 2 / other: as is, three suffixes); DAT_0056d8b8 = 10. */
 int rl_40cd58(void)

@@ -11,22 +11,22 @@ Status: **documented** = a catalog row · **named** = a non-generic port name (o
 | section | range | bytes | non-zero | items | documented | named | referenced | unreferenced |
 |---|---|--:|--:|--:|--:|--:|--:|--:|
 | headers | 400000–400400 | 1024 | 214 | 6 | 0 B / 0 | 1024 B / 6 | 0 B / 0 | 0 B / 0 |
-| .rdata | 4d0000–4d10f8 | 4344 | 3760 | 164 | 0 B / 0 | 84 B / 1 | 4115 B / 155 | 145 B / 8 |
-| .data | 4d2000–4e5a00 | 80384 | 42826 | 2856 | 4249 B / 19 | 468 B / 11 | 51322 B / 1538 | 24345 B / 1288 |
+| .rdata | 4d0000–4d10f8 | 4344 | 3760 | 164 | 208 B / 1 | 84 B / 1 | 3907 B / 154 | 145 B / 8 |
+| .data | 4d2000–4e5a00 | 80384 | 42826 | 2803 | 27807 B / 122 | 84 B / 7 | 28461 B / 1401 | 24032 B / 1273 |
 | .idata | 5cf000–5d002a | 4138 | 3300 | 342 | 0 B / 0 | 4133 B / 337 | 0 B / 0 | 5 B / 5 |
 | .rsrc | 5d1000–5d341a | 9242 | 4692 | 88 | 0 B / 0 | 9236 B / 85 | 0 B / 0 | 6 B / 3 |
-| all |  | 99132 | 54792 | 3456 | 4249 B / 19 | 14945 B / 440 | 55437 B / 1693 | 24501 B / 1304 |
+| all |  | 99132 | 54792 | 3403 | 28015 B / 123 | 14561 B / 436 | 32368 B / 1555 | 24188 B / 1289 |
 
 Non-zero bytes per status (zero bytes need no documentation beyond their extent):
 
 | section | documented | named | referenced | unreferenced |
 |---|--:|--:|--:|--:|
 | headers | 0 (0.0 %) | 214 (100.0 %) | 0 (0.0 %) | 0 (0.0 %) |
-| .rdata | 0 (0.0 %) | 27 (0.7 %) | 3638 (96.8 %) | 95 (2.5 %) |
-| .data | 2253 (5.3 %) | 206 (0.5 %) | 25505 (59.6 %) | 14862 (34.7 %) |
+| .rdata | 192 (5.1 %) | 27 (0.7 %) | 3446 (91.6 %) | 95 (2.5 %) |
+| .data | 12752 (29.8 %) | 59 (0.1 %) | 15329 (35.8 %) | 14686 (34.3 %) |
 | .idata | 0 (0.0 %) | 3300 (100.0 %) | 0 (0.0 %) | 0 (0.0 %) |
 | .rsrc | 0 (0.0 %) | 4692 (100.0 %) | 0 (0.0 %) | 0 (0.0 %) |
-| all | 2253 (4.1 %) | 8439 (15.4 %) | 29143 (53.2 %) | 14957 (27.3 %) |
+| all | 12944 (23.6 %) | 8292 (15.1 %) | 18775 (34.3 %) | 14781 (27.0 %) |
 
 By kind (all sections):
 
@@ -35,13 +35,13 @@ By kind (all sections):
 | header | 7 | 1108 | 241 |
 | import | 342 | 4138 | 3300 |
 | ptr(code) | 10 | 1108 | 826 |
-| ptr(data) | 6 | 32 | 24 |
+| ptr(data) | 7 | 40 | 30 |
 | ptr(mixed) | 1 | 8 | 6 |
 | resource | 88 | 9242 | 4692 |
-| scalar | 374 | 1518 | 559 |
-| string | 2039 | 38677 | 29680 |
-| table | 273 | 38592 | 15464 |
-| zero | 316 | 4709 | 0 |
+| scalar | 338 | 1377 | 513 |
+| string | 2028 | 38178 | 29260 |
+| table | 277 | 39858 | 15924 |
+| zero | 305 | 4075 | 0 |
 
 ## Pointer slots (.reloc HIGHLOW entries inside the data image)
 
@@ -61,93 +61,93 @@ Code-pointer tables (items holding code-pointer slots, by slot count):
 
 | va | size | kind | status | code ptrs | data ptrs | funcs | port names |
 |---|--:|---|---|--:|--:|---|---|
-| 4d57f0 | 400 | ptr(code) | referenced | 100 | 0 | 43eda0 | g_rl_4d57f0 |
-| 4d5980 | 400 | ptr(code) | referenced | 100 | 0 | 43eac1 |  |
-| 4d5c98 | 200 | ptr(code) | referenced | 50 | 0 | 4472ce | g_rl_4d5c98 |
-| 4de000 | 1088 | table | referenced | 44 | 2 | 4ba26e,4ba9c8 | g_rl_4de000 |
-| 4dcf50 | 480 | table | referenced | 20 | 0 | 4ba9c8 | g_rl_4dcf50 |
-| 4dd130 | 452 | table | referenced | 19 | 0 | 4ba9c8 | g_rl_4dd130 |
-| 4d9170 | 72 | ptr(code) | referenced | 18 | 0 | 4825d1,4826b0,482789,482862,… |  |
-| 4dd388 | 432 | table | referenced | 18 | 0 | 4ba26e,4ba9c8 | g_rl_4dd388 |
-| 4dd640 | 336 | table | referenced | 14 | 0 | 41da2f,438a91 | g_rl_4dd640 |
-| 4dddd8 | 312 | table | referenced | 13 | 0 | 4ba26e,4ba9c8 | g_rl_4dddd8 |
-| 4dce30 | 288 | table | referenced | 12 | 0 | 4ba9c8 |  |
-| 4d9140 | 48 | table | referenced | 11 | 0 | 4822ed |  |
-| 4d91f8 | 48 | table | referenced | 11 | 0 | 489401 |  |
-| 4dca10 | 264 | table | referenced | 11 | 0 | 4ba9c8 |  |
-| 4dd538 | 264 | table | referenced | 11 | 0 | 4ba26e,4ba9c8 | g_rl_4dd538 |
-| 4d91d0 | 40 | table | referenced | 9 | 0 | 489401 |  |
-| 4dc710 | 216 | table | referenced | 9 | 0 | 4329a4 | g_rl_4dc710 |
-| 4dc938 | 216 | table | referenced | 9 | 0 | 4ba9c8 |  |
-| 4d6a50 | 40 | table | referenced | 8 | 0 | 4650b0 |  |
-| 4dc3d0 | 88 | table | referenced | 7 | 0 |  |  |
-| 4dc890 | 168 | table | referenced | 7 | 0 | 4ba9c8 |  |
-| 4dcc20 | 168 | table | referenced | 7 | 0 | 4ba9c8 |  |
-| 4dcd88 | 168 | table | referenced | 7 | 0 | 4ba9c8 |  |
-| 4dc428 | 168 | table | referenced | 6 | 3 | 419c78,42ff10 | g_rl_4dc428 |
-| 4dc680 | 144 | table | referenced | 6 | 0 | 432967 | g_rl_4dc680 |
-| 4dd838 | 144 | table | named | 6 | 0 | 4ba26e,4ba9c8 | g_trade_buttons |
-| 4dd940 | 144 | table | named | 6 | 0 | 4ba26e,4ba9c8 | g_noble_buttons |
-| 4ddce8 | 144 | table | referenced | 6 | 0 | 4ba26e,4ba9c8 | g_rl_4ddce8 |
-| 4ddf10 | 144 | table | referenced | 6 | 0 | 4ba26e,4ba9c8 | g_rl_4ddf10 |
-| 4d91b8 | 24 | table | referenced | 5 | 0 | 489401 |  |
-| 4dc390 | 64 | table | referenced | 5 | 0 |  |  |
-| 4dc818 | 120 | table | referenced | 5 | 0 | 4ba9c8 |  |
-| 4dcba8 | 120 | table | referenced | 5 | 0 | 4ba9c8 |  |
-| 4dc360 | 48 | table | referenced | 4 | 0 |  |  |
-| 4dc4d0 | 96 | table | referenced | 4 | 0 | 438990 | g_rl_4dc4d0 |
-| 4dc620 | 96 | table | referenced | 4 | 0 | 43292d | g_rl_4dc620 |
-| 4dcb48 | 96 | table | referenced | 4 | 0 | 4ba9c8 |  |
-| 4dcd28 | 96 | table | referenced | 4 | 0 | 4ba9c8 |  |
-| 4dd8c8 | 96 | table | referenced | 4 | 0 | 4ba26e,4ba9c8 | g_rl_4dd8c8 |
-| 4dd9d0 | 96 | table | referenced | 4 | 0 | 4ba26e,4ba9c8 | g_rl_4dd9d0 |
-| … 50 more | | | | 101 | | | |
+| 4d57f0 | 400 | ptr(code) | documented | 100 | 0 | 43eda0 | g_rl_4d57f0 |
+| 4d5980 | 400 | ptr(code) | documented | 100 | 0 | 43eac1 |  |
+| 4d5c98 | 200 | ptr(code) | documented | 50 | 0 | 4472ce | g_rl_4d5c98 |
+| 4de000 | 1056 | table | documented | 44 | 0 | 4ba26e,4ba9c8 | g_rl_4de000 |
+| 4dcf50 | 480 | table | documented | 20 | 0 | 4ba9c8 | g_rl_4dcf50 |
+| 4dd130 | 480 | table | documented | 19 | 0 | 4ba9c8 | g_rl_4dd130 |
+| 4d9170 | 72 | ptr(code) | documented | 18 | 0 | 4825d1,4826b0,482789,482862,… |  |
+| 4dd388 | 432 | table | documented | 18 | 0 | 4ba26e,4ba9c8 | g_rl_4dd388 |
+| 4dd658 | 312 | table | documented | 13 | 0 |  |  |
+| 4dce30 | 288 | table | documented | 12 | 0 | 4ba9c8 |  |
+| 4d9140 | 48 | table | documented | 11 | 0 | 4822ed |  |
+| 4d91f8 | 48 | table | documented | 11 | 0 | 489401 |  |
+| 4dde08 | 264 | table | documented | 11 | 0 |  |  |
+| 4d91d0 | 40 | table | documented | 9 | 0 | 489401 |  |
+| 4dc938 | 216 | table | documented | 9 | 0 | 4ba9c8 |  |
+| 4dc3d0 | 84 | table | documented | 7 | 0 |  |  |
+| 4dc890 | 168 | table | documented | 7 | 0 | 4ba9c8 |  |
+| 4dcc20 | 168 | table | documented | 7 | 0 | 4ba9c8 |  |
+| 4dcd88 | 168 | table | documented | 7 | 0 | 4ba9c8 |  |
+| 4dc458 | 120 | table | documented | 6 | 0 |  |  |
+| 4dc680 | 144 | table | documented | 6 | 0 | 432967 | g_rl_4dc680 |
+| 4dca10 | 144 | table | documented | 6 | 0 | 4ba9c8 |  |
+| 4dd538 | 144 | table | documented | 6 | 0 | 4ba26e,4ba9c8 | g_rl_4dd538 |
+| 4dd838 | 144 | table | documented | 6 | 0 | 4ba26e,4ba9c8 | g_trade_buttons |
+| 4dd940 | 144 | table | documented | 6 | 0 | 4ba26e,4ba9c8 | g_noble_buttons |
+| 4ddce8 | 144 | table | documented | 6 | 0 | 4ba26e,4ba9c8 | g_rl_4ddce8 |
+| 4ddf10 | 144 | table | documented | 6 | 0 | 4ba26e,4ba9c8 | g_rl_4ddf10 |
+| 4d6a50 | 24 | table | documented | 5 | 0 | 4650b0 |  |
+| 4d91b8 | 24 | table | documented | 5 | 0 | 489401 |  |
+| 4dc390 | 60 | table | documented | 5 | 0 |  |  |
+| 4dc710 | 120 | table | documented | 5 | 0 | 4329a4 | g_rl_4dc710 |
+| 4dc818 | 120 | table | documented | 5 | 0 | 4ba9c8 |  |
+| 4dcaa0 | 120 | table | documented | 5 | 0 |  |  |
+| 4dcba8 | 120 | table | documented | 5 | 0 | 4ba9c8 |  |
+| 4dd5c8 | 120 | table | documented | 5 | 0 |  |  |
+| 4dc360 | 48 | table | documented | 4 | 0 |  |  |
+| 4dc620 | 96 | table | documented | 4 | 0 | 43292d | g_rl_4dc620 |
+| 4dc788 | 96 | table | documented | 4 | 0 |  |  |
+| 4dcb48 | 96 | table | documented | 4 | 0 | 4ba9c8 |  |
+| 4dcd28 | 96 | table | documented | 4 | 0 | 4ba9c8 |  |
+| … 56 more | | | | 119 | | | |
 
 ## Largest undocumented items (non-zero bytes)
 
 | va | size | non-zero | section | kind | status | ptrs c/d | funcs (n: first) | port / PE names |
 |---|--:|--:|---|---|---|---|---|---|
 | 5d208c | 2216 | 1382 | .rsrc | resource | named | 0/0 | 0:  | resource RT_ICON/2/2057 (2216 B) |
-| 4e3260 | 2244 | 895 | .data | table | referenced | 0/0 | 1: 4bb978 |  |
-| 4d3200 | 2840 | 673 | .data | table | referenced | 0/0 | 1: 43c2a9 |  |
-| 4d7d81 | 863 | 481 | .data | table | referenced | 0/0 | 1: 47c4ba |  |
-| 4e3bf4 | 1084 | 480 | .data | table | referenced | 0/0 | 3: 4bdc31,4be4df,4be7be |  |
-| 4e4034 | 1084 | 450 | .data | table | referenced | 0/0 | 5: 4bdc31,4be070,4be4df,… |  |
-| 4de000 | 1088 | 425 | .data | table | referenced | 44/2 | 2: 4ba26e,4ba9c8 | g_rl_4de000 |
 | 5d1da4 | 744 | 419 | .rsrc | resource | named | 0/0 | 0:  | resource RT_ICON/1/2057 (744 B) |
-| 4d7610 | 576 | 372 | .data | table | referenced | 0/0 | 4: 47aaa3,47b8b2,47dcce,… | g_bf_4d7610 |
-| 4d7930 | 576 | 372 | .data | table | referenced | 0/0 | 1: 47dfe0 | g_bf_4d7930 |
-| 4d7b81 | 511 | 347 | .data | table | referenced | 0/0 | 1: 47c4ba |  |
-| 4d8388 | 512 | 306 | .data | table | referenced | 0/0 | 1: 408438 |  |
-| 4d57f0 | 400 | 299 | .data | ptr(code) | referenced | 100/0 | 1: 43eda0 | g_rl_4d57f0 |
-| 4d5980 | 400 | 299 | .data | ptr(code) | referenced | 100/0 | 1: 43eac1 |  |
-| 4d7310 | 576 | 282 | .data | table | referenced | 0/0 | 1: 46dbf5 | g_rl_4d7310 |
 | 4d864f | 297 | 253 | .data | string | unreferenced | 0/0 | 0:  |  |
-| 4d5b90 | 256 | 245 | .data | table | referenced | 0/0 | 2: 43eac1,43eda0 | g_rl_4d5b90 |
-| 4dcf50 | 480 | 243 | .data | table | referenced | 20/0 | 1: 4ba9c8 | g_rl_4dcf50 |
-| 4dd130 | 452 | 232 | .data | table | referenced | 19/0 | 1: 4ba9c8 | g_rl_4dd130 |
-| 4d0058 | 208 | 192 | .rdata | table | referenced | 0/0 | 1: 4b8243 |  |
-| 4d2650 | 192 | 192 | .data | table | referenced | 0/0 | 1: 40bdf1 |  |
+| 4d8408 | 384 | 240 | .data | table | referenced | 0/0 | 0:  |  |
 | 5d17a0 | 308 | 186 | .rsrc | resource | named | 0/0 | 0:  | resource RT_CURSOR/5/2057 (308 B) |
 | 5d1c70 | 308 | 178 | .rsrc | resource | named | 0/0 | 0:  | resource RT_CURSOR/9/2057 (308 B) |
-| 4dd388 | 432 | 177 | .data | table | referenced | 18/0 | 2: 4ba26e,4ba9c8 | g_rl_4dd388 |
 | 5d166c | 308 | 173 | .rsrc | resource | named | 0/0 | 0:  | resource RT_CURSOR/4/2057 (308 B) |
 | 5d1538 | 308 | 171 | .rsrc | resource | named | 0/0 | 0:  | resource RT_CURSOR/3/2057 (308 B) |
 | 5d1a08 | 308 | 170 | .rsrc | resource | named | 0/0 | 0:  | resource RT_CURSOR/7/2057 (308 B) |
 | 5d1b3c | 308 | 158 | .rsrc | resource | named | 0/0 | 0:  | resource RT_CURSOR/8/2057 (308 B) |
-| 4dce30 | 288 | 153 | .data | table | referenced | 12/0 | 1: 4ba9c8 |  |
 | 5d18d4 | 308 | 153 | .rsrc | resource | named | 0/0 | 0:  | resource RT_CURSOR/6/2057 (308 B) |
-| 4d5c98 | 200 | 149 | .data | ptr(code) | referenced | 50/0 | 1: 4472ce | g_rl_4d5c98 |
-| 4d7860 | 208 | 137 | .data | table | referenced | 0/0 | 2: 47aaa3,47b8b2 | g_bf_4d7860 |
 | 4d7094 | 316 | 136 | .data | string | referenced | 0/0 | 1: 476768 | g_rl_4d7094 |
-| 4d6560 | 472 | 128 | .data | table | referenced | 0/0 | 1: 44d60d |  |
-| 4e4e42 | 258 | 128 | .data | table | referenced | 0/0 | 1: 4c92f0 |  |
+| 4d7f80 | 352 | 133 | .data | table | unreferenced | 0/0 | 0:  |  |
 | 5d2934 | 280 | 128 | .rsrc | resource | named | 0/0 | 0:  | resource RT_DIALOG/108/1031 (280 B) |
 | 5d2a4c | 280 | 128 | .rsrc | resource | named | 0/0 | 0:  | resource RT_DIALOG/108/1036 (280 B) |
 | 5d2b64 | 280 | 128 | .rsrc | resource | named | 0/0 | 0:  | resource RT_DIALOG/108/2057 (280 B) |
-| 4d8b34 | 724 | 119 | .data | table | referenced | 0/0 | 1: 49edc7 |  |
-| 4dd640 | 336 | 116 | .data | table | referenced | 14/0 | 2: 41da2f,438a91 | g_rl_4dd640 |
+| 4d0a20 | 116 | 114 | .rdata | string | referenced | 0/0 | 1: 4c3d40 |  |
+| 4d2ed4 | 452 | 113 | .data | table | referenced | 0/0 | 1: 41c208 |  |
+| 4d6578 | 448 | 111 | .data | table | unreferenced | 0/0 | 0:  |  |
+| 4d8778 | 408 | 101 | .data | table | referenced | 0/0 | 4: 435ebc,4a5003,4a50ae,… |  |
+| 5d2c7c | 220 | 99 | .rsrc | resource | named | 0/0 | 0:  | resource RT_DIALOG/116/1031 (220 B) |
+| 5d2d58 | 220 | 99 | .rsrc | resource | named | 0/0 | 0:  | resource RT_DIALOG/116/1036 (220 B) |
+| 5d2e34 | 218 | 99 | .rsrc | resource | named | 0/0 | 0:  | resource RT_DIALOG/116/2057 (218 B) |
+| 4e25d4 | 100 | 98 | .data | string | referenced | 0/0 | 1: 4b64d8 |  |
+| 4e26d4 | 100 | 97 | .data | string | referenced | 0/0 | 1: 4b64d8 |  |
+| 4e2560 | 100 | 96 | .data | string | referenced | 0/0 | 1: 4b64d8 |  |
+| 4e2660 | 100 | 96 | .data | string | referenced | 0/0 | 1: 4b64d8 |  |
+| 4d8f74 | 356 | 91 | .data | table | referenced | 0/0 | 1: 499e5d |  |
+| 4e5054 | 364 | 90 | .data | table | referenced | 0/0 | 1: 4c5930 |  |
+| 4d0998 | 84 | 82 | .rdata | string | referenced | 0/0 | 1: 4c3d40 |  |
+| 4d9950 | 88 | 81 | .data | table | referenced | 0/0 | 1: 485bb1 |  |
+| 4e53fc | 236 | 79 | .data | table | referenced | 0/0 | 1: 4c8990 |  |
+| 5d2f10 | 188 | 79 | .rsrc | resource | named | 0/0 | 0:  | resource RT_DIALOG/129/1031 (188 B) |
+| 5d2fcc | 188 | 79 | .rsrc | resource | named | 0/0 | 0:  | resource RT_DIALOG/129/1036 (188 B) |
+| 5d3088 | 186 | 79 | .rsrc | resource | named | 0/0 | 0:  | resource RT_DIALOG/129/2057 (186 B) |
+| 4dc180 | 78 | 78 | .data | table | referenced | 0/0 | 1: 49caaa |  |
+| 5d3144 | 184 | 75 | .rsrc | resource | named | 0/0 | 0:  | resource RT_DIALOG/130/1031 (184 B) |
+| 5d31fc | 184 | 75 | .rsrc | resource | named | 0/0 | 0:  | resource RT_DIALOG/130/1036 (184 B) |
+| 5d32b4 | 182 | 75 | .rsrc | resource | named | 0/0 | 0:  | resource RT_DIALOG/130/2057 (182 B) |
+| 4d7270 | 160 | 71 | .data | string | unreferenced | 0/0 | 0:  |  |
 
 ## Catalog
 
-19 rows in `docs/data/catalog.tsv`, 4249 B.
+123 rows in `docs/data/catalog.tsv`, 28015 B.
