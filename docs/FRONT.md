@@ -38,7 +38,7 @@
   sections mapped, `.text` INT3 + 1553 entry thunks, entry = the port of retail's start (`src/rl_crt.c`) → WinMain → window (`src/rl_main.c`),
   audit per run + `tools/standalone/prove_no_retail_code.py` (14/14 PASS). **Corpus (wine, 64): 64 run to the end with
   no retail code, 64 equal pure retail in frame / tick / RNG / every presented frame / state (CRT port 2026-11-08)** (bot-s16-t20 fixed: quirk #238); deterministic, Windows ≡ wine.
-  Data image: `tools/data_ledger.py` → `docs/data-ledger.md` (99 KB from the exe; 4.1% of its non-zero bytes
+  Data image: `tools/data_ledger.py` → `docs/data-ledger.md` (99 KB from the exe; 78.6% of its non-zero bytes
   documented). Free-play capture: Desktop "Lords II capture" (`rhost.py play-*`).
 - **Top blocker:** none for logic parity. The standalone's state = pure retail's (64/64, state_sem included) since the
   CRT port (2026-11-08, `docs/findings/crt-port.md`). Multiplayer stays unverifiable (DirectPlay / serial: rhost stubs it).
