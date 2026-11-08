@@ -542,6 +542,18 @@ void rl_crt_4c4370(uint32_t p)
 
 /* ================================================================ the debug heap (dbgheap.c) */
 
+/* _pfnAllocHook as retail calls it. Retail's default (0x4c4070, never replaced by the game) is called as its port, not
+ * by address: a call by address from port code enters that row's wrapper (rhost; the standalone's thunk), whose
+ * rh_port_sync_in reloads the port modules' file-static mirrors from retail memory in the middle of the caller's
+ * computation — a malloc inside the army-economy evaluator clobbered its live g_eval_revenue (0x5656f0: bot3s-s404-t36,
+ * bot3cen-s207-t44). Any other hook: by address. */
+int rl_crt_alloc_hook(uint32_t hook, int type, uint32_t data, uint32_t size, int use, int32_t req, uint32_t file, int line)
+{
+    if (hook == 0x4c4070u) return rl_crt_4c4070(type, data, (int)size, use, req, file, line);
+    return ((int (__cdecl *)(int, uint32_t, uint32_t, int, int32_t, uint32_t, int))(uintptr_t)hook)(type, data, size, use,
+                                                                                                   req, file, line);
+}
+
 /* Port of FUN_004c4070 (21 B) — the default allocation hook (_CrtDefaultAllocHook): 1 (allow). */
 int rl_crt_4c4070(int type, uint32_t data, int size, int use, int req, uint32_t file, int line)
 {
@@ -563,8 +575,7 @@ uint32_t rl_crt_4bfb30(uint32_t size, int use, uint32_t file, int line)
     int32_t req = V32(G_REQCURR);
     if (req == V32(G_BREAKALLOC))
         int3();
-    if (((int (__cdecl *)(int, uint32_t, uint32_t, int, int32_t, uint32_t, int))(uintptr_t)U32(G_ALLOCHOOK))(
-            1, 0, size, use, req, file, line) == 0) {
+    if (rl_crt_alloc_hook(U32(G_ALLOCHOOK), 1, 0, size, use, req, file, line) == 0) {
         if (file != 0) {
             if (REPORT(7, 0, 0, 0, 0, S_HOOKFAILAT, file, line)) int3();
         } else if (REPORT(6, 0, 0, 0, 0, S_PCT_S, S_HOOKFAIL))

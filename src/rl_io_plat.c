@@ -2,37 +2,25 @@
 #include "rl_io_plat.h"
 #include "rl_io.h"
 
-#include <direct.h>
+#include "rl_crt.h"
+#include "engine_retail_call.h"
+
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
-/* the host CRT's low-level I/O (msvcrt; <io.h> is shadowed by src/io.h) */
-_CRTIMP int __cdecl _open(const char *path, int oflag, ...);
-_CRTIMP int __cdecl _close(int fd);
-_CRTIMP int __cdecl _read(int fd, void *buf, unsigned n);
-_CRTIMP int __cdecl _write(int fd, const void *buf, unsigned n);
-_CRTIMP long __cdecl _lseek(int fd, long off, int origin);
-_CRTIMP long __cdecl _filelength(int fd);
-
-static const char *(*s_path)(const char *, int, char *, unsigned);   /* the host CRT's path resolver (rhost --standalone) */
-static int s_bound, s_crt;   /* imports through retail's IAT slots / retail's own CRT functions */
+static int s_bound;   /* imports through retail's IAT slots */
 #define SLOT(n, va) static const uint32_t k_slot_##n = va;
-#define CRTVA(n, va) static const uint32_t k_crt_##n = va;
 RL_PLAT_IMPORTS(SLOT)
-RL_PLAT_CRT(CRTVA)
 #undef SLOT
-#undef CRTVA
+#define PV(p) ((uint32_t)(uintptr_t)(p))   /* a retail pointer value */
 
-void rl_plat_bind_retail(void) { s_bound = 1; s_crt = 1; }
-void rl_plat_bind_imports(const char *(*path)(const char *p, int want_write, char *buf, unsigned n))
-{ s_bound = 1; s_crt = 0; s_path = path; }
+void rl_plat_bind_retail(void) { s_bound = 1; }
+void rl_plat_bind_imports(void) { s_bound = 1; }
 int rl_plat_bound(void) { return s_bound; }
 
 
 /* bound: the function retail's IAT slot holds NOW (rhost's override); else the host's */
 #define IMP(n, T, host) (s_bound ? (T)(uintptr_t)*(volatile uint32_t *)(uintptr_t)k_slot_##n : (T)(host))
-#define CRT(n, T) ((T)(uintptr_t)k_crt_##n)
 
 /* ---------------------------------------------------------------- imports */
 HGLOBAL rl_plat_GlobalAlloc(UINT fl, SIZE_T n)
@@ -216,144 +204,45 @@ LPTIMECALLBACK rl_plat_stream_timer_cb(void)
 }
 
 /* ---------------------------------------------------------------- CRT */
-/* the host CRT under rhost --standalone: a game-dir path through rhost's file overlay (reads: the run dir's copy
- * first; writes: into the run dir) */
-static char s_pb[2][MAX_PATH];
-#define HP(p, w)  (s_path ? s_path((p), (w), s_pb[0], MAX_PATH) : (p))
-#define HP2(p, w) (s_path ? s_path((p), (w), s_pb[1], MAX_PATH) : (p))
-int rl_plat_open(const char *path, int oflag, int pmode)
-{ return s_crt ? CRT(open, int (__cdecl *)(const char *, int, int))(path, oflag, pmode) : _open(HP(path, (oflag & 3) != 0 || (oflag & 0x100)), oflag, pmode); }
-int rl_plat_close(int fd)
-{ return s_crt ? CRT(close, int (__cdecl *)(int))(fd) : _close(fd); }
-int rl_plat_read(int fd, void *buf, unsigned n)
-{ return s_crt ? CRT(read, int (__cdecl *)(int, void *, unsigned))(fd, buf, n) : _read(fd, buf, n); }
-int rl_plat_write(int fd, const void *buf, unsigned n)
-{ return s_crt ? CRT(write, int (__cdecl *)(int, const void *, unsigned))(fd, buf, n) : _write(fd, buf, n); }
-int rl_plat_lseek(int fd, int off, int origin)
-{ return s_crt ? CRT(lseek, int (__cdecl *)(int, int, int))(fd, off, origin) : (int)_lseek(fd, off, origin); }
-int rl_plat_filelength(int fd)
-{ return s_crt ? CRT(filelength, int (__cdecl *)(int))(fd) : (int)_filelength(fd); }
-int rl_plat_chdir(const char *path)
-{ return s_crt ? CRT(chdir, int (__cdecl *)(const char *))(path) : _chdir(path); }
-/* imports-only (rhost --standalone): the clock is retail's GetLocalTime / GetTimeZoneInformation slots (rhost's virtual
- * clock), converted as MSVC's time() does (local + _timezone, no DST); localtime = that minus the bias. The host's
- * time() / localtime() read the wall clock and the host's zone. PORT-DEBT(crt): retail's time 0x4c2740 / localtime
- * 0x4c24e0 ported. */
-static int32_t days_from_civil(int y, unsigned m, unsigned d)
-{
-    y -= m <= 2;
-    int era = (y >= 0 ? y : y - 399) / 400;
-    unsigned yoe = (unsigned)(y - era * 400), doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
-    unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    return era * 146097 + (int32_t)doe - 719468;
-}
-static int32_t s_tz_bias_s(void)
-{
-    TIME_ZONE_INFORMATION z;
-    memset(&z, 0, sizeof z);
-    ((DWORD (WINAPI *)(TIME_ZONE_INFORMATION *))(uintptr_t)*(volatile uint32_t *)(uintptr_t)0x5cf44cu)(&z);
-    return (int32_t)z.Bias * 60;
-}
-int32_t rl_plat_time(int32_t *t)
-{
-    if (s_crt) return CRT(time, int32_t (__cdecl *)(int32_t *))(t);
-    int32_t v;
-    if (s_bound) {
-        SYSTEMTIME st;
-        ((void (WINAPI *)(SYSTEMTIME *))(uintptr_t)*(volatile uint32_t *)(uintptr_t)0x5cf444u)(&st);
-        v = days_from_civil(st.wYear, st.wMonth, st.wDay) * 86400 + st.wHour * 3600 + st.wMinute * 60 + st.wSecond + s_tz_bias_s();
-    } else v = (int32_t)time(NULL);
-    if (t) *t = v;
-    return v;
-}
-void *rl_plat_localtime(const int32_t *t)
-{
-    if (s_crt) return CRT(localtime, void *(__cdecl *)(const int32_t *))(t);
-    time_t tt = (time_t)*t;
-    if (s_bound) { tt -= s_tz_bias_s(); return gmtime(&tt); }
-    return localtime(&tt);
-}
-/* imports-only: the string lands in retail's own static buffer 0x4e5b38 (26 B, CRT .data): its readers copy past the
- * terminator (rl_4b049b takes 40 bytes), so what follows must be retail's data image, not the host CRT's memory */
-char *rl_plat_asctime(const void *tm)
-{
-    if (s_crt) return CRT(asctime, char *(__cdecl *)(const void *))(tm);
-    char *h = asctime((const struct tm *)tm);
-    if (!s_bound || !h) return h;
-    char *b = (char *)(uintptr_t)0x4e5b38u;
-    memcpy(b, h, 26);
-    return b;
-}
-void rl_plat_exit(int code)
-{
-    if (s_crt) CRT(exit, void (__cdecl *)(int))(code);
-    exit(code);
-}
-
-/* The standalone's debug heap: retail's free (0x4c0580 → the _free_dbg port 0x4c05a0) walks the debug
- * CRT's block headers (_CrtMemBlockHeader, 0x20 B before the data + 4 no-man's-land bytes after it) and its block
- * list (_pFirstBlock DAT_004e5b28, _pLastBlock DAT_004e5b20, _lCurAlloc DAT_004e5b2c), so the standalone's malloc
- * builds the same block (_heap_alloc_dbg: linked at the head, fills 0xfd / 0xcd) on the host heap. */
-#include "rl_io_globals.h"
-typedef struct hdr { struct hdr *next, *prev; const char *file; int line; uint32_t size; int use; int req; uint8_t gap[4]; } hdr_t;
-void *rl_plat_malloc(uint32_t n)
-{
-    if (s_crt) return CRT(malloc, void *(__cdecl *)(uint32_t))(n);
-    static int req;
-    hdr_t *h = malloc(sizeof *h + n + 4);
-    if (!h) return NULL;
-    h->next = (hdr_t *)(uintptr_t)(uint32_t)g_rl_4e5b28;
-    h->prev = NULL;
-    if (h->next) h->next->prev = h; else g_rl_4e5b20 = (int32_t)(uintptr_t)h;
-    g_rl_4e5b28 = (int32_t)(uintptr_t)h;
-    h->file = NULL; h->line = 0; h->size = n; h->use = 1; h->req = ++req;
-    g_rl_4e5b2c += (int32_t)n;
-    memset(h->gap, 0xfd, 4);
-    memset(h + 1, 0xcd, n);
-    memset((uint8_t *)(h + 1) + n, 0xfd, 4);
-    return h + 1;
-}
-int rl_plat_CrtCheckMemory(void)
-{ return s_crt ? CRT(CrtCheckMemory, int (__cdecl *)(void))() : 1; }
-int rl_plat_CrtIsValidHeapPointer(const void *p)
-{ return s_crt ? CRT(CrtIsValidHeapPointer, int (__cdecl *)(const void *))(p) : 1; }
+/* retail's own CRT, ported on its layout (rl_crt.c): the same code under rhost and in the standalone — its state in
+ * retail's .data (the fd table, errno, the debug heap's block list, tzset / time statics), its OS calls through
+ * retail's IAT slots (rhost's file overlay, fake handles, heap arena, virtual clock). */
+int rl_plat_open(const char *path, int oflag, int pmode) { return rl_crt_4cea00(PV(path), oflag, pmode); }
+int rl_plat_close(int fd) { return rl_crt_4ce640((uint32_t)fd); }
+int rl_plat_read(int fd, void *buf, unsigned n) { return rl_crt_4ceff0((uint32_t)fd, PV(buf), n); }
+int rl_plat_write(int fd, const void *buf, unsigned n) { return rl_crt_4cc0b0((uint32_t)fd, PV(buf), n); }
+int rl_plat_lseek(int fd, int off, int origin) { return rl_crt_4cc3b0((uint32_t)fd, off, origin); }
+int rl_plat_filelength(int fd) { return rl_crt_4cf490((uint32_t)fd); }
+int rl_plat_chdir(const char *path) { return rl_crt_4cf550(PV(path)); }
+int32_t rl_plat_time(int32_t *t) { return rl_crt_4c2740(PV(t)); }
+void *rl_plat_localtime(const int32_t *t) { return (void *)(uintptr_t)rl_crt_4c24e0(PV(t)); }
+char *rl_plat_asctime(const void *tm) { return (char *)(uintptr_t)rl_crt_4c2340(PV(tm)); }
+void rl_plat_exit(int code) { rl_crt_4bf6f0(code); }
+void *rl_plat_malloc(uint32_t n) { return (void *)(uintptr_t)rl_crt_4bfa00(n); }
+/* the debug heap's helpers (_free_dbg 0x4c05a0's callees): _CrtCheckMemory / _CrtDbgReport are unported (never
+ * reached: _CRTDBG_CHECK_ALWAYS_DF is off and every report is an error path) — retail under rhost, a gap standalone */
+int rl_plat_CrtCheckMemory(void) { return (int)engine_retail_call(0x4c0cf0u, 0); }
+int rl_plat_CrtIsValidHeapPointer(const void *p) { return rl_crt_4c1170(PV(p)); }
 int rl_plat_CrtDbgReport(int type, const char *file, int line, const char *mod, const char *fmt, uint32_t a5, uint32_t a6, uint32_t a7)
 {
-    if (s_crt)
-        return CRT(CrtDbgReport, int (__cdecl *)(int, const char *, int, const char *, const char *, ...))(type, file, line, mod, fmt, a5, a6, a7);
-    return 0;
+    return (int)engine_retail_call(0x4c3950u, 8, (uint32_t)type, PV(file), (uint32_t)line, PV(mod), PV(fmt), a5, a6, a7);
 }
-int rl_plat_CheckBytes(const void *p, int c, int n)
-{
-    if (s_crt) return CRT(CheckBytes, int (__cdecl *)(const void *, int, int))(p, c, n);
-    for (int i = 0; i < n; i++)
-        if (((const uint8_t *)p)[i] != (uint8_t)c) return 0;
-    return 1;
-}
-void rl_plat_free_base(void *block)
-{
-    if (s_crt) CRT(free_base, void (__cdecl *)(void *))(block);
-    else free(block);
-}
+int rl_plat_CheckBytes(const void *p, int c, int n) { return rl_crt_4c0c60(PV(p), c, n); }
+void rl_plat_free_base(void *block) { rl_crt_4c4370(PV(block)); }
+/* _pfnAllocHook as retail calls it (rl_crt_alloc_hook: retail's default as its port, another by address) */
 int rl_plat_alloc_hook(uint32_t hook, int type, void *data, int size, int use, int req, const char *file, int line)
 {
-    if (!s_crt && hook == 0x4c4070u) return 1;   /* the standalone: retail's default _CrtDefaultAllocHook */
-    return ((int (__cdecl *)(int, void *, int, int, int, const char *, int))(uintptr_t)hook)(type, data, size, use, req, file, line);
+    return rl_crt_alloc_hook(hook, type, PV(data), (uint32_t)size, use, req, PV(file), line);
 }
 
 /* turn */
-#include <stdio.h>
-int rl_plat_remove(const char *path)
-{ return s_crt ? CRT(remove, int (__cdecl *)(const char *))(path) : remove(HP(path, 1)); }
-int rl_plat_rename(const char *from, const char *to)
-{ return s_crt ? CRT(rename, int (__cdecl *)(const char *, const char *))(from, to) : rename(HP(from, 1), HP2(to, 1)); }
+int rl_plat_remove(const char *path) { return rl_crt_4c22c0(PV(path)); }
+int rl_plat_rename(const char *from, const char *to) { return rl_crt_4c2260(PV(from), PV(to)); }
+int rl_plat_getdrive(void) { return rl_crt_4c1cf0(); }
+char *rl_plat_getcwd(char *buf, int n) { return (char *)(uintptr_t)rl_crt_4c1b10(PV(buf), n); }
 /* host */
 BOOL rl_plat_GetCursorPos(POINT *p)
 { return IMP(GetCursorPos, BOOL (WINAPI *)(POINT *), GetCursorPos)(p); }
-int rl_plat_getdrive(void)
-{ return s_crt ? CRT(getdrive, int (__cdecl *)(void))() : _getdrive(); }
-char *rl_plat_getcwd(char *buf, int n)
-{ return s_crt ? CRT(getcwd, char *(__cdecl *)(char *, int))(buf, n) : _getcwd(buf, n); }
 LRESULT rl_plat_DefWindowProcA(HWND w, UINT m, WPARAM wp, LPARAM lp)
 { return IMP(DefWindowProcA, LRESULT (WINAPI *)(HWND, UINT, WPARAM, LPARAM), DefWindowProcA)(w, m, wp, lp); }
 BOOL rl_plat_IsIconic(HWND w) { return IMP(IsIconic, BOOL (WINAPI *)(HWND), IsIconic)(w); }

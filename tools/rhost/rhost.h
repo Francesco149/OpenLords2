@@ -111,7 +111,6 @@ int rh_host_in(unsigned v);
 /* rh_files.c */
 void rh_files_install(void);
 const char *rh_files_resolve(const char *path, int want_write, char *out, size_t n);
-const char *rh_files_resolve_keep(const char *path, int want_write, char *out, unsigned n);
 
 /* rh_handles.c */
 void rh_handles_install(void);

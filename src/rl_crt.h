@@ -16,6 +16,8 @@ int      rl_crt_4c1070(int flag);                                               
 int      rl_crt_4c1110(uint32_t p, uint32_t n, int rw);                             /* _CrtIsValidPointer */
 int      rl_crt_4c1170(uint32_t p);                                                 /* _CrtIsValidHeapPointer */
 uint32_t rl_crt_4c3760(uint32_t size);                                              /* _heap_alloc_base */
+int      rl_crt_alloc_hook(uint32_t hook, int type, uint32_t data, uint32_t size, int use, int32_t req, uint32_t file,
+                           int line);                                               /* call _pfnAllocHook */
 int      rl_crt_4c4070(int type, uint32_t data, int size, int use, int req, uint32_t file, int line); /* default alloc hook */
 void     rl_crt_4c4370(uint32_t p);                                                 /* _free_base */
 int      rl_crt_4c4480(void);                                                       /* _heap_init */

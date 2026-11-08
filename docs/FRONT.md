@@ -35,13 +35,13 @@
   rhost: RH_SH_HOST (host-level rows: proven by the hybrid pass), RH_SH_FULL (the copy shadow for rows whose subtree
   reads stack residue the paged shadow's fault frames overwrite), smackw32 / DirectDraw rollbacks, handle reuse.
   **2026-11-07: the standalone runs** (`rhost --standalone`, `docs/findings/standalone-path.md`): only the exe's data
-  sections mapped, `.text` INT3 + 1472 entry thunks, entry = the port's CRT half → WinMain → window (`src/rl_main.c`),
+  sections mapped, `.text` INT3 + 1553 entry thunks, entry = the port of retail's start (`src/rl_crt.c`) → WinMain → window (`src/rl_main.c`),
   audit per run + `tools/standalone/prove_no_retail_code.py` (14/14 PASS). **Corpus (wine, 64): 64 run to the end with
-  no retail code, 64 equal pure retail in frame / tick / RNG / every presented frame** (bot-s16-t20 fixed: quirk #238); deterministic, Windows ≡ wine.
+  no retail code, 64 equal pure retail in frame / tick / RNG / every presented frame / state (CRT port 2026-11-08)** (bot-s16-t20 fixed: quirk #238); deterministic, Windows ≡ wine.
   Data image: `tools/data_ledger.py` → `docs/data-ledger.md` (99 KB from the exe; 4.1% of its non-zero bytes
   documented). Free-play capture: Desktop "Lords II capture" (`rhost.py play-*`).
-- **Top blocker:** none for logic parity. The standalone's state differs from retail's only in the CRT (the host's:
-  ★3). Multiplayer stays unverifiable (DirectPlay / serial: rhost stubs it).
+- **Top blocker:** none for logic parity. The standalone's state = pure retail's (64/64, state_sem included) since the
+  CRT port (2026-11-08, `docs/findings/crt-port.md`). Multiplayer stays unverifiable (DirectPlay / serial: rhost stubs it).
 <!-- status:end -->
 
 ## ★ Next micro-tasks
@@ -56,13 +56,12 @@
 2. **Host-level rows**: ui4's 0x42e5c0 / 0x42ec91 / 0x42f1df (RH_SH_HOST rows; they passed replace-only with temporary
    rows). Done 2026-11-07: WinMain 0x40e9ab / the window 0x4b2258 (rows `rh_hooks_rl_main.c`), the frame guard through
    `rl_frame_driver` (rhost's frame boundary).
-3. **The CRT port** (the standalone's state = pure retail's → it joins `corpus --check`): retail's statically linked
-   MSVC debug CRT — the 79 functions the corpus reaches (22 KB: the debug heap `_heap_alloc_dbg` / `_free_dbg` / sbh,
-   `_ioinit` / `__pioinfo`, low-level I/O open / read / write / lseek / close, the mbctable, time / localtime / asctime,
-   getcwd / getdrive / chdir, remove / rename) on retail's layout over its `.data`, every OS call through retail's IAT
-   slots; rows → REPLACE-verified under rhost like any port; `rl_plat` then binds them in the standalone (today: the host
-   CRT, `rl_plat_bind_imports`). OpenSummoners did the same (`src/msvc_crt.c`). Then **`--live`**: a product exe on the
-   real platform (real window / DirectDraw / DirectSound behind the same IAT slots).
+3. ~~**The CRT port**~~ — done 2026-11-08 (`docs/findings/crt-port.md`): retail's MSVC 4.x debug CRT, 81 functions
+   (`src/rl_crt.c`, rows `rh_hooks_rl_crt.c`) on retail's layout; shadow 81/81 0 divergences, full hybrid 64/64; the
+   shim and `rl_crt_start` use it under rhost and standalone → **standalone 64/64 = pure retail incl. state_sem**.
+   Next: the standalone joins `corpus --check` (the pre-commit gate); 21 unreached CRT seams (`_CrtDbgReport`,
+   `_amsg_exit`, locale / TZ paths …) are standalone gaps (★4); then **`--live`**: a product exe on the real platform
+   (real window / DirectDraw / DirectSound behind the same IAT slots).
 4. **The standalone's static gaps** (`tools/standalone/prove_no_retail_code.py --gaps-only`): 213 retail entries the
    port calls with no thunk — the payload builders 0x4d57f0[100] (rl_glue.c:1414), the delayed-action handlers
    0x4d5c98[50] (rl_ctl.c:2547), 63 seams (the DLGPROCs 0x4b7f78 / 0x4b8335 / 0x4b8439 / 0x4b85b7, gfx_restore

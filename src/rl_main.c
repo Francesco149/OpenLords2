@@ -8,6 +8,7 @@
 #include "rl.h"
 #include "rl_main.h"
 #include "rl_io_plat.h"
+#include "rl_crt.h"
 
 #include <windows.h>
 
@@ -183,32 +184,11 @@ out:
     return (int)msg.wParam;   /* (the exits before the loop return retail's uninitialized MSG too) */
 }
 
-/* ---------------------------------------------------------------- the CRT entry's game-facing half */
-/* What start 0x4c3370 leaves in retail's state before WinMain and what WinMain receives: the version globals
- * 0x4e4548 (major) / 0x4e4544 (minor) / 0x4e4540 (major + minor << 8) / 0x4e453c (build), the command line's tail
- * after the program name, nShowCmd (STARTF_USESHOWWINDOW ? wShowWindow : SW_SHOWDEFAULT), GetModuleHandleA(NULL).
- * The CRT's own init (heap, _ioinit, mbctable, argv / envp, _cinit: only the C++ EH filter 0x4cc930) is the host's.
- * PORT-DEBT(crt): a faithful port of retail's CRT over its .data. */
+/* ---------------------------------------------------------------- the CRT entry */
+/* The standalone's entry: retail's start 0x4c3370, ported with the rest of its CRT (rl_crt.c: heap, _ioinit, the
+ * mbctable, argv / envp, _cinit, then WinMain, then exit → ExitProcess through retail's slot). Never returns. */
 int rl_crt_start(void)
 {
-    DWORD v = IAT(DWORD (WINAPI *)(void), 0x5cf434u)();
-    V32(0x4e4548) = (v >> 8) & 0xff;
-    V32(0x4e4544) = v & 0xff;
-    V32(0x4e4540) = (int32_t)(((v >> 8) & 0xff) + ((v & 0xff) << 8));
-    V32(0x4e453c) = (int32_t)(v >> 16);
-    char *cl = IAT(LPSTR (WINAPI *)(void), 0x5cf438u)();
-    V32(0x5cee4c) = (int32_t)(uintptr_t)cl;
-    char *p = cl;
-    if (*p == '"') {
-        while (*++p != '"' && *p) {}
-        if (*p == '"') p++;
-    } else
-        while ((uint8_t)*p > ' ') p++;
-    while (*p && (uint8_t)*p <= ' ') p++;
-    STARTUPINFOA si;
-    si.dwFlags = 0;
-    IAT(void (WINAPI *)(STARTUPINFOA *), 0x5cf448u)(&si);
-    int show = (si.dwFlags & STARTF_USESHOWWINDOW) ? si.wShowWindow : SW_SHOWDEFAULT;
-    HINSTANCE inst = IAT(HMODULE (WINAPI *)(LPCSTR), 0x5cf3c0u)(NULL);
-    return rl_40e9ab(inst, NULL, p, show);
+    rl_crt_4c3370();
+    return 0;
 }

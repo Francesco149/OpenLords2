@@ -944,7 +944,8 @@ def ida_name(idx, va):
 def cmd_standalone(a):
     """the corpus under --standalone (no retail code): per scenario how far it runs, the first gap (the retail function
     it reached + the caller), and — for a run that completes — frame / tick / RNG / fb (every presented frame) against
-    the blessed pure-retail values (state_sem is not compared: the CRT is the host's, PORT-DEBT(crt))"""
+    the blessed pure-retail values, and state_sem (the whole state: since the CRT port, rl_crt.c, the standalone's
+    state is retail's)"""
     names = all_scenarios(a.only)
     a.fb_hash = True
     a.extra = ((a.extra or "") + " --standalone").strip()
@@ -969,16 +970,16 @@ def cmd_standalone(a):
             line = f"{n:28s} GAP   f={f:>6}/{exp.get('frame', '?'):>6}  {va:08x} {ida_name(idx, va)}  from {ret:08x} {ida_name(idx, ret)}"
         elif r.get("status") in FINISHED:
             full += 1
-            keys = [k for k in ("frame", "tick", "rng", "fb") if exp.get(k) != r.get(k)]
+            keys = [k for k in ("frame", "tick", "rng", "fb", "state_sem") if exp.get(k) != r.get(k)]
             same += not keys
-            line = f"{n:28s} DONE  f={r.get('frame'):>6}  {'= pure retail (frame tick rng fb)' if not keys else 'differs: ' + ', '.join(f'{k} {exp.get(k)}→{r.get(k)}' for k in keys)}"
+            line = f"{n:28s} DONE  f={r.get('frame'):>6}  {'= pure retail (frame tick rng fb state)' if not keys else 'differs: ' + ', '.join(f'{k} {exp.get(k)}→{r.get(k)}' for k in keys)}"
         else:
             note = " | ".join(res.get(n + "#notes", [])[:2])
             line = f"{n:28s} {str(r.get('status')).upper():5s} f={r.get('frame', '?'):>6}  {note}"
         rows.append(line)
         print(line)
     print(f"STANDALONE: {len(names)} scenarios — {full} ran to the end ({same} equal to pure retail in frame / tick / RNG / "
-          f"every presented frame), {len(gaps)} stopped at a gap; distinct gaps: {len({g[0] for g in gaps.values()})}")
+          f"every presented frame / state_sem), {len(gaps)} stopped at a gap; distinct gaps: {len({g[0] for g in gaps.values()})}")
     return 0
 
 

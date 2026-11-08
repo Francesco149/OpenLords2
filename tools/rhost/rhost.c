@@ -819,7 +819,7 @@ static void sa_seal(const char *exe_abs, const retail_image_t *img)
            bad ? "FAIL" : "OK", g_audit);
     if (bad) rh_fatal("standalone: the audit failed (%s)", g_audit);
 }
-/* the standalone's entry: the port's CRT entry → WinMain; its return is retail's exit(code) → ExitProcess */
+/* the standalone's entry: the port of retail's start (rl_crt.c) → WinMain → exit → ExitProcess (never returns) */
 static void sa_entry(void)
 {
     rh_port_bind_once();   /* the port's seams (engine_retail_call → a VA: a thunk, or a gap) and table binds */
@@ -896,7 +896,7 @@ int main(int argc, char **argv)
     rh_mm_install();
     rh_win_install();
     rh_smack_install();                      /* last: smackw32's imports bind to every layer above */
-    if (O.standalone) rl_plat_bind_imports(O.no_overlay ? NULL : rh_files_resolve_keep);   /* no retail CRT: the host's */
+    if (O.standalone) rl_plat_bind_imports();   /* retail's slots; the CRT is the port of retail's (rl_crt.c) */
     rl_frame_driver = sa_frame_driver;       /* the port's frame guard (rl_40e890): this frame boundary */
     if (!O.standalone) {                     /* (standalone: no call sites — the port's 0x40e890 calls rl_frame_driver) */
         int nf = redirect_calls(L2_FRAME_FN, (void *)frame_wrap);

@@ -64,10 +64,10 @@ OpenSummoners does), toward a later fully documented port that loads nothing fro
   guard `rl_40e8bb` → `rl_40e890` → `rl_frame_driver` (rhost's frame boundary, which calls 0x4b99c0 by address → its
   thunk). Every Win32 call of these goes through retail's IAT slot (one code path for rhost and a real-platform
   standalone). Rows `rl_40e9ab` / `rl_4b2258` (RH_SH_HOST, `rh_hooks_rl_main.c`) put them in the hybrid too.
-- **CRT** — the host's: `rl_plat_bind_imports` (imports through retail's slots, CRT unbound; the host CRT's file paths
-  through rhost's overlay `rh_files_resolve_keep`; `time` / `localtime` from retail's GetLocalTime /
-  GetTimeZoneInformation slots — rhost's virtual clock). PORT-DEBT(crt): retail's CRT (79 functions reached, 22 KB:
-  the debug heap, `_ioinit`, the mbctable, low-level I/O, time) ported over its own `.data` → state hashes = pure retail.
+- **CRT** — retail's own, ported (2026-11-08, `docs/findings/crt-port.md`): `src/rl_crt.c` (81 functions over its
+  `.data`, every OS call through retail's IAT slots); `rl_crt_start` = start 0x4c3370's port (heap, `_ioinit`, the
+  mbctable, argv / envp, `_cinit`, WinMain, exit). The shim's CRT (`rl_plat_*`) calls the port under rhost and in the
+  standalone alike.
 - **Audit** (`<rundir>\standalone_audit.txt`, written after the seal, before the first port instruction): every range
   taken from the file (`copied` only for non-code sections), every thunk, `code_range … other 0` (every non-thunk code
   byte INT3), `retail_text_windows_compared 1809 identical 0`, the protections (`exec_outside_code_range 0`), smackw32
@@ -83,7 +83,8 @@ frames did not leave. The hybrid also showed why the 2026-11-05 "hybrid PASS" mi
 seam runs RETAIL in the hybrid even when VA has a row (only call sites are patched; the standalone thunks every
 entry), so the hybrid is weaker than the standalone there. Also fixed: field-orders' hybrid state (quirk #239: a
 battlefield sprite frame = the low byte of a frame pointer under rhost's stack; the port's WinMain moves the stack).
-Full hybrid 64/64, standalone 64/64. State: after the boot to the title
+Full hybrid 64/64, standalone 64/64. **Since the CRT port (2026-11-08) the standalone's state_sem equals pure
+retail's too: 64/64** (the report compares it). Before it, state: after the boot to the title
 (1500 frames) the only VALUE differences vs pure retail are in the CRT's own `.data` (0x4e45xx..0x4e5cxx: mbctable,
 ioinfo, the debug heap's totals, asctime's buffer) and 0x5cee4c.. (command line / environment pointers); the rest are
 heap pointers shifted by the CRT's allocations (retail's CRT allocates before WinMain).
@@ -92,6 +93,6 @@ heap pointers shifted by the CRT's allocations (retail's CRT allocates before Wi
 1. ~~Land round 3; re-measure the residual~~ (done: 9 non-library functions). Port WinMain / the window creation as
    plain code (no row: host level); rows for the handlers 2..4 (one residue model) and the frame guard.
 2. ~~A `standalone2` build~~ — done as `rhost --standalone` (above; the pointer-slot rewrite is unnecessary: code
-   pointers in data keep retail's VAs and land on thunks). Next: the CRT port (state = pure retail, then the standalone
-   joins `corpus --check`); a real-platform product exe (`--live`: real window / DirectDraw / DirectSound behind the same
+   pointers in data keep retail's VAs and land on thunks). Next: ~~the CRT port~~ (done 2026-11-08: state = pure
+   retail); the standalone joins `corpus --check`; a real-platform product exe (`--live`: real window / DirectDraw / DirectSound behind the same
    IAT slots, as OpenSummoners' `opensummoners-standalone.exe`); the static prover (`tools/standalone/`).

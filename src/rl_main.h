@@ -1,5 +1,5 @@
 /* rl_main.h — the host level on retail's layout (rl_main.c): WinMain 0x40e9ab, create_main_window 0x4b2258, the CRT
- * entry's game-facing half (the standalone's entry). */
+ * entry (the standalone's: start 0x4c3370's port, rl_crt.c). */
 #pragma once
 #include <windows.h>
 

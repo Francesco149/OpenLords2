@@ -5,13 +5,12 @@
  *   imports   Win32 / winmm / smackw32 through its import table. rhost overrides the IAT slots (rh_files, rh_handles,
  *             rh_heap, rh_dsound, rh_smack, the virtual clock), so a bound shim calls THROUGH RETAIL'S SLOT; the
  *             standalone calls the real API (smackw32 loaded lazily; absent = SmackOpen fails, as retail tolerates).
- *   CRT       the MSVC debug CRT linked into Lords2.exe. A CRT function with state (the fd table __pioinfo, errno /
- *             _doserrno, time's static tm and asctime's buffer, the debug heap's block list) lives in retail's .data:
- *             bound, the shim calls RETAIL'S OWN CRT FUNCTION (cdecl, no mirror bracket — the CRT touches no port
- *             mirror); the standalone calls the host CRT (malloc: a block with the debug CRT's header, so the ported
- *             _free_dbg 0x4c05a0 frees it the same way). Pure CRT (strcmp, strcat, memset, memcpy) is not shimmed:
- *             the port uses the host's (rl_io.c: rl_strcmp keeps retail's -1 / 0 / +1).
- * rhost binds the shim once (tools/rhost/rh_hooks_rl_io.c: rl_plat_bind_retail); unbound = the standalone. COM calls
+ *   CRT       the MSVC debug CRT linked into Lords2.exe, PORTED on retail's layout (rl_crt.c): its state (the fd table
+ *             __pioinfo, errno, time's statics and asctime's buffer, the debug heap's block list, the sbh pages) is
+ *             retail's .data / arena, its OS calls go through retail's IAT slots — one code path under rhost and in
+ *             the standalone. Pure CRT the port uses internally (strcmp, memcpy …) is the host's where no retail
+ *             state is involved (rl_io.c: rl_strcmp keeps retail's -1 / 0 / +1).
+ * rhost binds the shim once (tools/rhost/rh_hooks_rl_io.c: rl_plat_bind_retail; --standalone: rl_plat_bind_imports). COM calls
  * (DirectSound, DirectDraw, DirectPlay) go through the object's own vtable and need no shim. */
 #pragma once
 #include <stdint.h>
@@ -43,20 +42,8 @@
     /* host */ X(GetCursorPos, 0x5cf57cu) X(DefWindowProcA, 0x5cf558u) X(IsIconic, 0x5cf54cu) X(BeginPaint, 0x5cf4e8u)   \
     X(EndPaint, 0x5cf4f4u) X(PostQuitMessage, 0x5cf554u) X(GetClientRect, 0x5cf544u) X(ClientToScreen, 0x5cf548u)
 
-/* X(name, retail VA) — retail's CRT functions with state */
-#define RL_PLAT_CRT(X)                                                                                           \
-    X(open, 0x4cea00u) X(close, 0x4ce640u) X(read, 0x4ceff0u) X(write, 0x4cc0b0u) X(lseek, 0x4cc3b0u)            \
-    X(chdir, 0x4cf550u) X(time, 0x4c2740u) X(localtime, 0x4c24e0u) X(asctime, 0x4c2340u) X(malloc, 0x4bfa00u)    \
-    X(exit, 0x4bf6f0u) X(CrtCheckMemory, 0x4c0cf0u) X(CrtIsValidHeapPointer, 0x4c1170u)                          \
-    X(CrtDbgReport, 0x4c3950u) X(CheckBytes, 0x4c0c60u) X(free_base, 0x4c4370u)                              \
-    X(filelength, 0x4cf490u)                                                                                     \
-    /* turn */ X(remove, 0x4c22c0u) X(rename, 0x4c2260u) \
-    /* host */ X(getcwd, 0x4c1b10u) X(getdrive, 0x4c1cf0u)
-
-void rl_plat_bind_retail(void);   /* rhost: every shim call goes through retail's IAT slot / retail's CRT */
-/* rhost --standalone: imports through retail's IAT slots, the CRT the host's (no retail code), its file paths through
- * `path` (rhost's overlay resolver) */
-void rl_plat_bind_imports(const char *(*path)(const char *p, int want_write, char *buf, unsigned n));
+void rl_plat_bind_retail(void);   /* rhost: imports through retail's IAT slots */
+void rl_plat_bind_imports(void);  /* rhost --standalone: the same (the slots hold rhost's layers) */
 int  rl_plat_bound(void);
 
 /* imports */

@@ -100,7 +100,10 @@ static BOOL WINAPI h_CloseHandle(HANDLE h)
         g_closed[g_nclosed].fo = *g_fo[(v - FAKE_BASE) >> 2];
         g_nclosed++;
     }
-    BOOL r = CloseHandle(real_of(h)); rh_handle_forget(h); return r;
+    HANDLE real = real_of(h);
+    for (int i = 0; i < g_nsopen; i++)   /* closed by its opener: not the restore's to close (the value may be reused) */
+        if (g_sopen[i].real == real) g_sopen[i--] = g_sopen[--g_nsopen];
+    BOOL r = CloseHandle(real); rh_handle_forget(h); return r;
 }
 static BOOL WINAPI h_ReadFile(HANDLE h, LPVOID b, DWORD n, LPDWORD got, LPOVERLAPPED o)
 { rh_shadow_prewrite(b, n); rh_shadow_prewrite(got, 4); return ReadFile(real_of(h), b, n, got, o); }
@@ -201,18 +204,24 @@ void rh_handles_meta_restore(const void *p)
     EnterCriticalSection(&g_lk);
     for (uint32_t k = m->next; k < g_next; k++) g_real[k] = NULL;
     memcpy(g_real, m->real, m->next * sizeof(HANDLE)); g_next = m->next; g_live = m->live;
-    for (int c = 0; c < g_nclosed; c++)   /* closed since: open it again for this state */
-        for (uint32_t k = 0; k < m->next; k++)
-            if (g_real[k] == g_closed[c].real) {
-                const fopen_t *f = &g_closed[c].fo;
-                HANDLE r = p_CreateFileA(f->path, f->acc, f->share, NULL, OPEN_EXISTING, f->fl, NULL);
-                g_real[k] = r == INVALID_HANDLE_VALUE ? NULL : r;
-                if (!g_real[k]) rh_log("rh_handles: shadow: cannot re-open %s (closed in a shadowed call)\n", f->path);
-                ((handles_meta_t *)m)->real[k] = g_real[k];   /* (a later restore of this snapshot: the new handle) */
-                if (!g_fo[k]) g_fo[k] = malloc(sizeof *g_fo[k]);
-                *g_fo[k] = *f;
-                break;
-            }
+    /* closed since: open it again for this state. Only a slot that was a FILE in the snapshot (its position known: an
+     * mmio / event slot's value can equal a kernel file handle's), matched by the snapshot's handle value, each slot
+     * once, the first close of that value (the OS reuses a closed value: a later open + close carries it too) */
+    for (uint32_t k = 0; k < m->next; k++) {
+        HANDLE was = m->real[k];
+        if (!was || pos[k] < 0) continue;
+        for (int c = 0; c < g_nclosed; c++) {
+            if (g_closed[c].real != was) continue;
+            const fopen_t *f = &g_closed[c].fo;
+            HANDLE r = p_CreateFileA(f->path, f->acc, f->share, NULL, OPEN_EXISTING, f->fl, NULL);
+            g_real[k] = r == INVALID_HANDLE_VALUE ? NULL : r;
+            if (!g_real[k]) rh_log("rh_handles: shadow: cannot re-open %s (closed in a shadowed call)\n", f->path);
+            ((handles_meta_t *)m)->real[k] = g_real[k];   /* (a later restore of this snapshot: the new handle) */
+            if (!g_fo[k]) g_fo[k] = malloc(sizeof *g_fo[k]);
+            *g_fo[k] = *f;
+            break;
+        }
+    }
     g_nclosed = 0;
     for (int i = 0; i < g_nsopen; i++) {   /* opened since the latest snapshot and not in this one: discarded */
         int keep = 0;
