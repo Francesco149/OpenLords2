@@ -151,8 +151,13 @@ the other hosts.
   on a fallow field opens terrain info with `@field_fallow / _wheat / _cattle`. The merchant: click its wagon → screen
   8 → a good → trade 0xc (`@trade_up` … `@trade_yes`; hold `b153,226:120` to auto-repeat). County record fields
   `C(k).castle_workers`, `wood_workers`, `idle_workers`, `castle_wood_needed`, `castle_labor_left` …
-- `--until` is checked after the spec's last event (a click is never cut) and waits up to `--pad` (default 3000)
-  frames more. `rd scan R --from F --to T --watch X --changes` finds when something changed in your own movie.
+- `--until` is checked every frame (a press it interrupts is released at once) and, when the spec does not end in a
+  wait of its own, waits up to `--pad` (default 3000) frames more. `rd scan R --from F --to T --watch X --changes` finds when something changed in your own movie.
+- **Closing panels** (probe hotkeys): every panel has a close seal at `c{seal_x + 12},{seal_y + 12}`; RMB on the map
+  at (300,240) opens terrain info — "back" on the map is not neutral. Keys: F8 reloads the previous turn's autosave (old
+  turn); F2 cycles a display mode; ESC / File > Quit / New Game ask a confirm (0x1e: answer thumbs-down); never F1 (WinHelp)
+  or Alt-1 (writes into the game dir). The menu bar: `@menu_file` `@menu_options` `@menu_help`.
+- `rd cov R --blocks --fn NAME` lists a function's blocks nobody reaches yet — what to aim at next.
 - Loads of game files take one frame here; never wait by wall time, wait for state (`--until`).
 - A run that was poked (`rd ram R w`) is POKED and cannot be filed.
 

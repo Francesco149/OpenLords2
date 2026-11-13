@@ -1128,19 +1128,7 @@ class Run:
 
     def play(self, spec, until=None, avoid=None, watch=(), every=0, quiet=False, rows=40, undo=True, pad=0, changes=False):
         lv = self.attach()
-        items = parse_spec(spec)
-        if until:                                         # --until is checked after the spec's last event (a click is never cut)
-            last = max((i for i, it in enumerate(items) if it[0] == "e"), default=-1)
-            head, tail = items[:last + 1], items[last + 1:] + ([("w", pad)] if pad else [])
-            if head:
-                hsegs, _ = items_to_segs(head, lambda e: lv.prog(self.vars.compile(e)))
-                if undo:
-                    self.push_undo()
-                    undo = False
-                lv.cmd(f"run {hsegs}")
-            items = tail or [("w", 1)]
-        elif pad:
-            items = items + [("w", pad)]
+        items = parse_spec(spec) + ([("w", pad)] if pad else [])
         segs, total = items_to_segs(items, lambda e: lv.prog(self.vars.compile(e)))
         if not segs:
             raise SystemExit("empty input spec")
@@ -1166,6 +1154,17 @@ class Run:
             cmd += " s=" + ",".join(map(str, ids)) + f" e={every if (every and watch) else 1}"
         r = lv.cmd(cmd)
         k = Live.kv(r)
+        if k.get("stop") == "until":                      # stopped mid-press: release the button, so no click is left half done
+            self.sync_movie()
+            down = {}
+            for f, m, w, l in self.movie.events:
+                if m in (WM_LBUTTONDOWN, WM_RBUTTONDOWN):
+                    down[m] = l
+                elif m in (WM_LBUTTONUP, WM_RBUTTONUP):
+                    down.pop(m - 1, None)
+            for m, l in down.items():
+                lv.cmd(f"run e{m + 1}:0:{l},w{HOLD}")
+                k["ran"] = str(int(k["ran"]) + HOLD)
         self.sync_movie()
         self.save_sess()
         out = {"ran": int(k["ran"]), "stop": k["stop"], "frame": int(k["frame"]), "rows": [], "events": []}
@@ -2055,6 +2054,7 @@ CORPUS_COV = os.path.join(os.path.dirname(RUNS), "corpus_coverage.tsv")
 def corpus_coverage(refresh=False):
     """{va} the corpus reaches (rhost.py coverage, cached; --refresh-corpus re-runs it)"""
     if refresh or corpus_stale(CORPUS_COV):
+        print("[the corpus function baseline is stale (a scenario was filed): re-measuring every scenario (~2 min on wine)]", flush=True)
         out = subprocess.run([os.path.join(ROOT, "tools", "dev"), "python3", os.path.join(RH.HERE, "rhost.py"), "coverage", "--target", "wine", "-j", "8"],
                              capture_output=True, text=True).stdout
         m = re.search(r"→ (\S+coverage_summary\.tsv)", out)
@@ -2134,6 +2134,16 @@ def cov_blocks(a, r, tr):
         print(f"  {f:08x} {fn.get(f, ('?', 0))[0]:40s} {len(vs):4d} new blocks {sum(size[v] for v in vs):6d} B  first f{min(hit[v] for v in vs)}"
               + ("  (function new)" if f in vs and f not in corpus else ""))
     json.dump({"new_blocks": [f"{v:x}" for v in sorted(new)], "bytes": nb, "functions": len(byf)}, open(os.path.join(r.dir, "cov_blocks.json"), "w"))
+    for q in (a.fn or "").split(","):
+        if not q:
+            continue
+        byname = {n: v for v, (n, _) in fn.items()}
+        f = byname.get(q) or int(q.lower().removeprefix("sub_").removeprefix("fun_").removeprefix("0x"), 16)
+        miss = [(va, sz) for va, sz, ff in bl if ff == f and va not in corpus and va not in hit]
+        print(f"{f:08x} {fn.get(f, ('?', 0))[0]}: {len(miss)} blocks reached by neither the corpus nor this run "
+              f"({sum(z for _, z in miss)} B; a block right after a jmp / ret that nothing jumps to may be dead or a switch case):")
+        for va, sz in miss[:a.show]:
+            print(f"    {va:08x} {sz:4d} B")
 
 
 def cmd_covered(a):
@@ -2249,6 +2259,7 @@ def main():
     p = sp.add_parser("covered"); p.add_argument("what", nargs="+"); p.set_defaults(fn=cmd_covered)
     p = sp.add_parser("cov"); p.add_argument("run"); p.add_argument("--show", type=int, default=40); p.add_argument("--refresh-corpus", action="store_true")
     p.add_argument("--blocks", action="store_true", help="basic blocks (tools/drive/blocks.py) instead of whole functions")
+    p.add_argument("--fn", help="--blocks: VA or NAME[,..]: list the blocks of these functions that neither the corpus nor the run reaches")
     p.add_argument("--target", choices=("win", "wine", "bunker")); p.set_defaults(fn=cmd_cov)
     p = sp.add_parser("stop"); p.add_argument("run"); p.set_defaults(fn=cmd_stop)
     sp.add_parser("ls").set_defaults(fn=cmd_ls)

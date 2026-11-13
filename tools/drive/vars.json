@@ -579,5 +579,29 @@
   "type": "s32",
   "event": true,
   "note": "the season's phase: 4 the human plays, 6 after End turn, 7 the turn advance (probe ev-13d)"
+ },
+ "seal_x": {
+  "addr": "55ce78",
+  "type": "s32",
+  "note": "the open screen's close seal (24x24): c{seal_x+12},{seal_y+12} closes any panel (probe hotkeys)"
+ },
+ "seal_y": {
+  "addr": "57c8a0",
+  "type": "s32"
+ },
+ "turn_busy": {
+  "addr": "55403c",
+  "type": "s32",
+  "event": true,
+  "note": "0/1/2, 2 after End turn (~105 frames when screens still open)"
+ },
+ "minimap_zoom": {
+  "addr": "57a0c4",
+  "type": "s32"
+ },
+ "f2_mode": {
+  "addr": "568960",
+  "type": "s32",
+  "note": "F2 cycles 0/1/2"
  }
 }

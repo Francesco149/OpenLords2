@@ -407,5 +407,124 @@
   "screens": [
    15
   ]
+ },
+ "pop_open": {
+  "xy": [
+   510,
+   195
+  ],
+  "screens": [
+   0,
+   2,
+   20,
+   21,
+   22,
+   25
+  ],
+  "note": "side panel: population"
+ },
+ "happy_open": {
+  "xy": [
+   610,
+   195
+  ],
+  "screens": [
+   0,
+   2,
+   20,
+   21,
+   22,
+   25
+  ]
+ },
+ "tax_open": {
+  "xy": [
+   515,
+   225
+  ],
+  "screens": [
+   0,
+   2,
+   20,
+   21,
+   22,
+   25
+  ]
+ },
+ "rations_side": {
+  "xy": [
+   605,
+   225
+  ],
+  "screens": [
+   0,
+   2,
+   20,
+   21,
+   22,
+   25
+  ]
+ },
+ "labor_open": {
+  "xy": [
+   510,
+   350
+  ],
+  "screens": [
+   0,
+   2,
+   20,
+   21,
+   22,
+   25
+  ],
+  "note": "opens labor 0xf"
+ },
+ "minimap_zoom": {
+  "xy": [
+   623,
+   47
+  ],
+  "screens": [
+   0
+  ],
+  "note": "toggles the minimap zoom; RMB on the minimap unzooms"
+ },
+ "menu_file": {
+  "xy": [
+   25,
+   12
+  ],
+  "screens": [
+   0
+  ]
+ },
+ "menu_options": {
+  "xy": [
+   110,
+   12
+  ],
+  "screens": [
+   0
+  ]
+ },
+ "menu_help": {
+  "xy": [
+   200,
+   12
+  ],
+  "screens": [
+   0
+  ]
+ },
+ "gift": {
+  "xy": [
+   415,
+   118
+  ],
+  "screens": [
+   11
+  ],
+  "note": "diplomacy: gift"
  }
 }
