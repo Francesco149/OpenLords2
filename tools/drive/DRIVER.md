@@ -180,8 +180,12 @@ the other hosts.
 - **Options / sound** (probe sound-options): the Options menu items at x=140, y 44 / 64 / 84 / 104 / 124 = Advanced,
   Sounds, Display, Game speed, Scroll speed (`@options_*`); Sounds has On/Off arrows only (292, 166 / 198 / 230); speed
   panels up (205,197) / down (235,197), 0..10. Every in-game music track loops; a non-looping stream (setup.wav) starts
-  only when a movie returns to the title — use a `movies` start (`newgame-movies`, or `rd new --movies`). A click soon
-  after a toggle on the same arrow may be eaten: read the variable, not the panel.
+  only when a movie returns to the title — use a `movies` start (`newgame-movies`, or `rd new --movies`). Option-panel
+  buttons (screens 0x39 / 0x43) count down 20 hit-test calls that run per INPUT EVENT, not per frame: a click and a wait
+  never fires — follow the click with ~15 mouse moves (`(m300,300 m301,300)x8`). Read the variable, not the panel.
+- **Popups** (probe popups): `modal` = the message id, `popup_type` its kind, `popup_from` the sender realm; a left click
+  on one of your county's buildings on the map gives the type-4 notice (the castle: "Building off/on" toggles!);
+  Display > Animations off (`animations` 0) shows victory / defeat / capture as plain scrolls.
 - Task files: `final:` predicates must hold on the movie's last frame (`steps` are ordered "at some frame after").
 - `rd cov R --blocks --fn NAME` lists a function's blocks nobody reaches yet — what to aim at next.
 - Loads of game files take one frame here; never wait by wall time, wait for state (`--until`).

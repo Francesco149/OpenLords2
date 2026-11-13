@@ -595,5 +595,14 @@
   "screens": [
    31
   ]
+ },
+ "display_animations": {
+  "xy": [
+   292,
+   216
+  ],
+  "screens": [
+   67
+  ]
  }
 }

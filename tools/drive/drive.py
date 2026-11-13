@@ -1373,6 +1373,10 @@ class _LiveRead:
         return bytes.fromhex(self.lv.cmd(f"r {va:x} {n}")[3:])
 
 
+class UntilHit(Exception):
+    pass
+
+
 class LiveSession(_LiveRead):
     """the rhbot.Session interface tools/bot (ui.py, battle.py) drives, over a live rd session: every input is recorded in
     the run's movie like any rd play"""
@@ -1388,9 +1392,13 @@ class LiveSession(_LiveRead):
     def screen(self):
         return int(Live.kv(self.lv.cmd("ping"))["screen"])
 
+    until = None                                          # a program id: run() raises UntilHit when it holds (rd seasons --until)
+
     def run(self, n=1):
         if n > 0:
-            self.lv.cmd(f"run w{n}")
+            r = self.lv.cmd(f"run w{n}" + (f" u={self.until}" if self.until is not None else ""))
+            if self.until is not None and Live.kv(r).get("stop") == "until":
+                raise UntilHit()
 
     def post(self, m, w=0, l=0):
         self.lv.cmd(f"run e{m}:{w}:{l}")
@@ -1437,6 +1445,8 @@ def cmd_seasons(a):
             return "attack" if a.battle == "field" else "auto"
         return UIM.default_ask(kind, info)
     u = UIM.UI(s, log=lambda *x: None, ask=ask)
+    if a.until:
+        s.until = lv.prog(r.vars.program(a.until))       # checked every frame the bot steps, inside a season too
     done, why = 0, "seasons"
     try:
         if s.screen != 0 or u.modal():
@@ -1450,6 +1460,8 @@ def cmd_seasons(a):
             if a.until and r.ev(a.until)[0]:
                 why = "until"
                 break
+    except UntilHit:
+        why = "until (mid-season: the bot's settling stopped as it held)"
     except (UIM.Stuck, UIM.GameEnded) as e:
         why = f"{type(e).__name__}: {e}"
     r.sync_movie()

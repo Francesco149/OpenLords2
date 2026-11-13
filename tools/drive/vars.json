@@ -498,7 +498,7 @@
  "cam_col": {
   "addr": "5651b4",
   "type": "s32",
-  "note": "strategic scroll origin col"
+  "note": "UNVERIFIED: stayed 22/58 while the view moved (probe popups) \u2014 not the view origin"
  },
  "cam_row": {
   "addr": "5651b8",
@@ -518,7 +518,8 @@
  },
  "popup_from": {
   "addr": "553ee0",
-  "type": "s32"
+  "type": "s32",
+  "note": "the sender realm (a1)"
  },
  "confirm_kind": {
   "addr": "57cb14",
@@ -708,5 +709,32 @@
   "addr": "53f284",
   "type": "s32",
   "note": "Options > Advanced 'Fight humans only?' INVERTED: 1 shows No (0 = quick battles, load_muster)"
+ },
+ "animations": {
+  "addr": "53f248",
+  "type": "s32",
+  "note": "Options > Display > Animations: 1 = popup types 13/14 play a movie"
+ },
+ "popup_timer": {
+  "addr": "57c954",
+  "type": "s32",
+  "note": "counts down from 2000 while a popup is up; speech at 1990/1910/1900/1800"
+ },
+ "popup_county": {
+  "addr": "55ce54",
+  "type": "s32"
+ },
+ "popup_realm": {
+  "addr": "57c8ac",
+  "type": "s32"
+ },
+ "others_alive": {
+  "addr": "56d5d8",
+  "type": "s32"
+ },
+ "endgame_kind": {
+  "addr": "53f0c4",
+  "type": "s32",
+  "note": "10 victory, 11 defeat"
  }
 }
