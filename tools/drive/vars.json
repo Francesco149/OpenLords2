@@ -275,6 +275,10 @@
     "grain_event_amount": [
      "278",
      "s32"
+    ],
+    "unrest_band": [
+     "20",
+     "u8"
     ]
    }
   },
@@ -401,6 +405,10 @@
     ],
     "siege_seasons": [
      "19c",
+     "u8"
+    ],
+    "in_county": [
+     "10",
      "u8"
     ]
    }
@@ -637,6 +645,33 @@
  },
  "ti_flags": {
   "addr": "5440b0",
+  "type": "s32"
+ },
+ "zoom": {
+  "addr": "57cb18",
+  "type": "s32",
+  "note": "0 the map, 2 the kingdom overview (magnifier (623,143))"
+ },
+ "foraging": {
+  "addr": "53f260",
+  "type": "s32",
+  "note": "Options > Advanced: army foraging"
+ },
+ "exploration": {
+  "addr": "53f264",
+  "type": "s32"
+ },
+ "query_county": {
+  "addr": "5681e0",
+  "type": "s32",
+  "note": "the county of the last map query (panels use it)"
+ },
+ "battle_atk": {
+  "addr": "568210",
+  "type": "s32"
+ },
+ "battle_def": {
+  "addr": "568218",
   "type": "s32"
  }
 }

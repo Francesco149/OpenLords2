@@ -60,7 +60,8 @@ rd check R TASK.md      rd verify R      rd cov R [--blocks]      rd lint TASK.m
 | `tTEXT` | type text (`_` = space) |
 | `eM:W:L` | a raw window message |
 
-`X,Y` may be numbers, a named point `@endturn` (`tools/drive/ui.json`), or `{EXPR},{EXPR}` read from state at that
+`X,Y` may be numbers, a named point `@endturn` (`tools/drive/ui.json`), a map cell `@cell(13,16)` or a piece `@A(14)`
+(resolved on the live viewport; on screen only), or `{EXPR},{EXPR}` read from state at that
 boundary (`c{C(3).capital_col * 32},{...}` — rarely needed). Example: `"c@endturn .*400"`, `"r300,240 .*20"`.
 
 **Retail's input model** (the bot learned it the hard way, `tools/bot/README.md`): an in-game LMB on the map **fires
@@ -162,6 +163,12 @@ the other hosts.
   the camera on it and changes `sel_county`; RMB on the panel closes it. `rd cell R COL,ROW` says where a cell is on
   screen now (read only); off screen: recentre via the minimap (a county) or edge-scroll (cursor at x=0). In custom-strong
   event scrolls keep arriving up to ~1,100 frames into a season — wait for quiet before map clicks.
+- **Pieces** (probe piece-kinds): RMB on a piece opens its info panel (screen 4, like terrain info: test
+  `A(sel_piece).kind`, and `sel_piece` is not reset by a terrain panel); a hover just before the RMB makes it fail —
+  `r@A(14) .*40`. An envoy scroll eats the next RMB. An enemy entering a county town raises the county's militia (an army
+  of ours, "aaaaaa"): losing that battle loses the county. A march onto a wood / mountain cell is silently refused.
+  Rebels: a county under 25 happiness climbs `C(k).unrest_band` 0..4; at 4 rebels spawn (50 % tax: ~5 seasons). The
+  castle panel's "View these troops" arrow (355,425) works on enemy castles too. Battle result screen 0x13: `c@result_continue`.
 - `rd cov R --blocks --fn NAME` lists a function's blocks nobody reaches yet — what to aim at next.
 - Loads of game files take one frame here; never wait by wall time, wait for state (`--until`).
 - A run that was poked (`rd ram R w`) is POKED and cannot be filed.

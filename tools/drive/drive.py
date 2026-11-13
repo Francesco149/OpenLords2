@@ -66,6 +66,9 @@ def ui_points():
 
 def split_coord(s):
     """"320,107" / "@endturn" / "{ax},{ay + 4}" → (x, y) as int or ("expr", text)"""
+    m = re.fullmatch(r"@cell\((\d+),(\d+)\)", s) or re.fullmatch(r"@A\((\d+)\)", s)
+    if m:                                                 # a map cell / piece: resolved against the live viewport when played
+        return ("ref", ("cell", int(m.group(1)), int(m.group(2))) if s.startswith("@cell") else ("piece", int(m.group(1))))
     if s.startswith("@"):
         pts = ui_points()
         if s[1:] not in pts:
@@ -184,7 +187,7 @@ def parse_spec(spec):
     return out
 
 
-def items_to_segs(items, prog=None, sep=","):
+def items_to_segs(items, prog=None, sep=",", resolve=None):
     """items → server segments "w8,e512:0:7012672,…" (+ total frames); prog(expr) → program id for {EXPR} coordinates"""
     segs, total = [], 0
     for it in items:
@@ -198,6 +201,10 @@ def items_to_segs(items, prog=None, sep=","):
                 segs.append(["w", it[1]])
             continue
         _, m, w, l = it
+        if isinstance(l, tuple) and l and l[0] == "ref":
+            if resolve is None:
+                raise SystemExit("@cell(..) / @A(..) need a live session")
+            l = resolve(l[1])
         if isinstance(l, tuple):
             x, y = l
             if isinstance(x, int) and isinstance(y, int):
@@ -1129,7 +1136,7 @@ class Run:
     def play(self, spec, until=None, avoid=None, watch=(), every=0, quiet=False, rows=40, undo=True, pad=0, changes=False):
         lv = self.attach()
         items = parse_spec(spec) + ([("w", pad)] if pad else [])
-        segs, total = items_to_segs(items, lambda e: lv.prog(self.vars.compile(e)))
+        segs, total = items_to_segs(items, lambda e: lv.prog(self.vars.compile(e)), resolve=self.screen_point)
         if not segs:
             raise SystemExit("empty input spec")
         if undo:
@@ -1202,6 +1209,19 @@ class Run:
                 for f, vals in out["rows"][-rows:]:
                     print(f"  {f:6d} " + "  ".join(fmt(v) for v in vals))
         return out
+
+    def screen_point(self, ref):
+        """("cell", col, row) / ("piece", i) → (x, y) on screen now (tools/bot/mapview.py geometry)"""
+        sys.path.insert(0, os.path.join(ROOT, "tools", "bot"))
+        import mapview as MV
+        if ref[0] == "piece":
+            col, row = (int(v) for v in self.ev(f"A({ref[1]}).col", f"A({ref[1]}).row"))
+        else:
+            col, row = ref[1], ref[2]
+        vis = MV.visible(_LiveRead(self.attach()))
+        if row * 64 + col not in vis:
+            raise SystemExit(f"{ref[0]} {ref[1:]} = cell ({col},{row}) is not on screen: recentre first (minimap / edge scroll; rd cell)")
+        return vis[row * 64 + col]
 
     def load_frame(self, frame, sid=None, movie=None):
         if sid is not None and self.live:
