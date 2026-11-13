@@ -41,6 +41,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 AGENTS = os.environ.get("RD_AGENTS", "/mnt/ephemeral/openlords2/drive/agents")
 RUNS = os.environ.get("RD_RUNS", "/mnt/ephemeral/openlords2/drive/runs")
+os.environ.setdefault("RHOST_WIN", "win-wifi") if os.system("timeout 5 ssh -o BatchMode=yes -o ConnectTimeout=3 win true >/dev/null 2>&1") else None
 IDA = "/mnt/ephemeral/openlords2/decompiled-ida"
 READ_ROOTS = [os.path.join(ROOT, d) for d in ("docs", "tools/drive", "tools/rhost", "tools/bot", "src",
                                                "CLAUDE.md")] + [IDA, RUNS]
@@ -83,9 +84,9 @@ def tool_rd(args, run):
     cmd = argv[0]
     if cmd in ("file",):
         return f"`rd {cmd}` is the orchestrator's: say in your report that the run is ready to file", True
-    read_only = cmd in ("status", "text", "hot", "eval", "ls", "lint", "movie") or (cmd == "ram" and len(argv) > 2 and argv[2] in ("list", "read", "status")) or \
+    read_only = cmd in ("status", "text", "hot", "eval", "ls", "lint", "movie", "rec", "cell", "cov") or (cmd == "ram" and len(argv) > 2 and argv[2] in ("list", "read", "status")) or \
         (cmd == "ck" and len(argv) > 2 and argv[2] == "list")
-    if cmd not in ("ls", "lint") and (len(argv) < 2 or (argv[1] != run and not read_only)):
+    if cmd not in ("ls", "lint", "covered") and (len(argv) < 2 or (argv[1] != run and not read_only)):
         return f"your run is {run!r}: `rd {cmd} {run} ...`", True
     if cmd == "new" and "--force" not in argv and os.path.exists(os.path.join(RUNS, run, "meta.json")):
         return f"run {run} exists (add --force to start it over)", True
