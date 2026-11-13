@@ -326,7 +326,7 @@ def snapshot(read, fair=None):
         castle["name"] = CASTLES[castle["level"]] if castle["level"] < len(CASTLES) else castle["level"]
         castle["cell"] = [r[0x74], r[0x75]]                        # +0x74/+0x75 castle 2x2 anchor [live: flag-0x80 cells]
         castle["garrison"] = _i32(r, 0x1BC)                        # +0x1bc garrison piece, 0 = none [live: garrison 5 / leave 0]
-        if building:                                               # +0x1c3 1 new / 2 upgrade [live]
+        if building:                                               # +0x1c3 1 building (new or upgrade) / 2 repairing siege damage [live: rd probe castle-labor 2026-11-13]
             castle.update({"building": CASTLES[lvl] if lvl < len(CASTLES) else lvl,
                            "labor_left": _i32(r, 0x1CC), "labor_total": _i32(r, 0x1D8),   # [live]
                            "stone_needed": _i32(r, 0x1D0), "wood_needed": _i32(r, 0x1D4)})  # [live: wood 350->264]

@@ -100,7 +100,7 @@
    }
   },
   "C": {
-   "note": "county k=1..n_counties \u2014 0x53f9b0 + k*0x300",
+   "note": "county k=1..n_counties \u2014 0x53f9b0 + k*0x300; castle_building: 1 building (new or upgrade), 2 repairing siege damage (probe castle-labor); castle = the level being built while building",
    "base": "53f9b0",
    "stride": "0x300",
    "slots": [
@@ -223,6 +223,46 @@
     "smithy_weapon": [
      "290",
      "u8"
+    ],
+    "grain_workers": [
+     "c4",
+     "s32"
+    ],
+    "cattle_workers": [
+     "d0",
+     "s32"
+    ],
+    "cattle_needed": [
+     "d4",
+     "s32"
+    ],
+    "castle_workers": [
+     "ec",
+     "s32"
+    ],
+    "wood_workers": [
+     "10c",
+     "s32"
+    ],
+    "idle_workers": [
+     "124",
+     "s32"
+    ],
+    "castle_stone_needed": [
+     "1d0",
+     "s32"
+    ],
+    "castle_wood_needed": [
+     "1d4",
+     "s32"
+    ],
+    "castle_labor_total": [
+     "1d8",
+     "s32"
+    ],
+    "castle_labor_left": [
+     "1cc",
+     "s32"
     ]
    }
   },
@@ -359,7 +399,7 @@
   "type": "u8",
   "status": true,
   "event": true,
-  "note": "screen id: 0 map, 2 workforce, 8 merchant, 9 court, 0xb diplomacy, 0xc trade, 0x10 army move, 0x12/0x13 battle prompt, 0x17 raise army, 0x19 rations, 0x1b castle, 0x1c victory/defeat, 0x1d siege, 0x1e confirm, 0x1f title menus, 0x20 rankings, 0x22 movie, 0x23 turn processing, 0x27 scroll, 0x28-0x2b battlefield (tools/bot/l2state.py SCREENS)"
+  "note": "screen id: 0 map, 2 workforce, 8 merchant, 9 court, 0xb diplomacy, 0xc trade, 0x10 army move, 0x12/0x13 battle prompt, 0x17 raise army, 0x19 rations, 0x1b castle, 0x1c victory/defeat, 0x1d siege, 0x1e confirm, 0x1f title menus, 0x20 rankings, 0x22 movie, 0x23 / 0x24 turn processing, 0x27 scroll, 0x28-0x2b battlefield (tools/bot/l2state.py SCREENS)"
  },
  "state": {
   "addr": "52af94",
@@ -515,5 +555,10 @@
   "addr": "554040",
   "type": "s32",
   "note": "men leaving (Army Division); per class: 0x53f6a0 + 0x80*me + 0x10*i (+4 leaving)"
+ },
+ "labor_task": {
+  "addr": "553f54",
+  "type": "u8",
+  "note": "the task open on the labor detail scroll (screen 15): 4 castle"
  }
 }

@@ -259,5 +259,153 @@
    17
   ],
   "note": "Army Division: thumbs up"
+ },
+ "castle_open": {
+  "xy": [
+   592,
+   447
+  ],
+  "screens": [
+   0
+  ],
+  "note": "HUD: the castle screen 0x1b"
+ },
+ "castle_yes": {
+  "xy": [
+   447,
+   455
+  ],
+  "screens": [
+   27
+  ]
+ },
+ "castle_palisade": {
+  "xy": [
+   56,
+   342
+  ],
+  "screens": [
+   27
+  ]
+ },
+ "castle_motte": {
+  "xy": [
+   152,
+   342
+  ],
+  "screens": [
+   27
+  ]
+ },
+ "castle_keep": {
+  "xy": [
+   250,
+   342
+  ],
+  "screens": [
+   27
+  ],
+  "note": "Norman keep"
+ },
+ "castle_stone": {
+  "xy": [
+   352,
+   342
+  ],
+  "screens": [
+   27
+  ]
+ },
+ "castle_royal": {
+  "xy": [
+   516,
+   342
+  ],
+  "screens": [
+   27
+  ]
+ },
+ "trade_up": {
+  "xy": [
+   153,
+   226
+  ],
+  "screens": [
+   12
+  ],
+  "note": "hold it (bX,Y:N) to auto-repeat: erratic rate"
+ },
+ "trade_down": {
+  "xy": [
+   180,
+   226
+  ],
+  "screens": [
+   12
+  ]
+ },
+ "trade_max": {
+  "xy": [
+   211,
+   224
+  ],
+  "screens": [
+   12
+  ]
+ },
+ "trade_zero": {
+  "xy": [
+   236,
+   224
+  ],
+  "screens": [
+   12
+  ]
+ },
+ "trade_yes": {
+  "xy": [
+   335,
+   262
+  ],
+  "screens": [
+   12
+  ]
+ },
+ "field_fallow": {
+  "xy": [
+   264,
+   400
+  ],
+  "screens": [
+   4
+  ],
+  "note": "terrain info on a field: set its use"
+ },
+ "field_wheat": {
+  "xy": [
+   328,
+   400
+  ],
+  "screens": [
+   4
+  ]
+ },
+ "field_cattle": {
+  "xy": [
+   392,
+   400
+  ],
+  "screens": [
+   4
+  ]
+ },
+ "labor_close": {
+  "xy": [
+   430,
+   258
+  ],
+  "screens": [
+   15
+  ]
  }
 }

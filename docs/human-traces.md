@@ -59,7 +59,7 @@ Supplies end to end (arrows, all-toggle, retarget, dispatch → the caravan FUN_
 | function | reached only via | list item |
 |---|---|---|
 | FUN_00438681 disband_into_realm | the player's "disband army" in a county (FUN_0043744f, confirm kind 6), MP FUN_00447d9d, or the AI's garrison order FUN_004a6270 when the keep is full | **synth**: bot v3 disbands its garrison (troop panel's 2nd button → confirm 6): `bot3-s106-t32`, `bot3cen-s210-t44`, `bot3cen-s211-t44` |
-| FUN_0043a123 labor open hit test (+ FUN_004398f5 / FUN_0045183a / FUN_004517ca), the labor drags FUN_004399b0 / FUN_00439df0 (unported) — not hooked | the workforce grid (screen 2) → a task cell → labor (0x0f); no corpus game opens either (coverage 0) | **B2** |
+| FUN_0043a123 labor open hit test (+ FUN_004398f5 / FUN_0045183a / FUN_004517ca), the labor drags FUN_004399b0 / FUN_00439df0 (unported) — not hooked | the workforce grid (screen 2) → a task cell → labor (0x0f); reached: realm-tour / strat-tour, and castle-labor (rd campaign 1, 2026-11-13: workers dragged to the castle lane, the detail scroll) | **B2** |
 | FUN_0043a5a9 county ration set (engine_county_panels, not hooked) | the rations panel's ◄ ► / slider changing the level (FUN_0043a379 runs in 29 scenarios but never changes it) | the bot (C: rations) |
 
 ## B. Medium — synthesizable with effort, a short human trace is cheaper

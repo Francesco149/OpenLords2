@@ -106,7 +106,7 @@ rations-panel food grid, not troops (troops are piece +0x16c).
 | +0x1ff +0x200 +0x201 +0x203 +0x204 +0x205 | u8 | field census: fallow, cattle+reclaim(type 0xf..0x16), wheat, barren/flooded/parched, reclaiming(0x19+), total | live + FUN_00469b8d |
 | +0x1c0 | u8 | castle level 0 none 1 palisade 2 motte & bailey 3 Norman keep 4 stone 5 royal; target level while building | live ("already of the type"; build motte → 2) |
 | +0x1c1 | u8 | level before the current construction | live (→ 1) |
-| +0x1c3 | u8 | building: 1 new / 2 upgrade | live / quirk #210 |
+| +0x1c3 | u8 | building: 1 building (new or upgrade; +0x1c0 = the level being built) / 2 repairing siege damage (only writer sub_4784CA after a siege battle; completion posts event 163) | live (rd probe castle-labor, 2026-11-13) / quirk #210 |
 | +0x1cc / +0x1d8 | i32 | construction labour left / total | live (400 / 400 for a motte) |
 | +0x1d0 / +0x1d4 | i32 | stone / wood still needed | live (wood 350 → 264 after a turn's 86) |
 | +0x294 + L*0x18 | lane | industry lane L: 0 wood 1 iron 2 smithy 3 stone. +0 s8 efficiency %, +1 exists, +3 operating, +0x14 i32 output next season | live (+3/+0x14 = HUD wood +86/+115); +0/+1 port |

@@ -51,6 +51,7 @@ rd check R TASK.md      rd verify R      rd cov R [--blocks]      rd lint TASK.m
 |---|---|
 | `.` / `.*N` | wait 1 / N frames (a frame = 17 virtual ms) |
 | `cX,Y` / `rX,Y` | left / right click: move there, 2 frames, button down, 2 frames, up, 2 frames |
+| `bX,Y:N` / `BX,Y:N` | hold the left / right button N frames (auto-repeat arrows) |
 | `mX,Y` / `hX,Y` | move the cursor (+2 frames) / hover: move and rest 20 frames (retail acts on mouse idle) |
 | `dX,Y-X2,Y2` | left-button drag (box selection, sliders) |
 | `kESC` `kENTER` `kSPACE` `kF1` `kA` `k5` | a key (down, char, up) |
@@ -115,7 +116,7 @@ the other hosts.
   (left gauntlet (345,128) = take the field, right (383,128) = auto-resolve), 0x14 population, 0x15 tax, 0x16
   happiness, 0x17 raise army (+ mercenaries), 0x18 send supplies, 0x19 rations, 0x1a diplomacy action, 0x1b castle,
   0x1c victory / defeat, 0x1d siege preparations, 0x1e confirm (thumbs (240,218) yes / (287,218) no), 0x1f the title
-  menus, 0x20 rankings, 0x22 a movie, 0x23 turn processing, 0x27 a hint / report scroll (RMB), 0x28..0x2b the
+  menus, 0x20 rankings, 0x22 a movie, 0x23 / 0x24 turn processing, 0x27 a hint / report scroll (RMB), 0x28..0x2b the
   battlefield (0x29 running, 0x2b "the battle is won / lost").
 - `state` (engine): 2 title, 3 in a game. `turn` 1 = the first season; `season` 1 Spring .. 4 Winter; `year`; `me` = the
   human's realm; `sel_county`; `crowns`, `my_counties`, `my_armies`; `modal` ≠ 0 = an event scroll is up;
@@ -137,6 +138,17 @@ the other hosts.
   assigned on the armoury wall (screen 0xa: `@armory_bows`, `@armory_swords` → overlay 0x0d `@assign_plus` …). Play
   Now starts with 25 swords and 25 bows. `rd rec R A` lists the pieces (armies) in use, `rd rec R C 2` a county.
 - `rd hot` misses screens whose input uses code hit tests (Army Division, the armoury wall, overlays): look + click.
+- **Economy** (probe castle-labor): the castle screen `c@castle_open` (designs `@castle_palisade` … `@castle_royal`,
+  `c@castle_yes`); Play Now's Raw Sienna starts with a palisade (`C(2).castle == 1`); `castle_building` 1 = building
+  (new or upgrade, `castle` = the level being built, `castle_prev` the old), 2 = repairing siege damage. Clicking a
+  castle under construction on the map toggles "Building off". The Town Center (workforce, screen 2) opens on a click on
+  the county town; workers move by a box drag over figures (`dX,Y-X2,Y2`, screen 5 → 6) then a click on a task area
+  (~26 frames); a click on a task area with nothing selected opens its detail scroll (screen 15, RMB). Fields: a click
+  on a fallow field opens terrain info with `@field_fallow / _wheat / _cattle`. The merchant: click its wagon → screen
+  8 → a good → trade 0xc (`@trade_up` … `@trade_yes`; hold `b153,226:120` to auto-repeat). County record fields
+  `C(k).castle_workers`, `wood_workers`, `idle_workers`, `castle_wood_needed`, `castle_labor_left` …
+- `--until` is checked after the spec's last event (a click is never cut) and waits up to `--pad` (default 3000)
+  frames more. `rd scan R --from F --to T --watch X --changes` finds when something changed in your own movie.
 - Loads of game files take one frame here; never wait by wall time, wait for state (`--until`).
 - A run that was poked (`rd ram R w`) is POKED and cannot be filed.
 

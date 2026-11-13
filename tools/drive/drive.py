@@ -104,6 +104,11 @@ def parse_token(t):
         dn, up, mk = (WM_LBUTTONDOWN, WM_LBUTTONUP, 1) if k == "c" else (WM_RBUTTONDOWN, WM_RBUTTONUP, 2)
         one = [ev(WM_MOUSEMOVE, 0, xy), ("w", HOLD), ev(dn, mk, xy), ("w", HOLD), ev(up, 0, xy), ("w", HOLD)]
         return one * n
+    if k in "bB" and ":" in rest:                         # hold a button: bX,Y:N (left) / BX,Y:N (right) — down, N frames, up
+        xy, nf = rest.rsplit(":", 1)
+        xy = split_coord(xy)
+        dn, up, mk = (WM_LBUTTONDOWN, WM_LBUTTONUP, 1) if k == "b" else (WM_RBUTTONDOWN, WM_RBUTTONUP, 2)
+        return [ev(WM_MOUSEMOVE, 0, xy), ("w", HOLD), ev(dn, mk, xy), ("w", int(nf)), ev(up, 0, xy), ("w", HOLD)] * n
     if k == "m":                                          # move the cursor, then HOLD frames
         return [ev(WM_MOUSEMOVE, 0, split_coord(rest)), ("w", HOLD)] * n
     if k == "h":                                          # hover: move, rest 20 frames (retail acts on mouse idle)
@@ -142,7 +147,7 @@ def parse_token(t):
         if len(p) != 3:
             raise SystemExit(f"raw event eM:W:L ({t!r})")
         return [("e", int(p[0], 0), int(p[1], 0), int(p[2], 0))] * n
-    raise SystemExit(f"bad input token {t!r}: .*N  cX,Y  rX,Y  mX,Y  hX,Y  dX,Y-X2,Y2  kESC  tTEXT  eM:W:L  (X,Y: numbers, @name, {{EXPR}})")
+    raise SystemExit(f"bad input token {t!r}: .*N  cX,Y  rX,Y  bX,Y:N  mX,Y  hX,Y  dX,Y-X2,Y2  kESC  tTEXT  eM:W:L  (X,Y: numbers, @name, {{EXPR}})")
 
 
 def parse_spec(spec):
@@ -644,7 +649,7 @@ def parse_samples(text):
 # expected.json == expected.wine.json — Lords2 has no float state that differs by host).
 RD_HOST = os.environ.get("RD_HOST", "auto")
 HOSTS = ("win", "bunker", "wine")
-WIN_MAX_SESSIONS = int(os.environ.get("RD_WIN_MAX_SESSIONS", "6"))
+WIN_MAX_SESSIONS = int(os.environ.get("RD_WIN_MAX_SESSIONS", "10"))
 BUNKER_MAX_SESSIONS = int(os.environ.get("RD_BUNKER_MAX_SESSIONS", "8"))
 BUNKER_FLOOR_MB = int(os.environ.get("RD_BUNKER_MEM_FLOOR_MB", "512"))
 LOCAL_MAX = int(os.environ.get("RD_LOCAL_MAX", "6"))
@@ -857,6 +862,8 @@ def spawn_live(tag, movie, upto=None, idle=1800, wait=300, host=None):
                 print(f"[{e} — trying the next host]")
         host = "wine"
     host = host or (RD_HOST if RD_HOST != "auto" else "wine")
+    if host == "win" and not host_up("win"):                # (resolves the win / win-wifi alias)
+        raise NotAdmitted(f"live session {tag}: {RH.WIN} does not answer")
     upto = movie.frame if upto is None else upto
     name = f"{tag}-{os.getpid()}-{int(time.time() * 1000) % 10 ** 9}"
     win = f"{WIN_SESS}\\{name}"
@@ -1119,9 +1126,22 @@ class Run:
             s += "  [POKED: memory was written by hand — this run's movie does not reproduce it]"
         return s
 
-    def play(self, spec, until=None, avoid=None, watch=(), every=0, quiet=False, rows=40, undo=True):
+    def play(self, spec, until=None, avoid=None, watch=(), every=0, quiet=False, rows=40, undo=True, pad=0):
         lv = self.attach()
-        segs, total = items_to_segs(parse_spec(spec), lambda e: lv.prog(self.vars.compile(e)))
+        items = parse_spec(spec)
+        if until:                                         # --until is checked after the spec's last event (a click is never cut)
+            last = max((i for i, it in enumerate(items) if it[0] == "e"), default=-1)
+            head, tail = items[:last + 1], items[last + 1:] + ([("w", pad)] if pad else [])
+            if head:
+                hsegs, _ = items_to_segs(head, lambda e: lv.prog(self.vars.compile(e)))
+                if undo:
+                    self.push_undo()
+                    undo = False
+                lv.cmd(f"run {hsegs}")
+            items = tail or [("w", 1)]
+        elif pad:
+            items = items + [("w", pad)]
+        segs, total = items_to_segs(items, lambda e: lv.prog(self.vars.compile(e)))
         if not segs:
             raise SystemExit("empty input spec")
         if undo:
@@ -1262,7 +1282,7 @@ def cmd_new(a):
 
 def cmd_play(a):
     r = Run(a.run)
-    r.play(a.spec, a.until, a.avoid, split_top(a.watch) if a.watch else (), a.every, rows=a.rows)
+    r.play(a.spec, a.until, a.avoid, split_top(a.watch) if a.watch else (), a.every, rows=a.rows, pad=a.pad if a.pad is not None else (3000 if a.until else 0))
     r.close()
 
 
@@ -2070,7 +2090,7 @@ def corpus_blocks(refresh=False):
     if refresh or now:
         print("[the corpus block baseline is stale: re-measuring every scenario (~1 min on wine)]")
         runs = RH.resolve_runs(RH.all_scenarios())
-        got = coverage_run(runs, [b[0] for b in block_list()], "corpus-blocks")
+        got = coverage_run(runs, [b[0] for b in block_list()], "corpus-blocks", jobs=int(os.environ.get("RD_COV_JOBS", "4")))
         miss = [n for n, v in got.items() if v is None]
         if miss:
             raise SystemExit(f"block coverage failed for {miss}")
@@ -2160,7 +2180,8 @@ def main():
     sp = ap.add_subparsers(dest="cmd", required=True)
     p = sp.add_parser("new"); p.add_argument("run"); p.add_argument("--from", dest="src", required=True); p.add_argument("--force", action="store_true"); p.set_defaults(fn=cmd_new)
     p = sp.add_parser("play"); p.add_argument("run"); p.add_argument("spec"); p.add_argument("--until"); p.add_argument("--avoid")
-    p.add_argument("--watch"); p.add_argument("--every", type=int, default=0); p.add_argument("--rows", type=int, default=40); p.set_defaults(fn=cmd_play)
+    p.add_argument("--watch"); p.add_argument("--every", type=int, default=0); p.add_argument("--rows", type=int, default=40)
+    p.add_argument("--pad", type=int, help="wait up to N more frames after the spec (default with --until: 3000)"); p.set_defaults(fn=cmd_play)
     p = sp.add_parser("status"); p.add_argument("run"); p.set_defaults(fn=cmd_status)
     p = sp.add_parser("text"); p.add_argument("run"); p.add_argument("--all", action="store_true"); p.add_argument("--age", type=int, default=120)
     p.set_defaults(fn=cmd_text)
