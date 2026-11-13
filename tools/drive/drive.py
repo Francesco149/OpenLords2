@@ -1371,6 +1371,91 @@ class _LiveRead:
         return bytes.fromhex(self.lv.cmd(f"r {va:x} {n}")[3:])
 
 
+class LiveSession(_LiveRead):
+    """the rhbot.Session interface tools/bot (ui.py, battle.py) drives, over a live rd session: every input is recorded in
+    the run's movie like any rd play"""
+    def __init__(self, lv, hold=HOLD):
+        super().__init__(lv)
+        self.hold = hold
+
+    @property
+    def frame(self):
+        return int(Live.kv(self.lv.cmd("ping"))["frame"])
+
+    @property
+    def screen(self):
+        return int(Live.kv(self.lv.cmd("ping"))["screen"])
+
+    def run(self, n=1):
+        if n > 0:
+            self.lv.cmd(f"run w{n}")
+
+    def post(self, m, w=0, l=0):
+        self.lv.cmd(f"run e{m}:{w}:{l}")
+
+    def u8(self, va):
+        return self.read(va, 1)[0]
+
+    def u32(self, va):
+        return int.from_bytes(self.read(va, 4), "little")
+
+    def i32(self, va):
+        return int.from_bytes(self.read(va, 4), "little", signed=True)
+
+    def move(self, x, y, frames=None):
+        self.lv.cmd(f"run e{WM_MOUSEMOVE}:0:{(y << 16) | x},w{frames or self.hold}")
+
+    def click(self, x, y, right=False, frames=None):
+        dn, up, mk = (WM_RBUTTONDOWN, WM_RBUTTONUP, 2) if right else (WM_LBUTTONDOWN, WM_LBUTTONUP, 1)
+        l, h = (y << 16) | x, frames or self.hold
+        self.lv.cmd(f"run e{WM_MOUSEMOVE}:0:{l},w{h},e{dn}:{mk}:{l},w{h},e{up}:0:{l},w{h}")
+
+    def key(self, vk, char=None, frames=None):
+        h = frames or self.hold
+        self.lv.cmd(f"run e{WM_KEYDOWN}:{vk}:1" + (f",e{WM_CHAR}:{ord(char) if isinstance(char, str) else char}:1" if char else "") +
+                    f",w{h},e{WM_KEYUP}:{vk}:{0xC0000001},w{h}")
+
+    def shot(self, tag):
+        self.lv.cmd(f"shot {tag}")
+
+
+def cmd_seasons(a):
+    """End turn N times with the autoplay bot's settling (tools/bot/ui.py): report scrolls and event popups dismissed,
+    confirms answered no, sieges proceeded with no engines, battle prompts auto-resolved (--battle field: fought by
+    tools/bot/battle.py); stops early when --until holds after a season"""
+    sys.path.insert(0, os.path.join(ROOT, "tools", "bot"))
+    import ui as UIM
+    r = Run(a.run)
+    lv = r.attach()
+    r.push_undo()
+    s = LiveSession(lv)
+
+    def ask(kind, info):
+        if kind == "battle":
+            return "attack" if a.battle == "field" else "auto"
+        return UIM.default_ask(kind, info)
+    u = UIM.UI(s, log=lambda *x: None, ask=ask)
+    done, why = 0, "seasons"
+    try:
+        if s.screen != 0 or u.modal():
+            u.settle()
+        for done in range(1, a.n + 1):
+            u.end_turn()
+            line = f"  season {done}: frame {s.frame}  turn {fmt(r.ev('turn')[0])}"
+            if a.watch:
+                line += "  " + "  ".join(f"{w}={fmt(v)}" for w, v in zip(split_top(a.watch), r.ev(*split_top(a.watch))))
+            print(line, flush=True)
+            if a.until and r.ev(a.until)[0]:
+                why = "until"
+                break
+    except (UIM.Stuck, UIM.GameEnded) as e:
+        why = f"{type(e).__name__}: {e}"
+    r.sync_movie()
+    r.save_sess()
+    print(f"{done} season(s) ({why}); battles {u.battles} (field {u.fields}), sieges {u.sieges}, events {len(u.events)}  " + r.status_line())
+    r.close()
+
+
 def cmd_cell(a):
     """where map cell COL,ROW is on screen now (retail's own viewport geometry, tools/bot/mapview.py) — read only"""
     sys.path.insert(0, os.path.join(ROOT, "tools", "bot"))
@@ -2277,6 +2362,8 @@ def main():
     p.set_defaults(fn=cmd_text)
     p = sp.add_parser("hot"); p.add_argument("run"); p.set_defaults(fn=cmd_hot)
     p = sp.add_parser("rec"); p.add_argument("run"); p.add_argument("rec"); p.add_argument("slot", nargs="?", type=int); p.set_defaults(fn=cmd_rec)
+    p = sp.add_parser("seasons"); p.add_argument("run"); p.add_argument("n", type=int); p.add_argument("--until"); p.add_argument("--watch")
+    p.add_argument("--battle", choices=("auto", "field"), default="auto"); p.set_defaults(fn=cmd_seasons)
     p = sp.add_parser("cell"); p.add_argument("run"); p.add_argument("cells", nargs="+", help="COL,ROW .."); p.set_defaults(fn=cmd_cell)
     p = sp.add_parser("movie"); p.add_argument("run"); p.add_argument("-n", type=int, default=20); p.set_defaults(fn=cmd_movie)
     p = sp.add_parser("eval"); p.add_argument("run"); p.add_argument("exprs", nargs="+"); p.add_argument("--at"); p.add_argument("--at-frame", type=int)

@@ -51,7 +51,14 @@
 
 ## ★ Next micro-tasks
 
-0. **rd campaigns** (`tools/drive/README.md` §Campaign recipe): tasks from the coverage gaps (coverage-round3 "Not
+0. **rd campaigns** — campaign 1–2 (2026-11-13, 7 driver subagents): filed split-arm, castle-labor (+17 blocks),
+   hotkeys (+167, 5 new functions), terrain-info (+91), piece-kinds (+55); ev-13d and split-arm drove covered code (the
+   premise check `rd covered` came from that). **siege-knights (halve_garrison 0x4ad8cc) blocked**: AI knights take years
+   (armour only from a smithy), an AI targets a garrisoned castle only under a vendetta (−30 attitude + 3 battles), and
+   0x48d9ce arms the flag only when every AI unit left is a knight before any wall breach — a 30–40-season managed game
+   (driver report in the 2026-11-13 session; furthest checkpoint run `siegeknights:t27`). Next: `rd seasons` makes long
+   setups cheap; lord_move 0x4a599d and 0x48e774 are the other real function gaps; block gaps by `rd cov --blocks --fn`.
+   Earlier note: **rd campaigns** (`tools/drive/README.md` §Campaign recipe): tasks from the coverage gaps (coverage-round3 "Not
    covered", human-traces A1–A6, bot "Not yet"), driver subagents, accepted runs → `rd file` → bless → verify. Tool
    work: savestate take ~3 ms / restore ~1.5 ms (wine) dominate short actions — a dirty-page hint (GetWriteWatch on
    the arena / media / stack reservations) would cut both; the boundary's host work leaves stack residue retail reads

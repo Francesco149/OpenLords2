@@ -43,6 +43,8 @@ rd search R --goal EXPR [--avoid EXPR] [--cell "(a, b)"] [--actions SPEC ..] [--
             [--score EXPR [--apply-best]] [--max-len N]
 rd rec R A|C|R [SLOT]   (a record's fields: the pieces in use, a county, a realm)
 rd cell R COL,ROW ..    (where a map cell is on screen now)
+rd seasons R N [--until EXPR] [--watch EXPR,..] [--battle auto|field]   (End turn N times, the bot's settling: scrolls,
+                        popups, confirms (no), sieges (no engines), battles auto-resolved / fought; ~0.1 s a season)
 rd covered VA|NAME ..   (is a retail function reached by the corpus, by which scenarios — before you start)
 rd check R TASK.md      rd verify R      rd cov R [--blocks]      rd lint TASK.md --on RUN      rd movie R      rd stop R      rd ls
 ```
@@ -169,6 +171,11 @@ the other hosts.
   of ours, "aaaaaa"): losing that battle loses the county. A march onto a wood / mountain cell is silently refused.
   Rebels: a county under 25 happiness climbs `C(k).unrest_band` 0..4; at 4 rebels spawn (50 % tax: ~5 seasons). The
   castle panel's "View these troops" arrow (355,425) works on enemy castles too. Battle result screen 0x13: `c@result_continue`.
+- **AI lords** (probe siege-knights): realm +0x84 + 0x10·q = attitude toward realm q (−30..30), +0x87 + 0x10·q the
+  vendetta stage (battles at −30 advance it), +0xEB the vendetta target, +0x4b the current target county; an AI picks
+  a garrisoned castle last (+40 in 0x4a03f2) unless its vendetta is you. Knights need armour (realm +0x154, only from
+  a smithy). A keep holds 200 men (more → a split prompt, the split-off half garrisons); at 0 people a county stays
+  yours while its castle is garrisoned. AI raiders take a county's herd in 1–2 seasons.
 - `rd cov R --blocks --fn NAME` lists a function's blocks nobody reaches yet — what to aim at next.
 - Loads of game files take one frame here; never wait by wall time, wait for state (`--until`).
 - A run that was poked (`rd ram R w`) is POKED and cannot be filed.
