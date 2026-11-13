@@ -42,6 +42,7 @@ rd ck R save NAME | load NAME | list        rd undo R        rd rewind R --to F
 rd search R --goal EXPR [--avoid EXPR] [--cell "(a, b)"] [--actions SPEC ..] [--time-limit S] [--apply] [-j N]
             [--score EXPR [--apply-best]] [--max-len N]
 rd rec R A|C|R [SLOT]   (a record's fields: the pieces in use, a county, a realm)
+rd cell R COL,ROW ..    (where a map cell is on screen now)
 rd covered VA|NAME ..   (is a retail function reached by the corpus, by which scenarios — before you start)
 rd check R TASK.md      rd verify R      rd cov R [--blocks]      rd lint TASK.md --on RUN      rd movie R      rd stop R      rd ls
 ```
@@ -157,6 +158,10 @@ the other hosts.
   at (300,240) opens terrain info — "back" on the map is not neutral. Keys: F8 reloads the previous turn's autosave (old
   turn); F2 cycles a display mode; ESC / File > Quit / New Game ask a confirm (0x1e: answer thumbs-down); never F1 (WinHelp)
   or Alt-1 (writes into the game dir). The menu bar: `@menu_file` `@menu_options` `@menu_help`.
+- **The map** (probe terrain-info): RMB on a map cell (no army on it) opens terrain info (screen 4) for that cell, recentres
+  the camera on it and changes `sel_county`; RMB on the panel closes it. `rd cell R COL,ROW` says where a cell is on
+  screen now (read only); off screen: recentre via the minimap (a county) or edge-scroll (cursor at x=0). In custom-strong
+  event scrolls keep arriving up to ~1,100 frames into a season — wait for quiet before map clicks.
 - `rd cov R --blocks --fn NAME` lists a function's blocks nobody reaches yet — what to aim at next.
 - Loads of game files take one frame here; never wait by wall time, wait for state (`--until`).
 - A run that was poked (`rd ram R w`) is POKED and cannot be filed.

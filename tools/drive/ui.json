@@ -526,5 +526,15 @@
    11
   ],
   "note": "diplomacy: gift"
+ },
+ "options_advanced": {
+  "xy": [
+   140,
+   44
+  ],
+  "screens": [
+   0
+  ],
+  "note": "Options > Advanced (screen 0x39; toggles at x=292: Advanced farming y=166, foraging 198, Exploration 230, Fight humans only 262)"
  }
 }

@@ -271,6 +271,10 @@
     "ev_id": [
      "1aa",
      "s16"
+    ],
+    "grain_event_amount": [
+     "278",
+     "s32"
     ]
    }
   },
@@ -603,5 +607,36 @@
   "addr": "568960",
   "type": "s32",
   "note": "F2 cycles 0/1/2"
+ },
+ "adv_farming": {
+  "addr": "53f25c",
+  "type": "s32",
+  "note": "the Advanced farming option (fallow text, yield lines)"
+ },
+ "next_season": {
+  "addr": "57c92c",
+  "type": "s32",
+  "note": "1..4, one season ahead of season"
+ },
+ "hover_tile": {
+  "addr": "568974",
+  "type": "s32",
+  "note": "the view tile under the cursor (mapview.py)"
+ },
+ "ti_cell": {
+  "expr": "u32(0x56795c) // 8",
+  "note": "terrain info: the cell shown (probe terrain-info)"
+ },
+ "ti_type": {
+  "addr": "57cb2c",
+  "type": "s32"
+ },
+ "ti_county": {
+  "addr": "5681e0",
+  "type": "s32"
+ },
+ "ti_flags": {
+  "addr": "5440b0",
+  "type": "s32"
  }
 }

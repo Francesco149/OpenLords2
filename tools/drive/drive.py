@@ -1342,6 +1342,35 @@ def cmd_rec(a):
     r.close()
 
 
+class _LiveRead:
+    """the read(va, n) interface tools/bot (l2state, mapview) expects, over a live session"""
+    def __init__(self, lv):
+        self.lv = lv
+
+    def read(self, va, n):
+        return bytes.fromhex(self.lv.cmd(f"r {va:x} {n}")[3:])
+
+
+def cmd_cell(a):
+    """where map cell COL,ROW is on screen now (retail's own viewport geometry, tools/bot/mapview.py) — read only"""
+    sys.path.insert(0, os.path.join(ROOT, "tools", "bot"))
+    import mapview as MV
+    r = Run(a.run)
+    s = _LiveRead(r.attach())
+    vis = MV.visible(s)
+    for q in a.cells:
+        col, row = (int(x) for x in q.split(","))
+        cell = row * 64 + col
+        cty = r.ev(f"u8({0x522F90} + {cell} * 8 + 7)")[0]
+        if cell in vis:
+            x, y = vis[cell]
+            print(f"cell ({col},{row}) county {cty}: on screen at c{x},{y}  (hover it first for march orders: h{x},{y})")
+        else:
+            print(f"cell ({col},{row}) county {cty}: not on screen — recentre on its county (the minimap, sel_county) or edge-scroll "
+                  f"(cursor on x=0 / the 1-px border); scroll origin col {fmt(r.ev('cam_col')[0])} row {fmt(r.ev('cam_row')[0])}")
+    r.close()
+
+
 def cmd_movie(a):
     r = Run(a.run, lock=False)
     print(f"{r.movie_p}: {len(r.movie.events)} events, {r.movie.frame} frames, saves {[os.path.basename(s) for s in r.movie.saves]}")
@@ -2134,7 +2163,7 @@ def cov_blocks(a, r, tr):
         print(f"  {f:08x} {fn.get(f, ('?', 0))[0]:40s} {len(vs):4d} new blocks {sum(size[v] for v in vs):6d} B  first f{min(hit[v] for v in vs)}"
               + ("  (function new)" if f in vs and f not in corpus else ""))
     json.dump({"new_blocks": [f"{v:x}" for v in sorted(new)], "bytes": nb, "functions": len(byf)}, open(os.path.join(r.dir, "cov_blocks.json"), "w"))
-    for q in (a.fn or "").split(","):
+    for q in (a.fn_list or "").split(","):
         if not q:
             continue
         byname = {n: v for v, (n, _) in fn.items()}
@@ -2228,6 +2257,7 @@ def main():
     p.set_defaults(fn=cmd_text)
     p = sp.add_parser("hot"); p.add_argument("run"); p.set_defaults(fn=cmd_hot)
     p = sp.add_parser("rec"); p.add_argument("run"); p.add_argument("rec"); p.add_argument("slot", nargs="?", type=int); p.set_defaults(fn=cmd_rec)
+    p = sp.add_parser("cell"); p.add_argument("run"); p.add_argument("cells", nargs="+", help="COL,ROW .."); p.set_defaults(fn=cmd_cell)
     p = sp.add_parser("movie"); p.add_argument("run"); p.add_argument("-n", type=int, default=20); p.set_defaults(fn=cmd_movie)
     p = sp.add_parser("eval"); p.add_argument("run"); p.add_argument("exprs", nargs="+"); p.add_argument("--at"); p.add_argument("--at-frame", type=int)
     p.add_argument("--raw", action="store_true"); p.set_defaults(fn=cmd_eval)
@@ -2259,7 +2289,7 @@ def main():
     p = sp.add_parser("covered"); p.add_argument("what", nargs="+"); p.set_defaults(fn=cmd_covered)
     p = sp.add_parser("cov"); p.add_argument("run"); p.add_argument("--show", type=int, default=40); p.add_argument("--refresh-corpus", action="store_true")
     p.add_argument("--blocks", action="store_true", help="basic blocks (tools/drive/blocks.py) instead of whole functions")
-    p.add_argument("--fn", help="--blocks: VA or NAME[,..]: list the blocks of these functions that neither the corpus nor the run reaches")
+    p.add_argument("--fn", dest="fn_list", help="--blocks: VA or NAME[,..]: list the blocks of these functions that neither the corpus nor the run reaches")
     p.add_argument("--target", choices=("win", "wine", "bunker")); p.set_defaults(fn=cmd_cov)
     p = sp.add_parser("stop"); p.add_argument("run"); p.set_defaults(fn=cmd_stop)
     sp.add_parser("ls").set_defaults(fn=cmd_ls)
