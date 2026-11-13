@@ -2059,7 +2059,7 @@ def cmd_verify(a):
             host = "wine"
     elif host == "bunker" and not host_up("bunker"):
         host = "wine"
-    b = argparse.Namespace(jobs=1, target=host, extra=None, frames=None, fb_hash=False)
+    b = argparse.Namespace(jobs=1, target=host, extra="--finish-late", frames=None, fb_hash=False)   # the live session's state point
     _, bd, res, out = RH.run_batch(b, [("verify", tr, json.load(open(tr)) if False else Movie_meta(tr))], "rd-verify")
     v = res.get("verify") or {}
     rng = live.get("rng", "").replace("/", "/")

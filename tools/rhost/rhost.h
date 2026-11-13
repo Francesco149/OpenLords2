@@ -71,6 +71,7 @@ typedef struct {
     uint32_t live_idle;         /* --live-idle S: a live session exits after S seconds without a command (1800) */
     uint32_t live_until;        /* --live-until F: with --trace, stop the prefix replay at frame F (default: its last event) */
     const char *snap_test;      /* --snap-test A:B[:K]: savestate self-check (rh_live.c) */
+    int finish_late;            /* --finish-late: end a --frames run after the boundary's timers / input (a live session's state point: rd verify) */
     int standalone;             /* --standalone: NO retail code — only the data sections are mapped (the code range is
                                    INT3 + a jmp thunk into port code at every hook row's entry); the entry is the port's
                                    rl_crt_start; <rundir>\standalone_audit.txt proves it (docs/findings/standalone-path.md) */

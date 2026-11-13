@@ -577,13 +577,14 @@ static void __cdecl frame_wrap(void)
     if (g_nw) watch_arm_due();
     ((frame_fn_t)(uintptr_t)L2_FRAME_FN)();
     end_of_frame();
-    if (g_frame + 1 >= O.frames) { g_frame++; finish("frames"); }
+    if (g_frame + 1 >= O.frames && !O.finish_late) { g_frame++; finish("frames"); }
     g_frame++;
     g_vclock += O.step_ms; g_calls_since_frame = 0;
     rh_mm_frame();
     rh_smack_frame();
     rh_ds_mix();
     rh_win_frame();
+    if (O.finish_late && g_frame >= O.frames) finish("frames");   /* after the timers + input of the boundary, like a live session */
     rh_bot_frame();
     if (O.live || O.snap_test) { yield_to_host(); return; }
     if (O.realtime) {
@@ -691,6 +692,7 @@ static void parse(int argc, char **argv)
         else if (!strcmp(a, "--live-idle")) O.live_idle = strtoul(ARG(), 0, 0);
         else if (!strcmp(a, "--live-until")) O.live_until = strtoul(ARG(), 0, 0);
         else if (!strcmp(a, "--snap-test")) O.snap_test = ARG();
+        else if (!strcmp(a, "--finish-late")) O.finish_late = 1;
         else if (!strcmp(a, "--no-arena")) O.no_arena = 1;
         else if (!strcmp(a, "--no-overlay")) O.no_overlay = 1;
         else if (!strcmp(a, "--log-files")) O.log_files = 1;
