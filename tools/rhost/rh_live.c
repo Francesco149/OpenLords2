@@ -134,10 +134,10 @@ static void rec_install(void)
 /* ---------------- programs (postfix) ---------------- */
 enum { OP_NUM, OP_R8, OP_R16, OP_R32, OP_S8, OP_S16, OP_S32, OP_F32, OP_F64, OP_FRAME, OP_ADD, OP_SUB, OP_MUL, OP_DIV, OP_FDIV,
        OP_MOD, OP_AND, OP_OR, OP_XOR, OP_SHL, OP_SHR, OP_INV, OP_LT, OP_LE, OP_GT, OP_GE, OP_EQ, OP_NE, OP_LAND, OP_LOR, OP_LNOT,
-       OP_NEG, OP_ABS, OP_MIN, OP_MAX, OP_SEL, OP_SQRT, OP_SIN, OP_COS, OP_ATAN2, OP_HYPOT, OP_POW };
+       OP_NEG, OP_ABS, OP_MIN, OP_MAX, OP_SEL, OP_SQRT, OP_SIN, OP_COS, OP_ATAN2, OP_HYPOT, OP_POW, OP_SLOT, OP_SLOTI, OP_CNT };
 static const char *const OPN[] = { "", "r8", "r16", "r32", "s8", "s16", "s32", "f32", "f64", "frame", "+", "-", "*", "/", "//", "%",
                                    "&", "|", "^", "<<", ">>", "~", "<", "<=", ">", ">=", "==", "!=", "and", "or", "not", "neg", "abs",
-                                   "min", "max", "sel", "sqrt", "sin", "cos", "atan2", "hypot", "pow" };
+                                   "min", "max", "sel", "sqrt", "sin", "cos", "atan2", "hypot", "pow", "slot", "sloti", "cnt" };
 typedef struct { uint8_t op; double v; } ins_t;
 typedef struct { int n; ins_t *c; } prog_t;
 #define NPROG 256
@@ -155,11 +155,16 @@ static int mem_ok(uint32_t a, uint32_t n)
     }
     return 1;
 }
-static double vm_eval(const prog_t *p)
+/* records: `BASE STRIDE LO HI cnt:N <N body tokens>` = how many slots LO..HI make the body non-zero; inside the body
+ * `slot` pushes the slot's address (BASE + i * STRIDE) and `sloti` its index i (a count over 150 pieces is ~20 tokens) */
+static double g_slot, g_sloti;
+static double vm_run(const ins_t *c, int n);
+static double vm_eval(const prog_t *p) { return vm_run(p->c, p->n); }
+static double vm_run(const ins_t *c, int n)
 {
     double st[64]; int sp = 0;
-    for (int i = 0; i < p->n; i++) {
-        const ins_t *x = &p->c[i];
+    for (int i = 0; i < n; i++) {
+        const ins_t *x = &c[i];
         #define A st[sp - 2]
         #define B st[sp - 1]
         #define BIN(expr) do { if (sp < 2) return 0; double r_ = (expr); sp--; st[sp - 1] = r_; } while (0)
@@ -209,6 +214,18 @@ static double vm_eval(const prog_t *p)
         case OP_HYPOT: BIN(sqrt(A * A + B * B)); break;
         case OP_POW: BIN((A < 0 && B != floor(B)) || (A == 0 && B < 0) ? 0 : pow(A, B)); break;
         case OP_SEL: if (sp < 3) return 0; { double r = st[sp - 3] != 0 ? st[sp - 2] : st[sp - 1]; sp -= 2; st[sp - 1] = r; } break;
+        case OP_SLOT: if (sp < 64) st[sp++] = g_slot; break;
+        case OP_SLOTI: if (sp < 64) st[sp++] = g_sloti; break;
+        case OP_CNT: {
+            int body = (int)x->v;
+            if (sp < 4 || i + body >= n + 0 || body < 0 || i + 1 + body > n) return 0;
+            double base = st[sp - 4], stride = st[sp - 3]; int64_t lo = (int64_t)st[sp - 2], hi = (int64_t)st[sp - 1]; sp -= 4;
+            double os = g_slot, oi = g_sloti, cnt = 0;
+            for (int64_t k = lo; k <= hi && k - lo < 4096; k++) { g_slot = base + (double)k * stride; g_sloti = (double)k; if (vm_run(c + i + 1, body) != 0) cnt++; }
+            g_slot = os; g_sloti = oi;
+            st[sp++] = cnt; i += body;
+            break;
+        }
         }
         #undef A
         #undef B
@@ -223,6 +240,7 @@ static int prog_define(int id, char **tok, int ntok, sb_t *err)
     for (int i = 0; i < ntok; i++) {
         int op = -1;
         for (int k = 1; k < (int)(sizeof OPN / sizeof OPN[0]); k++) if (!strcmp(tok[i], OPN[k])) { op = k; break; }
+        if (op < 0 && !strncmp(tok[i], "cnt:", 4)) { c[i].op = OP_CNT; c[i].v = atof(tok[i] + 4); continue; }
         if (op < 0) {
             char *e; double v = (tok[i][0] == '0' && (tok[i][1] == 'x' || tok[i][1] == 'X')) ? (double)strtoull(tok[i], &e, 16) : strtod(tok[i], &e);
             if (*e || e == tok[i]) { sb_f(err, "bad token '%s'", tok[i]); free(c); return -1; }

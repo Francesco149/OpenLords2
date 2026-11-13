@@ -248,7 +248,7 @@ MAX_PROG_TOKENS = 598
 MAX_STACK = 64
 EVAL_CHUNK = 48
 MAX_SAMPLED = 32
-_ARITY = {"r8": 1, "r16": 1, "r32": 1, "s8": 1, "s16": 1, "s32": 1, "f32": 1, "f64": 1, "~": 1, "not": 1, "neg": 1, "abs": 1,
+_ARITY = {"slot": 0, "sloti": 0, "r8": 1, "r16": 1, "r32": 1, "s8": 1, "s16": 1, "s32": 1, "f32": 1, "f64": 1, "~": 1, "not": 1, "neg": 1, "abs": 1,
           "sqrt": 1, "sin": 1, "cos": 1, "sel": 3, "frame": 0}
 _BINARY = {"+", "-", "*", "/", "//", "%", "&", "|", "^", "<<", ">>", "<", "<=", ">", ">=", "==", "!=", "and", "or", "min", "max",
            "atan2", "hypot", "pow"}
@@ -261,7 +261,9 @@ CMPOP = {ast.Lt: "<", ast.LtE: "<=", ast.Gt: ">", ast.GtE: ">=", ast.Eq: "==", a
 def stack_depth(tokens):
     sp = hi = 0
     for t in tokens:
-        if t in _BINARY:
+        if t.startswith("cnt:"):
+            sp -= 3
+        elif t in _BINARY:
             sp -= 1
         elif t in _ARITY:
             sp += 1 - _ARITY[t]
@@ -433,16 +435,14 @@ class Vars:
         lo, hi = r["slots"]
         if len(n.args) == 4:
             lo, hi = (int(ast.literal_eval(a)) for a in n.args[2:])
-        terms = []
-        for i in range(lo, hi + 1):
-            base = int(str(r["base"]), 16) + i * int(str(r["stride"]), 0)
-            self._slot = {k: [str(base + int(str(off), 16)), TYPES[ty]] for k, (off, ty, *_) in r["fields"].items()}
-            self._slot["I"] = [str(i)]
-            try:
-                terms.append(self._c(n.args[1], depth, src) + ["0", "!="])
-            finally:
-                self._slot = None
-        return terms
+        self._slot = {k: ["slot", str(int(str(off), 16)), "+", TYPES[ty]] for k, (off, ty, *_) in r["fields"].items()}
+        self._slot["I"] = ["sloti"]
+        try:
+            body = self._c(n.args[1], depth, src)
+        finally:
+            self._slot = None
+        # the server loops the body over the slots (rh_live.c OP_CNT): one term, whatever the slot count
+        return [[str(int(str(r["base"]), 16)), str(int(str(r["stride"]), 0)), str(lo), str(hi), f"cnt:{len(body)}"] + body]
 
     def _terms(self, n, depth, src):
         if isinstance(n, ast.BinOp) and isinstance(n.op, (ast.Add, ast.Sub)):
@@ -666,6 +666,11 @@ def host_up(h):
         if h not in _up:
             if h == "win":
                 _up[h] = win_up(timeout=3)
+                if not _up[h] and RH.WIN == "win" and not os.environ.get("RHOST_WIN"):   # the box on wifi: its other address
+                    RH.WIN = "win-wifi"
+                    _up[h] = win_up(timeout=3)
+                    if not _up[h]:
+                        RH.WIN = "win"
             elif h == "bunker":
                 _up[h] = bool(BK) and BK.up(timeout=3)
         return _up[h]
