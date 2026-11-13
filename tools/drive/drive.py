@@ -1983,6 +1983,48 @@ def cmd_file(a):
     r.close()
 
 
+CORPUS_COV = os.path.join(os.path.dirname(RUNS), "corpus_coverage.tsv")
+
+
+def corpus_coverage(refresh=False):
+    """{va} the corpus reaches (rhost.py coverage, cached; --refresh-corpus re-runs it)"""
+    if refresh or not os.path.exists(CORPUS_COV):
+        out = subprocess.run([os.path.join(ROOT, "tools", "dev"), "python3", os.path.join(RH.HERE, "rhost.py"), "coverage", "--target", "wine", "-j", "8"],
+                             capture_output=True, text=True).stdout
+        m = re.search(r"→ (\S+coverage_summary\.tsv)", out)
+        if not m:
+            raise SystemExit("rhost.py coverage failed:\n" + out[-800:])
+        shutil.copy(m.group(1), CORPUS_COV)
+    return {int(l.split("\t")[0], 16) for l in open(CORPUS_COV).readlines()[1:]}
+
+
+def cmd_cov(a):
+    """the retail functions this run's movie reaches that no corpus scenario does (a replay with --coverage)"""
+    r = Run(a.run, lock=False)
+    corpus = corpus_coverage(a.refresh_corpus)
+    fn, _ = RH.function_table()
+    cov_in = os.path.join(r.dir, "coverage_in.txt")
+    open(cov_in, "w").write("".join(f"{va:x}\n" for va in sorted(fn)))
+    tr = os.path.join(r.dir, "cov.trace.jsonl")
+    r.movie.write(tr, comment=r.name, rel_to=r.dir)
+    b = argparse.Namespace(jobs=1, target=a.target or "wine", extra=None, coverage_file=cov_in)
+    _, bd, res, out = RH.run_batch(b, [("cov", tr, RH.trace_meta(tr))], "rd-cov", fetch=("rhost.log", "coverage.txt"))
+    p = os.path.join(bd, "cov", "coverage.txt")
+    if not os.path.exists(p):
+        raise SystemExit(f"no coverage from the replay ({bd})")
+    hit = {int(l.split()[0], 16): int(l.split()[1]) for l in open(p) if l.strip()}
+    new = sorted((v for v in hit if v not in corpus and v in fn), key=lambda v: hit[v])
+    nb = sum(fn[v][1] for v in new)
+    tot = sum(sz for _, sz in fn.values())
+    print(f"{r.name}: {len(hit)} retail functions reached; {len(new)} NEW to the corpus ({nb} bytes, +{100.0 * nb / tot:.2f}% of retail code)")
+    for v in new[:a.show]:
+        print(f"  {v:08x} {fn[v][0]:40s} {fn[v][1]:6d} B  first at frame {hit[v]}")
+    if len(new) > a.show:
+        print(f"  … {len(new) - a.show} more (--show N)")
+    json.dump({"new": [f"{v:08x}" for v in new], "bytes": nb, "reached": len(hit)}, open(os.path.join(r.dir, "cov.json"), "w"))
+    shutil.rmtree(bd, ignore_errors=True)
+
+
 def cmd_stop(a):
     r = Run(a.run)
     r.stop()
@@ -2043,6 +2085,8 @@ def main():
     p = sp.add_parser("check"); p.add_argument("run"); p.add_argument("task"); p.set_defaults(fn=cmd_check)
     p = sp.add_parser("lint"); p.add_argument("task"); p.add_argument("--on", nargs="+", required=True); p.set_defaults(fn=cmd_lint)
     p = sp.add_parser("file"); p.add_argument("run"); p.add_argument("name"); p.add_argument("note", nargs="*"); p.add_argument("--force", action="store_true"); p.set_defaults(fn=cmd_file)
+    p = sp.add_parser("cov"); p.add_argument("run"); p.add_argument("--show", type=int, default=40); p.add_argument("--refresh-corpus", action="store_true")
+    p.add_argument("--target", choices=("win", "wine", "bunker")); p.set_defaults(fn=cmd_cov)
     p = sp.add_parser("stop"); p.add_argument("run"); p.set_defaults(fn=cmd_stop)
     sp.add_parser("ls").set_defaults(fn=cmd_ls)
     argv, i = [], 1
