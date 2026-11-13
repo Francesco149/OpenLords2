@@ -51,18 +51,21 @@
 
 ## ★ Next micro-tasks
 
-0. **rd campaigns** — campaign 1–2 (2026-11-13, 7 driver subagents): filed split-arm, castle-labor (+17 blocks),
+0. **rd campaigns** — 2026-11-13 totals: 4 campaigns, 15 drivers (11 subagents, 4 API drivers for $9.12), 13 scenarios
+   filed; corpus 22,673 → 23,255 basic blocks (62.9 % → 64.6 % of retail code bytes), 1,527 → 1,533 functions (lord_move
+   0x4a599d and the F8 old-turn path among them); `rhost.py verify` on the first 5 new scenarios: 0 divergences, hybrid
+   PASS. Remaining block gaps are mostly multiplayer, dead code, device behaviour or long setups (siege on our walls with
+   AI knights; county captures; a won campaign) — `rd cov --blocks --fn X --disasm` per function.
+   Campaign 1–2 (7 driver subagents): filed split-arm, castle-labor (+17 blocks),
    hotkeys (+167, 5 new functions), terrain-info (+91), piece-kinds (+55); ev-13d and split-arm drove covered code (the
    premise check `rd covered` came from that). **siege-knights (halve_garrison 0x4ad8cc) blocked**: AI knights take years
    (armour only from a smithy), an AI targets a garrisoned castle only under a vendetta (−30 attitude + 3 battles), and
    0x48d9ce arms the flag only when every AI unit left is a knight before any wall breach — a 30–40-season managed game
    (driver report in the 2026-11-13 session; furthest checkpoint run `siegeknights:t27`). Next: `rd seasons` makes long
    setups cheap; lord_move 0x4a599d and 0x48e774 are the other real function gaps; block gaps by `rd cov --blocks --fn`.
-   Earlier note: **rd campaigns** (`tools/drive/README.md` §Campaign recipe): tasks from the coverage gaps (coverage-round3 "Not
-   covered", human-traces A1–A6, bot "Not yet"), driver subagents, accepted runs → `rd file` → bless → verify. Tool
-   work: savestate take ~3 ms / restore ~1.5 ms (wine) dominate short actions — a dirty-page hint (GetWriteWatch on
-   the arena / media / stack reservations) would cut both; the boundary's host work leaves stack residue retail reads
-   (field-orders differs by compiler: make the boundary residue-free, then re-bless).
+   Recipe: `tools/drive/README.md` §Campaign recipe. Tool work left: the boundary's host work leaves stack residue
+   retail reads (field-orders differs by compiler: make the boundary residue-free, then re-bless); savestates cost ~9 %
+   of search time (not worth optimizing yet).
 
 1. ~~One residue model for the march executor~~ — done 2026-11-07 (quirks #238 / #239): the driver's residue window =
    the AI step 0x49a010's imprint (`engine_army_state_res_ai_step`), rl_4b99c0 calls the driver port directly (was an
