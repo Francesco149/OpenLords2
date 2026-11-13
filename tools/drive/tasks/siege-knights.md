@@ -25,3 +25,13 @@ different waits + dismissing scrolls, avoid = losing the county; checkpoint ofte
 §battlefield) defend so the assault reaches the walls. `rd covered` / `rd cov --blocks` measure it.
 
 Report frames per step, the setup that worked, how long it took in seasons, and rd cov (functions + blocks).
+
+**Campaign 2's attempt (blocked, run `siegeknights`, furthest checkpoint `t27` at f39101 — you may start from it with
+`rd new R --from siegeknights:t27`, or start over):** AI knights take years (armour only from a smithy); an AI targets a
+garrisoned castle only under a vendetta (attitude −30 + 3 battles); 0x48d9ce arms the flag only when every AI unit left
+on the field is a knight, before any wall breach. Since then: `rd seasons` (~0.1 s a season) makes a 30–60-season game
+cheap, and campaign 4 (docs/findings/probes/lord-move.md) found that each diplomacy insult costs ~15 attitude (−30 is
+the clamp, two seasons — one message per lord per season), that an AI's weapons climb ~12 a season and recruiting
+spends them. So: pick the AI with the best armour economy, insult it to −30, give it battles (attack its armies), let
+it arm, keep our castle garrisoned and fed; on the field, kill its non-knights first (archers / foot) so only knights
+remain before any breach.
