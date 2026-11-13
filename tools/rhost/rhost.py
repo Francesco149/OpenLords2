@@ -351,6 +351,8 @@ def run_batch(a, runs, tag, fetch=("rhost.log",), interactive=False):
     global _pruned
     if getattr(a, "target", "win") == "wine":
         return run_batch_wine(a, runs, tag)
+    if getattr(a, "target", "win") == "bunker":
+        return bunker().run_batch(a, runs, tag, fetch)
     ensure_staged()
     if not _pruned and PRUNE_HOURS > 0:     # once per invocation: keep our run dirs bounded on the shared box
         _pruned = True
@@ -367,6 +369,13 @@ def run_batch(a, runs, tag, fetch=("rhost.log",), interactive=False):
             scp(f"{WIN}:C:/ol2-rhost/runs/{batch}/{name}/{f}", dst, check=False)
     print(f"[batch {batch}: {len(runs)} run(s) in {time.time() - t0:.1f}s (-j{a.jobs}) → {bdir}]")
     return batch, bdir, results, out
+
+
+def bunker():
+    """tools/bunker/bunker.py: --target bunker (headless under wine on the temporary NixOS box, one bounded pool)"""
+    sys.path.insert(0, os.path.join(ROOT, "tools", "bunker"))
+    import bunker as bk
+    return bk
 
 
 def resolve_runs(names):
@@ -541,7 +550,8 @@ def cmd_snap_check(a):
     """savestates vs a straight replay: each scenario replays through the game coroutine with --snap-test A:B:2 (a
     savestate at A; at B hash, restore, replay A..B again, twice) — every pass must equal the first, and the run's end
     the blessed expected (frame / tick / RNG / state_sem / every presented frame)"""
-    names = [n for n in all_scenarios(a.only) if os.path.exists(os.path.join(SCEN, n, "expected.json" if a.target == "win" else f"expected.{a.target}.json"))]
+    tgt = "wine" if a.target == "bunker" else a.target       # bunker = the same wine engine: wine's bless
+    names = [n for n in all_scenarios(a.only) if os.path.exists(os.path.join(SCEN, n, "expected.json" if tgt == "win" else f"expected.{tgt}.json"))]
     a.fb_hash = True
     runs = []
     for n, tr, meta in resolve_runs(names):
@@ -575,6 +585,7 @@ VERIFY_HOOKS = verify_hooks()
 def expected_diffs(names, res, tgt):
     """{scenario: ["key exp→got", ...]} against the blessed expected[.TARGET].json (missing file → one entry)"""
     out = {}
+    tgt = "wine" if tgt == "bunker" else tgt                 # bunker = the same wine engine: wine's bless
     for n in names:
         ep = os.path.join(SCEN, n, "expected.json" if tgt == "win" else f"expected.{tgt}.json")
         if not os.path.exists(ep):
@@ -1042,7 +1053,8 @@ def main():
         sp.add_argument("--show", action="store_true")
         sp.add_argument("-j", "--jobs", type=int, default=None,
                         help="parallel runs (default: $RHOST_JOBS, else 8 on wine, 3 on win — sibling projects share the Windows box)")
-        sp.add_argument("--target", choices=("win", "wine"), default=os.environ.get("RHOST_TARGET", "win"))
+        sp.add_argument("--target", choices=("win", "wine", "bunker"), default=os.environ.get("RHOST_TARGET", "win"),
+                        help="bunker: headless under wine on the NixOS box (run / snap-check / corpus --check), tools/bunker/README.md")
         sp.add_argument("--extra")
     sub.add_parser("build").set_defaults(fn=cmd_build)
     sub.add_parser("stage").set_defaults(fn=cmd_stage)
