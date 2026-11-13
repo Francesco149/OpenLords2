@@ -673,5 +673,40 @@
  "battle_def": {
   "addr": "568218",
   "type": "s32"
+ },
+ "music_on": {
+  "addr": "53f218",
+  "type": "s32"
+ },
+ "sfx_on": {
+  "addr": "53f214",
+  "type": "s32"
+ },
+ "stream_loop": {
+  "addr": "522bf8",
+  "type": "s32",
+  "note": "music stream 0 (record 0x522bb0, stride 0x54): 1 = looping track"
+ },
+ "stream_eof": {
+  "addr": "522bfc",
+  "type": "s32"
+ },
+ "stream_tail": {
+  "addr": "522c00",
+  "type": "s32"
+ },
+ "stream_stopped": {
+  "addr": "522bf4",
+  "type": "s32"
+ },
+ "title_page": {
+  "addr": "5530f0",
+  "type": "s32",
+  "note": "title menu page (1 = main)"
+ },
+ "ai_fights_ai": {
+  "addr": "53f284",
+  "type": "s32",
+  "note": "Options > Advanced 'Fight humans only?' INVERTED: 1 shows No (0 = quick battles, load_muster)"
  }
 }

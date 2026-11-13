@@ -1283,6 +1283,8 @@ def cmd_new(a):
         old.close()
         shutil.rmtree(os.path.join(RUNS, a.run))
     mv = resolve_start(a.src)
+    if a.movies:
+        mv.extra["movies"] = True
     r = Run(a.run, create=True)
     saves = []
     for s in mv.saves:                                    # the run keeps its own copy of the start saves
@@ -2068,7 +2070,7 @@ def load_task(path):
     m = re.match(r"---\n(.*?)\n---\n?(.*)", txt, re.S)
     if not m:
         raise SystemExit(f"{path}: needs a --- header ---")
-    t = {"name": os.path.splitext(os.path.basename(path))[0], "start": "fresh", "steps": [], "forbid": [], "text": m.group(2).strip()}
+    t = {"name": os.path.splitext(os.path.basename(path))[0], "start": "fresh", "steps": [], "forbid": [], "final": [], "text": m.group(2).strip()}
     in_list = None
     for line in m.group(1).splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
@@ -2090,7 +2092,7 @@ def load_task(path):
         k = re.match(r"(\w+):\s*(.*?)\s*(?:#.*)?$", line)
         if not k:
             raise SystemExit(f"{path}: cannot read header line {line!r}")
-        in_list = k.group(1) if k.group(1) in ("steps", "forbid") else None
+        in_list = k.group(1) if k.group(1) in ("steps", "forbid", "final") else None
         if not in_list:
             t[k.group(1)] = k.group(2)
     if not t["steps"]:
@@ -2125,7 +2127,7 @@ def cmd_check(a):
     r = Run(a.run)
     t = load_task(a.task)
     after = r.meta.get("start_frame", 0)
-    preds = t["steps"] + t["forbid"]
+    preds = t["steps"] + t["forbid"] + t["final"]
     truth, end = walk_movie(r.movie, r.vars, preds)
     ns, at, ok, first_step = len(t["steps"]), after, True, None
     print(f"task {t['name']}: {ns} steps, {len(t['forbid'])} forbids; movie {r.movie.frame} frames; steps judged after frame {after}")
@@ -2143,6 +2145,10 @@ def cmd_check(a):
         if bad:
             ok = False
             print(f"  FORBIDDEN at frame {bad[0]} ({len(bad)} frames): {name}: {expr}")
+    for j, (name, expr) in enumerate(t["final"]):          # must hold on the movie's last frame
+        held = r.movie.frame in truth[ns + len(t["forbid"]) + j]
+        ok = ok and held
+        print(f"  final {'holds' if held else 'DOES NOT HOLD'} at frame {r.movie.frame}: {name}")
     if end.get("frame") != str(r.movie.frame):
         print(f"  (the replay ended at frame {end.get('frame')}, the movie at {r.movie.frame})")
         ok = False
@@ -2284,6 +2290,8 @@ def cov_blocks(a, r, tr):
               f"({sum(z for _, z in miss)} B; a block right after a jmp / ret that nothing jumps to may be dead or a switch case):")
         for va, sz in miss[:a.show]:
             print(f"    {va:08x} {sz:4d} B")
+        if len(miss) > a.show:
+            print(f"    … {len(miss) - a.show} more (--show N)")
 
 
 def cmd_covered(a):
@@ -2358,7 +2366,8 @@ def cmd_ls(a):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sp = ap.add_subparsers(dest="cmd", required=True)
-    p = sp.add_parser("new"); p.add_argument("run"); p.add_argument("--from", dest="src", required=True); p.add_argument("--force", action="store_true"); p.set_defaults(fn=cmd_new)
+    p = sp.add_parser("new"); p.add_argument("run"); p.add_argument("--from", dest="src", required=True); p.add_argument("--force", action="store_true")
+    p.add_argument("--movies", action="store_true", help="real Smacker movies (deterministic, rh_smack.c); scenarios with \"movies\" meta have them already"); p.set_defaults(fn=cmd_new)
     p = sp.add_parser("play"); p.add_argument("run"); p.add_argument("spec"); p.add_argument("--until"); p.add_argument("--avoid")
     p.add_argument("--watch"); p.add_argument("--every", type=int, default=0); p.add_argument("--rows", type=int, default=40)
     p.add_argument("--pad", type=int, help="wait up to N more frames after the spec (default with --until and no trailing wait of its own: 3000)")

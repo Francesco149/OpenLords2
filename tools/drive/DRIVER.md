@@ -177,6 +177,12 @@ the other hosts.
   a garrisoned castle last (+40 in 0x4a03f2) unless its vendetta is you. Knights need armour (realm +0x154, only from
   a smithy). A keep holds 200 men (more → a split prompt, the split-off half garrisons); at 0 people a county stays
   yours while its castle is garrisoned. AI raiders take a county's herd in 1–2 seasons.
+- **Options / sound** (probe sound-options): the Options menu items at x=140, y 44 / 64 / 84 / 104 / 124 = Advanced,
+  Sounds, Display, Game speed, Scroll speed (`@options_*`); Sounds has On/Off arrows only (292, 166 / 198 / 230); speed
+  panels up (205,197) / down (235,197), 0..10. Every in-game music track loops; a non-looping stream (setup.wav) starts
+  only when a movie returns to the title — use a `movies` start (`newgame-movies`, or `rd new --movies`). A click soon
+  after a toggle on the same arrow may be eaten: read the variable, not the panel.
+- Task files: `final:` predicates must hold on the movie's last frame (`steps` are ordered "at some frame after").
 - `rd cov R --blocks --fn NAME` lists a function's blocks nobody reaches yet — what to aim at next.
 - Loads of game files take one frame here; never wait by wall time, wait for state (`--until`).
 - A run that was poked (`rd ram R w`) is POKED and cannot be filed.

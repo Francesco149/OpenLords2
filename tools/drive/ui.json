@@ -536,5 +536,64 @@
    0
   ],
   "note": "Options > Advanced (screen 0x39; toggles at x=292: Advanced farming y=166, foraging 198, Exploration 230, Fight humans only 262)"
+ },
+ "options_sounds": {
+  "xy": [
+   140,
+   64
+  ],
+  "screens": [
+   0
+  ],
+  "note": "after @menu_options"
+ },
+ "options_display": {
+  "xy": [
+   140,
+   84
+  ],
+  "screens": [
+   0
+  ],
+  "note": "after @menu_options"
+ },
+ "options_speed": {
+  "xy": [
+   140,
+   104
+  ],
+  "screens": [
+   0
+  ],
+  "note": "after @menu_options"
+ },
+ "options_scroll": {
+  "xy": [
+   140,
+   124
+  ],
+  "screens": [
+   0
+  ],
+  "note": "after @menu_options"
+ },
+ "file_new_game": {
+  "xy": [
+   60,
+   44
+  ],
+  "screens": [
+   0
+  ],
+  "note": "after @menu_file"
+ },
+ "title_lords_of_magic": {
+  "xy": [
+   320,
+   174
+  ],
+  "screens": [
+   31
+  ]
  }
 }
