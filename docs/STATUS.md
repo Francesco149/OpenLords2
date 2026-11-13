@@ -1636,6 +1636,11 @@ claims are unverified until rhost re-checks them (`docs/audits/2026-10-23-method
   no retail code, 64 equal pure retail in frame / tick / RNG / every presented frame / state (CRT port 2026-11-08)** (bot-s16-t20 fixed: quirk #238); deterministic, Windows ≡ wine.
   Data image: `tools/data_ledger.py` → `docs/data-ledger.md` (99 KB from the exe; 78.6% of its non-zero bytes
   documented). Free-play capture: Desktop "Lords II capture" (`rhost.py play-*`).
+  **2026-11-13: agent-driven play (`rd`, `tools/drive/`)** — openrecet's / the Kirby playbook's method on rhost:
+  `rhost --live` (retail as a coroutine on its fixed stack), in-process savestates by full page compare (`rhost.py
+  snap-check`: 128/128 PASS, end states = the blessed corpus), exploration search (wine 6.8k frames/s a session,
+  Windows 13.7k, bunker 16.1k; `-j 8` across hosts 41k), screen text + hotspot recorders, exact in-session pictures,
+  `rd cov` (corpus baseline 1527/2611 functions, 75.8%). Third host: bunker (`tools/bunker/`). Campaign 1 running.
 - **Top blocker:** none for logic parity. The standalone's state = pure retail's (64/64, state_sem included) since the
   CRT port (2026-11-08, `docs/findings/crt-port.md`). Multiplayer stays unverifiable (DirectPlay / serial: rhost stubs it).
 

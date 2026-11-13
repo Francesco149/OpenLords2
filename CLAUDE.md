@@ -46,8 +46,16 @@ wine is not); `rhost.py corpus --check` (and `--target wine`; `--bless` runs eac
 human play `rhost.py record NAME [--from S]` (visible window on the Windows desktop), authored with
 `tools/rhost/rhbot.py "run 600; click 320 107; …"`, or played by the autoplay bot (`tools/bot/`).
 
-**Live probing** = `rhbot.py` (control channel: step frames, post input, read memory, shots) — it
-replaces the old Frida probe daemon / MCP. Probes: `--watch-write VA@F`, `--trap VA`, `--coverage`.
+**Agent-driven play (2026-11-13 — `tools/drive/README.md`, card `tools/drive/DRIVER.md`):** `./rd` drives retail LIVE
+(`rhost --live`: retail as a coroutine, in-process savestates, exploration search): step, read state by name (`vars.json`
+records `R(p)` / `C(k)` / `A(i)`, `count(REC, COND)`), `rd text` / `rd hot` / `rd look` (screen text, hotspots, the exact
+frame), search on savestates (`-j N` over win / bunker / wine), `rd check` / `verify` / `cov`, `rd file` → scenario.
+The Kirby playbook as openrecet runs it: a task = ordered state predicates (`tools/drive/tasks/`), the model names state
+and designs the search, a driver subagent (the parent session's model) runs it; the API driver `tools/drive/agent.sh`
+only when `agent.sh --check-credit` passes AND the owner says credit is available. Gates after touching rhost:
+`rhost.py snap-check --target wine` (savestates ≡ straight replay). Hosts: `RD_HOST=auto` = Windows (`RHOST_WIN=win-wifi`
+when on wifi; rd falls back to it) → bunker (`tools/bunker/`, root@10.0.10.58, pool `ol2-bunker-pool` 4 G) → wine.
+**Live probing** (scripted) = `rhbot.py` (control channel) — probes: `--watch-write VA@F`, `--trap VA`, `--coverage`.
 
 **Legacy — superseded, keep for reference, don't extend:** the Frida retail drive (`tools/frida/`,
 `frida_capture.py`, `probe_daemon.py`, `probe.py`, `openlords2_mcp.py`, `play_*.py`, film tools),
