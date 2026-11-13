@@ -10,6 +10,13 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 [ -n "${IN_NIX_SHELL:-}" ] && exec "$@"
 key=$(cat "$ROOT/flake.nix" "$ROOT/flake.lock" | sha256sum | cut -c1-16)
 cache=${XDG_CACHE_HOME:-$HOME/.cache}/openlords2/devenv-$key.sh
+# a GC root for the dev env's store paths: without one, `nix-collect-garbage` deletes the pinned mingw and every
+# build silently falls back to /usr/bin's (another GCC: the 2026-11-13 field-orders residue flip, build.sh refuses it now)
+root=${XDG_CACHE_HOME:-$HOME/.cache}/openlords2/devenv-$key.profile
+if [ ! -e "$root" ]; then
+    mkdir -p "$(dirname "$root")"
+    (cd "$ROOT" && nix develop --profile "$root" --command true) >/dev/null 2>&1 || echo "tools/dev: no GC root for the dev env (nix develop --profile failed)" >&2
+fi
 if [ ! -s "$cache" ]; then
     mkdir -p "$(dirname "$cache")"
     (cd "$ROOT" && nix print-dev-env) > "$cache.$$" || { rm -f "$cache.$$"; echo "tools/dev: nix print-dev-env failed" >&2; exit 1; }

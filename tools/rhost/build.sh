@@ -5,6 +5,11 @@
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../.." && pwd); S=$ROOT/src; H=$ROOT/tools/rhost; B=${RHOST_BUILD_DIR:-$ROOT/build/rhost}   # (an experiment builds aside)
 CC=${RHOST_CC:-i686-w64-mingw32-gcc}
+# the pinned devshell compiler only (tools/dev): /usr/bin's mingw is another GCC, and rhost's own code leaves stack
+# residue some retail readers see (field-orders' state differs between GCC 15.2 and 16.2 builds). RHOST_CC overrides.
+if [ -z "${RHOST_CC:-}" ] && [[ "$(command -v "$CC")" != /nix/store/* ]]; then
+    echo "build.sh: $CC is $(command -v "$CC" || echo missing), not the pinned devshell's — run it through tools/dev" >&2; exit 1
+fi
 LDF=(-Wl,--image-base,0x200000 -Wl,--large-address-aware -Wl,--disable-dynamicbase -Wl,-T,"$H/rhost.x" -static-libgcc -static)
 PORT_STD=${PORT_STD:-$(sed -n 's/^CFLAGS *?= *\(-std=[a-z0-9]*\).*/\1/p' "$S/Makefile")}
 mkdir -p "$B"
