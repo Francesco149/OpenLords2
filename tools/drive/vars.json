@@ -495,5 +495,25 @@
  "awaiting_input": {
   "expr": "screen == 0 and modal == 0 and R(me).ready > 0 and R(me).ready < 999",
   "note": "the map, no event scroll, the human mid-turn"
+ },
+ "drafted": {
+  "addr": "543fd8",
+  "type": "s32",
+  "note": "men drafted on the raise-army screen (0x17)"
+ },
+ "split_piece": {
+  "addr": "553074",
+  "type": "s32",
+  "note": "the piece being split (Army Division 0x11)"
+ },
+ "split_keep_total": {
+  "addr": "554468",
+  "type": "s32",
+  "note": "men staying (Army Division)"
+ },
+ "split_new_total": {
+  "addr": "554040",
+  "type": "s32",
+  "note": "men leaving (Army Division); per class: 0x53f6a0 + 0x80*me + 0x10*i (+4 leaving)"
  }
 }

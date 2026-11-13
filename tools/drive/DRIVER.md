@@ -41,6 +41,7 @@ rd ram R mark ; (act) ; rd ram R diff [--lo VA --hi VA] [--save NAME] [--minus N
 rd ck R save NAME | load NAME | list        rd undo R        rd rewind R --to F
 rd search R --goal EXPR [--avoid EXPR] [--cell "(a, b)"] [--actions SPEC ..] [--time-limit S] [--apply] [-j N]
             [--score EXPR [--apply-best]] [--max-len N]
+rd rec R A|C|R [SLOT]   (a record's fields: the pieces in use, a county, a realm)
 rd check R TASK.md      rd verify R      rd cov R      rd lint TASK.md --on RUN      rd movie R      rd stop R      rd ls
 ```
 
@@ -129,6 +130,13 @@ the other hosts.
 - The battlefield (`tools/bot/README.md` §battlefield): it opens paused; control panel 480..639 × 448..479; selection =
   a drag > 24 px; RMB = order (an enemy under the cursor = attack); minimap 480..639 × 24..183 recentres only with
   nothing selected or paused.
+- **Armies** (probe split-arm): an army needs ≥ 50 men ("Army too small"); raise = map icon `c@raise_army` → slider
+  `c@raise_more` (+4–5 men a click, `drafted`) → `c@raise_continue` twice; an army's info panel (screen 4) = RMB on an
+  army that is NOT selected (RMB on a selected one deselects): move / disband / split (`@army_split`, refused once the
+  army moved); Army Division 0x11: per class row y = 128 + 32·i, arrows (268,y) / (298,y), `c@split_yes`. Weapons are
+  assigned on the armoury wall (screen 0xa: `@armory_bows`, `@armory_swords` → overlay 0x0d `@assign_plus` …). Play
+  Now starts with 25 swords and 25 bows. `rd rec R A` lists the pieces (armies) in use, `rd rec R C 2` a county.
+- `rd hot` misses screens whose input uses code hit tests (Army Division, the armoury wall, overlays): look + click.
 - Loads of game files take one frame here; never wait by wall time, wait for state (`--until`).
 - A run that was poked (`rd ram R w`) is POKED and cannot be filed.
 

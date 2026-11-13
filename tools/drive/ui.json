@@ -104,5 +104,160 @@
    31
   ],
   "note": "title: Single player"
+ },
+ "raise_army": {
+  "xy": [
+   492,
+   447
+  ],
+  "screens": [
+   0
+  ],
+  "note": "map icon: raise army (0x17)"
+ },
+ "raise_more": {
+  "xy": [
+   310,
+   201
+  ],
+  "screens": [
+   23
+  ],
+  "note": "raise: slider right arrow (+4..5 men)"
+ },
+ "raise_continue": {
+  "xy": [
+   490,
+   346
+  ],
+  "screens": [
+   23
+  ],
+  "note": "raise: Continue (the first click after slider clicks is ignored: click twice)"
+ },
+ "armory_create": {
+  "xy": [
+   588,
+   410
+  ],
+  "screens": [
+   10,
+   23
+  ]
+ },
+ "armory_change": {
+  "xy": [
+   588,
+   437
+  ],
+  "screens": [
+   10,
+   23
+  ]
+ },
+ "armory_cancel": {
+  "xy": [
+   588,
+   464
+  ],
+  "screens": [
+   10,
+   23
+  ]
+ },
+ "armory_bows": {
+  "xy": [
+   440,
+   270
+  ],
+  "screens": [
+   10
+  ],
+  "note": "armoury wall: bows \u2192 assign overlay 0x0d"
+ },
+ "armory_swords": {
+  "xy": [
+   540,
+   280
+  ],
+  "screens": [
+   10
+  ],
+  "note": "armoury wall: swords"
+ },
+ "assign_plus": {
+  "xy": [
+   288,
+   62
+  ],
+  "screens": [
+   13
+  ]
+ },
+ "assign_minus": {
+  "xy": [
+   318,
+   62
+  ],
+  "screens": [
+   13
+  ]
+ },
+ "assign_none": {
+  "xy": [
+   350,
+   62
+  ],
+  "screens": [
+   13
+  ]
+ },
+ "assign_all": {
+  "xy": [
+   382,
+   62
+  ],
+  "screens": [
+   13
+  ]
+ },
+ "army_move": {
+  "xy": [
+   68,
+   404
+  ],
+  "screens": [
+   4
+  ],
+  "note": "army info (RMB on an unselected army): move"
+ },
+ "army_disband": {
+  "xy": [
+   132,
+   404
+  ],
+  "screens": [
+   4
+  ]
+ },
+ "army_split": {
+  "xy": [
+   196,
+   404
+  ],
+  "screens": [
+   4
+  ],
+  "note": "refused (event 149) once the army moved"
+ },
+ "split_yes": {
+  "xy": [
+   302,
+   436
+  ],
+  "screens": [
+   17
+  ],
+  "note": "Army Division: thumbs up"
  }
 }

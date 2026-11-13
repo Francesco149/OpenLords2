@@ -67,18 +67,21 @@ keeps its host; the exe is content-addressed (`bin\<sha12>\ol2-rhost.exe`) so a 
 
 1. **Pick targets from the gaps**: `docs/findings/coverage-round3.md` "Not covered", `docs/human-traces.md`,
    `tools/bot/README.md` "Not yet", FRONT's unreached list; one behaviour per task.
-2. **Write the task** (`tasks/NAME.md`): `start:` a scenario (prefix replays are cheap), ordered `steps:` as predicates,
+2. **Check the target is a gap first**: name the retail functions the behaviour runs and grep them in
+   `/mnt/ephemeral/openlords2/drive/corpus_coverage.tsv` — split-arm (campaign 1) drove a flow the corpus already
+   covered (0 new functions). A task whose functions are covered is a documentation probe, not a coverage one: say so.
+3. **Write the task** (`tasks/NAME.md`): `start:` a scenario (prefix replays are cheap), ordered `steps:` as predicates,
    `forbid:` lines, prose with the findings / IDA functions. If the state is not named yet, say which function writes it.
-3. **Lint** predicates on runs that do the thing (`rd lint TASK --on RUN`).
-4. **Hand each task to a driver** with `DRIVER.md` + the task file:
+4. **Lint** predicates on runs that do the thing (`rd lint TASK --on RUN`).
+5. **Hand each task to a driver** with `DRIVER.md` + the task file:
    - **a subagent of the Claude Code session** (the default; the parent session's model): "read tools/drive/DRIVER.md
      and tools/drive/tasks/NAME.md; your run is NAME; report per the card";
    - **`tools/drive/agent.sh tasks/NAME.md --run NAME --budget N`** when there is API credit: `agent.sh --check-credit`
      (exit 4 = none) before a campaign; it checks again at start.
-5. **Accept:** `rd check` PASS, `rd verify` MATCH, `rd cov` (new retail functions), a picture of the moment looked at.
+6. **Accept:** `rd check` PASS, `rd verify` MATCH, `rd cov` (new retail functions), a picture of the moment looked at.
    Then `rd file R NAME` → `rhost.py corpus --bless --only '^NAME$'` (wine + win) → `rhost.py verify --only '^NAME$'`
    (the port's rows on it) → commit with the evidence line.
-6. **Keep what was learned:** names → `vars.json`, points → `ui.json`, game facts → `DRIVER.md`, tool gaps → fix the tool.
+7. **Keep what was learned:** names → `vars.json`, points → `ui.json`, game facts → `DRIVER.md`, tool gaps → fix the tool.
 
 ## Known limits
 

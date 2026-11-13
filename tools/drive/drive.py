@@ -729,9 +729,9 @@ def free_local_port():
     return p
 
 
-def win_ps(ps, timeout=600):
+def win_ps(ps, timeout=600, host=None):
     for attempt in range(4):
-        r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", RH.WIN, ps], text=True, capture_output=True, timeout=timeout)
+        r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", host or RH.WIN, ps], text=True, capture_output=True, timeout=timeout)
         if r.returncode == 255 and attempt < 3:
             time.sleep(2 + 3 * attempt)
             continue
@@ -874,7 +874,7 @@ def spawn_live(tag, movie, upto=None, idle=1800, wait=300, host=None):
             wpid, wport = win_spawn(name, ld, args, wait, tag)
         finally:
             shutil.rmtree(ld, ignore_errors=True)
-        s = {"host": "win", "pid": wpid, "wport": wport, "rundir": win}
+        s = {"host": "win", "ssh": RH.WIN, "pid": wpid, "wport": wport, "rundir": win}
         try:
             s["fwd"], s["port"] = win_forward(wpid, wport)
         except BaseException:
@@ -944,7 +944,7 @@ def kill_session(s):
         rd = s.get("rundir", "")
         if not rd.startswith(WIN_SESS + "\\") or not s.get("pid"):
             return
-        win_ps(f"$p = Get-CimInstance Win32_Process -Filter 'ProcessId={int(s['pid'])}'; "
+        win_ps(host=s.get("ssh"), ps=f"$p = Get-CimInstance Win32_Process -Filter 'ProcessId={int(s['pid'])}'; "
                f"if ($p -and $p.Name -eq 'ol2-rhost.exe' -and $p.CommandLine -like '*{rd}*') {{ Stop-Process -Id {int(s['pid'])} -Force; "
                f"Wait-Process -Id {int(s['pid'])} -Timeout 10 -ErrorAction SilentlyContinue }}; "
                f"Remove-Item '{rd}' -Recurse -Force -ErrorAction SilentlyContinue; exit 0", timeout=120)
@@ -981,7 +981,7 @@ def sess_file(s, f, dst):
         open(dst, "wb").write(data)
         return True
     if s.get("host") == "win":
-        return subprocess.run(["scp", "-q", f"{RH.WIN}:{s['rundir'].replace(chr(92), '/')}/{f}", dst], capture_output=True).returncode == 0 \
+        return subprocess.run(["scp", "-q", f"{s.get('ssh', RH.WIN)}:{s['rundir'].replace(chr(92), '/')}/{f}", dst], capture_output=True).returncode == 0 \
             and os.path.exists(dst)
     src = os.path.join(s["rundir"], f)
     if not os.path.exists(src):
@@ -1295,6 +1295,26 @@ def cmd_eval(a):
         r.close()
     for e, v in zip(a.exprs, vals):
         print(f"{e} = {repr(v) if a.raw else fmt(v)}" + (f"  (0x{int(v) & 0xffffffff:x})" if isinstance(v, int) and abs(v) > 9 else ""))
+
+
+def cmd_rec(a):
+    """every field of record REC slot I (R / C / A), or with no slot the in-use slots of A / C as a table"""
+    r = Run(a.run)
+    recs = r.vars.records
+    if a.rec not in recs:
+        raise SystemExit(f"records: {' '.join(recs)}")
+    fields = sorted(recs[a.rec]["fields"], key=lambda f: int(str(recs[a.rec]["fields"][f][0]), 16))
+    lo, hi = recs[a.rec]["slots"]
+    slots = [a.slot] if a.slot is not None else list(range(lo, hi + 1))
+    vals = r.ev(*[f"{a.rec}({i}).{f}" for i in slots for f in fields])
+    rows = [dict(zip(fields, vals[k * len(fields):(k + 1) * len(fields)])) for k in range(len(slots))]
+    for i, row in zip(slots, rows):
+        if a.slot is None and a.rec == "A" and row.get("owner", 0) == 0:
+            continue
+        if a.slot is None and a.rec == "C" and i > int(r.ev("n_counties")[0]):
+            continue
+        print(f"{a.rec}({i}): " + "  ".join(f"{f}={fmt(v)}" for f, v in row.items() if v or a.slot is not None))
+    r.close()
 
 
 def cmd_movie(a):
@@ -1845,6 +1865,13 @@ def cmd_verify(a):
     tr = os.path.join(r.dir, "verify.trace.jsonl")
     r.movie.write(tr, comment=r.name, rel_to=r.dir)
     host = a.target or (r.sess or {}).get("host", "wine")
+    if host == "win":
+        RH.WIN = (r.sess or {}).get("ssh", RH.WIN)
+        if not win_up(3):
+            print(f"[{RH.WIN} does not answer: verifying on wine (same state hashes on every host)]")
+            host = "wine"
+    elif host == "bunker" and not host_up("bunker"):
+        host = "wine"
     b = argparse.Namespace(jobs=1, target=host, extra=None, frames=None, fb_hash=False)
     _, bd, res, out = RH.run_batch(b, [("verify", tr, json.load(open(tr)) if False else Movie_meta(tr))], "rd-verify")
     v = res.get("verify") or {}
@@ -2062,6 +2089,7 @@ def main():
     p = sp.add_parser("text"); p.add_argument("run"); p.add_argument("--all", action="store_true"); p.add_argument("--age", type=int, default=120)
     p.set_defaults(fn=cmd_text)
     p = sp.add_parser("hot"); p.add_argument("run"); p.set_defaults(fn=cmd_hot)
+    p = sp.add_parser("rec"); p.add_argument("run"); p.add_argument("rec"); p.add_argument("slot", nargs="?", type=int); p.set_defaults(fn=cmd_rec)
     p = sp.add_parser("movie"); p.add_argument("run"); p.add_argument("-n", type=int, default=20); p.set_defaults(fn=cmd_movie)
     p = sp.add_parser("eval"); p.add_argument("run"); p.add_argument("exprs", nargs="+"); p.add_argument("--at"); p.add_argument("--at-frame", type=int)
     p.add_argument("--raw", action="store_true"); p.set_defaults(fn=cmd_eval)
