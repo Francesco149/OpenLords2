@@ -279,6 +279,58 @@
     "unrest_band": [
      "20",
      "u8"
+    ],
+    "grain_weather": [
+     "24c",
+     "s32"
+    ],
+    "cattle_weather": [
+     "270",
+     "s32"
+    ],
+    "herd_crowding": [
+     "25c",
+     "s32"
+    ],
+    "cattle_births": [
+     "268",
+     "s32"
+    ],
+    "cattle_deaths": [
+     "26c",
+     "s32"
+    ],
+    "cattle_event_amount": [
+     "274",
+     "s32"
+    ],
+    "grain_seed": [
+     "230",
+     "s32"
+    ],
+    "weather": [
+     "21b",
+     "u8"
+    ],
+    "moisture": [
+     "21d",
+     "s8"
+    ],
+    "fertility": [
+     "208",
+     "s32"
+    ],
+    "pastures": [
+     "200",
+     "u8"
+    ],
+    "wheat_fields": [
+     "201",
+     "u8"
+    ],
+    "fallow_fields": [
+     "1ff",
+     "u8"
     ]
    }
   },
@@ -431,7 +483,8 @@
  "tick": {
   "addr": "57c998",
   "type": "s32",
-  "note": "master sim tick"
+  "note": "master sim tick: runs ~280 frames into a season, then freezes until End turn (probe farming)",
+  "status": true
  },
  "mode": {
   "addr": "57c8fc",

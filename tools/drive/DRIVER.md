@@ -43,6 +43,8 @@ rd search R --goal EXPR [--avoid EXPR] [--cell "(a, b)"] [--actions SPEC ..] [--
             [--score EXPR [--apply-best]] [--max-len N]
 rd rec R A|C|R [SLOT]   (a record's fields: the pieces in use, a county, a realm)
 rd cell R COL,ROW ..    (where a map cell is on screen now)
+rd sweep R --wait A..B [--then SPEC] [--frames N] [--until EXPR] --read EXPR,.. [--where EXPR] [--apply N]
+                        (from a savestate: wait N, THEN, read — one row per N; --apply N keeps one)
 rd seasons R N [--until EXPR] [--watch EXPR,..] [--battle auto|field]   (End turn N times, the bot's settling: scrolls,
                         popups, confirms (no), sieges (no engines), battles auto-resolved / fought; ~0.1 s a season)
 rd covered VA|NAME ..   (is a retail function reached by the corpus, by which scenarios — before you start)
@@ -71,9 +73,10 @@ boundary (`c{C(3).capital_col * 32},{...}` — rarely needed). Example: `"c@endt
 order needs the cursor to **rest on the destination** first (`h`), then the click; RMB backs out of panels and
 dismisses report scrolls (`r300,240`); the first use of a feature pops a hint scroll (screen 0x27: RMB); an event
 scroll on the map (`modal != 0`) is dismissed by a LEFT click on it (RMB does not) and eats the next map click.
-A season runs in real time: sim ticks advance while you think, AI moves happen at fixed ticks, and the RNG (`rng_b`)
-steps once a frame — how long you wait before End turn changes every roll of that season (probe ev-13d: a realm event
-made to fire by modelling the LFSR; `rng7`, `phase`).
+A season runs in real time for its first ~280 frames: sim ticks (`tick`) advance, AI moves happen at fixed ticks, and
+the RNG (`rng_b`) steps once a tick — then the ticks FREEZE until End turn. So the rolls of a season (realm / field
+events, weather) depend on WHEN in those first ~280 frames you press End turn: checkpoint at the season's start and
+`rd sweep R --wait 0..280 --then "c@endturn" --until "phase == 1" --read "C(5).ev_id"` (probes ev-13d, farming).
 
 **Expressions** (goals, `--until`, `--watch`, `eval`, task steps): Python syntax over named state (`rd ram R list`),
 `frame`, raw reads `u8(va) s8 u16 s16 u32 s32 f32` (nestable), `+ - * / // % & | ^ << >> ~`, comparisons, `and or
@@ -186,6 +189,10 @@ the other hosts.
 - **Popups** (probe popups): `modal` = the message id, `popup_type` its kind, `popup_from` the sender realm; a left click
   on one of your county's buildings on the map gives the type-4 notice (the castle: "Building off/on" toggles!);
   Display > Animations off (`animations` 0) shows victory / defeat / capture as plain scrolls.
+- **Farming** (probe farming): wheat is sown in Winter on fallow fields (10 sacks seed a field; ×12 in 4 seasons
+  before events / weather / fertility); with Advanced farming the Town Center layout shifts ~70 px down. Herd crowding
+  = herd / pastures (≤10 low … >30 massive). Field events need ≥ 50 sacks / ≥ 40 head. County fields `weather`,
+  `moisture`, `fertility`, `grain_weather`, `cattle_weather`, `herd_crowding`, `pastures`, `wheat_fields` …
 - Task files: `final:` predicates must hold on the movie's last frame (`steps` are ordered "at some frame after").
 - `rd cov R --blocks --fn NAME` lists a function's blocks nobody reaches yet — what to aim at next.
 - Loads of game files take one frame here; never wait by wall time, wait for state (`--until`).

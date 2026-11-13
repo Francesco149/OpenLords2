@@ -1470,6 +1470,41 @@ def cmd_seasons(a):
     r.close()
 
 
+def cmd_sweep(a):
+    """from the state now: for each wait N in A..B — restore, wait N frames, play THEN, run up to --frames, read the
+    expressions — one row per N (savestates: ~ms each). --apply N keeps that row's inputs."""
+    r = Run(a.run)
+    lv = r.attach()
+    lo, hi = (int(x) for x in a.wait.split(".."))
+    exprs = split_top(a.read)
+    then_items = parse_spec(a.then) if a.then else []
+    tsegs, tframes = items_to_segs(then_items, lambda e: lv.prog(r.vars.compile(e)), resolve=r.screen_point) if then_items else ("", 0)
+    ids, sl = sampled_cols(lv, r.vars, exprs)
+    u = f" u={lv.prog(r.vars.program(a.until))}" if a.until else ""
+    root = r.snap()
+    print("     N  " + "  ".join(exprs))
+    try:
+        for n in range(lo, hi + 1, a.step):
+            lv.cmd(f"restore {root}")
+            segs = ",".join(x for x in (f"w{n}" if n else "", tsegs, f"w{a.frames}" if a.frames else "") if x)
+            if segs:
+                lv.cmd(f"run {segs}{u}")
+            vals = fold_row([float(x) for x in Live.kv(lv.cmd("eval " + ",".join(map(str, ids))))["v"].split(":")], sl)
+            if not a.where or r.ev(a.where)[0]:
+                print(f"  {n:5d}  " + "  ".join(fmt(v) for v in vals), flush=True)
+    finally:
+        lv.cmd(f"restore {root}")
+        lv.cmd(f"free {root}", check=False)
+    if a.apply is not None:
+        r.push_undo()
+        segs = ",".join(x for x in (f"w{a.apply}" if a.apply else "", tsegs, f"w{a.frames}" if a.frames else "") if x)
+        lv.cmd(f"run {segs}{u}")
+        print(f"applied N={a.apply}  " + r.status_line())
+    r.sync_movie()
+    r.save_sess()
+    r.close()
+
+
 def cmd_cell(a):
     """where map cell COL,ROW is on screen now (retail's own viewport geometry, tools/bot/mapview.py) — read only"""
     sys.path.insert(0, os.path.join(ROOT, "tools", "bot"))
@@ -1722,10 +1757,10 @@ def default_actions(r):
     return acts + [f".*{DEFAULT_WAIT}"]
 
 
-def action_arg(specs, prog=None):
+def action_arg(specs, prog=None, resolve=None):
     acts = []
     for s in specs:
-        seg, total = items_to_segs(parse_spec(s), prog, sep="+")
+        seg, total = items_to_segs(parse_spec(s), prog, sep="+", resolve=resolve)
         if not total:
             raise SystemExit(f"action {s!r} needs at least one frame (a wait)")
         acts.append(seg)
@@ -1740,10 +1775,10 @@ def search_progs(V, a):
     return P
 
 
-def explore_cmd(lv, V, a, seed, apply, P):
+def explore_cmd(lv, V, a, seed, apply, P, resolve=None):
     g = lv.prog(P["goal"])
     cells = [lv.prog(t) for t in P["cell"]]
-    cmd = f"explore g={g} c={','.join(map(str, cells))} acts={action_arg(a.actions, lambda e: lv.prog(V.compile(e)))}"
+    cmd = f"explore g={g} c={','.join(map(str, cells))} acts={action_arg(a.actions, lambda e: lv.prog(V.compile(e)), resolve)}"
     if P["avoid"]:
         cmd += f" a={lv.prog(P['avoid'])}"
     if P["score"]:
@@ -1798,7 +1833,7 @@ def search_body(r, lv, a, P, st):
     results = []
     apply_mode = 2 if a.apply_best else 1 if a.apply else 0
     if a.jobs <= 1:
-        res = lv.cmd(explore_cmd(lv, r.vars, a, a.seed, apply_mode, P), check=False)
+        res = lv.cmd(explore_cmd(lv, r.vars, a, a.seed, apply_mode, P, r.screen_point), check=False)
         if not res.startswith("ok"):
             raise SystemExit("search: " + res)
         results.append((Live.kv(res), "main"))
@@ -1821,12 +1856,18 @@ def search_body(r, lv, a, P, st):
                     last = e
                     passed.setdefault(h, str(e).split(" — ", 1)[-1][:160])
             errs.append(str(last))
+        cache = {}
+        refs = lambda ref: cache.setdefault(ref, r.screen_point(ref))   # resolved once on the main session (same frame everywhere)
+        for spec in a.actions:
+            for it in parse_spec(spec):
+                if it[0] == "e" and isinstance(it[3], tuple) and it[3] and it[3][0] == "ref":
+                    refs(it[3][1])
         ts = [threading.Thread(target=boot, args=(i,)) for i in range(1, a.jobs)]
         [t.start() for t in ts]
 
         def one(lvx, seed, apply, tag):
             try:
-                res = lvx.cmd(explore_cmd(lvx, r.vars, a, seed, apply, P), check=False)
+                res = lvx.cmd(explore_cmd(lvx, r.vars, a, seed, apply, P, refs), check=False)
             except BaseException as e:          # noqa: B902
                 res = f"err {type(e).__name__}: {e}"
             results.append((Live.kv(res) if res.startswith("ok") else {"found": "0", "err": res}, tag))
@@ -2391,6 +2432,10 @@ def main():
     p = sp.add_parser("rec"); p.add_argument("run"); p.add_argument("rec"); p.add_argument("slot", nargs="?", type=int); p.set_defaults(fn=cmd_rec)
     p = sp.add_parser("seasons"); p.add_argument("run"); p.add_argument("n", type=int); p.add_argument("--until"); p.add_argument("--watch")
     p.add_argument("--battle", choices=("auto", "field"), default="auto"); p.set_defaults(fn=cmd_seasons)
+    p = sp.add_parser("sweep", help="restore, wait N, THEN, read: one row per N"); p.add_argument("run"); p.add_argument("--wait", required=True, help="A..B")
+    p.add_argument("--then"); p.add_argument("--frames", type=int, default=0, help="frames to run after THEN before reading"); p.add_argument("--until")
+    p.add_argument("--read", required=True); p.add_argument("--where"); p.add_argument("--step", type=int, default=1); p.add_argument("--apply", type=int)
+    p.set_defaults(fn=cmd_sweep)
     p = sp.add_parser("cell"); p.add_argument("run"); p.add_argument("cells", nargs="+", help="COL,ROW .."); p.set_defaults(fn=cmd_cell)
     p = sp.add_parser("movie"); p.add_argument("run"); p.add_argument("-n", type=int, default=20); p.set_defaults(fn=cmd_movie)
     p = sp.add_parser("eval"); p.add_argument("run"); p.add_argument("exprs", nargs="+"); p.add_argument("--at"); p.add_argument("--at-frame", type=int)
