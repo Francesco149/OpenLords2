@@ -1126,7 +1126,7 @@ class Run:
             s += "  [POKED: memory was written by hand — this run's movie does not reproduce it]"
         return s
 
-    def play(self, spec, until=None, avoid=None, watch=(), every=0, quiet=False, rows=40, undo=True, pad=0):
+    def play(self, spec, until=None, avoid=None, watch=(), every=0, quiet=False, rows=40, undo=True, pad=0, changes=False):
         lv = self.attach()
         items = parse_spec(spec)
         if until:                                         # --until is checked after the spec's last event (a click is never cut)
@@ -1173,7 +1173,9 @@ class Run:
             prev = None
             for f, vals in parse_samples(k["samples"]):
                 if watch and (not every or (f - (out["frame"] - out["ran"])) % every == 0):
-                    out["rows"].append((f, fold_row(vals, wsl)))
+                    row = fold_row(vals, wsl)
+                    if not changes or not out["rows"] or out["rows"][-1][1] != row:
+                        out["rows"].append((f, row))
                 evs = fold_row(vals, esl)
                 if prev is not None:
                     for n, a, b in zip(ev_names, prev, evs):
@@ -1282,7 +1284,11 @@ def cmd_new(a):
 
 def cmd_play(a):
     r = Run(a.run)
-    r.play(a.spec, a.until, a.avoid, split_top(a.watch) if a.watch else (), a.every, rows=a.rows, pad=a.pad if a.pad is not None else (3000 if a.until else 0))
+    items = parse_spec(a.spec)
+    last = max((i for i, it in enumerate(items) if it[0] == "e"), default=-1)
+    trailing = sum(it[1] for it in items[last + 1:] if it[0] == "w")
+    pad = a.pad if a.pad is not None else (3000 if a.until and trailing <= HOLD else 0)   # a spec ending in its own wait is not padded
+    r.play(a.spec, a.until, a.avoid, split_top(a.watch) if a.watch else (), a.every, rows=a.rows, pad=pad, changes=a.changes)
     r.close()
 
 
@@ -1616,11 +1622,17 @@ def cmd_search(a):
     st = {"applied": False}
     try:
         return search_body(r, lv, a, P, st)
+    except (socket.timeout, TimeoutError):
+        r.live = None
+        r.stop()
+        raise SystemExit(f"search: the session did not answer within {a.time_limit + a.refine + 180:.0f}s — retail is stuck between frames "
+                         "(an action opened something that never returns to the frame loop?). The session was stopped; the run is as "
+                         "before the search. Try other actions, and report which.")
     finally:
         if not st["applied"]:
             try:
                 r.drop_undo()
-            except (OSError, SessionEnded):
+            except (OSError, SessionEnded, socket.timeout, AttributeError):
                 pass
         r.save_sess()
         r.close()
@@ -1628,6 +1640,8 @@ def cmd_search(a):
 
 def search_body(r, lv, a, P, st):
     t0 = time.time()
+    print(f"[searching up to {a.time_limit:.0f}s + {a.refine:.0f}s refine, {a.jobs} session(s) …]", flush=True)
+    lv.s.settimeout(a.time_limit + a.refine + 180)   # a wedged session (retail stuck between frames) must not hang the driver
     results = []
     apply_mode = 2 if a.apply_best else 1 if a.apply else 0
     if a.jobs <= 1:
@@ -2122,6 +2136,22 @@ def cov_blocks(a, r, tr):
     json.dump({"new_blocks": [f"{v:x}" for v in sorted(new)], "bytes": nb, "functions": len(byf)}, open(os.path.join(r.dir, "cov_blocks.json"), "w"))
 
 
+def cmd_covered(a):
+    """is a retail function (VA or IDA name) reached by the corpus, by which scenarios — check a task's premise first"""
+    fn, _ = RH.function_table()
+    byname = {n: v for v, (n, _) in fn.items()}
+    corpus_coverage()
+    rows = {int(l.split("\t")[0], 16): l.rstrip("\n").split("\t") for l in open(CORPUS_COV).readlines()[1:]}
+    for q in a.what:
+        va = byname.get(q) or int(q.lower().removeprefix("fun_").removeprefix("sub_").removeprefix("0x"), 16)
+        nm = fn.get(va, ("?", 0))[0]
+        if va in rows:
+            sc = rows[va][3].split(",")
+            print(f"{va:08x} {nm}: REACHED by {len(sc)} scenario(s): {', '.join(sc[:8])}{' …' if len(sc) > 8 else ''}")
+        else:
+            print(f"{va:08x} {nm}: not reached by the corpus")
+
+
 def cmd_cov(a):
     """the retail functions this run's movie reaches that no corpus scenario does (a replay with --coverage)"""
     r = Run(a.run, lock=False)
@@ -2181,7 +2211,8 @@ def main():
     p = sp.add_parser("new"); p.add_argument("run"); p.add_argument("--from", dest="src", required=True); p.add_argument("--force", action="store_true"); p.set_defaults(fn=cmd_new)
     p = sp.add_parser("play"); p.add_argument("run"); p.add_argument("spec"); p.add_argument("--until"); p.add_argument("--avoid")
     p.add_argument("--watch"); p.add_argument("--every", type=int, default=0); p.add_argument("--rows", type=int, default=40)
-    p.add_argument("--pad", type=int, help="wait up to N more frames after the spec (default with --until: 3000)"); p.set_defaults(fn=cmd_play)
+    p.add_argument("--pad", type=int, help="wait up to N more frames after the spec (default with --until and no trailing wait of its own: 3000)")
+    p.add_argument("--changes", action="store_true", help="--watch: only rows where a value changed"); p.set_defaults(fn=cmd_play)
     p = sp.add_parser("status"); p.add_argument("run"); p.set_defaults(fn=cmd_status)
     p = sp.add_parser("text"); p.add_argument("run"); p.add_argument("--all", action="store_true"); p.add_argument("--age", type=int, default=120)
     p.set_defaults(fn=cmd_text)
@@ -2215,6 +2246,7 @@ def main():
     p = sp.add_parser("check"); p.add_argument("run"); p.add_argument("task"); p.set_defaults(fn=cmd_check)
     p = sp.add_parser("lint"); p.add_argument("task"); p.add_argument("--on", nargs="+", required=True); p.set_defaults(fn=cmd_lint)
     p = sp.add_parser("file"); p.add_argument("run"); p.add_argument("name"); p.add_argument("note", nargs="*"); p.add_argument("--force", action="store_true"); p.set_defaults(fn=cmd_file)
+    p = sp.add_parser("covered"); p.add_argument("what", nargs="+"); p.set_defaults(fn=cmd_covered)
     p = sp.add_parser("cov"); p.add_argument("run"); p.add_argument("--show", type=int, default=40); p.add_argument("--refresh-corpus", action="store_true")
     p.add_argument("--blocks", action="store_true", help="basic blocks (tools/drive/blocks.py) instead of whole functions")
     p.add_argument("--target", choices=("win", "wine", "bunker")); p.set_defaults(fn=cmd_cov)

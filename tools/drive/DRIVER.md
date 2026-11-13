@@ -42,6 +42,7 @@ rd ck R save NAME | load NAME | list        rd undo R        rd rewind R --to F
 rd search R --goal EXPR [--avoid EXPR] [--cell "(a, b)"] [--actions SPEC ..] [--time-limit S] [--apply] [-j N]
             [--score EXPR [--apply-best]] [--max-len N]
 rd rec R A|C|R [SLOT]   (a record's fields: the pieces in use, a county, a realm)
+rd covered VA|NAME ..   (is a retail function reached by the corpus, by which scenarios — before you start)
 rd check R TASK.md      rd verify R      rd cov R [--blocks]      rd lint TASK.md --on RUN      rd movie R      rd stop R      rd ls
 ```
 
@@ -65,7 +66,10 @@ boundary (`c{C(3).capital_col * 32},{...}` — rarely needed). Example: `"c@endt
 300 ms (~18 frames) after release** and only if no UI element took the press → space map clicks ≥ 25 frames; a march
 order needs the cursor to **rest on the destination** first (`h`), then the click; RMB backs out of panels and
 dismisses report scrolls (`r300,240`); the first use of a feature pops a hint scroll (screen 0x27: RMB); an event
-scroll on the map (`modal != 0`) eats the next map click.
+scroll on the map (`modal != 0`) is dismissed by a LEFT click on it (RMB does not) and eats the next map click.
+A season runs in real time: sim ticks advance while you think, AI moves happen at fixed ticks, and the RNG (`rng_b`)
+steps once a frame — how long you wait before End turn changes every roll of that season (probe ev-13d: a realm event
+made to fire by modelling the LFSR; `rng7`, `phase`).
 
 **Expressions** (goals, `--until`, `--watch`, `eval`, task steps): Python syntax over named state (`rd ram R list`),
 `frame`, raw reads `u8(va) s8 u16 s16 u32 s32 f32` (nestable), `+ - * / // % & | ^ << >> ~`, comparisons, `and or

@@ -263,6 +263,14 @@
     "castle_labor_left": [
      "1cc",
      "s32"
+    ],
+    "ev_active": [
+     "0",
+     "u8"
+    ],
+    "ev_id": [
+     "1aa",
+     "s16"
     ]
    }
   },
@@ -511,7 +519,8 @@
  },
  "rng_b": {
   "addr": "58fe08",
-  "type": "u32"
+  "type": "u32",
+  "note": "31-bit LFSR, 31 shifts a step; steps once per sim tick (= frame) and once in the turn advance (probe ev-13d)"
  },
  "crowns": {
   "expr": "R(me).crowns",
@@ -560,5 +569,15 @@
   "addr": "553f54",
   "type": "u8",
   "note": "the task open on the labor detail scroll (screen 15): 4 castle"
+ },
+ "rng7": {
+  "expr": "u32(0x58fd60) & 0x7f",
+  "note": "the realm-event roll's RNG bits: index (2*rng7 + county) mod 256 into table 0x4d6108 (probe ev-13d)"
+ },
+ "phase": {
+  "addr": "569584",
+  "type": "s32",
+  "event": true,
+  "note": "the season's phase: 4 the human plays, 6 after End turn, 7 the turn advance (probe ev-13d)"
  }
 }
