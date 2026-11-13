@@ -1,0 +1,499 @@
+{
+ "_records": {
+  "R": {
+   "note": "realm (lord) p=1..5 \u2014 0x57bf00 + p*0x160 (docs/findings/game-state-map.md)",
+   "base": "57bf00",
+   "stride": "0x160",
+   "slots": [
+    1,
+    5
+   ],
+   "fields": {
+    "ready": [
+     "0",
+     "s32"
+    ],
+    "active": [
+     "4",
+     "u8"
+    ],
+    "human": [
+     "5",
+     "u8"
+    ],
+    "personality": [
+     "7",
+     "u8"
+    ],
+    "color": [
+     "a",
+     "u8"
+    ],
+    "troop_strength": [
+     "14",
+     "s32"
+    ],
+    "rank": [
+     "2b",
+     "u8"
+    ],
+    "score": [
+     "50",
+     "s32"
+    ],
+    "ally": [
+     "81",
+     "u8"
+    ],
+    "army_wages": [
+     "fc",
+     "s32"
+    ],
+    "crowns": [
+     "118",
+     "s32"
+    ],
+    "crowns_last": [
+     "11c",
+     "s32"
+    ],
+    "iron": [
+     "120",
+     "s32"
+    ],
+    "stone": [
+     "128",
+     "s32"
+    ],
+    "wood": [
+     "130",
+     "s32"
+    ],
+    "crossbows": [
+     "140",
+     "s32"
+    ],
+    "maces": [
+     "144",
+     "s32"
+    ],
+    "swords": [
+     "148",
+     "s32"
+    ],
+    "pikes": [
+     "14c",
+     "s32"
+    ],
+    "bows": [
+     "150",
+     "s32"
+    ],
+    "armour": [
+     "154",
+     "s32"
+    ],
+    "tax_income": [
+     "15c",
+     "s32"
+    ]
+   }
+  },
+  "C": {
+   "note": "county k=1..n_counties \u2014 0x53f9b0 + k*0x300",
+   "base": "53f9b0",
+   "stride": "0x300",
+   "slots": [
+    1,
+    16
+   ],
+   "fields": {
+    "owner": [
+     "5",
+     "u8"
+    ],
+    "industry_pct": [
+     "8",
+     "s8"
+    ],
+    "health": [
+     "9",
+     "u8"
+    ],
+    "happiness": [
+     "c",
+     "s8"
+    ],
+    "happiness_last": [
+     "d",
+     "s8"
+    ],
+    "population": [
+     "24",
+     "s32"
+    ],
+    "population_last": [
+     "28",
+     "s32"
+    ],
+    "births": [
+     "30",
+     "s32"
+    ],
+    "deaths": [
+     "34",
+     "s32"
+    ],
+    "capital_col": [
+     "6c",
+     "u8"
+    ],
+    "capital_row": [
+     "6d",
+     "u8"
+    ],
+    "castle_col": [
+     "74",
+     "u8"
+    ],
+    "castle_row": [
+     "75",
+     "u8"
+    ],
+    "tax": [
+     "b9",
+     "u8"
+    ],
+    "tax_income": [
+     "c0",
+     "s32"
+    ],
+    "ration_achieved": [
+     "15d",
+     "u8"
+    ],
+    "ration": [
+     "15e",
+     "u8"
+    ],
+    "meat_pct": [
+     "15f",
+     "s8"
+    ],
+    "merc_offer": [
+     "1ad",
+     "u8"
+    ],
+    "garrison": [
+     "1bc",
+     "s32"
+    ],
+    "castle": [
+     "1c0",
+     "u8"
+    ],
+    "castle_prev": [
+     "1c1",
+     "u8"
+    ],
+    "castle_building": [
+     "1c3",
+     "u8"
+    ],
+    "labor_left": [
+     "1cc",
+     "s32"
+    ],
+    "grain": [
+     "224",
+     "s32"
+    ],
+    "grain_change": [
+     "22c",
+     "s32"
+    ],
+    "cattle": [
+     "250",
+     "s32"
+    ],
+    "cattle_change": [
+     "258",
+     "s32"
+    ],
+    "smithy_weapon": [
+     "290",
+     "u8"
+    ]
+   }
+  },
+  "A": {
+   "note": "map piece i=1..150 (armies, rebels, merchants, supply carts) \u2014 0x52f0b0 + i*0x1a4; owner 0 = free slot",
+   "base": "52f0b0",
+   "stride": "0x1a4",
+   "slots": [
+    1,
+    150
+   ],
+   "fields": {
+    "owner": [
+     "0",
+     "s8"
+    ],
+    "kind": [
+     "8",
+     "u8"
+    ],
+    "col": [
+     "a",
+     "u8"
+    ],
+    "row": [
+     "b",
+     "u8"
+    ],
+    "home": [
+     "11",
+     "u8"
+    ],
+    "dest_col": [
+     "14",
+     "u8"
+    ],
+    "dest_row": [
+     "15",
+     "u8"
+    ],
+    "order": [
+     "1a",
+     "u8"
+    ],
+    "moving": [
+     "14c",
+     "u8"
+    ],
+    "name_idx": [
+     "14f",
+     "u8"
+    ],
+    "moved": [
+     "153",
+     "s8"
+    ],
+    "health": [
+     "155",
+     "u8"
+    ],
+    "wages": [
+     "15c",
+     "s32"
+    ],
+    "formed": [
+     "164",
+     "s16"
+    ],
+    "trading_in": [
+     "167",
+     "u8"
+    ],
+    "men": [
+     "168",
+     "s32"
+    ],
+    "peasants": [
+     "16c",
+     "s16"
+    ],
+    "crossbowmen": [
+     "16e",
+     "s16"
+    ],
+    "macemen": [
+     "170",
+     "s16"
+    ],
+    "swordsmen": [
+     "172",
+     "s16"
+    ],
+    "pikemen": [
+     "174",
+     "s16"
+    ],
+    "archers": [
+     "176",
+     "s16"
+    ],
+    "knights": [
+     "178",
+     "s16"
+    ],
+    "merc_class": [
+     "195",
+     "u8"
+    ],
+    "merc_n": [
+     "196",
+     "u8"
+    ],
+    "merc_nation": [
+     "197",
+     "u8"
+    ],
+    "garrisoned": [
+     "198",
+     "u8"
+    ],
+    "besieging": [
+     "199",
+     "u8"
+    ],
+    "siege_seasons": [
+     "19c",
+     "u8"
+    ]
+   }
+  }
+ },
+ "screen": {
+  "addr": "4eac50",
+  "type": "u8",
+  "status": true,
+  "event": true,
+  "note": "screen id: 0 map, 2 workforce, 8 merchant, 9 court, 0xb diplomacy, 0xc trade, 0x10 army move, 0x12/0x13 battle prompt, 0x17 raise army, 0x19 rations, 0x1b castle, 0x1c victory/defeat, 0x1d siege, 0x1e confirm, 0x1f title menus, 0x20 rankings, 0x22 movie, 0x23 turn processing, 0x27 scroll, 0x28-0x2b battlefield (tools/bot/l2state.py SCREENS)"
+ },
+ "state": {
+  "addr": "52af94",
+  "type": "s32",
+  "status": true,
+  "event": true,
+  "note": "engine state: 2 boot/title, 3 in game, 10 save, 0xb load"
+ },
+ "tick": {
+  "addr": "57c998",
+  "type": "s32",
+  "note": "master sim tick"
+ },
+ "mode": {
+  "addr": "57c8fc",
+  "type": "s32",
+  "event": true,
+  "note": "0 strategic / 2 tactical combat"
+ },
+ "modal": {
+  "addr": "53e910",
+  "type": "s32",
+  "event": true,
+  "note": "event scroll id up (extended pause; RMB does not dismiss)"
+ },
+ "season": {
+  "addr": "57c934",
+  "type": "s32",
+  "status": true,
+  "event": true,
+  "note": "1 Spring .. 4 Winter"
+ },
+ "year": {
+  "addr": "553edc",
+  "type": "s32",
+  "status": true,
+  "note": "AD"
+ },
+ "turn": {
+  "addr": "553240",
+  "type": "s32",
+  "status": true,
+  "event": true,
+  "note": "turn counter, 1 = first season"
+ },
+ "me": {
+  "addr": "57c8cc",
+  "type": "s32",
+  "note": "the human's realm (whose HUD is shown)"
+ },
+ "sel_county": {
+  "addr": "57c93c",
+  "type": "s32",
+  "status": true,
+  "event": true,
+  "note": "selected county (HUD)"
+ },
+ "n_counties": {
+  "addr": "56d5dc",
+  "type": "s32",
+  "note": "counties on this map"
+ },
+ "map_id": {
+  "addr": "53f034",
+  "type": "s32"
+ },
+ "difficulty": {
+  "addr": "53f23c",
+  "type": "s32"
+ },
+ "not_ready": {
+  "addr": "554004",
+  "type": "s32",
+  "note": "players still mid-turn"
+ },
+ "cam_col": {
+  "addr": "5651b4",
+  "type": "s32",
+  "note": "strategic scroll origin col"
+ },
+ "cam_row": {
+  "addr": "5651b8",
+  "type": "s32"
+ },
+ "sel_piece": {
+  "addr": "52afbc",
+  "type": "s32",
+  "event": true,
+  "note": "piece under the last map query / selection"
+ },
+ "popup_type": {
+  "addr": "5440a4",
+  "type": "s32",
+  "event": true,
+  "note": "popup: 0/2/3/13/14/18 notices, 1 AI message, 10 pay-for-help, 11, 17"
+ },
+ "popup_from": {
+  "addr": "553ee0",
+  "type": "s32"
+ },
+ "confirm_kind": {
+  "addr": "57cb14",
+  "type": "s32",
+  "note": "confirm dialog 0x1e line (loc grp 10): 7 garrison, 8 besiege, 13 lift siege"
+ },
+ "rng_a": {
+  "addr": "58fe28",
+  "type": "u32"
+ },
+ "rng_b": {
+  "addr": "58fe08",
+  "type": "u32"
+ },
+ "crowns": {
+  "expr": "R(me).crowns",
+  "status": true,
+  "event": true,
+  "note": "the human's treasury"
+ },
+ "my_counties": {
+  "expr": "count(C, owner == me)",
+  "status": true,
+  "event": true
+ },
+ "my_armies": {
+  "expr": "count(A, owner == me and kind == 1)",
+  "status": true,
+  "event": true
+ },
+ "in_game": {
+  "expr": "state == 3"
+ },
+ "awaiting_input": {
+  "expr": "screen == 0 and modal == 0 and R(me).ready > 0 and R(me).ready < 999",
+  "note": "the map, no event scroll, the human mid-turn"
+ }
+}

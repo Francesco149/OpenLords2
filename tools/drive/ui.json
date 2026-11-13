@@ -1,0 +1,108 @@
+{
+ "_note": "named click points (640x480 game coords) for specs (c@name) and search actions; screens = screen ids where the point is a button (search default actions). Sources: tools/bot/ui.py, battle.py, actions.py",
+ "endturn": {
+  "xy": [
+   558,
+   469
+  ],
+  "screens": [
+   0
+  ],
+  "note": "End turn"
+ },
+ "back": {
+  "xy": [
+   300,
+   240
+  ],
+  "note": "RMB here backs out of panels / dismisses report scrolls"
+ },
+ "rations_open": {
+  "xy": [
+   600,
+   218
+  ],
+  "screens": [
+   0
+  ]
+ },
+ "auto_resolve": {
+  "xy": [
+   383,
+   128
+  ],
+  "screens": [
+   18,
+   19
+  ],
+  "note": "battle prompt: the right gauntlet = auto-calc"
+ },
+ "take_field": {
+  "xy": [
+   345,
+   128
+  ],
+  "screens": [
+   18,
+   19
+  ],
+  "note": "battle prompt: the left gauntlet = fight on the battlefield"
+ },
+ "result_continue": {
+  "xy": [
+   410,
+   412
+  ],
+  "note": "the hand on 'The Battle is decided.'"
+ },
+ "confirm_yes": {
+  "xy": [
+   240,
+   218
+  ],
+  "screens": [
+   30
+  ],
+  "note": "thumb up (confirm dialog 0x1e)"
+ },
+ "confirm_no": {
+  "xy": [
+   287,
+   218
+  ],
+  "screens": [
+   30
+  ],
+  "note": "thumb down"
+ },
+ "popup_yes": {
+  "xy": [
+   368,
+   200
+  ],
+  "note": "popup kinds 10/11"
+ },
+ "popup_no": {
+  "xy": [
+   404,
+   204
+  ]
+ },
+ "seal": {
+  "xy": [
+   425,
+   368
+  ],
+  "note": "event scroll seal fallback"
+ },
+ "title_single": {
+  "xy": [
+   320,
+   107
+  ],
+  "screens": [
+   31
+  ],
+  "note": "title: Single player"
+ }
+}
