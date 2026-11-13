@@ -14,7 +14,8 @@
 static HANDLE g_real[FAKE_MAX];
 static uint32_t g_next;
 /* a file handle's identity (CreateFileA's arguments) — the shadow re-opens a file a shadowed call closed (below) */
-typedef struct { char path[MAX_PATH]; DWORD acc, share, fl; } fopen_t;
+typedef struct { char path[MAX_PATH]; DWORD acc, share, fl; } fopen_t;   /* fl == FO_MMIO: an HMMIO (acc = its open flags) */
+#define FO_MMIO 0xffffffffu
 static fopen_t *g_fo[FAKE_MAX];
 /* files opened inside a shadowed call, tagged with the meta generation (rh_handles_meta_save) current then: the
  * port side's opens (after the snapshot of retail's post-state) are discarded with that side and closed at the
@@ -122,7 +123,17 @@ static BOOL WINAPI h_FlushFileBuffers(HANDLE h) { return FlushFileBuffers(real_o
 static BOOL WINAPI h_SetEndOfFile(HANDLE h) { return SetEndOfFile(real_of(h)); }
 static BOOL WINAPI h_SetStdHandle(DWORD n, HANDLE h) { (void)n; (void)h; return TRUE; }
 /* mmio: the HMMIO retail keeps in its stream records is a handle too */
-static HMMIO WINAPI h_mmioOpenA(LPSTR p, LPMMIOINFO info, DWORD fl) { return (HMMIO)fake_of((HANDLE)p_mmioOpenA(p, info, fl)); }
+static HMMIO WINAPI h_mmioOpenA(LPSTR p, LPMMIOINFO info, DWORD fl)
+{
+    HANDLE h = fake_of((HANDLE)p_mmioOpenA(p, info, fl));
+    uint32_t v = (uint32_t)(uintptr_t)h;
+    if (p && v >= FAKE_BASE && v < FAKE_BASE + 4u * FAKE_MAX && !(v & 3)) {   /* identity for a savestate's re-open */
+        uint32_t k = (v - FAKE_BASE) >> 2;
+        if (!g_fo[k]) g_fo[k] = malloc(sizeof *g_fo[k]);
+        snprintf(g_fo[k]->path, MAX_PATH, "%s", p); g_fo[k]->acc = fl; g_fo[k]->share = 0; g_fo[k]->fl = FO_MMIO;
+    }
+    return (HMMIO)h;
+}
 static MMRESULT WINAPI h_mmioClose(HMMIO h, UINT fl) { MMRESULT r = mmioClose((HMMIO)real_of((HANDLE)h), fl); rh_handle_forget((HANDLE)h); return r; }
 static LONG WINAPI h_mmioRead(HMMIO h, HPSTR b, LONG n) { rh_shadow_prewrite(b, n > 0 ? (size_t)n : 0); return mmioRead((HMMIO)real_of((HANDLE)h), b, n); }
 static LONG WINAPI h_mmioSeek(HMMIO h, LONG o, int org) { return mmioSeek((HMMIO)real_of((HANDLE)h), o, org); }
@@ -234,5 +245,71 @@ void rh_handles_meta_restore(const void *p)
             LARGE_INTEGER to = { .QuadPart = pos[k] };
             SetFilePointerEx(g_real[k], to, NULL, FILE_BEGIN);
         }
+    LeaveCriticalSection(&g_lk);
+}
+
+/* ---- savestates (rh_snap.c) ----
+ * A savestate holds the fake-handle table: per slot the real handle, the open identity (file: CreateFileA's
+ * arguments; mmio: mmioOpenA's path + flags) and the position. A restore makes each slot match: the same real
+ * handle still open → seek it; else close what the slot holds now and re-open from the identity (OPEN_EXISTING /
+ * no MMIO_CREATE), then seek; slots open now but not in the savestate are closed. Non-file handles (events,
+ * threads) keep whatever they are: retail Lords2 holds none across a frame boundary that a restore would change. */
+typedef struct { HANDLE real; int64_t pos; int has_fo; fopen_t fo; } hslot_t;
+typedef struct { uint32_t next; long live; hslot_t s[]; } hsnap_t;
+static int64_t slot_pos(uint32_t k)
+{
+    if (!g_real[k] || !g_fo[k]) return -1;
+    if (g_fo[k]->fl == FO_MMIO) { LONG p = mmioSeek((HMMIO)g_real[k], 0, SEEK_CUR); return p < 0 ? -1 : p; }
+    LARGE_INTEGER z = { .QuadPart = 0 }, at;
+    return SetFilePointerEx(g_real[k], z, &at, FILE_CURRENT) ? at.QuadPart : -1;
+}
+void *rh_handles_snap(void)
+{
+    EnterCriticalSection(&g_lk);
+    hsnap_t *m = malloc(sizeof *m + (g_next ? g_next : 1) * sizeof(hslot_t));
+    m->next = g_next; m->live = g_live;
+    for (uint32_t k = 0; k < g_next; k++) {
+        hslot_t *x = &m->s[k];
+        x->real = g_real[k]; x->pos = slot_pos(k); x->has_fo = g_real[k] && g_fo[k];
+        if (x->has_fo) x->fo = *g_fo[k];
+    }
+    LeaveCriticalSection(&g_lk);
+    return m;
+}
+static void slot_close(uint32_t k)
+{
+    if (!g_real[k]) return;
+    if (g_fo[k] && g_fo[k]->fl == FO_MMIO) mmioClose((HMMIO)g_real[k], 0);
+    else if (g_fo[k]) CloseHandle(g_real[k]);
+    /* (a non-file handle is left to the OS: never seen across a boundary) */
+    g_real[k] = NULL; g_live--;
+}
+void rh_handles_unsnap(void *p)
+{
+    hsnap_t *m = p;
+    EnterCriticalSection(&g_lk);
+    uint32_t top = g_next > m->next ? g_next : m->next;
+    for (uint32_t k = 0; k < top; k++) {
+        const hslot_t *x = k < m->next ? &m->s[k] : NULL;
+        int same = x && x->real && g_real[k] == x->real && g_fo[k] && x->has_fo && !strcmp(g_fo[k]->path, x->fo.path);
+        if (!same && g_real[k] && (!x || !x->real || x->has_fo)) slot_close(k);
+        if (!x || !x->real) { if (k >= m->next && g_fo[k]) { free(g_fo[k]); g_fo[k] = NULL; } continue; }
+        if (!x->has_fo) { if (!g_real[k]) { g_real[k] = x->real; g_live++; } continue; }
+        if (!same) {
+            HANDLE r;
+            if (x->fo.fl == FO_MMIO) r = (HANDLE)p_mmioOpenA((LPSTR)x->fo.path, NULL, x->fo.acc & ~(DWORD)(MMIO_CREATE | MMIO_DELETE | MMIO_PARSE | MMIO_EXIST));
+            else { r = p_CreateFileA(x->fo.path, x->fo.acc, x->fo.share, NULL, OPEN_EXISTING, x->fo.fl, NULL); if (r == INVALID_HANDLE_VALUE) r = NULL; }
+            if (!r) rh_log("rh_handles: savestate: cannot re-open %s\n", x->fo.path);
+            g_real[k] = r; if (r) g_live++;
+            if (!g_fo[k]) g_fo[k] = malloc(sizeof *g_fo[k]);
+            *g_fo[k] = x->fo;
+            m->s[k].real = r;                                  /* a later restore of this savestate: this handle */
+        }
+        if (g_real[k] && x->pos >= 0) {
+            if (x->fo.fl == FO_MMIO) mmioSeek((HMMIO)g_real[k], (LONG)x->pos, SEEK_SET);
+            else { LARGE_INTEGER to = { .QuadPart = x->pos }; SetFilePointerEx(g_real[k], to, NULL, FILE_BEGIN); }
+        }
+    }
+    g_next = m->next; g_live = m->live;
     LeaveCriticalSection(&g_lk);
 }

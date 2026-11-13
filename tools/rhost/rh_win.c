@@ -365,6 +365,7 @@ static void trace_load(const char *path)
     rh_log("trace: %u events, last frame %u (%s)\n", g_nev, g_last, path);
 }
 uint32_t rh_trace_last_frame(void) { return g_last; }
+void rh_win_snap_register(void) { rh_snap_register("trace.cursor", &g_iev, sizeof g_iev); }   /* --snap-test replays the trace again */
 static void rec_write(uint32_t f, UINT m, uint32_t w, uint32_t l)
 {
     if (g_recf) { fprintf(g_recf, "{\"f\": %u, \"m\": %u, \"w\": %u, \"l\": %u}\n", f, m, w, l); fflush(g_recf); }
@@ -373,6 +374,7 @@ static void inject(uint32_t f, UINT m, uint32_t w, uint32_t l)
 {
     q_put((HWND)(uintptr_t)RH_FAKE_HWND, m, (WPARAM)w, (LPARAM)l);
     rec_write(f, m, w, l);
+    if (O.live) rh_live_note_event(f, m, w, l);
 }
 /* the control channel's input (rh_bot.c): same path, same record */
 void rh_win_inject(UINT m, uint32_t w, uint32_t l) { inject(g_frame, m, w, l); }

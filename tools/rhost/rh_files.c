@@ -82,8 +82,10 @@ static void fwrite_all(const char *p, int existed, const uint8_t *d, DWORD n)
     if (h == INVALID_HANDLE_VALUE) return;
     DWORD w; WriteFile(h, d, n, &w, NULL); CloseHandle(h);
 }
+static void snap_note(const char *rp);
 static void journal_touch(const char *rp)   /* rp: a run-dir path about to be written / deleted / replaced */
 {
+    snap_note(rp);
     if (!g_jopen || _strnicmp(rp, R, strlen(R))) return;
     for (int i = 0; i < g_njr; i++) if (!_stricmp(g_jr[i].path, rp)) return;
     if (g_njr >= 64) rh_fatal("rh_files: more than 64 files touched in one shadowed call");
@@ -291,4 +293,67 @@ void rh_files_install(void)
     iat_override("GetDriveTypeA", my_GetDriveTypeA);
     iat_override("SetCurrentDirectoryA", my_SetCurrentDirectoryA);
     rh_log("overlay: game=%s run=%s\n", G, R);
+}
+
+/* ---- savestates (rh_snap.c) ----
+ * The run dir's game files are state: retail saves every turn (lastturn / old_turn / safeturn.sav, castles.dat)
+ * and loads them back. Every path the game writes, deletes or moves is noted (with its content before the first
+ * touch: the origin) and bumps g_fgen. A savestate shares one blob per generation — every noted path's content
+ * (or absence) then — so savestates between two saves cost nothing. A restore whose generation differs from the
+ * live one writes every noted path back: the blob's content, or the origin for paths noted after the blob. */
+typedef struct { char path[MAX_PATH]; int existed; uint8_t *data; DWORD n; } fpath_t;
+static fpath_t g_orig[64]; static int g_norig;            /* noted paths, in note order: content before the first touch */
+static uint32_t g_fgen = 1, g_fctr = 1;   /* generation: unique per write (never reused after a restore) */
+typedef struct { uint32_t gen; int ref, n; fpath_t f[64]; } fblob_t;
+static fblob_t *g_fcur;                                    /* the blob of generation g_fcur->gen (shared) */
+typedef struct { fblob_t *b; int nwhite; char white[256][96]; } fsnap2_t;
+static void snap_note(const char *rp)
+{
+    if (_strnicmp(rp, R, strlen(R))) return;
+    g_fgen = ++g_fctr;
+    for (int i = 0; i < g_norig; i++) if (!_stricmp(g_orig[i].path, rp)) return;
+    if (g_norig >= 64) rh_fatal("rh_files: more than 64 run-dir paths written");
+    fpath_t *f = &g_orig[g_norig++];
+    snprintf(f->path, sizeof f->path, "%s", rp);
+    f->existed = fread_all(rp, &f->data, &f->n);
+}
+static void blob_unref(fblob_t *b)
+{
+    if (!b || --b->ref) return;
+    for (int i = 0; i < b->n; i++) free(b->f[i].data);
+    free(b);
+}
+void *rh_files_snap(void)
+{
+    if (!g_fcur || g_fcur->gen != g_fgen) {
+        blob_unref(g_fcur);
+        g_fcur = calloc(1, sizeof *g_fcur); g_fcur->gen = g_fgen; g_fcur->ref = 1;
+        for (int i = 0; i < g_norig; i++) {
+            fpath_t *f = &g_fcur->f[g_fcur->n++];
+            snprintf(f->path, sizeof f->path, "%s", g_orig[i].path);
+            f->existed = fread_all(f->path, &f->data, &f->n);
+        }
+    }
+    fsnap2_t *s = malloc(sizeof *s);
+    s->b = g_fcur; g_fcur->ref++;
+    s->nwhite = g_nwhite; memcpy(s->white, g_white, sizeof g_white);
+    return s;
+}
+void rh_files_unsnap(void *p)
+{
+    const fsnap2_t *s = p;
+    g_nwhite = s->nwhite; memcpy(g_white, s->white, sizeof g_white);
+    if (s->b->gen == g_fgen) return;
+    for (int i = 0; i < g_norig; i++) {
+        const fpath_t *f = &g_orig[i];
+        for (int k = 0; k < s->b->n; k++) if (!_stricmp(s->b->f[k].path, f->path)) { f = &s->b->f[k]; break; }
+        fwrite_all(g_orig[i].path, f->existed, f->data, f->n);
+    }
+    g_fgen = s->b->gen;
+    blob_unref(g_fcur); g_fcur = s->b; g_fcur->ref++;
+}
+void rh_files_snap_free(void *p)
+{
+    fsnap2_t *s = p; if (!s) return;
+    blob_unref(s->b); free(s);
 }

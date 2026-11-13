@@ -432,6 +432,17 @@ void rh_heap_meta_restore(void *p)
     g_nalloc = m->na; g_nfree = m->nf; g_inuse = m->iu; g_inuse_max = m->ium;
     unlock();
 }
+/* a savestate restore (rh_snap.c): the arena's pages were committed / decommitted to the savestate's set, so the
+ * regions' commit marks come back too, and the committed-range cache is stale */
+void rh_heap_meta_restore_snap(void *p)
+{
+    heap_meta_t *m = p;
+    rh_heap_meta_restore(p);
+    lock();
+    R_SMALL.committed = m->s.committed; R_LARGE.committed = m->l.committed; R_VREG.committed = m->v.committed;
+    g_commit_gen++;
+    unlock();
+}
 void rh_heap_meta_free(void *p)
 {
     heap_meta_t *m = p; if (!m) return;

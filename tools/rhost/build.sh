@@ -44,7 +44,7 @@ python3 "$H/gen_callsites.py" "$B/rh_callsites.h" >/dev/null   # real call instr
 LINK=($CC -std=gnu11 -O2 -g -Wall -Wno-unused-function -Wno-format-truncation -Wno-cast-function-type -Wno-misleading-indentation
       -I"$S" -I"$H" -I"$B" -include "$H/rh_hostalloc.h" "${LDF[@]}" -o "$OUT"
       "$H"/rhost.c "$H"/rh_heap.c "$H"/rh_media.c "$H"/rh_files.c "$H"/rh_handles.c "$H"/rh_state.c "$H"/rh_shot.c
-      "$H"/rh_ddraw.c "$H"/rh_dsound.c "$H"/rh_win.c "$H"/rh_hooks.c "$H"/rh_bot.c "$H"/rh_smack.c "${SUB_HOOKS[@]}"
+      "$H"/rh_ddraw.c "$H"/rh_dsound.c "$H"/rh_win.c "$H"/rh_hooks.c "$H"/rh_bot.c "$H"/rh_smack.c "$H"/rh_snap.c "$H"/rh_live.c "${SUB_HOOKS[@]}"
       "$B/rh_hostalloc.o" "${PORT_OBJS[@]}" -luser32 -lgdi32 -lwinmm -lws2_32)
 "${LINK[@]}"
 # a FIXED SizeOfImage: the system allocations Windows / wine place right after the image must not

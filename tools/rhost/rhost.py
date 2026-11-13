@@ -179,6 +179,7 @@ def rhost_args(a, run_win, trace_win, meta):
         args += ["--show"]
     if getattr(a, "extra", None):
         args += shlex.split(a.extra)
+    args += meta.get("_extra", [])           # per-run arguments (snap-check's windows)
     return args
 
 
@@ -240,6 +241,8 @@ def parse_out(out):
     for line in out.splitlines():
         if line.startswith("=== "):
             cur = line[4:].strip()
+        elif cur and line.startswith("RESULT-SNAP"):
+            results.setdefault(cur, {}).update(dict(kv.split("=", 1) for kv in line.split()[1:] if "=" in kv))
         elif cur and line.startswith("RESULT"):
             results[cur] = dict(kv.split("=", 1) for kv in line.split()[1:] if "=" in kv)
         elif cur and line.strip():
@@ -516,6 +519,44 @@ def cmd_corpus(a):
             bad += bool(diffs)
     if a.check:
         print(f"CORPUS CHECK: {'PASS' if not bad else f'FAIL ({bad})'}")
+    return 1 if bad else 0
+
+
+def snap_windows(tr, meta, k):
+    """k savestate windows A:B over a scenario's length (snap-check)"""
+    last = 0
+    for line in open(tr):
+        m = re.search(r'"[ft]":\s*(\d+)', line)
+        if m and '"meta"' not in line:
+            last = max(last, int(m.group(1)))
+    n = int(meta.get("frames") or last + 60)
+    out = []
+    for i in range(k):
+        lo = max(1, n * (i + 1) // (k + 2))
+        out.append((lo, min(n - 1, lo + max(120, n // (k + 2)))))
+    return out
+
+
+def cmd_snap_check(a):
+    """savestates vs a straight replay: each scenario replays through the game coroutine with --snap-test A:B:2 (a
+    savestate at A; at B hash, restore, replay A..B again, twice) — every pass must equal the first, and the run's end
+    the blessed expected (frame / tick / RNG / state_sem / every presented frame)"""
+    names = [n for n in all_scenarios(a.only) if os.path.exists(os.path.join(SCEN, n, "expected.json" if a.target == "win" else f"expected.{a.target}.json"))]
+    a.fb_hash = True
+    runs = []
+    for n, tr, meta in resolve_runs(names):
+        for i, (lo, hi) in enumerate(snap_windows(tr, meta, a.windows)):
+            runs.append((n if i == 0 else f"{n}__w{i}", tr, dict(meta, _extra=["--snap-test", f"{lo}:{hi}:2"])))
+    batch, bdir, res, out = run_batch(a, runs, "snapcheck")
+    bad = 0
+    for name, tr, meta in runs:
+        base = name.split("__w")[0]
+        r = res.get(name, {})
+        diffs = expected_diffs([base], {base: r}, a.target).get(base, [])
+        ok = r.get("snap_test") == "PASS" and not diffs
+        bad += not ok
+        print(f"  {name:40s} {meta['_extra'][1]:>14s} snap={r.get('snap_test', '?'):10s} {'PASS' if ok else 'FAIL ' + '; '.join(diffs)}")
+    print(f"SNAP-CHECK: {'PASS' if not bad else f'FAIL ({bad})'} ({len(runs)} runs; {bdir})")
     return 1 if bad else 0
 
 
@@ -1027,6 +1068,8 @@ def main():
     sp = sub.add_parser("diff"); sp.add_argument("a"); sp.add_argument("b"); sp.add_argument("--show-n", type=int, default=40); sp.set_defaults(fn=cmd_diff)
     sp = sub.add_parser("record"); common(sp); sp.add_argument("name"); sp.add_argument("--from", dest="from_scen")
     sp.add_argument("--force", action="store_true"); sp.set_defaults(fn=cmd_record)
+    sp = sub.add_parser("snap-check"); common(sp); sp.add_argument("--only"); sp.add_argument("--windows", type=int, default=2)
+    sp.set_defaults(fn=cmd_snap_check)
     sp = sub.add_parser("standalone"); common(sp); sp.add_argument("--only"); sp.set_defaults(fn=cmd_standalone)
     sub.add_parser("play-install").set_defaults(fn=cmd_play_install)
     sp = sub.add_parser("play-status"); sp.add_argument("--root", default=PLAY); sp.set_defaults(fn=cmd_play_status)

@@ -67,6 +67,10 @@ typedef struct {
     uint32_t cap_from, cap_count;   /* --cap FROM:COUNT */  /* --heap-trace A-B: every HeapAlloc / HeapFree in this frame window */
     const char *bot;           /* host:port of a decision server (bot mode) */
     const char *stop_on;        /* stop condition (e.g. "screen=0x13") */
+    int live, live_port;        /* --live PORT: serve commands on 127.0.0.1:PORT (0 = pick one → <run>\\live.port); rh_live.c */
+    uint32_t live_idle;         /* --live-idle S: a live session exits after S seconds without a command (1800) */
+    uint32_t live_until;        /* --live-until F: with --trace, stop the prefix replay at frame F (default: its last event) */
+    const char *snap_test;      /* --snap-test A:B[:K]: savestate self-check (rh_live.c) */
     int standalone;             /* --standalone: NO retail code — only the data sections are mapped (the code range is
                                    INT3 + a jmp thunk into port code at every hook row's entry); the entry is the port's
                                    rl_crt_start; <rundir>\standalone_audit.txt proves it (docs/findings/standalone-path.md) */
@@ -168,7 +172,8 @@ uint32_t rh_trace_last_frame(void);
 const char *rh_trace_status(void);
 void rh_trace_finish(void);
 void rh_win_post(UINT m, WPARAM w, LPARAM l);   /* append to the virtual queue (not recorded) */
-void rh_win_inject(UINT m, uint32_t w, uint32_t l);   /* input event at this frame boundary (recorded) */
+void rh_win_inject(UINT m, uint32_t w, uint32_t l);
+void rh_win_snap_register(void);   /* input event at this frame boundary (recorded) */
 
 /* rh_state.c */
 typedef struct { uint64_t full, semantic; uint32_t masked, ranges, bytes; } rh_hash_t;
@@ -204,6 +209,35 @@ int  rh_smack_in(uint32_t v);
 /* rh_hooks.c */
 void rh_hooks_install(void);
 void rh_hooks_report(void);
+
+/* rhost.c — the game coroutine (--live / --snap-test): retail runs on its fixed stack, the host on its own */
+void rh_step(void);             /* host: run one whole frame, boundary to boundary */
+uint32_t rh_game_esp(void);     /* retail's stack pointer at the boundary */
+
+/* rh_snap.c — in-process savestates */
+void rh_snap_register(const char *name, void *p, size_t n);
+int  rh_snap_take(void);
+int  rh_snap_restore(int id);
+void rh_snap_free(int id);
+void rh_snap_free_all(void);
+int  rh_snap_frame(int id);
+int  rh_snap_live(void);
+long rh_snap_diff(int id, uint32_t lo, uint32_t hi, void (*cb)(uint32_t va, uint32_t was, uint32_t now, void *u), void *u);
+void rh_snap_stats(char *buf, size_t n);
+void rh_heap_meta_restore_snap(void *m);   /* rh_heap.c: + the regions' commit marks */
+void *rh_handles_snap(void);               /* rh_handles.c */
+void rh_handles_unsnap(void *s);
+void *rh_files_snap(void);                 /* rh_files.c */
+void rh_files_unsnap(void *s);
+void rh_files_snap_free(void *s);
+
+/* rh_live.c */
+void rh_live_install(void);
+void rh_live_register(void);
+void rh_live_main(void);
+void rh_live_note_event(uint32_t frame, uint32_t m, uint32_t w, uint32_t l);
+void rh_snap_selftest(void);
+const char *rh_snap_test_status(void);
 
 /* rh_bot.c — decision-server link (bot mode) */
 void rh_bot_install(void);

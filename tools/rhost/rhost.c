@@ -256,6 +256,64 @@ static uint32_t __attribute__((noinline)) call_on_stack(void *fn, uint32_t lo, u
     return r;
 }
 
+/* ---- the game coroutine (--live / --snap-test) ----
+ * Retail runs on its fixed stack; the host (the live server, the snap-test loop) on the main thread's own. At the
+ * end of frame_wrap — the same frame boundary a plain run has, at a constant stack depth (WinMain → the guard
+ * 0x40e8bb → 0x40e890 → the frame driver: one call chain) — retail's side yields; rh_step() resumes it for one frame.
+ * Host code never runs on the game stack, so a session leaves retail's stack residue as a plain replay does, and a
+ * savestate restore can rewrite the game stack [rh_game_esp(), top) while retail is suspended. */
+uint32_t g_gesp, g_hesp, g_gseh = 0xffffffffu, g_cw0 = 0x027f;
+static uint32_t g_hseh, g_hbase, g_hlimit; static uint16_t g_gcw = 0x027f;
+uint32_t rh_game_esp(void) { return g_gesp; }
+__attribute__((naked)) static void swap_to_host(void)
+{
+    __asm__("pushl %ebx\n\t pushl %esi\n\t pushl %edi\n\t pushl %ebp\n\t"
+            "movl %esp, _g_gesp\n\t movl _g_hesp, %esp\n\t"
+            "popl %ebp\n\t popl %edi\n\t popl %esi\n\t popl %ebx\n\t ret");
+}
+__attribute__((naked)) static void swap_to_game(void)
+{
+    __asm__("pushl %ebx\n\t pushl %esi\n\t pushl %edi\n\t pushl %ebp\n\t"
+            "movl %esp, _g_hesp\n\t movl _g_gesp, %esp\n\t"
+            "popl %ebp\n\t popl %edi\n\t popl %esi\n\t popl %ebx\n\t ret");
+}
+static void yield_to_host(void)                       /* retail's side, end of frame_wrap */
+{
+    NT_TIB *tib = (NT_TIB *)NtCurrentTeb();
+    __asm__ volatile("fnstcw %0" : "=m"(g_gcw));
+    g_gseh = (uint32_t)(uintptr_t)tib->ExceptionList;
+    tib->StackBase = (void *)(uintptr_t)g_hbase; tib->StackLimit = (void *)(uintptr_t)g_hlimit; tib->ExceptionList = (void *)(uintptr_t)g_hseh;
+    swap_to_host();
+    __asm__ volatile("fldcw %0" : : "m"(g_gcw));
+}
+void rh_step(void)                                    /* the host's side: one frame */
+{
+    NT_TIB *tib = (NT_TIB *)NtCurrentTeb();
+    g_hseh = (uint32_t)(uintptr_t)tib->ExceptionList;
+    tib->StackBase = (void *)(uintptr_t)MAIN_STACK_HI; tib->StackLimit = (void *)(uintptr_t)(MAIN_STACK_LO + STACK_GUARD);
+    tib->ExceptionList = (void *)(uintptr_t)g_gseh;
+    uint16_t hcw; __asm__ volatile("fnstcw %0" : "=m"(hcw));
+    swap_to_game();
+    __asm__ volatile("fldcw %0" : : "m"(hcw));
+}
+uint32_t g_entry;
+void __cdecl rh_game_main(void);
+__attribute__((naked)) static void game_tramp(void) { __asm__("fninit\n\t fldcw _g_cw0\n\t call _rh_game_main\n\t hlt"); }
+static void coro_init(void *entry)
+{
+    NT_TIB *tib = (NT_TIB *)NtCurrentTeb();
+    g_hbase = (uint32_t)(uintptr_t)tib->StackBase; g_hlimit = (uint32_t)(uintptr_t)tib->StackLimit;
+    g_entry = (uint32_t)(uintptr_t)entry;
+    uint32_t *sp = (uint32_t *)(uintptr_t)(MAIN_STACK_HI - 192 - 64);   /* call_on_stack's entry depth */
+    *--sp = (uint32_t)(uintptr_t)game_tramp;
+    for (int i = 0; i < 4; i++) *--sp = 0;            /* ebx esi edi ebp */
+    g_gesp = (uint32_t)(uintptr_t)sp;
+    rh_snap_register("game.esp", &g_gesp, sizeof g_gesp);
+    rh_snap_register("game.seh", &g_gseh, sizeof g_gseh);
+    rh_snap_register("game.cw", &g_gcw, sizeof g_gcw);
+    rh_snap_register("frame", (void *)&g_frame, sizeof g_frame);
+}
+
 /* ---- virtual time ---- */
 static uint32_t g_vclock, g_calls_since_frame, g_creep_total;
 uint32_t rh_vnow(void) { return g_vclock; }
@@ -526,6 +584,7 @@ static void __cdecl frame_wrap(void)
     rh_ds_mix();
     rh_win_frame();
     rh_bot_frame();
+    if (O.live || O.snap_test) { yield_to_host(); return; }
     if (O.realtime) {
         LARGE_INTEGER q; QueryPerformanceCounter(&q);
         double due = (double)g_frame * O.step_ms, now = (double)(q.QuadPart - g_t0.QuadPart) * 1000.0 / (double)g_qf.QuadPart;
@@ -557,6 +616,7 @@ static void finish(const char *why)
            !strcmp(why, "game-exit") ? "exit" : "ok", why, g_frame, G32(L2_SIM_TICK), G8(L2_SCREEN), G32(L2_ENGINE_STATE),
            G32(L2_RNG_A), G32(L2_RNG_B), (unsigned long long)h.full, (unsigned long long)h.semantic, h.masked, h.bytes, ms,
            ms > 0 ? g_frame * 1000.0 / ms : 0.0, g_creep_total, rh_trace_status(), fb);
+    if (O.snap_test) rh_log("RESULT-SNAP%s\n", rh_snap_test_status());
     if (rh_bot_poked()) rh_log("RESULT-NOTE poked=%u (memory writes over the control channel: not a pure replay)\n", rh_bot_poked());
     if (g_logf) fclose(g_logf);
     ExitProcess(0);
@@ -626,6 +686,10 @@ static void parse(int argc, char **argv)
         else if (!strcmp(a, "--shadow-poison-px")) { const char *v = ARG(); O.poison_px = 1; O.poison_x = (int)strtol(v, 0, 0); const char *c = strchr(v, ','); O.poison_y = c ? (int)strtol(c + 1, 0, 0) : 0; }
         else if (!strcmp(a, "--coverage")) O.coverage = ARG();
         else if (!strcmp(a, "--bot")) O.bot = ARG();
+        else if (!strcmp(a, "--live")) { O.live = 1; O.live_port = atoi(ARG()); }
+        else if (!strcmp(a, "--live-idle")) O.live_idle = strtoul(ARG(), 0, 0);
+        else if (!strcmp(a, "--live-until")) O.live_until = strtoul(ARG(), 0, 0);
+        else if (!strcmp(a, "--snap-test")) O.snap_test = ARG();
         else if (!strcmp(a, "--no-arena")) O.no_arena = 1;
         else if (!strcmp(a, "--no-overlay")) O.no_overlay = 1;
         else if (!strcmp(a, "--log-files")) O.log_files = 1;
@@ -828,6 +892,12 @@ static void sa_entry(void)
 }
 static int sa_frame_driver(void) { frame_wrap(); return 0; }
 
+void __cdecl rh_game_main(void)                    /* the game coroutine's body (game_tramp) */
+{
+    ((void (*)(void))(uintptr_t)g_entry)();
+    finish("entry-returned");
+}
+
 RETAIL_HOLE_DEFINE
 
 int main(int argc, char **argv)
@@ -911,12 +981,19 @@ int main(int argc, char **argv)
         AddVectoredExceptionHandler(1, trap_veh);
         for (int i = 0; i < g_ntrap; i++) { g_torig[i] = G8(g_tva[i]); G8(g_tva[i]) = 0xCC; }
     }
-    if (!O.frames) O.frames = (O.record || O.bot) ? 0xfffffff0u : O.trace ? rh_trace_last_frame() + O.tail : 3000u;
+    if (!O.frames) O.frames = (O.record || O.bot || O.live) ? 0xfffffff0u : O.trace ? rh_trace_last_frame() + O.tail : 3000u;
     rh_log("rhost: frames<=%u step=%ums vbase=%u creep_after=%u realtime=%d show=%d movies=%d arena=%d overlay=%d standalone=%d\n",
            O.frames, O.step_ms, O.vbase, O.creep_after, O.realtime, O.show, O.movies, !O.no_arena, !O.no_overlay, O.standalone);
     if (O.standalone) { AddVectoredExceptionHandler(1, sa_veh); sa_seal(exe_abs, &img); }
     rh_bot_install();                        /* bot mode: serves the controller until its first `run` */
-    if (!O.record && !O.show && !O.bot && O.stall_wall_ms) CloseHandle(CreateThread(NULL, 0, watchdog, NULL, 0, NULL));
+    if (!O.record && !O.show && !O.bot && !O.live && O.stall_wall_ms) CloseHandle(CreateThread(NULL, 0, watchdog, NULL, 0, NULL));
+    if (O.live || O.snap_test) {             /* the host drives retail frame by frame */
+        coro_init(O.standalone ? (void *)sa_entry : (void *)(uintptr_t)img.entry);
+        rh_snap_register("fb.chain", &g_fb_chain, sizeof g_fb_chain); rh_snap_register("fb.n", &g_fb_n, sizeof g_fb_n);
+        rh_win_snap_register();
+        if (O.live) { rh_live_install(); rh_live_register(); rh_live_main(); }
+        for (;;) { rh_snap_selftest(); rh_step(); }
+    }
     call_on_stack(O.standalone ? (void *)sa_entry : (void *)(uintptr_t)img.entry, MAIN_STACK_LO, MAIN_STACK_HI - 192);   /* CRT entry: never returns */
     finish("entry-returned");
     return 0;
