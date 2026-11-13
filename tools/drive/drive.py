@@ -2020,19 +2020,95 @@ CORPUS_COV = os.path.join(os.path.dirname(RUNS), "corpus_coverage.tsv")
 
 def corpus_coverage(refresh=False):
     """{va} the corpus reaches (rhost.py coverage, cached; --refresh-corpus re-runs it)"""
-    if refresh or not os.path.exists(CORPUS_COV):
+    if refresh or corpus_stale(CORPUS_COV):
         out = subprocess.run([os.path.join(ROOT, "tools", "dev"), "python3", os.path.join(RH.HERE, "rhost.py"), "coverage", "--target", "wine", "-j", "8"],
                              capture_output=True, text=True).stdout
         m = re.search(r"→ (\S+coverage_summary\.tsv)", out)
         if not m:
             raise SystemExit("rhost.py coverage failed:\n" + out[-800:])
         shutil.copy(m.group(1), CORPUS_COV)
+        json.dump(sorted(RH.all_scenarios()), open(CORPUS_COV + ".scenarios", "w"))
     return {int(l.split("\t")[0], 16) for l in open(CORPUS_COV).readlines()[1:]}
+
+
+CORPUS_BLOCKS = os.path.join(os.path.dirname(RUNS), "corpus_blocks.txt")
+
+
+def block_list():
+    sys.path.insert(0, HERE)
+    import blocks as BL
+    return BL.blocks()
+
+
+def coverage_run(runs, vas, tag, target="wine", jobs=8):
+    """{run name: {va: first frame}} — the runs replayed with a one-shot INT3 at every VA (rhost --coverage)"""
+    os.makedirs(os.path.dirname(RUNS), exist_ok=True)
+    cov_in = os.path.join(os.path.dirname(RUNS), f"cov_in_{tag}_{os.getpid()}.txt")
+    open(cov_in, "w").write("".join(f"{va:x}\n" for va in sorted(vas)))
+    b = argparse.Namespace(jobs=jobs, target=target, extra=None, coverage_file=cov_in)
+    _, bd, res, out = RH.run_batch(b, runs, tag, fetch=("rhost.log", "coverage.txt"))
+    os.remove(cov_in)
+    got = {}
+    for name, *_ in runs:
+        p = os.path.join(bd, name, "coverage.txt")
+        got[name] = {int(l.split()[0], 16): int(l.split()[1]) for l in open(p) if l.strip()} if os.path.exists(p) else None
+    shutil.rmtree(bd, ignore_errors=True)
+    return got
+
+
+def corpus_stale(path):
+    """the cached baseline was made from another scenario set (a scenario filed / removed since)"""
+    side = path + ".scenarios"
+    now = sorted(RH.all_scenarios())
+    if not os.path.exists(path) or not os.path.exists(side) or json.load(open(side)) != now:
+        return now
+    return None
+
+
+def corpus_blocks(refresh=False):
+    now = corpus_stale(CORPUS_BLOCKS)
+    if refresh or now:
+        print("[the corpus block baseline is stale: re-measuring every scenario (~1 min on wine)]")
+        runs = RH.resolve_runs(RH.all_scenarios())
+        got = coverage_run(runs, [b[0] for b in block_list()], "corpus-blocks")
+        miss = [n for n, v in got.items() if v is None]
+        if miss:
+            raise SystemExit(f"block coverage failed for {miss}")
+        hit = set().union(*got.values())
+        open(CORPUS_BLOCKS, "w").write("".join(f"{v:x}\n" for v in sorted(hit)))
+        json.dump(sorted(RH.all_scenarios()), open(CORPUS_BLOCKS + ".scenarios", "w"))
+    return {int(l, 16) for l in open(CORPUS_BLOCKS) if l.strip()}
+
+
+def cov_blocks(a, r, tr):
+    bl = block_list()
+    size = {va: sz for va, sz, _ in bl}
+    fof = {va: f for va, _, f in bl}
+    corpus = corpus_blocks(a.refresh_corpus)
+    hit = coverage_run([("cov", tr, RH.trace_meta(tr))], list(size), "rd-covb", a.target or "wine", 1)["cov"]
+    if hit is None:
+        raise SystemExit("no coverage from the replay")
+    fn, _ = RH.function_table()
+    new = [v for v in hit if v not in corpus]
+    nb, tot, cb = sum(size[v] for v in new), sum(size.values()), sum(size[v] for v in corpus if v in size)
+    print(f"{r.name}: {len(hit)} retail blocks reached; {len(new)} NEW to the corpus ({nb} bytes, +{100.0 * nb / tot:.2f}% of retail code; "
+          f"the corpus has {len(corpus)}/{len(size)} blocks, {100.0 * cb / tot:.1f}%)")
+    byf = {}
+    for v in new:
+        byf.setdefault(fof[v], []).append(v)
+    for f, vs in sorted(byf.items(), key=lambda x: -sum(size[v] for v in x[1]))[:a.show]:
+        print(f"  {f:08x} {fn.get(f, ('?', 0))[0]:40s} {len(vs):4d} new blocks {sum(size[v] for v in vs):6d} B  first f{min(hit[v] for v in vs)}"
+              + ("  (function new)" if f in vs and f not in corpus else ""))
+    json.dump({"new_blocks": [f"{v:x}" for v in sorted(new)], "bytes": nb, "functions": len(byf)}, open(os.path.join(r.dir, "cov_blocks.json"), "w"))
 
 
 def cmd_cov(a):
     """the retail functions this run's movie reaches that no corpus scenario does (a replay with --coverage)"""
     r = Run(a.run, lock=False)
+    if a.blocks:
+        tr = os.path.join(r.dir, "cov.trace.jsonl")
+        r.movie.write(tr, comment=r.name, rel_to=r.dir)
+        return cov_blocks(a, r, tr)
     corpus = corpus_coverage(a.refresh_corpus)
     fn, _ = RH.function_table()
     cov_in = os.path.join(r.dir, "coverage_in.txt")
@@ -2119,6 +2195,7 @@ def main():
     p = sp.add_parser("lint"); p.add_argument("task"); p.add_argument("--on", nargs="+", required=True); p.set_defaults(fn=cmd_lint)
     p = sp.add_parser("file"); p.add_argument("run"); p.add_argument("name"); p.add_argument("note", nargs="*"); p.add_argument("--force", action="store_true"); p.set_defaults(fn=cmd_file)
     p = sp.add_parser("cov"); p.add_argument("run"); p.add_argument("--show", type=int, default=40); p.add_argument("--refresh-corpus", action="store_true")
+    p.add_argument("--blocks", action="store_true", help="basic blocks (tools/drive/blocks.py) instead of whole functions")
     p.add_argument("--target", choices=("win", "wine", "bunker")); p.set_defaults(fn=cmd_cov)
     p = sp.add_parser("stop"); p.add_argument("run"); p.set_defaults(fn=cmd_stop)
     sp.add_parser("ls").set_defaults(fn=cmd_ls)

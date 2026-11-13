@@ -21,8 +21,8 @@ whenever a screen is new to you; Read the PNG.
 5. **Checkpoint before anything you might redo:** `rd ck R save NAME`; `rd ck R load NAME` returns in a millisecond.
    A load is a step back in time: the movie is cut there, later checkpoints are dropped. `rd undo R` reverts the last
    state-changing command (8 deep).
-6. **Finish:** `rd check R TASK.md` → PASS (if there is a task file), `rd verify R` → MATCH, `rd cov R` (what retail
-   code your run reaches that no corpus scenario does), and you have LOOKED at the moment the trace is about. Report:
+6. **Finish:** `rd check R TASK.md` → PASS (if there is a task file), `rd verify R` → MATCH, `rd cov R` and `rd cov R --blocks` (the retail
+   functions / basic blocks your run reaches that no corpus scenario does), and you have LOOKED at the moment the trace is about. Report:
    run name, frames, each step's frame, state you named, game facts learned, `rd cov` numbers, what the tool lacked.
 
 One command at a time per run (a run is locked while a command works). Give shell calls a timeout above a search's
@@ -42,7 +42,7 @@ rd ck R save NAME | load NAME | list        rd undo R        rd rewind R --to F
 rd search R --goal EXPR [--avoid EXPR] [--cell "(a, b)"] [--actions SPEC ..] [--time-limit S] [--apply] [-j N]
             [--score EXPR [--apply-best]] [--max-len N]
 rd rec R A|C|R [SLOT]   (a record's fields: the pieces in use, a county, a realm)
-rd check R TASK.md      rd verify R      rd cov R      rd lint TASK.md --on RUN      rd movie R      rd stop R      rd ls
+rd check R TASK.md      rd verify R      rd cov R [--blocks]      rd lint TASK.md --on RUN      rd movie R      rd stop R      rd ls
 ```
 
 **Input spec** (640×480 game coordinates; tokens separated by spaces; `*N` repeats a token; `( … )xN` a group):
