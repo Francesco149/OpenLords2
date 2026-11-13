@@ -86,7 +86,7 @@ static mnode_t **movie_list(mnode_t *head, mnode_t *stop, size_t *n)   /* the no
  * Their call sites are redirected to thunks that note the arguments and jump on; the C part runs on a private stack and
  * writes no retail memory (a live session's state stays a plain replay's: `rd verify`). Rows are per frame (cleared
  * when a frame starts); text a screen drew once stays in `g_text` until the screen id changes. */
-typedef struct { uint8_t kind; int32_t a[4]; uint16_t len; char s[100]; } lrec_t;
+typedef struct { uint8_t kind; int32_t a[4], b[2]; uint16_t len; char s[100]; } lrec_t;   /* b: localized (group, string) */
 #define MAX_HOT 96
 #define MAX_TXT 192
 static lrec_t g_hot[MAX_HOT], g_txt[MAX_TXT]; static int g_nhot, g_ntxt, g_txt_screen = -1, g_rec_stale;
@@ -94,18 +94,23 @@ uint32_t g_rec_esp, g_rec_stack;
 __attribute__((used)) void __cdecl rec_record(uint32_t kind)
 {
     const int32_t *a = (const int32_t *)(uintptr_t)g_rec_esp;      /* [0] ret, [1..] args */
-    if (kind >= 2) {                                               /* hotspot table: (ox, oy, table, count) */
+    if (kind == 2 || kind == 3) {                                  /* hotspot table: (ox, oy, table, count) */
         for (int i = 0; i < g_nhot; i++) if (g_hot[i].a[2] == a[3] && g_hot[i].a[0] == a[1] && g_hot[i].a[1] == a[2]) return;
         if (g_nhot >= MAX_HOT) return;
-        lrec_t *r = &g_hot[g_nhot++]; r->kind = (uint8_t)kind; r->a[0] = a[1]; r->a[1] = a[2]; r->a[2] = a[3]; r->a[3] = a[4]; r->len = 0;
+        lrec_t *r = &g_hot[g_nhot++]; r->kind = (uint8_t)kind; r->a[0] = a[1]; r->a[1] = a[2]; r->a[2] = a[3]; r->a[3] = a[4]; r->b[0] = r->b[1] = 0; r->len = 0;
         return;
     }
-    const char *str = (const char *)(uintptr_t)a[1];
-    if ((uint32_t)a[1] < 0x400000u) return;
+    /* kinds 0 / 1: (buf, x, y, ...); 4 / 5 / 6: localized (group, string, x, y, ...); 7: wrapped buffer (buf, x, y, ...) */
+    int loc = kind >= 4 && kind <= 6;
+    const char *str = loc ? "" : (const char *)(uintptr_t)a[1];
+    int32_t x = loc ? a[3] : a[2], y = loc ? a[4] : a[3];
+    if (!loc && (uint32_t)a[1] < 0x400000u) return;
+    if ((int)G8(L2_SCREEN) != g_txt_screen) { g_ntxt = 0; g_txt_screen = G8(L2_SCREEN); }   /* a new screen: its own rows (a panel draws in the frame it opens) */
     int slot = -1;                                                 /* one row per position: a redraw replaces it */
-    for (int i = 0; i < g_ntxt; i++) if (g_txt[i].a[0] == a[2] && g_txt[i].a[1] == a[3]) { slot = i; break; }
+    for (int i = 0; i < g_ntxt; i++) if (g_txt[i].a[0] == x && g_txt[i].a[1] == y) { slot = i; break; }
     if (slot < 0) { if (g_ntxt >= MAX_TXT) return; slot = g_ntxt++; }
-    lrec_t *r = &g_txt[slot]; r->kind = (uint8_t)kind; r->a[0] = a[2]; r->a[1] = a[3]; r->a[2] = kind == 1 ? a[4] : 0; r->a[3] = (int32_t)g_frame;
+    lrec_t *r = &g_txt[slot]; r->kind = (uint8_t)kind; r->a[0] = x; r->a[1] = y; r->a[2] = kind == 1 ? a[4] : 0; r->a[3] = (int32_t)g_frame;
+    r->b[0] = loc ? a[1] : 0; r->b[1] = loc ? a[2] : 0;
     uint16_t n = 0; while (n < sizeof r->s && str[n]) n++;
     memcpy(r->s, str, n); r->len = n;
 }
@@ -117,10 +122,13 @@ REC_THUNK(rec_text, 0, 0x402637)
 REC_THUNK(rec_text_c, 1, 0x4025d7)
 REC_THUNK(rec_hot_click, 2, 0x40e3ee)
 REC_THUNK(rec_hot_hover, 3, 0x40e5e7)
+REC_THUNK(rec_loc_line, 4, 0x402d37)
+REC_THUNK(rec_loc_centred, 5, 0x402c5e)
+REC_THUNK(rec_loc_wrap, 6, 0x40328e)
+REC_THUNK(rec_buf_wrap, 7, 0x40352f)
 void rh_live_frame_begin(void)                                     /* rhost.c rh_step: a frame starts */
 {
     g_nhot = 0; g_rec_stale = 0;
-    if ((int)G8(L2_SCREEN) != g_txt_screen) { g_ntxt = 0; g_txt_screen = G8(L2_SCREEN); }
 }
 static void rec_install(void)
 {
@@ -128,7 +136,9 @@ static void rec_install(void)
     g_rec_stack = (uint32_t)(uintptr_t)st + 0x10000 - 64;
     int a = redirect_calls(0x402637u, rec_text), b = redirect_calls(0x4025d7u, rec_text_c);
     int c = redirect_calls(0x40e3eeu, rec_hot_click), d = redirect_calls(0x40e5e7u, rec_hot_hover);
-    rh_log("live: screen text from %d + %d call sites, hotspots from %d + %d\n", a, b, c, d);
+    int e = redirect_calls(0x402d37u, rec_loc_line), f = redirect_calls(0x402c5eu, rec_loc_centred);
+    int g = redirect_calls(0x40328eu, rec_loc_wrap), h = redirect_calls(0x40352fu, rec_buf_wrap);
+    rh_log("live: screen text from %d + %d call sites (localized %d + %d + %d, wrapped %d), hotspots from %d + %d\n", a, b, e, f, g, h, c, d);
 }
 
 /* ---------------- programs (postfix) ---------------- */
@@ -649,7 +659,7 @@ static void command(char *line, sb_t *o)
         static const char X[] = "0123456789abcdef";
         sb_f(o, "ok frame=%u stale=%d n=%d rows=", g_frame, g_rec_stale, n);
         for (int i = 0; i < n; i++) {
-            sb_f(o, "%s%d:%d:%d:%d:%d:", i ? ";" : "", v[i].kind, v[i].a[0], v[i].a[1], v[i].a[2], v[i].a[3]);
+            sb_f(o, "%s%d:%d:%d:%d:%d:%d:%d:", i ? ";" : "", v[i].kind, v[i].a[0], v[i].a[1], v[i].a[2], v[i].a[3], v[i].b[0], v[i].b[1]);
             char h[sizeof v[i].s * 2 + 1];
             for (int k = 0; k < v[i].len; k++) { uint8_t b = (uint8_t)v[i].s[k]; h[k * 2] = X[b >> 4]; h[k * 2 + 1] = X[b & 15]; }
             h[v[i].len * 2] = 0; sb_put(o, h, (size_t)v[i].len * 2);

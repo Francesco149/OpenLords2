@@ -1640,7 +1640,7 @@ def rec_rows(lv, what):
     rows = []
     for r in filter(None, k.get("rows", "").split(";")):
         p = r.split(":")
-        rows.append((int(p[0]), [int(x) for x in p[1:5]], bytes.fromhex(p[5]) if len(p) > 5 else b""))
+        rows.append((int(p[0]), [int(x) for x in p[1:5]], bytes.fromhex(p[7]) if len(p) > 7 else b"", (int(p[5]), int(p[6])) if len(p) > 7 else (0, 0)))
     return rows, k.get("stale") == "1"
 
 
@@ -1652,7 +1652,7 @@ def hotspots(lv):
     """[(x0, y0, x1, y1, action_va, type, kind)] — the hotspot tables retail's input handlers tested in the last frame"""
     rows, stale = rec_rows(lv, "hot")
     out = []
-    for kind, (ox, oy, tbl, n), _ in rows:
+    for kind, (ox, oy, tbl, n), _, _ in rows:
         if not (0 < n <= 64):
             continue
         h = bytes.fromhex(lv.cmd(f"r {tbl & 0xffffffff:x} {n * 24}")[3:])
@@ -1665,13 +1665,19 @@ def hotspots(lv):
 
 def cmd_text(a):
     r = Run(a.run)
-    rows, stale = rec_rows(r.attach(), "text")
+    lv = r.attach()
+    rows, stale = rec_rows(lv, "text")
+    sys.path.insert(0, os.path.join(ROOT, "tools", "bot"))
+    import l2state as L2
+    rd = _LiveRead(lv).read
+    rows = [(k, a4, L2.loc(rd, gs[0], gs[1]).encode("latin-1", "replace") if 4 <= k <= 6 else b, gs) for k, a4, b, gs in rows]
     print(f"text drawn since screen {fmt(r.ev('screen')[0])} opened ({len(rows)} rows)" + ("  [stale: the state was restored — play a frame]" if stale else ""))
-    last = max((f for _, (_, _, _, f), _ in rows), default=0)
-    for kind, (x, y, w, f), s in sorted(rows, key=lambda t: (t[1][1], t[1][0])):
+    last = max((f for _, (_, _, _, f), _, _ in rows), default=0)
+    for kind, (x, y, w, f), s, gs in sorted(rows, key=lambda t: (t[1][1], t[1][0])):
         if a.all or f >= last - a.age:
-            print(f"  ({x:3d},{y:3d}){' c' if kind == 1 else '  '} {text_of(s)}" + (f"   [drawn f{f}]" if f < last else ""))
-    old = sum(1 for _, (_, _, _, f), _ in rows if f < last - a.age)
+            tag = {1: " c", 4: " L", 5: " L", 6: " W", 7: " W"}.get(kind, "  ")
+            print(f"  ({x:3d},{y:3d}){tag} {text_of(s)}" + (f"   [loc {gs[0]}:{gs[1]}]" if 4 <= kind <= 6 else "") + (f"   [drawn f{f}]" if f < last else ""))
+    old = sum(1 for _, (_, _, _, f), _, _ in rows if f < last - a.age)
     if old and not a.all:
         print(f"  ({old} rows drawn more than {a.age} frames before the newest, f{last}, not shown: --all; they may be covered now)")
     r.close()

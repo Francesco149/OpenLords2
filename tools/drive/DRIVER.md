@@ -146,6 +146,7 @@ the other hosts.
   assigned on the armoury wall (screen 0xa: `@armory_bows`, `@armory_swords` → overlay 0x0d `@assign_plus` …). Play
   Now starts with 25 swords and 25 bows. `rd rec R A` lists the pieces (armies) in use, `rd rec R C 2` a county.
 - `rd hot` misses screens whose input uses code hit tests (Army Division, the armoury wall, overlays): look + click.
+  `rd text` has every text path (lines, localized lines, word-wrapped text: `L` / `W` rows) since 2026-11-13.
 - **Economy** (probe castle-labor): the castle screen `c@castle_open` (designs `@castle_palisade` … `@castle_royal`,
   `c@castle_yes`); Play Now's Raw Sienna starts with a palisade (`C(2).castle == 1`); `castle_building` 1 = building
   (new or upgrade, `castle` = the level being built, `castle_prev` the old), 2 = repairing siege damage. Clicking a
