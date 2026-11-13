@@ -34,7 +34,7 @@ One command at a time per run (a run is locked while a command works). Give shel
 rd new R --from fresh | SCENARIO[@F] | RUN[:CK|@F]   [--force]     a scenario = tests/scenarios/<name> (its prefix replays: ~10k frames/s)
 rd play R "SPEC" [--until EXPR] [--avoid EXPR] [--watch EXPR,EXPR] [--every N] [--rows N]
 rd status R      rd text R [--all]      rd hot R      rd look R [--at F,F]      rd strip R --from F --to F [--every N]
-rd eval R EXPR [EXPR..] [--at CHECKPOINT | --at-frame F] [--raw]
+rd eval R EXPR [EXPR..] [--at CHECKPOINT | --at-frame F] [--raw] [--each A..B  (a table: {I} → A..B)]
 rd scan R --from F [--to T] --watch "EXPR,EXPR" [--every N] [--changes] [--where EXPR]
 rd ram R list | read VA [N] | dwords VA [N] | str VA | define NAME --addr HEX --type s32 | --expr "..." [--status] [--event]
 rd ram R mark ; (act) ; rd ram R diff [--lo VA --hi VA] [--save NAME] [--minus NAME]
@@ -139,9 +139,17 @@ the other hosts.
 - **End turn** = `c@endturn` (558,469); a season's processing takes ~90–400 frames (`screen == 35` meanwhile); reports
   and event scrolls then wait for RMB (`r300,240`).
 - Realm events roll only for **odd-numbered counties** after 1268 (`docs/findings/game-state-map.md`).
-- The battlefield (`tools/bot/README.md` §battlefield): it opens paused; control panel 480..639 × 448..479; selection =
-  a drag > 24 px; RMB = order (an enemy under the cursor = attack); minimap 480..639 × 24..183 recentres only with
-  nothing selected or paused.
+- The battlefield (`tools/bot/README.md` §battlefield; probe battles): it opens paused; panel buttons at y=464: hourglass
+  496, retreat 528, siege action 560, Mop up 592, Autocalc 624; selection = a drag > 24 px (survives the pause toggle);
+  ORDERS ARE LEFT CLICKS (an RMB release deselects) and fire only while running — hover until `enemy_under_cursor` != 0
+  for an attack; minimap 480..639 × 24..183 recentres when paused or with nothing selected, else marches. Mop up can
+  stall on a few knights; a battle can end "won" with one enemy man left.
+- **Title / setup** (probe title-setup): title pages (`title_page`): 1 Single / Multiple / LoM / Exit at y 103 / 139 /
+  175 / 211 (EXIT QUITS THE PROCESS); 2 Play Now / Load / Skirmish / Custom / Back (y 103..247 step 36); 4 shields
+  (x 144 + 88·i, y 175), Back (208,227) → page 1, Continue (432,227); 5 the campaign choice; 7 custom setup; 12 / 13
+  skirmish + its file list. In game: File New (48,44) / Load (48,64) / Save (48,84) / Quit (48,104); saves land in the
+  session and show in the title's load list. Diplomacy (screen 11) faces at x=90, y 90 / 190 / 290 / 390 (Bishop /
+  Countess / Knight / Baron); actions: gift (410,118), insult (410,218), alliance (410,268), plea (410,318).
 - **Armies** (probe split-arm): an army needs ≥ 50 men ("Army too small"); raise = map icon `c@raise_army` → slider
   `c@raise_more` (+4–5 men a click, `drafted`) → `c@raise_continue` twice; an army's info panel (screen 4) = RMB on an
   army that is NOT selected (RMB on a selected one deselects): move / disband / split (`@army_split`, refused once the
@@ -194,7 +202,7 @@ the other hosts.
   = herd / pastures (≤10 low … >30 massive). Field events need ≥ 50 sacks / ≥ 40 head. County fields `weather`,
   `moisture`, `fertility`, `grain_weather`, `cattle_weather`, `herd_crowding`, `pastures`, `wheat_fields` …
 - Task files: `final:` predicates must hold on the movie's last frame (`steps` are ordered "at some frame after").
-- `rd cov R --blocks --fn NAME` lists a function's blocks nobody reaches yet — what to aim at next.
+- `rd cov R --blocks --fn NAME [--disasm]` lists a function's blocks nobody reaches yet (with their instructions) — what to aim at next.
 - Loads of game files take one frame here; never wait by wall time, wait for state (`--until`).
 - A run that was poked (`rd ram R w`) is POKED and cannot be filed.
 

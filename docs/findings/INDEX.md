@@ -91,3 +91,7 @@ session — they outlive the conversation context.
 
 *This index is hand-maintained. When you add a `findings/<subsystem>.md`,
 add a row here (and a `PROGRESS.md` dispatch entry).*
+
+## Drive probes (`tools/drive`, 2026-11-13)
+
+Agent-driven retail probes (rd campaigns): `probes/lord-move.md` (engine_army_ai_order_lord_move reached: the ally deployment chain), `probes/battles.md` (battlefield orders, panel, mixed attack), `probes/title-setup.md` (title pages, skirmish, custom setup, save / load), `probes/tooltips.md` (strategic tooltips). Subagent probes' facts are in `tools/drive/DRIVER.md` and the commits that filed their scenarios.

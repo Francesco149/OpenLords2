@@ -663,7 +663,8 @@
  },
  "minimap_zoom": {
   "addr": "57a0c4",
-  "type": "s32"
+  "type": "s32",
+  "note": "minimap overlay mode: 0 normal, 1 labour, 2 rations, 3 happiness (side buttons) \u2014 probe tooltips"
  },
  "f2_mode": {
   "addr": "568960",
@@ -789,5 +790,16 @@
   "addr": "53f0c4",
   "type": "s32",
   "note": "10 victory, 11 defeat"
+ },
+ "tooltip_id": {
+  "addr": "4eac00",
+  "type": "s32",
+  "event": true,
+  "note": "the strategic tooltip shown (engine_tooltip_classify_strategic; after ~1 s of cursor rest)"
+ },
+ "enemy_under_cursor": {
+  "addr": "5533b8",
+  "type": "s32",
+  "note": "battlefield: an enemy under the cursor (an LMB order then attacks)"
  }
 }

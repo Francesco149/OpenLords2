@@ -1336,6 +1336,17 @@ def cmd_eval(a):
         finally:
             kill_session(h)
         print(f"(at frame {frame}: a side replay)")
+    elif a.each:
+        lo, hi = (int(x) for x in a.each.split(".."))
+        r = Run(a.run)
+        exprs = [e.replace("{I}", str(i)) for i in range(lo, hi + 1) for e in a.exprs]
+        vals = r.ev(*exprs)
+        r.close()
+        k = len(a.exprs)
+        print("   I  " + "  ".join(a.exprs))
+        for n, i in enumerate(range(lo, hi + 1)):
+            print(f"  {i:3d}  " + "  ".join(fmt(v) for v in vals[n * k:(n + 1) * k]))
+        return
     else:
         r = Run(a.run)
         vals = r.ev(*a.exprs)
@@ -2341,8 +2352,28 @@ def cov_blocks(a, r, tr):
         miss = [(va, sz) for va, sz, ff in bl if ff == f and va not in corpus and va not in hit]
         print(f"{f:08x} {fn.get(f, ('?', 0))[0]}: {len(miss)} blocks reached by neither the corpus nor this run "
               f"({sum(z for _, z in miss)} B; a block right after a jmp / ret that nothing jumps to may be dead or a switch case):")
+        asm = {}
+        if a.disasm:
+            want = {va for va, _ in miss[:a.show]}
+            for va, sz in miss[:a.show]:
+                asm[va] = []
+            cur = None
+            for line in open(os.path.join(RH.EPH, "decompiled-ida", "all_ida.asm"), errors="replace"):
+                if len(line) > 10 and line[8:10] == "  ":
+                    try:
+                        ia = int(line[:8], 16)
+                    except ValueError:
+                        continue
+                    if ia in want:
+                        cur = ia
+                    elif cur is not None and ia >= cur + dict(miss)[cur]:
+                        cur = None
+                    if cur is not None:
+                        asm[cur].append(line.rstrip())
         for va, sz in miss[:a.show]:
             print(f"    {va:08x} {sz:4d} B")
+            for l in asm.get(va, [])[:12]:
+                print(f"        {l}")
         if len(miss) > a.show:
             print(f"    … {len(miss) - a.show} more (--show N)")
 
@@ -2439,6 +2470,7 @@ def main():
     p = sp.add_parser("cell"); p.add_argument("run"); p.add_argument("cells", nargs="+", help="COL,ROW .."); p.set_defaults(fn=cmd_cell)
     p = sp.add_parser("movie"); p.add_argument("run"); p.add_argument("-n", type=int, default=20); p.set_defaults(fn=cmd_movie)
     p = sp.add_parser("eval"); p.add_argument("run"); p.add_argument("exprs", nargs="+"); p.add_argument("--at"); p.add_argument("--at-frame", type=int)
+    p.add_argument("--each", help="A..B: a table, {I} in the expressions replaced by A..B (C({I}).owner, R({I}).crowns)")
     p.add_argument("--raw", action="store_true"); p.set_defaults(fn=cmd_eval)
     p = sp.add_parser("scan"); p.add_argument("run"); p.add_argument("--from", dest="frm", type=int, required=True); p.add_argument("--to", type=int)
     p.add_argument("--watch", required=True); p.add_argument("--every", type=int, default=0); p.add_argument("--changes", action="store_true")
@@ -2468,6 +2500,7 @@ def main():
     p = sp.add_parser("covered"); p.add_argument("what", nargs="+"); p.set_defaults(fn=cmd_covered)
     p = sp.add_parser("cov"); p.add_argument("run"); p.add_argument("--show", type=int, default=40); p.add_argument("--refresh-corpus", action="store_true")
     p.add_argument("--blocks", action="store_true", help="basic blocks (tools/drive/blocks.py) instead of whole functions")
+    p.add_argument("--disasm", action="store_true", help="--fn: print each untaken block's instructions (all_ida.asm)")
     p.add_argument("--fn", dest="fn_list", help="--blocks: VA or NAME[,..]: list the blocks of these functions that neither the corpus nor the run reaches")
     p.add_argument("--target", choices=("win", "wine", "bunker")); p.set_defaults(fn=cmd_cov)
     p = sp.add_parser("stop"); p.add_argument("run"); p.set_defaults(fn=cmd_stop)
