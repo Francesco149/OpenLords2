@@ -289,6 +289,7 @@ static void yield_to_host(void)                       /* retail's side, end of f
 void rh_step(void)                                    /* the host's side: one frame */
 {
     NT_TIB *tib = (NT_TIB *)NtCurrentTeb();
+    if (O.live) rh_live_frame_begin();
     g_hseh = (uint32_t)(uintptr_t)tib->ExceptionList;
     tib->StackBase = (void *)(uintptr_t)MAIN_STACK_HI; tib->StackLimit = (void *)(uintptr_t)(MAIN_STACK_LO + STACK_GUARD);
     tib->ExceptionList = (void *)(uintptr_t)g_gseh;
@@ -304,10 +305,10 @@ static void coro_init(void *entry)
     NT_TIB *tib = (NT_TIB *)NtCurrentTeb();
     g_hbase = (uint32_t)(uintptr_t)tib->StackBase; g_hlimit = (uint32_t)(uintptr_t)tib->StackLimit;
     g_entry = (uint32_t)(uintptr_t)entry;
-    uint32_t *sp = (uint32_t *)(uintptr_t)(MAIN_STACK_HI - 192 - 64);   /* call_on_stack's entry depth */
-    *--sp = (uint32_t)(uintptr_t)game_tramp;
-    for (int i = 0; i < 4; i++) *--sp = 0;            /* ebx esi edi ebp */
-    g_gesp = (uint32_t)(uintptr_t)sp;
+    uint32_t sp = MAIN_STACK_HI - 192 - 64;           /* call_on_stack's entry depth */
+    sp -= 4; G32(sp) = (uint32_t)(uintptr_t)game_tramp;
+    for (int i = 0; i < 4; i++) { sp -= 4; G32(sp) = 0; }   /* ebx esi edi ebp */
+    g_gesp = sp;
     rh_snap_register("game.esp", &g_gesp, sizeof g_gesp);
     rh_snap_register("game.seh", &g_gseh, sizeof g_gseh);
     rh_snap_register("game.cw", &g_gcw, sizeof g_gcw);

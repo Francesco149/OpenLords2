@@ -80,6 +80,57 @@ static mnode_t **movie_list(mnode_t *head, mnode_t *stop, size_t *n)   /* the no
     return v;
 }
 
+/* ---------------- what the last frame drew / tested: screen text and hotspots ----------------
+ * Retail's text lines end in FUN_00402637 (buf, x, y, …) or FUN_004025d7 (centred: buf, x, y, width, …); its menu / HUD
+ * input handlers test their hotspot tables with FUN_0040e3ee (click: ox, oy, table, count) and FUN_0040e5e7 (hover).
+ * Their call sites are redirected to thunks that note the arguments and jump on; the C part runs on a private stack and
+ * writes no retail memory (a live session's state stays a plain replay's: `rd verify`). Rows are per frame (cleared
+ * when a frame starts); text a screen drew once stays in `g_text` until the screen id changes. */
+typedef struct { uint8_t kind; int32_t a[4]; uint16_t len; char s[100]; } lrec_t;
+#define MAX_HOT 96
+#define MAX_TXT 192
+static lrec_t g_hot[MAX_HOT], g_txt[MAX_TXT]; static int g_nhot, g_ntxt, g_txt_screen = -1, g_rec_stale;
+uint32_t g_rec_esp, g_rec_stack;
+__attribute__((used)) void __cdecl rec_record(uint32_t kind)
+{
+    const int32_t *a = (const int32_t *)(uintptr_t)g_rec_esp;      /* [0] ret, [1..] args */
+    if (kind >= 2) {                                               /* hotspot table: (ox, oy, table, count) */
+        for (int i = 0; i < g_nhot; i++) if (g_hot[i].a[2] == a[3] && g_hot[i].a[0] == a[1] && g_hot[i].a[1] == a[2]) return;
+        if (g_nhot >= MAX_HOT) return;
+        lrec_t *r = &g_hot[g_nhot++]; r->kind = (uint8_t)kind; r->a[0] = a[1]; r->a[1] = a[2]; r->a[2] = a[3]; r->a[3] = a[4]; r->len = 0;
+        return;
+    }
+    const char *str = (const char *)(uintptr_t)a[1];
+    if ((uint32_t)a[1] < 0x400000u) return;
+    int slot = -1;                                                 /* one row per position: a redraw replaces it */
+    for (int i = 0; i < g_ntxt; i++) if (g_txt[i].a[0] == a[2] && g_txt[i].a[1] == a[3]) { slot = i; break; }
+    if (slot < 0) { if (g_ntxt >= MAX_TXT) return; slot = g_ntxt++; }
+    lrec_t *r = &g_txt[slot]; r->kind = (uint8_t)kind; r->a[0] = a[2]; r->a[1] = a[3]; r->a[2] = kind == 1 ? a[4] : 0; r->a[3] = (int32_t)g_frame;
+    uint16_t n = 0; while (n < sizeof r->s && str[n]) n++;
+    memcpy(r->s, str, n); r->len = n;
+}
+#define REC_THUNK(name, k, target) \
+    __attribute__((naked)) static void name(void) { \
+        __asm__("movl %esp, _g_rec_esp\n\t movl _g_rec_stack, %esp\n\t pushl $" #k "\n\t call _rec_record\n\t" \
+                "movl _g_rec_esp, %esp\n\t movl $" #target ", %eax\n\t jmp *%eax"); }
+REC_THUNK(rec_text, 0, 0x402637)
+REC_THUNK(rec_text_c, 1, 0x4025d7)
+REC_THUNK(rec_hot_click, 2, 0x40e3ee)
+REC_THUNK(rec_hot_hover, 3, 0x40e5e7)
+void rh_live_frame_begin(void)                                     /* rhost.c rh_step: a frame starts */
+{
+    g_nhot = 0; g_rec_stale = 0;
+    if ((int)G8(L2_SCREEN) != g_txt_screen) { g_ntxt = 0; g_txt_screen = G8(L2_SCREEN); }
+}
+static void rec_install(void)
+{
+    uint8_t *st = VirtualAlloc(NULL, 0x10000, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    g_rec_stack = (uint32_t)(uintptr_t)st + 0x10000 - 64;
+    int a = redirect_calls(0x402637u, rec_text), b = redirect_calls(0x4025d7u, rec_text_c);
+    int c = redirect_calls(0x40e3eeu, rec_hot_click), d = redirect_calls(0x40e5e7u, rec_hot_hover);
+    rh_log("live: screen text from %d + %d call sites, hotspots from %d + %d\n", a, b, c, d);
+}
+
 /* ---------------- programs (postfix) ---------------- */
 enum { OP_NUM, OP_R8, OP_R16, OP_R32, OP_S8, OP_S16, OP_S32, OP_F32, OP_F64, OP_FRAME, OP_ADD, OP_SUB, OP_MUL, OP_DIV, OP_FDIV,
        OP_MOD, OP_AND, OP_OR, OP_XOR, OP_SHL, OP_SHR, OP_INV, OP_LT, OP_LE, OP_GT, OP_GE, OP_EQ, OP_NE, OP_LAND, OP_LOR, OP_LNOT,
@@ -444,6 +495,7 @@ void rh_live_install(void)
     char q[MAX_PATH]; snprintf(q, sizeof q, "%s\\live.port", O.rundir);
     FILE *f = fopen(p, "w"); if (f) { fprintf(f, "%d %lu\n", O.live_port, (unsigned long)GetCurrentProcessId()); fclose(f); MoveFileExA(p, q, MOVEFILE_REPLACE_EXISTING); }
     g_xs = 0x9E3779B97F4A7C15ull;
+    rec_install();
     rh_log("live: serving on 127.0.0.1:%d\n", O.live_port);
 }
 void rh_live_register(void) { rh_snap_register("movie.head", &g_mhead, sizeof g_mhead); }
@@ -555,7 +607,7 @@ static void command(char *line, sb_t *o)
     }
     else if (!strcmp(c, "restore")) {
         int id = nt >= 2 ? atoi(tok[1]) : 0;
-        if (rh_snap_restore(id)) sb_f(o, "err no savestate %d (epoch %u)", id, g_epoch); else { sb_f(o, "ok "); status(o); }
+        if (rh_snap_restore(id)) sb_f(o, "err no savestate %d (epoch %u)", id, g_epoch); else { g_rec_stale = 1; sb_f(o, "ok "); status(o); }
     }
     else if (!strcmp(c, "free")) { for (int i = 1; i < nt; i++) rh_snap_free(atoi(tok[i])); sb_f(o, "ok"); }
     else if (!strcmp(c, "freeall")) { rh_snap_free_all(); g_epoch++; sb_f(o, "ok epoch=%u", g_epoch); }
@@ -573,6 +625,17 @@ static void command(char *line, sb_t *o)
         char tag[64]; snprintf(tag, sizeof tag, "%s", nt >= 2 ? tok[1] : "live");
         rh_shot(tag);
         sb_f(o, "ok %s\\shot_%s.png frame=%u", O.rundir, tag, g_frame);
+    }
+    else if (!strcmp(c, "text") || !strcmp(c, "hot")) {
+        int t = c[0] == 't'; const lrec_t *v = t ? g_txt : g_hot; int n = t ? g_ntxt : g_nhot;
+        static const char X[] = "0123456789abcdef";
+        sb_f(o, "ok frame=%u stale=%d n=%d rows=", g_frame, g_rec_stale, n);
+        for (int i = 0; i < n; i++) {
+            sb_f(o, "%s%d:%d:%d:%d:%d:", i ? ";" : "", v[i].kind, v[i].a[0], v[i].a[1], v[i].a[2], v[i].a[3]);
+            char h[sizeof v[i].s * 2 + 1];
+            for (int k = 0; k < v[i].len; k++) { uint8_t b = (uint8_t)v[i].s[k]; h[k * 2] = X[b >> 4]; h[k * 2 + 1] = X[b & 15]; }
+            h[v[i].len * 2] = 0; sb_put(o, h, (size_t)v[i].len * 2);
+        }
     }
     else if (!strcmp(c, "hash")) {
         rh_hash_t h; rh_state_hash(&h);
@@ -616,8 +679,13 @@ static void command(char *line, sb_t *o)
         const char *ssc = opt(tok, nt, "score"), *sgr = opt(tok, nt, "greed");
         int scp = ssc ? pid_of(ssc) : -1;
         if (ssc && scp < 0) { sb_f(o, "err explore score=P (undefined program)"); for (int i = 0; i < nact; i++) free(acts[i]); return; }
+        static lrec_t sh[MAX_HOT], stx[MAX_TXT]; int snh = g_nhot, snt = g_ntxt, sts = g_txt_screen, sst = g_rec_stale;
+        memcpy(sh, g_hot, sizeof sh); memcpy(stx, g_txt, sizeof stx);
         do_explore(g, a, cp, nc, acts, alen, nact, st ? atof(st) : 60000, sr ? atof(sr) : 5000, maxlen, sk ? atof(sk) / 100.0 : 0.5, sap ? atoi(sap) : 0,
                    scp, sgr ? atof(sgr) : 3.0, &hold, o);
+        if (!strstr(o->p ? o->p : "", " applied=1")) {     /* nothing applied: the rows of the frame the search started at */
+            memcpy(g_hot, sh, sizeof sh); memcpy(g_txt, stx, sizeof stx); g_nhot = snh; g_ntxt = snt; g_txt_screen = sts; g_rec_stale = sst;
+        }
         for (int i = 0; i < nact; i++) free(acts[i]);
         for (int i = 0; i < nh; i++) free(hacts[i]);
     }

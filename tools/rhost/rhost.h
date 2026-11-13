@@ -235,6 +235,7 @@ void rh_files_snap_free(void *s);
 void rh_live_install(void);
 void rh_live_register(void);
 void rh_live_main(void);
+void rh_live_frame_begin(void);
 void rh_live_note_event(uint32_t frame, uint32_t m, uint32_t w, uint32_t l);
 void rh_snap_selftest(void);
 const char *rh_snap_test_status(void);

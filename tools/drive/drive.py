@@ -646,7 +646,7 @@ RD_HOST = os.environ.get("RD_HOST", "auto")
 HOSTS = ("win", "bunker", "wine")
 WIN_MAX_SESSIONS = int(os.environ.get("RD_WIN_MAX_SESSIONS", "6"))
 BUNKER_MAX_SESSIONS = int(os.environ.get("RD_BUNKER_MAX_SESSIONS", "8"))
-BUNKER_FLOOR_MB = int(os.environ.get("RD_BUNKER_MEM_FLOOR_MB", "600"))
+BUNKER_FLOOR_MB = int(os.environ.get("RD_BUNKER_MEM_FLOOR_MB", "512"))
 LOCAL_MAX = int(os.environ.get("RD_LOCAL_MAX", "6"))
 LOCAL_FLOOR_GB = float(os.environ.get("RD_LOCAL_FLOOR_GB", "8"))
 ADMIT_WAIT = {"win": float(os.environ.get("RD_WIN_ADMIT_WAIT", "30")), "bunker": float(os.environ.get("RD_BUNKER_ADMIT_WAIT", "30"))}
@@ -685,7 +685,7 @@ def staged_exe(host):
             RH.cmd_build(None)
         sha = bin_sha()
         if host == "bunker":
-            return BK.exe_path(BK.stage()) if hasattr(BK, "exe_path") else f"{RH.WROOT}\\bin\\{BK.stage()}\\{RH.WEXE}"
+            return BK.staged_exe(BK.stage())
         if host == "win":
             stamp = os.path.join(RH.BUILD, f".staged-win-{sha}")
             if not os.path.exists(stamp):
@@ -1434,6 +1434,74 @@ def cmd_rewind(a):
     r.close()
 
 
+# ---- what the screen shows: text rows, hotspots (rh_live.c recorders)
+_IDA_NAMES = None
+
+
+def ida_name(va):
+    global _IDA_NAMES
+    if _IDA_NAMES is None:
+        _IDA_NAMES = {}
+        p = os.path.join(RH.EPH, "decompiled-ida", "functions_ida.tsv")
+        if os.path.exists(p):
+            for l in open(p):
+                f = l.split("\t")
+                if len(f) > 2 and re.fullmatch(r"[0-9a-f]{8}", f[0]):
+                    _IDA_NAMES[int(f[0], 16)] = f[2]
+    return _IDA_NAMES.get(va, f"FUN_{va:08x}")
+
+
+def rec_rows(lv, what):
+    k = Live.kv(lv.cmd(what))
+    rows = []
+    for r in filter(None, k.get("rows", "").split(";")):
+        p = r.split(":")
+        rows.append((int(p[0]), [int(x) for x in p[1:5]], bytes.fromhex(p[5]) if len(p) > 5 else b""))
+    return rows, k.get("stale") == "1"
+
+
+def text_of(b):
+    return "".join(chr(c) if 32 <= c < 127 or c >= 160 else ("|" if c in (10, 13) else "·") for c in b)
+
+
+def hotspots(lv):
+    """[(x0, y0, x1, y1, action_va, type, kind)] — the hotspot tables retail's input handlers tested in the last frame"""
+    rows, stale = rec_rows(lv, "hot")
+    out = []
+    for kind, (ox, oy, tbl, n), _ in rows:
+        if not (0 < n <= 64):
+            continue
+        h = bytes.fromhex(lv.cmd(f"r {tbl & 0xffffffff:x} {n * 24}")[3:])
+        for i in range(n):
+            x0, y0, x1, y1 = (int.from_bytes(h[i * 24 + 2 * j:i * 24 + 2 * j + 2], "little", signed=True) for j in range(4))
+            act = int.from_bytes(h[i * 24 + 8:i * 24 + 12], "little")
+            out.append((ox + x0, oy + y0, ox + x1, oy + y1, act, h[i * 24 + 15], kind, tbl & 0xffffffff, i))
+    return out, stale
+
+
+def cmd_text(a):
+    r = Run(a.run)
+    rows, stale = rec_rows(r.attach(), "text")
+    print(f"text drawn since screen {fmt(r.ev('screen')[0])} opened ({len(rows)} rows)" + ("  [stale: the state was restored — play a frame]" if stale else ""))
+    last = max((f for _, (_, _, _, f), _ in rows), default=0)
+    for kind, (x, y, w, f), s in sorted(rows, key=lambda t: (t[1][1], t[1][0])):
+        if a.all or f >= last - a.age:
+            print(f"  ({x:3d},{y:3d}){' c' if kind == 1 else '  '} {text_of(s)}" + (f"   [drawn f{f}]" if f < last else ""))
+    old = sum(1 for _, (_, _, _, f), _ in rows if f < last - a.age)
+    if old and not a.all:
+        print(f"  ({old} rows drawn more than {a.age} frames before the newest, f{last}, not shown: --all; they may be covered now)")
+    r.close()
+
+
+def cmd_hot(a):
+    r = Run(a.run)
+    hs, stale = hotspots(r.attach())
+    print(f"{len(hs)} hotspots tested in the last frame" + ("  [stale: the state was restored — play a frame]" if stale else ""))
+    for x0, y0, x1, y1, act, ty, kind, tbl, i in hs:
+        print(f"  c{(x0 + x1) // 2},{(y0 + y1) // 2}   rect ({x0},{y0})-({x1},{y1})  {ida_name(act)}  type {ty}  table {tbl:x}[{i}]{' hover' if kind == 3 else ''}")
+    r.close()
+
+
 # ---- search
 DEFAULT_WAIT = 25                                         # an in-game LMB fires 300 ms after release (≥ 25 frames between map clicks)
 
@@ -1442,7 +1510,9 @@ def default_actions(r):
     """the screen's clickable points (ui.json "screens": per screen id) + a wait; else a coarse grid"""
     pts = ui_points()
     scr = int(r.ev("screen")[0]) if "screen" in r.vars.defs else -1
-    acts = [f"c@{n} .*{DEFAULT_WAIT}" for n, p in pts.items() if scr in p.get("screens", [])]
+    hs, _ = hotspots(r.attach())
+    acts = sorted({f"c{(x0 + x1) // 2},{(y0 + y1) // 2} .*{DEFAULT_WAIT}" for x0, y0, x1, y1, *_ in hs if x1 > x0 and y1 > y0})
+    acts += [f"c@{n} .*{DEFAULT_WAIT}" for n, p in pts.items() if scr in p.get("screens", [])]
     if not acts:
         acts = [f"c{x},{y} .*{DEFAULT_WAIT}" for x in range(40, 640, 80) for y in range(30, 480, 60)]
     return acts + [f".*{DEFAULT_WAIT}"]
@@ -1942,6 +2012,9 @@ def main():
     p = sp.add_parser("play"); p.add_argument("run"); p.add_argument("spec"); p.add_argument("--until"); p.add_argument("--avoid")
     p.add_argument("--watch"); p.add_argument("--every", type=int, default=0); p.add_argument("--rows", type=int, default=40); p.set_defaults(fn=cmd_play)
     p = sp.add_parser("status"); p.add_argument("run"); p.set_defaults(fn=cmd_status)
+    p = sp.add_parser("text"); p.add_argument("run"); p.add_argument("--all", action="store_true"); p.add_argument("--age", type=int, default=120)
+    p.set_defaults(fn=cmd_text)
+    p = sp.add_parser("hot"); p.add_argument("run"); p.set_defaults(fn=cmd_hot)
     p = sp.add_parser("movie"); p.add_argument("run"); p.add_argument("-n", type=int, default=20); p.set_defaults(fn=cmd_movie)
     p = sp.add_parser("eval"); p.add_argument("run"); p.add_argument("exprs", nargs="+"); p.add_argument("--at"); p.add_argument("--at-frame", type=int)
     p.add_argument("--raw", action="store_true"); p.set_defaults(fn=cmd_eval)
