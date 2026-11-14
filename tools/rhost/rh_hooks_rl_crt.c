@@ -37,28 +37,38 @@ enum {
     X_rl_crt_4cc5e0, X_rl_crt_4cd2f0, X_rl_crt_4cd270, X_rl_crt_4cd3d0, X_rl_crt_4cd3b0, X_rl_crt_4cc740,
     X_rl_crt_4cd4f0, X_rl_crt_4cd5b0, X_rl_crt_4cd5e0, X_rl_crt_4cc950, X_rl_crt_4cc930, X_rl_crt_4cca20,
     X_rl_crt_4bf870, X_rl_crt_4bf6a0, X_rl_crt_4bf770, X_rl_crt_4bf6f0, X_rl_crt_4c3370,
+    X_rl_crt_4bfa60, X_rl_crt_4c3200, X_rl_crt_4c28d0, X_rl_crt_4c8870, X_rl_crt_4c2fb0,
+    X_rl_crt_4c77b0, X_rl_crt_4c7680, X_rl_crt_4c7700, X_rl_crt_4c7750, X_rl_crt_4c68f0, X_rl_crt_4c2a80,
 };
 
 /* ---------------------------------------------------------------- stack outputs (HOOK_SO) */
 #define SO_STACK_LO 0x58000000u   /* rhost's fixed stack (README) */
 #define SO_STACK_HI 0x59000000u
 #define SO_MAX 4096
-/* a spec entry: { arg index, kind, n }: kind 0 = n bytes, 1 = the length in argument n, 2 = strlen(argument n) + 1 */
+/* a spec entry: { arg index, kind, n }: kind 0 = n bytes, 1 = the length in argument n, 2 = strlen(argument n) + 1,
+ * 3 = n * 16 bytes (an output of unknown length: sprintf's buffer, _splitpath's parts — cut at the stack's top),
+ * 4 = n * 16 bytes at the pointer the argument points at (a FILE's _ptr: __output / _write_char's target) */
 typedef struct { uint8_t arg, kind, n; } so_spec_t;
 #define SO_END { 0xff, 0, 0 }
-typedef struct { int n; uint32_t p[3], len[3]; uint8_t *pre[3], *post[3]; } so_ctx_t;
+#define SO_N 5
+typedef struct { int n; uint32_t p[SO_N], len[SO_N]; uint8_t *pre[SO_N], *post[SO_N]; } so_ctx_t;
 static so_ctx_t *s_so;
 static void so_enter(so_ctx_t *c, uint32_t e0, const so_spec_t *spec)
 {
     c->n = 0;
     for (; spec->arg != 0xff; spec++) {
         uint32_t ptr = G32(e0 + 4u + 4u * spec->arg), len = spec->n;
+        if (spec->kind == 4) ptr = (ptr >= SO_STACK_LO && ptr + 4 <= SO_STACK_HI) || ptr >= 0x400000u ? G32(ptr) : 0;
+        if (spec->kind >= 3) {
+            len = 16u * spec->n;
+            if (ptr >= SO_STACK_LO && ptr < SO_STACK_HI && ptr + len > SO_STACK_HI) len = SO_STACK_HI - ptr;
+        }
         if (spec->kind == 1) len = G32(e0 + 4u + 4u * spec->n);
         else if (spec->kind == 2) {
             uint32_t s = G32(e0 + 4u + 4u * spec->n);
             len = s ? (uint32_t)strlen((const char *)(uintptr_t)s) + 1 : 0;
         }
-        if (len == 0 || len > SO_MAX || ptr < SO_STACK_LO || ptr + len > SO_STACK_HI || c->n == 3)
+        if (len == 0 || len > SO_MAX || ptr < SO_STACK_LO || ptr + len > SO_STACK_HI || c->n == SO_N)
             continue;   /* a .data / arena target is state: the shadow compares it */
         c->p[c->n] = ptr; c->len[c->n] = len;
         c->pre[c->n] = malloc(len); c->post[c->n] = malloc(len);
@@ -116,6 +126,32 @@ static uint32_t find_block(const uint32_t *a)
     if (r != 0) { G32(a[1]) = hdr; G32(a[2]) = page; }
     return r;
 }
+
+/* sprintf is variadic: the port takes the address of the first variadic argument (e0 + 12, retail's stack — the same
+ * in both passes); the buffer is a stack output (HOOK_SO kind 3: 512 bytes) */
+static uint32_t s_sprintf_e0;
+static const so_spec_t k_so_rl_crt_4c2a80[] = SPEC({ 0, 3, 32 });
+static uint32_t p_rl_crt_4c2a80(const uint32_t *a)
+{
+    so_port_pre(X_rl_crt_4c2a80);
+    uint32_t r = (uint32_t)rl_crt_4c2a80(a[0], a[1], s_sprintf_e0 + 12u);
+    return so_port_post(X_rl_crt_4c2a80, r);
+}
+static void w_rl_crt_4c2a80(void);
+static __attribute__((used, noinline)) uint32_t __cdecl b_rl_crt_4c2a80(uint32_t e0)
+{
+    so_ctx_t c, *keep = s_so;
+    uint32_t keep_e0 = s_sprintf_e0;
+    so_enter(&c, e0, k_so_rl_crt_4c2a80);
+    s_so = &c;
+    s_sprintf_e0 = e0;
+    uint32_t r = rh_port_run(&RH_TABLE[X_rl_crt_4c2a80], (void *)w_rl_crt_4c2a80, p_rl_crt_4c2a80, 1, e0);
+    s_sprintf_e0 = keep_e0;
+    s_so = keep;
+    so_leave(&c);
+    return r;
+}
+RH_ENTRY(w_rl_crt_4c2a80, b_rl_crt_4c2a80)
 
 /* ---------------------------------------------------------------- rows */
 HOOK_R(rl_crt_4bf620, 1, rl_crt_4bf620(a[0]))
@@ -212,6 +248,16 @@ HOOK_V(rl_crt_4bf6a0, 0, rl_crt_4bf6a0())
 HOOK_V(rl_crt_4bf770, 3, rl_crt_4bf770(I(0), I(1), I(2)))
 HOOK_V(rl_crt_4bf6f0, 1, rl_crt_4bf6f0(I(0)))
 HOOK_V(rl_crt_4c3370, 0, rl_crt_4c3370())
+HOOK_R(rl_crt_4bfa60, 2, rl_crt_4bfa60(a[0], I(1)))
+HOOK_R(rl_crt_4c3200, 1, rl_crt_4c3200(a[0]))
+HOOK_SO(rl_crt_4c28d0, 3, SPEC({ 0, 1, 2 }), rl_crt_4c28d0(a[0], a[1], a[2]))
+HOOK_SO(rl_crt_4c8870, 3, SPEC({ 0, 1, 2 }), rl_crt_4c8870(a[0], a[1], a[2]))
+HOOK_SO(rl_crt_4c2fb0, 5, SPEC({ 1, 0, 3 }, { 2, 3, 16 }, { 3, 3, 16 }, { 4, 3, 16 }), rl_crt_4c2fb0(a[0], a[1], a[2], a[3], a[4]))
+HOOK_SO(rl_crt_4c77b0, 1, SPEC({ 0, 0, 4 }), rl_crt_4c77b0(a[0]))
+HOOK_SO(rl_crt_4c7680, 3, SPEC({ 1, 0, 8 }, { 1, 4, 1 }, { 2, 0, 4 }), rl_crt_4c7680(I(0), a[1], a[2]))
+HOOK_SO(rl_crt_4c7700, 4, SPEC({ 2, 0, 8 }, { 2, 4, 32 }, { 3, 0, 4 }), rl_crt_4c7700(I(0), I(1), a[2], a[3]))
+HOOK_SO(rl_crt_4c7750, 4, SPEC({ 2, 0, 8 }, { 2, 4, 32 }, { 3, 0, 4 }), rl_crt_4c7750(a[0], I(1), a[2], a[3]))
+HOOK_SO(rl_crt_4c68f0, 3, SPEC({ 0, 0, 8 }, { 0, 4, 32 }), rl_crt_4c68f0(a[0], a[1], a[2]))
 
 hook_t RH_HOOKS_RL_CRT[] = {
     { "rl_crt_4bf620", 0x4bf620u, (void *)w_rl_crt_4bf620, 0, 0, 0, 0, "", 0, RH_SH_SAMPLE },
@@ -295,5 +341,16 @@ hook_t RH_HOOKS_RL_CRT[] = {
     { "rl_crt_4bf770", 0x4bf770u, (void *)w_rl_crt_4bf770, 0, 0, 0, 0, "", 0, RH_SH_HOST },
     { "rl_crt_4bf6f0", 0x4bf6f0u, (void *)w_rl_crt_4bf6f0, 0, 0, 0, 0, "", 0, RH_SH_HOST },
     { "rl_crt_4c3370", 0x4c3370u, (void *)w_rl_crt_4c3370, 0, 0, 0, 0, "", 0, RH_SH_HOST },
+    { "rl_crt_4bfa60", 0x4bfa60u, (void *)w_rl_crt_4bfa60, 0, 0, 0, 0, "", 0, 0 },
+    { "rl_crt_4c3200", 0x4c3200u, (void *)w_rl_crt_4c3200, 0, 0, 0, 0, "", 0, 0 },
+    { "rl_crt_4c28d0", 0x4c28d0u, (void *)w_rl_crt_4c28d0, 0, 0, 0, 0, "", 0, 0 },
+    { "rl_crt_4c8870", 0x4c8870u, (void *)w_rl_crt_4c8870, 0, 0, 0, 0, "", 0, 0 },
+    { "rl_crt_4c2fb0", 0x4c2fb0u, (void *)w_rl_crt_4c2fb0, 0, 0, 0, 0, "", 0, 0 },
+    { "rl_crt_4c77b0", 0x4c77b0u, (void *)w_rl_crt_4c77b0, 0, 0, 0, 0, "", 0, RH_SH_SAMPLE },
+    { "rl_crt_4c7680", 0x4c7680u, (void *)w_rl_crt_4c7680, 0, 0, 0, 0, "", 0, RH_SH_SAMPLE },
+    { "rl_crt_4c7700", 0x4c7700u, (void *)w_rl_crt_4c7700, 0, 0, 0, 0, "", 0, RH_SH_SAMPLE },
+    { "rl_crt_4c7750", 0x4c7750u, (void *)w_rl_crt_4c7750, 0, 0, 0, 0, "", 0, RH_SH_SAMPLE },
+    { "rl_crt_4c68f0", 0x4c68f0u, (void *)w_rl_crt_4c68f0, 0, 0, 0, 0, "", 0, 0 },
+    { "rl_crt_4c2a80", 0x4c2a80u, (void *)w_rl_crt_4c2a80, 0, 0, 0, 0, "", 0, 0 },
 };
 const int RH_HOOKS_RL_CRT_N = sizeof RH_HOOKS_RL_CRT / sizeof *RH_HOOKS_RL_CRT;

@@ -1,14 +1,16 @@
 /* rl_crt.c — retail's statically linked MSVC 4.x DEBUG C runtime, ported on retail's layout (docs/findings/crt-port.md).
  *
  * Lords2.exe links the debug CRT (dbgheap.c's block list and fill bytes, the 4.x page-based small-block heap, the
- * __pioinfo fd table, text-mode CRLF I/O, the mbctable, tzset / localtime, onexit). The corpus reaches 81 of its
- * functions (the 79 FLIRT library ones + _isindst 0x4c5dc0 + the xc initializer 0x4cc930); each is ported here from
+ * __pioinfo fd table, text-mode CRLF I/O, the mbctable, tzset / localtime, onexit). The corpus reaches 93 of its
+ * functions (the 79 FLIRT library ones + _isindst 0x4c5dc0 + the xc initializer 0x4cc930; the multiplayer scenarios
+ * add operator new, sprintf / __output, _splitpath, strncpy / _mbsnbcpy and the DirectPlayEnumerateA thunk); each is
+ * ported here from
  * retail's code (IDA pseudocode + disassembly), named rl_crt_<va>. Its state is retail's own: the globals at their
  * VAs in .data / .bss (under rhost and the standalone retail's data image is mapped there), every OS call THROUGH
  * RETAIL'S IAT SLOT (rhost's virtual layers: the fixed-address heap arena, the file overlay, fake handles, the
  * virtual clock). So the port's allocations land where retail's do and the state is retail's byte for byte.
  * Callees the corpus never reaches (_CrtDbgReport, _CrtCheckMemory, _amsg_exit, _callnewh, the locale paths,
- * _chsize, _commit, _fcloseall, _realloc_dbg, __sbh_decommit_pages, strncpy / atol / wcstombs on the TZ paths …) are
+ * _chsize, _commit, _fcloseall, _realloc_dbg, __sbh_decommit_pages, atol / wcstombs on the TZ paths, _flsbuf, _wctomb …) are
  * seams by bare VA (engine_retail_call: retail under rhost, a GAP in the standalone). */
 #include "rl_crt.h"
 #include "rl_main.h"
@@ -138,6 +140,19 @@
 #define S_IOINIT_C   0x4d0cacu
 #define S_FILE_C     0x4d100cu
 #define S_OSFINFO_C  0x4d1020u
+#define S_FORMATNULL 0x4d0860u   /* "format != NULL" */
+#define S_SPRINTF_C  0x4d0870u   /* "sprintf.c" */
+#define S_STRINGNULL 0x4d087cu   /* "string != NULL" */
+#define S_WNULL      0x4e52a8u   /* -> L"(null)" (0x4d0b7c) */
+#define S_NULL       0x4e52a4u   /* -> "(null)" (0x4d0b8c) */
+#define T_LOOKUP     0x4d0b98u   /* output.c's __lookuptable: class (ch - ' ') in the low nibble, the next state
+                                    (class * 8 + state) in the high nibble */
+#define S_OUTPUT_C   0x4d0bf4u   /* "output.c" */
+#define S_CH_NOT_EOS 0x4d0c00u   /* "ch != _T('\\0')" */
+#define P_CFLTCVT    0x4e5970u   /* _cfltcvt_tab: _cfltcvt, _cropzeros, _fassign, _forcdecpt, _positive, _fpclass —
+                                    retail links no floating point: all six are __fptrap 0x4cd4d0 (_amsg_exit(2)) */
+#define P_CROPZEROS  0x4e5974u
+#define P_FORCDECPT  0x4e597cu
 #define S_ONEXIT_C   0x4d102cu
 #define T_XC_A 0x4d2000u         /* the C++ initializers [0x4d2000, 0x4d2008) */
 #define T_XC_Z 0x4d2008u
@@ -170,9 +185,10 @@
 #define VA_REALLOC_DBG     0x4bff40u
 #define VA_CHSIZE          0x4cf640u
 #define VA_CRTDUMPLEAKS    0x4c19b0u
-#define VA_STRNCPY         0x4c28d0u
 #define VA_ATOL            0x4c1df0u
 #define VA_WCSTOMBS        0x4cbbf0u
+#define VA_WCTOMB          0x4cc770u   /* _wctomb (%C / %S / %lc / %ls: the locale path) */
+#define VA_FLSBUF          0x4c6650u   /* _flsbuf (a string stream never fills: _cnt 0x7fffffff) */
 
 /* the IAT slots the CRT calls through */
 #define I_CloseHandle            0x5cf3a0u
@@ -220,6 +236,7 @@
 #define I_GetFileType            0x5cf4d8u
 #define I_SetHandleCount         0x5cf4dcu
 #define I_WideCharToMultiByte    0x5cf4e0u
+#define I_DirectPlayEnumerateA   0x5cf368u   /* DPLAY ordinal 2 (rhost: rh_net's fake provider list) */
 
 static DWORD last_error(void) { return IAT(DWORD (WINAPI *)(void), I_GetLastError)(); }
 static void int3(void) { __asm__ volatile("int3"); }
@@ -720,6 +737,482 @@ uint32_t rl_crt_4c09f0(uint32_t p, int use)
     if (U32(h + 20) != 3 && U32(h + 20) != (uint32_t)use && REPORT(5, 2, S_DBGHEAP_C, 1170, 0, S_BLOCKUSE))
         int3();
     return U32(h + 16);
+}
+
+/* ================================================================ operator new / strncpy / sprintf / _splitpath
+ * (the multiplayer paths: 0x4b7a9a's SIGS session object and "%s%s" path, 0x4b79e3's chat line) */
+
+/* Port of FUN_004bfa60 (38 B) — _nh_malloc: _nh_malloc_dbg(size, nh, _NORMAL_BLOCK, no file, line 0). */
+uint32_t rl_crt_4bfa60(uint32_t size, int nh)
+{
+    return rl_crt_4bfa90(size, nh, 1, 0, 0);
+}
+
+/* Port of FUN_004c3200 (30 B) — operator new (??2@YAPAXI@Z): _nh_malloc(size, 1) (the new handler on failure). */
+uint32_t rl_crt_4c3200(uint32_t size)
+{
+    return rl_crt_4bfa60(size, 1);
+}
+
+/* Port of FUN_004c28d0 (254 B) — strncpy: copies up to n bytes, stops after the terminator and zero-fills the rest of
+ * the n (retail's dword loop writes exactly those bytes: the dwords it stores past the terminator are zeros inside n);
+ * no terminator when the source is n bytes or longer. Returns the destination. */
+uint32_t rl_crt_4c28d0(uint32_t d, uint32_t s, uint32_t n)
+{
+    uint8_t *dp = P8(d);
+    const uint8_t *sp = P8(s);
+    while (n != 0) {
+        n--;
+        if ((*dp++ = *sp++) == 0) break;
+    }
+    while (n != 0) { n--; *dp++ = 0; }
+    return d;
+}
+
+/* Port of FUN_004c8870 (277 B) — _mbsnbcpy: with __mbcodepage 0 (SBCS: rhost's CP 1252) strncpy; else the DBCS copy
+ * (a lead byte with no room for its trail byte, or a lead followed by NUL, is overwritten with NUL), then zero-fill of
+ * the remaining count. */
+uint32_t rl_crt_4c8870(uint32_t d, uint32_t s, uint32_t n)
+{
+    if (V32(G_MBCP) == 0) return rl_crt_4c28d0(d, s, n);
+    uint8_t *dp = P8(d);
+    const uint8_t *sp = P8(s);
+    while (n != 0) {
+        n--;
+        if (U8(G_MBCTYPE + 1u + *sp) & 4) {
+            *dp++ = *sp++;
+            if (n == 0) { dp[-1] = 0; break; }
+            n--;
+            uint8_t *t = dp++;
+            *t = *sp++;
+            if (*t == 0) { dp[-2] = 0; break; }
+        } else {
+            uint8_t *t = dp++;
+            *t = *sp++;
+            if (*t == 0) break;
+        }
+    }
+    while (n-- != 0) *dp++ = 0;
+    return d;
+}
+
+/* Port of FUN_004c2fb0 (578 B) — _splitpath: drive ("X:" via _mbsnbcpy(2) + NUL), then one scan for the last '/' or
+ * '\\' and the last '.' (a DBCS lead byte skips its trail — retail's ++ then the loop's ++: a lead byte right before the
+ * terminator steps over it, kept), dir / fname / ext each copied by _mbsnbcpy capped at 255 bytes + NUL; a '.' before
+ * the last separator is no extension. A NULL output is skipped. Returns retail's EAX (void in C, unused by the callers;
+ * modelled for the shadow's return comparison: the last count / pointer the code path loaded). */
+uint32_t rl_crt_4c2fb0(uint32_t path, uint32_t drive, uint32_t dir, uint32_t fname, uint32_t ext)
+{
+    uint32_t dot = 0, sep = 0, i, eax;
+    if ((int8_t)U8(path + 1) == ':') {
+        if (drive != 0) {
+            rl_crt_4c8870(drive, path, 2);
+            U8(drive + 2) = 0;
+        }
+        path += 2;
+    } else if (drive != 0)
+        U8(drive) = 0;
+    for (i = path; (int8_t)U8(i) != 0; i++) {
+        if (U8(G_MBCTYPE + 1u + U8(i)) & 4) i++;
+        else if ((int8_t)U8(i) == '/' || (int8_t)U8(i) == '\\') sep = i + 1;
+        else if ((int8_t)U8(i) == '.') dot = i;
+    }
+    if (sep != 0) {
+        if (dir != 0) {
+            uint32_t n = sep - path < 0xff ? sep - path : 0xff;
+            rl_crt_4c8870(dir, path, n);
+            U8(dir + n) = 0;
+        }
+        path = sep;
+        eax = sep;
+    } else if (dir != 0) {
+        U8(dir) = 0;
+        eax = dir;
+    } else
+        eax = 0;   /* the scan's last load: the terminator */
+    if (dot != 0) eax = path;
+    if (dot != 0 && dot >= path) {
+        if (fname != 0) {
+            uint32_t n = dot - path < 0xff ? dot - path : 0xff;
+            rl_crt_4c8870(fname, path, n);
+            U8(fname + n) = 0;
+            eax = n;
+        }
+        if (ext != 0) {
+            uint32_t n = i - dot < 0xff ? i - dot : 0xff;
+            rl_crt_4c8870(ext, dot, n);
+            U8(ext + n) = 0;
+            eax = n;
+        }
+    } else {
+        if (fname != 0) {
+            uint32_t n = i - path < 0xff ? i - path : 0xff;
+            rl_crt_4c8870(fname, path, n);
+            U8(fname + n) = 0;
+            eax = n;
+        }
+        if (ext != 0) { U8(ext) = 0; eax = ext; }
+    }
+    return eax;
+}
+
+/* ---- output.c: the printf engine. A stream is retail's FILE (+0 _ptr, +4 _cnt, +8 _base, +12 _flag); `pcount` points
+ * at __output's character count (-1 = an output error: every writer stops). */
+
+/* Port of FUN_004c7680 (117 B) — _write_char: putc (a full buffer → _flsbuf); EOF → *pcount = -1, else ++*pcount.
+ * EAX (unused by retail's callers; returned for the shadow's comparison) = pcount. */
+uint32_t rl_crt_4c7680(int ch, uint32_t f, uint32_t pcount)
+{
+    int r;
+    if (--V32(f + 4) < 0)
+        r = (int)RETAIL(VA_FLSBUF, 2, (uint32_t)ch, f);
+    else {
+        U8(U32(f)) = (uint8_t)ch;
+        r = U8(U32(f));
+        U32(f) += 1;
+    }
+    if (r == -1) V32(pcount) = -1;
+    else V32(pcount) += 1;
+    return pcount;
+}
+
+/* Port of FUN_004c7700 (75 B) — _write_multi_char: n copies of ch (none for n <= 0), stopping at an error. EAX = the
+ * count slot's value when the loop ends (<= 0), pcount after an error. */
+uint32_t rl_crt_4c7700(int ch, int n, uint32_t f, uint32_t pcount)
+{
+    for (;;) {
+        int k = n--;
+        if (k <= 0) return (uint32_t)k;
+        rl_crt_4c7680(ch, f, pcount);
+        if (V32(pcount) == -1) return pcount;
+    }
+}
+
+/* Port of FUN_004c7750 (87 B) — _write_string: n bytes of s (each sign-extended into _write_char, as retail's movsx),
+ * stopping at an error. EAX as _write_multi_char's. */
+uint32_t rl_crt_4c7750(uint32_t s, int n, uint32_t f, uint32_t pcount)
+{
+    for (;;) {
+        int k = n--;
+        if (k <= 0) return (uint32_t)k;
+        rl_crt_4c7680((int8_t)U8(s), f, pcount);
+        s++;
+        if (V32(pcount) == -1) return pcount;
+    }
+}
+
+/* Port of FUN_004c77b0 (30 B) — _get_int_arg: *pargp += 4, the dword before it. */
+int rl_crt_4c77b0(uint32_t pargp)
+{
+    U32(pargp) += 4;
+    return V32(U32(pargp) - 4);
+}
+/* 0x4c77d0 _get_int64_arg / 0x4c7800 _get_short_arg inlined (no row: only %I64 / %C reach them): the qword / the low
+ * word, advancing 8 / 4 */
+static int64_t get_int64_arg(uint32_t *argp) { *argp += 8; return *(volatile int64_t *)(uintptr_t)(*argp - 8); }
+static uint16_t get_short_arg(uint32_t *argp) { *argp += 4; return U16(*argp - 4); }
+
+/* Port of FUN_004c68f0 (3459 B) — __output: the printf state machine of the MSVC 4.x debug CRT (output.c).
+ * Per format byte (signed char; NUL or a negative count ends): class = __lookuptable[ch - ' '] & 15 for ' '..'x' else 0,
+ * state = __lookuptable[class * 8 + state] >> 4 (0 normal, 1 percent, 2 flag, 3 width, 4 dot, 5 precision, 6 size,
+ * 7 type). Normal: a _pctype lead byte (_LEADBYTE 0x8000) writes its trail byte too (a NUL trail asserts, then is
+ * written). Flags ' ' 2, '+' 1, '-' 4, '0' 8, '#' 0x80; size 'h' 0x20, 'l' 0x10, 'w' 0x800, "I64" 0x8000 (an 'I'
+ * without "64" goes back to the normal state and is written); '*' width < 0 = '-' and |width|, '*' precision < 0 = none.
+ * Types: c / C (wide: _wctomb), s / S (precision-limited, "(null)" / L"(null)"), Z (ANSI_STRING / UNICODE_STRING),
+ * d i (signed 0x40) u o (base 8; '#' 0x200 forces a leading 0) x X p (precision 8, upper case) with the "0x" / "0X"
+ * prefix under '#' (dropped for a zero value), h → (short) / (ushort), I64 → a qword, n (stores the count; no output),
+ * e E f g G (through the _cfltcvt pointer table — retail's points at __fptrap: no floating point is linked).
+ * A precision turns the '0' flag off; the number is built backwards in a 512-byte buffer (retail's frame: a precision
+ * past 510 overruns retail's locals — not modelled). Then sign / prefix, width padding (spaces unless '-' or '0'),
+ * zeros, the text (a wide text through _wctomb per character), trailing spaces for '-'. Returns the count. */
+int rl_crt_4c68f0(uint32_t f, uint32_t fmt, uint32_t argp)
+{
+    int32_t count = 0;
+    uint32_t pcount = (uint32_t)(uintptr_t)&count, pargp = (uint32_t)(uintptr_t)&argp;
+    int state = 0, cls;
+    uint32_t flags = 0;                   /* var_4 */
+    int capexp = 0;                       /* var_8 */
+    int prefixlen = 0;                    /* var_10 */
+    int textiswide = 0;                   /* var_1C */
+    int textlen = 0;                      /* var_24 */
+    int precision = -1;                   /* var_234 */
+    int hexadd = 0;                       /* var_230 */
+    int radix = 0;                        /* var_238 */
+    int no_output = 0;                    /* var_23C */
+    int width = 0;                        /* var_244 */
+    uint8_t prefix[4] = { 0 };            /* var_240 */
+    uint8_t buf[512];                     /* MbCh: ebp-228h .. ebp-29h */
+    uint8_t *const bufend = buf + 511;    /* ebp-29h */
+    uint8_t *text = NULL;                 /* Str */
+    uint8_t ch;
+    for (;;) {
+        ch = U8(fmt);
+        fmt++;
+        if ((int8_t)ch == 0 || count < 0) return count;
+        cls = ((int8_t)ch >= ' ' && (int8_t)ch <= 'x') ? (int8_t)U8(T_LOOKUP + (uint32_t)((int8_t)ch - ' ')) & 15 : 0;
+        state = (int8_t)U8(T_LOOKUP + (uint32_t)(cls * 8 + state)) >> 4;
+        switch (state) {
+        case 0:
+        normal_state:
+            textiswide = 0;
+            if (U16(U32(G_PCTYPE) + 2u * ch) & 0x8000) {
+                rl_crt_4c7680((int8_t)ch, f, pcount);
+                ch = U8(fmt);
+                fmt++;
+                if ((int8_t)ch == 0 && REPORT(5, 2, S_OUTPUT_C, 389, 0, S_CH_NOT_EOS)) int3();
+            }
+            rl_crt_4c7680((int8_t)ch, f, pcount);
+            break;
+        case 1:
+            capexp = 0;
+            no_output = 0;
+            width = 0;
+            prefixlen = 0;
+            flags = 0;
+            precision = -1;
+            textiswide = 0;
+            break;
+        case 2:
+            switch ((int8_t)ch) {
+            case ' ': flags |= 2; break;
+            case '#': flags |= 0x80; break;
+            case '+': flags |= 1; break;
+            case '-': flags |= 4; break;
+            case '0': flags |= 8; break;
+            }
+            break;
+        case 3:
+            if ((int8_t)ch == '*') {
+                width = rl_crt_4c77b0(pargp);
+                if (width < 0) { flags |= 4; width = -width; }
+            } else
+                width = (int8_t)ch + width * 10 - '0';
+            break;
+        case 4:
+            precision = 0;
+            break;
+        case 5:
+            if ((int8_t)ch == '*') {
+                precision = rl_crt_4c77b0(pargp);
+                if (precision < 0) precision = -1;
+            } else
+                precision = (int8_t)ch + precision * 10 - '0';
+            break;
+        case 6:
+            switch ((int8_t)ch) {
+            case 'I':
+                if ((int8_t)U8(fmt) != '6' || (int8_t)U8(fmt + 1) != '4') {
+                    state = 0;
+                    goto normal_state;
+                }
+                fmt += 2;
+                flags |= 0x8000;
+                break;
+            case 'h': flags |= 0x20; break;
+            case 'l': flags |= 0x10; break;
+            case 'w': flags |= 0x800; break;
+            }
+            break;
+        case 7:
+            switch ((int8_t)ch) {
+            case 'C':
+                if ((flags & 0x830) == 0) flags |= 0x800;
+                /* fall through */
+            case 'c':
+                if (flags & 0x810) {
+                    uint16_t wch = get_short_arg(&argp);
+                    textlen = (int)RETAIL(VA_WCTOMB, 2, (uint32_t)(uintptr_t)buf, (uint32_t)wch);
+                    if (textlen < 0) no_output = 1;
+                } else {
+                    buf[0] = (uint8_t)rl_crt_4c77b0(pargp);
+                    textlen = 1;
+                }
+                text = buf;
+                break;
+            case 'Z': {
+                uint32_t a = (uint32_t)rl_crt_4c77b0(pargp);
+                if (a == 0 || U32(a + 4) == 0) {
+                    text = P8(U32(S_NULL));
+                    textlen = (int)rl_crt_4bf620(U32(S_NULL));
+                } else if (flags & 0x800) {
+                    text = P8(U32(a + 4));
+                    textlen = (int)((uint32_t)(int32_t)(int16_t)U16(a) >> 1);
+                    textiswide = 1;
+                } else {
+                    textiswide = 0;
+                    text = P8(U32(a + 4));
+                    textlen = (int16_t)U16(a);
+                }
+                break;
+            }
+            case 'S':
+                if ((flags & 0x830) == 0) flags |= 0x800;
+                /* fall through */
+            case 's': {
+                int left = precision == -1 ? 0x7fffffff : precision;
+                uint32_t s = (uint32_t)rl_crt_4c77b0(pargp), q;
+                if (flags & 0x810) {
+                    if (s == 0) s = U32(S_WNULL);
+                    textiswide = 1;
+                    for (q = s; left-- != 0 && U16(q) != 0; q += 2) {}
+                    textlen = (int)(q - s) >> 1;
+                } else {
+                    if (s == 0) s = U32(S_NULL);
+                    for (q = s; left-- != 0 && (int8_t)U8(q) != 0; q++) {}
+                    textlen = (int)(q - s);
+                }
+                text = P8(s);
+                break;
+            }
+            case 'n': {
+                uint32_t p = (uint32_t)rl_crt_4c77b0(pargp);
+                if (flags & 0x20) U16(p) = (uint16_t)count;
+                else V32(p) = count;
+                no_output = 1;
+                break;
+            }
+            case 'E':
+            case 'G':
+                capexp = 1;
+                ch = (uint8_t)((int8_t)ch + 32);
+                /* fall through */
+            case 'e':
+            case 'f':
+            case 'g': {
+                flags |= 0x40;
+                text = buf;
+                if (precision < 0) precision = 6;
+                else if (precision == 0 && (int8_t)ch == 'g') precision = 1;
+                argp += 8;
+                uint32_t dbl[2] = { U32(argp - 8), U32(argp - 4) };   /* var_264 / var_260 */
+                ((void (__cdecl *)(uint32_t, uint32_t, int, int, int))(uintptr_t)U32(P_CFLTCVT))(
+                    (uint32_t)(uintptr_t)dbl, (uint32_t)(uintptr_t)text, (int8_t)ch, precision, capexp);
+                if ((flags & 0x80) && precision == 0)
+                    ((void (__cdecl *)(uint32_t))(uintptr_t)U32(P_FORCDECPT))((uint32_t)(uintptr_t)text);
+                if ((int8_t)ch == 'g' && !(flags & 0x80))
+                    ((void (__cdecl *)(uint32_t))(uintptr_t)U32(P_CROPZEROS))((uint32_t)(uintptr_t)text);
+                if ((int8_t)*text == '-') { flags |= 0x100; text++; }
+                textlen = (int)rl_crt_4bf620((uint32_t)(uintptr_t)text);
+                break;
+            }
+            case 'd':
+            case 'i':
+                flags |= 0x40;
+                radix = 10;
+                goto common_int;
+            case 'u':
+                radix = 10;
+                goto common_int;
+            case 'o':
+                radix = 8;
+                if (flags & 0x80) flags |= 0x200;
+                goto common_int;
+            case 'p':
+                precision = 8;
+                /* fall through */
+            case 'X':
+                hexadd = 7;
+                goto common_hex;
+            case 'x':
+                hexadd = 39;
+            common_hex:
+                radix = 16;
+                if (flags & 0x80) {
+                    prefix[0] = '0';
+                    prefix[1] = (uint8_t)(hexadd + 0x51);
+                    prefixlen = 2;
+                }
+            common_int: {
+                int64_t v;
+                uint64_t u;
+                if (flags & 0x8000) v = get_int64_arg(&argp);
+                else if (flags & 0x20) {
+                    if (flags & 0x40) v = (int16_t)rl_crt_4c77b0(pargp);
+                    else v = (uint16_t)rl_crt_4c77b0(pargp);
+                } else if (flags & 0x40) v = (int32_t)rl_crt_4c77b0(pargp);
+                else v = (uint32_t)rl_crt_4c77b0(pargp);
+                if ((flags & 0x40) && v < 0) { u = (uint64_t)0 - (uint64_t)v; flags |= 0x100; }
+                else u = (uint64_t)v;
+                if (!(flags & 0x8000)) u &= 0xffffffffu;
+                if (precision < 0) precision = 1;
+                else flags &= ~8u;
+                if (u == 0) prefixlen = 0;
+                text = bufend;
+                for (;;) {
+                    int p = precision--;
+                    if (p <= 0 && u == 0) break;
+                    int dig = (int)(u % (uint64_t)(int64_t)radix) + '0';   /* __aullrem / __aulldiv */
+                    u /= (uint64_t)(int64_t)radix;
+                    if (dig > '9') dig += hexadd;
+                    *text-- = (uint8_t)dig;
+                }
+                textlen = (int)(bufend - text);
+                text++;
+                if ((flags & 0x200) && ((int8_t)*text != '0' || textlen == 0)) {
+                    *--text = '0';
+                    textlen++;
+                }
+                break;
+            }
+            }
+            if (no_output == 0) {
+                if (flags & 0x40) {
+                    if (flags & 0x100) { prefix[0] = '-'; prefixlen = 1; }
+                    else if (flags & 1) { prefix[0] = '+'; prefixlen = 1; }
+                    else if (flags & 2) { prefix[0] = ' '; prefixlen = 1; }
+                }
+                int pad = width - textlen - prefixlen;
+                if ((flags & 0xc) == 0) rl_crt_4c7700(' ', pad, f, pcount);
+                rl_crt_4c7750((uint32_t)(uintptr_t)prefix, prefixlen, f, pcount);
+                if ((flags & 8) && !(flags & 4)) rl_crt_4c7700('0', pad, f, pcount);
+                if (textiswide && textlen > 0) {
+                    uint8_t mb[4];   /* var_288 */
+                    uint32_t w = (uint32_t)(uintptr_t)text;
+                    for (int left = textlen; left-- != 0; ) {
+                        uint16_t wc = U16(w);
+                        w += 2;
+                        int n = (int)RETAIL(VA_WCTOMB, 2, (uint32_t)(uintptr_t)mb, (uint32_t)wc);
+                        if (n <= 0) break;
+                        rl_crt_4c7750((uint32_t)(uintptr_t)mb, n, f, pcount);
+                    }
+                } else
+                    rl_crt_4c7750((uint32_t)(uintptr_t)text, textlen, f, pcount);
+                if (flags & 4) rl_crt_4c7700(' ', pad, f, pcount);
+            }
+            break;
+        }
+    }
+}
+
+/* Port of FUN_004c2a80 (236 B) — sprintf: a string FILE (_flag 0x42 _IOWRT | _IOSTRG, _base = _ptr = the buffer, _cnt
+ * 0x7fffffff) → __output, then the terminator (putc 0). `argp` = the address of the first variadic argument (retail:
+ * &format + 4). Asserts a NULL buffer / format (_CrtDbgReport, sprintf.c 93 / 94). Returns __output's count. */
+int rl_crt_4c2a80(uint32_t buf, uint32_t fmt, uint32_t argp)
+{
+    uint32_t file[8] = { 0 };   /* retail's FILE local: _ptr, _cnt, _base, _flag, … (the rest unread) */
+    uint32_t f = (uint32_t)(uintptr_t)file;
+    if (buf == 0 && REPORT(5, 2, S_SPRINTF_C, 93, 0, S_STRINGNULL)) int3();
+    if (fmt == 0 && REPORT(5, 2, S_SPRINTF_C, 94, 0, S_FORMATNULL)) int3();
+    file[3] = 0x42;
+    file[2] = buf;
+    file[0] = file[2];
+    file[1] = 0x7fffffff;
+    int r = rl_crt_4c68f0(f, fmt, argp);
+    if (--V32(f + 4) < 0)
+        RETAIL(VA_FLSBUF, 2, 0, f);
+    else {
+        U8(U32(f)) = 0;
+        U32(f) += 1;
+    }
+    return r;
+}
+
+/* Port of FUN_004bf60e (6 B) — DirectPlayEnumerateA's import thunk (jmp [0x5cf368]): the call through retail's IAT slot
+ * (__stdcall: callback, context). */
+int rl_crt_4bf60e(uint32_t cb, uint32_t ctx)
+{
+    return (int)IAT(HRESULT (WINAPI *)(void *, void *), I_DirectPlayEnumerateA)((void *)(uintptr_t)cb,
+                                                                                   (void *)(uintptr_t)ctx);
 }
 
 /* ================================================================ low-level I/O */
@@ -1433,7 +1926,7 @@ void rl_crt_4c5a60(void)
         if (U32(G_LASTTZ) == 0) return;
         rl_crt_4c2080(U32(G_LASTTZ), tz);
         uint32_t n0 = U32(G_TZNAME0), n1 = U32(G_TZNAME1);
-        RETAIL(VA_STRNCPY, 3, n0, tz, 3);
+        rl_crt_4c28d0(n0, tz, 3);
         U8(n0 + 3) = 0;
         uint32_t s = tz + 3;
         if (U8(s) == '-') { neg = 1; s++; }
@@ -1450,7 +1943,7 @@ void rl_crt_4c5a60(void)
         if (neg) V32(G_TIMEZONE) = -V32(G_TIMEZONE);
         V32(G_DAYLIGHT) = (int8_t)U8(s);
         if (V32(G_DAYLIGHT) != 0) {
-            RETAIL(VA_STRNCPY, 3, n1, s, 3);
+            rl_crt_4c28d0(n1, s, 3);
             U8(n1 + 3) = 0;
         } else
             U8(n1) = 0;

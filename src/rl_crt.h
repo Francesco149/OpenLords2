@@ -93,3 +93,16 @@ uint32_t rl_crt_4cd5e0(void);                                                   
 uint32_t rl_crt_4cc930(void);                                                       /* the xc initializer → 0x4cc950 */
 uint32_t rl_crt_4cc950(void);                                                       /* the C++ EH filter install */
 void     rl_crt_4cca20(void);                                                       /* __CxxRestoreUnhandledExceptionFilter */
+/* operator new / strings / printf / _splitpath (the multiplayer paths) */
+uint32_t rl_crt_4bfa60(uint32_t size, int nh);                                      /* _nh_malloc */
+uint32_t rl_crt_4c3200(uint32_t size);                                              /* operator new */
+uint32_t rl_crt_4c28d0(uint32_t d, uint32_t s, uint32_t n);                         /* strncpy */
+uint32_t rl_crt_4c8870(uint32_t d, uint32_t s, uint32_t n);                         /* _mbsnbcpy */
+uint32_t rl_crt_4c2fb0(uint32_t path, uint32_t drive, uint32_t dir, uint32_t fname, uint32_t ext); /* _splitpath */
+uint32_t rl_crt_4c7680(int ch, uint32_t f, uint32_t pcount);                        /* _write_char */
+uint32_t rl_crt_4c7700(int ch, int n, uint32_t f, uint32_t pcount);                 /* _write_multi_char */
+uint32_t rl_crt_4c7750(uint32_t s, int n, uint32_t f, uint32_t pcount);             /* _write_string */
+int      rl_crt_4c77b0(uint32_t pargp);                                             /* _get_int_arg */
+int      rl_crt_4c68f0(uint32_t f, uint32_t fmt, uint32_t argp);                    /* __output (argp: the va_list) */
+int      rl_crt_4c2a80(uint32_t buf, uint32_t fmt, uint32_t argp);                  /* sprintf (argp: &format + 4) */
+int      rl_crt_4bf60e(uint32_t cb, uint32_t ctx);                                  /* DirectPlayEnumerateA (IAT thunk) */

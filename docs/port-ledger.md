@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **1709** (69.8%) — tested 788, ported 921
-- code bytes touched: **80.6%** (675,976 / 838,629 B)
-- unported: **738**
+- touched: **1720** (70.3%) — tested 788, ported 932
+- code bytes touched: **81.2%** (680,875 / 838,629 B)
+- unported: **727**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (788) — ported + host unit suite
@@ -810,7 +810,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (921) — reimplemented, no host test yet
+## ported (932) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -1659,6 +1659,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf870 | __initterm | 49 | rl_crt.c |
 | 0x4bfa00 | _malloc | 40 | rl_crt.c |
 | 0x4bfa30 | __malloc_dbg | 46 | rl_crt.c |
+| 0x4bfa60 | __nh_malloc | 38 | rl_crt.c |
 | 0x4bfa90 | __nh_malloc_dbg | 101 | rl_crt.c |
 | 0x4bfb30 | __heap_alloc_dbg | 818 | rl_crt.c |
 | 0x4bfea0 | __calloc_dbg | 110 | rl_crt.c |
@@ -1681,6 +1682,10 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4c24a0 | store_dt | 63 | rl_crt.c |
 | 0x4c24e0 | _localtime | 597 | rl_crt.c |
 | 0x4c2740 | _time | 390 | rl_crt.c |
+| 0x4c28d0 | _strncpy | 254 | rl_crt.c |
+| 0x4c2a80 | _sprintf | 236 | rl_crt.c |
+| 0x4c2fb0 | __splitpath | 578 | rl_crt.c |
+| 0x4c3200 | operator_new | 30 | rl_crt.c |
 | 0x4c3370 | entry | 494 | rl_crt.c |
 | 0x4c3760 | __heap_alloc_base | 99 | rl_crt.c |
 | 0x4c4070 | FUN_004c4070 | 21 | rl_crt.c |
@@ -1699,6 +1704,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4c6130 | cvtdate | 515 | rl_crt.c |
 | 0x4c6340 | _gmtime | 487 | rl_crt.c |
 | 0x4c6530 | ___loctotime_t | 274 | rl_crt.c |
+| 0x4c68f0 | __output | 3177 | rl_crt.c |
+| 0x4c7680 | write_char | 117 | rl_crt.c |
+| 0x4c7700 | write_multi_char | 75 | rl_crt.c |
+| 0x4c7750 | write_string | 87 | rl_crt.c |
+| 0x4c77b0 | get_int_arg | 30 | rl_crt.c |
+| 0x4c8870 | __mbsnbcpy | 277 | rl_crt.c |
 | 0x4c8990 | __setmbcp | 815 | rl_crt.c |
 | 0x4c8cc0 | getSystemCP | 121 | rl_crt.c |
 | 0x4c8e90 | ___initmbctable | 21 | rl_crt.c |
