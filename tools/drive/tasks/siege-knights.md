@@ -36,15 +36,11 @@ spends them. So: pick the AI with the best armour economy, insult it to −30, g
 it arm, keep our castle garrisoned and fed; on the field, kill its non-knights first (archers / foot) so only knights
 remain before any breach.
 
-**Campaign 6 correction (orchestrator, read the code to confirm): knights are NOT required.** sub_481B9A (all_ida.c:69750)
-counts only AI units of class < 7 (unit +0x12; +0x13 == 0 marks the AI's units: set at spawn for a human owner).
-Classes 7..10 are the siege ENGINES and are not counted. So 0x48d9ce arms the flag (0x553f74 ≤ 0x57c980) also when
-**every AI soldier is dead and only its engines remain** (0 ≤ 0), provided 0x53e990 == 0 (0 until the first wall hit
-in a fresh siege: siege-defence's catapult battle keeps it 0 for ~9700 frames; read sub_477DFC all_ida.c:65653 for the
-other way it becomes 4) and the AI's stance-4 group (the lord's: table 0x4d91d0) has no target when its 200-tick clock
-fires. The aftermath 0x4ab383 (all_ida.c:85755/85798) then halves the LOSER (the AI army) via 0x4ad8cc. Skirmish
-battles never run the aftermath — this needs a campaign siege of OUR castle by an AI, fought on the field.
-So the target is any AI siege of our castle (does an AI besieger bring engines? find out — 0x1d / the AI's siege
-preparations), and on the field: kill its foot / archers fast (a garrison heavy in crossbows / archers on the walls)
-while its engines are still short of a hit. Task `ai-surrender` (skirmish) proves the flag first; read its report if
-it exists (docs/findings/probes/ai-surrender.md).
+**Campaign 6 (docs/findings/probes/ai-surrender.md) — knights ARE required, plus three conditions found:** stance 4
+(0x48d9ce) is given only to a class-6 (knights) group (all_ida.c:69239); sub_477DFC ends the battle as soon as a side has
+0 men of class < 7, so every AI non-knight must die while an AI knight lives (the orchestrator's "engines only" path is
+void); u32(0x553ff0) (class 7..9 engines on the field, either side) must stay > 0 or 0x53e990 becomes 4; u32(0x53e990) =
+the breach count (+1 per courtyard wall cell to rubble, +4 gate broken by a ram — 0x568da4 past 20000 —, +4 a docked
+tower, +3 at all_ida.c:75454). The knights' group must be untargeted when its 200-tick clock fires. Skirmish attackers
+are fixed presets (the Cust. page edits only the human's army); none is knights-only. Skirmish battles never run the
+aftermath 0x4ab383 — halve_garrison needs a campaign siege of OUR castle by an AI with knights, fought on the field.

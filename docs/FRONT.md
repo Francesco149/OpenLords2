@@ -51,13 +51,15 @@
 
 ## ★ Next micro-tasks
 
-0. **rd campaigns** — **campaign 5 (2026-11-14, 4 API drivers, $13.03):** knight-garrison filed (sub_48E774 0x48e774 —
+0. **rd campaigns** — **campaign 6 (2026-11-14, API drivers):** ai-recall filed (sub_48B7FC 0x48b7fc first time: an Equal
+   field skirmish after a Play Now → New Game trip — a cold skirmish leaves byte_553080 zero, so the recall never fires;
+   +12 blocks); ai-surrender blocked (probe: no skirmish attacker is knights-only; the battle ends when a side has 0 men
+   of class < 7, so halve_garrison needs AI knights in a campaign siege after all). **campaign 5 (2026-11-14, 4 API drivers, $13.03):** knight-garrison filed (sub_48E774 0x48e774 —
    AI siege-defender knights, the Baron's Germany garrison, custom-strong + 4 seasons; +27 blocks), ai-sally filed
    (sub_48C3FE 0x48c3fe → sub_496D76 0x496d76: a skirmish siege, a docked tower = a breach record, our archers' hits give
    the AI swords a target; +41 blocks; attempt 1 named the condition); **siege-knights blocked again** (probe
    `docs/findings/probes/siege-knights.md`: the Baron's knight armies never came south; next: a start beside the armour
-   AI, attitude < −10 by insults only). Still unreached: 0x4ad8cc halve_garrison, 0x48b7fc (a FIELD battle: our archers
-   on an AI stance-2/3/4 group, never its stance-1 group — the ai-sally probe), 0x485861. `rhost.py verify` on the 7
+   AI, attitude < −10 by insults only). Still unreached: 0x4ad8cc halve_garrison, 0x485861. `rhost.py verify` on the 7
    campaign-3/4 scenarios: 1314/1557 rows reached, 0 divergences, hybrid PASS. Fixed: live / snap-test sessions ran
    retail's stack 16 bytes low (rd verify MISMATCH on any run through siege-castles' battle; 0ae40e4); the battle
    residue model's 0x4b99c0 e0 was a constant gone stale by 8 (frame_wrap's frame grew) — now retail's chain constant

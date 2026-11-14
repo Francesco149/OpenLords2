@@ -150,6 +150,10 @@ the other hosts.
   skirmish + its file list. In game: File New (48,44) / Load (48,64) / Save (48,84) / Quit (48,104); saves land in the
   session and show in the title's load list. Diplomacy (screen 11) faces at x=90, y 90 / 190 / 290 / 390 (Bishop /
   Countess / Knight / Baron); actions: gift (410,118), insult (410,218), alliance (410,268), plea (410,318).
+- **Skirmish from a cold start is not a real game's AI** (probe ai-recall): the table byte_553080 (48 B, random) is
+  filled only when a strategic game starts (0x497e65); a skirmish from `fresh` reads zeros (the AI field recall
+  0x48b7fc can never fire). Play Now first, then File → New Game → thumbs-up (240,218) back to the title: the table
+  survives into the skirmish. An Equal field skirmish ("A Bridge Too Far", we defend): the AI crosses on its own.
 - **Armies** (probe split-arm): an army needs ≥ 50 men ("Army too small"); raise = map icon `c@raise_army` → slider
   `c@raise_more` (+4–5 men a click, `drafted`) → `c@raise_continue` twice; an army's info panel (screen 4) = RMB on an
   army that is NOT selected (RMB on a selected one deselects): move / disband / split (`@army_split`, refused once the
