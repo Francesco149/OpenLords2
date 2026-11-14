@@ -186,8 +186,12 @@ the other hosts.
 - **AI lords** (probe siege-knights): realm +0x84 + 0x10·q = attitude toward realm q (−30..30), +0x87 + 0x10·q the
   vendetta stage (battles at −30 advance it), +0xEB the vendetta target, +0x4b the current target county; an AI picks
   a garrisoned castle last (+40 in 0x4a03f2) unless its vendetta is you. Knights need armour (realm +0x154, only from
-  a smithy). A keep holds 200 men (more → a split prompt, the split-off half garrisons); at 0 people a county stays
-  yours while its castle is garrisoned. AI raiders take a county's herd in 1–2 seasons.
+  a smithy). A keep holds 0x4d8a0c[level] men (150/200/200/400/600): a bigger army is refused silently (split it
+  first; siege-knights 2 saw no split prompt); a county went neutral at 4 people with 75 men in its castle. AI raiders
+  take a county's herd in 1–2 seasons; a hostile army camping in a county depopulates it — insult only whom you can
+  fight. An AI attacks the vendetta target, else the realm with the lowest attitude below −10 (0x4a0015; muster county
+  realm +0xE5 ≥ 400 people, cooldown realm +0x15a ≈ 10 seasons). custom-strong's diplomacy faces Bishop / Countess /
+  Knight / Baron = realms 2 / 3 / 4 / 5 top to bottom; the Baron (5) is the armour economy.
 - **Options / sound** (probe sound-options): the Options menu items at x=140, y 44 / 64 / 84 / 104 / 124 = Advanced,
   Sounds, Display, Game speed, Scroll speed (`@options_*`); Sounds has On/Off arrows only (292, 166 / 198 / 230); speed
   panels up (205,197) / down (235,197), 0..10. Every in-game music track loops; a non-looping stream (setup.wav) starts
@@ -197,6 +201,18 @@ the other hosts.
 - **Popups** (probe popups): `modal` = the message id, `popup_type` its kind, `popup_from` the sender realm; a left click
   on one of your county's buildings on the map gives the type-4 notice (the castle: "Building off/on" toggles!);
   Display > Animations off (`animations` 0) shows victory / defeat / capture as plain scrolls.
+- **Marches / sieges** (probe knight-garrison): a march order does NOT carry into the next season (the order resets,
+  the destination is kept): re-order each season. Map cell (c,r) on screen: x = 30(c−r) − 60·OC + 1920, y = 15(c+r) −
+  15·OR + 46 (OC, OR = the scroll origin `rd cell` prints); edge-scroll works in move mode; a minimap click recentres
+  but leaves move mode. Besiege → "Besiege castle?" thumbs-up → siege preparations (no engines: 0 seasons) → Proceed
+  (312,410) → the battle prompt (screen 18) → left gauntlet = the field. A garrison (`A(i).garrisoned` = its county,
+  written only by 0x4a79a3) takes an arriving own army while the total fits 0x4d8a0c[level] = 150/200/200/400/600;
+  in custom-strong the Baron garrisons Germany (county 9) with knights after ~4 idle seasons. Siege-defender knights
+  (class 6) get stance 4 → 0x48e774.
+- **Battlefield AI** (probe ai-sally): groups 0x566520 + 52·g (+8 stance, +0xa target group, +0xc target timer); units
+  0x554490 + 432·i; cell kinds byte 0x5440e7 + 640·row + 8·col (1 ground, 4 wall, 5 courtyard, 9 rubble). An AI group
+  takes a target only from a RANGED hit (arrow / bolt), never from melee or stones; 0x4eea98 = AI strength over ours
+  (% − 100). `rd cell` / `@A` do not work on the battlefield (map positions from the minimap / `enemy_under_cursor`).
 - **Farming** (probe farming): wheat is sown in Winter on fallow fields (10 sacks seed a field; ×12 in 4 seasons
   before events / weather / fertility); with Advanced farming the Town Center layout shifts ~70 px down. Herd crowding
   = herd / pastures (≤10 low … >30 massive). Field events need ≥ 50 sacks / ≥ 40 head. County fields `weather`,

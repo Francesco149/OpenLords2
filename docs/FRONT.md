@@ -51,7 +51,20 @@
 
 ## ★ Next micro-tasks
 
-0. **rd campaigns** — 2026-11-13 totals: 4 campaigns, 15 drivers (11 subagents, 4 API drivers for $9.12), 13 scenarios
+0. **rd campaigns** — **campaign 5 (2026-11-14, 4 API drivers, $13.03):** knight-garrison filed (sub_48E774 0x48e774 —
+   AI siege-defender knights, the Baron's Germany garrison, custom-strong + 4 seasons; +27 blocks), ai-sally filed
+   (sub_48C3FE 0x48c3fe → sub_496D76 0x496d76: a skirmish siege, a docked tower = a breach record, our archers' hits give
+   the AI swords a target; +41 blocks; attempt 1 named the condition); **siege-knights blocked again** (probe
+   `docs/findings/probes/siege-knights.md`: the Baron's knight armies never came south; next: a start beside the armour
+   AI, attitude < −10 by insults only). Still unreached: 0x4ad8cc halve_garrison, 0x48b7fc (a FIELD battle: our archers
+   on an AI stance-2/3/4 group, never its stance-1 group — the ai-sally probe), 0x485861. `rhost.py verify` on the 7
+   campaign-3/4 scenarios: 1314/1557 rows reached, 0 divergences, hybrid PASS. Fixed: live / snap-test sessions ran
+   retail's stack 16 bytes low (rd verify MISMATCH on any run through siege-castles' battle; 0ae40e4); the battle
+   residue model's 0x4b99c0 e0 was a constant gone stale by 8 (frame_wrap's frame grew) — now retail's chain constant
+   minus frame_wrap's measured frame, and the port's WinMain / 0x40e8bb / 0x40e890 have retail's frames: **field-orders'
+   long-standing hybrid / standalone FAIL is gone — full hybrid 78/78, standalone 77/78 = pure retail** (hotkeys stops at
+   the unported 0x43f7e3, the F8 old-turn path).
+   2026-11-13 totals: 4 campaigns, 15 drivers (11 subagents, 4 API drivers for $9.12), 13 scenarios
    filed; corpus 22,673 → 23,255 basic blocks (62.9 % → 64.6 % of retail code bytes), 1,527 → 1,533 functions (lord_move
    0x4a599d and the F8 old-turn path among them); `rhost.py verify` on the first 5 new scenarios: 0 divergences, hybrid
    PASS. Remaining block gaps are mostly multiplayer, dead code, device behaviour or long setups (siege on our walls with
@@ -63,9 +76,8 @@
    0x48d9ce arms the flag only when every AI unit left is a knight before any wall breach — a 30–40-season managed game
    (driver report in the 2026-11-13 session; furthest checkpoint run `siegeknights:t27`). Next: `rd seasons` makes long
    setups cheap; lord_move 0x4a599d and 0x48e774 are the other real function gaps; block gaps by `rd cov --blocks --fn`.
-   Recipe: `tools/drive/README.md` §Campaign recipe. Tool work left: the boundary's host work leaves stack residue
-   retail reads (field-orders differs by compiler: make the boundary residue-free, then re-bless); savestates cost ~9 %
-   of search time (not worth optimizing yet).
+   Recipe: `tools/drive/README.md` §Campaign recipe. Tool work left: savestates cost ~9 % of search time (not worth
+   optimizing yet).
 
 1. ~~One residue model for the march executor~~ — done 2026-11-07 (quirks #238 / #239): the driver's residue window =
    the AI step 0x49a010's imprint (`engine_army_state_res_ai_step`), rl_4b99c0 calls the driver port directly (was an

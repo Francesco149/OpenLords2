@@ -1,5 +1,5 @@
 ---
-start: siege-castles        # a strategic siege of an AI castle fought on the field — read its header; any start you prefer, say which
+start: knight-garrison@19051   # the battle prompt of a strategic siege (the Baron's Germany: swords + archers garrison) — or a skirmish siege (Cust. page: add archers); say which and why
 steps:
   - on the battlefield of a siege: screen >= 40 and screen <= 43
   - still on the battlefield: screen >= 40 and screen <= 43
@@ -25,3 +25,13 @@ section falls), our units standing OUTSIDE the walls near the breach as the defe
 state in the cell. `rd cov R --blocks --fn 0x48e4cc` shows which branches you take.
 
 Report frames, the state named, rd cov (functions + blocks), and if blocked, exactly which condition and why.
+
+**Campaign 5's attempt (run `aisally`, docs/findings/probes/ai-sally.md) named the blocking condition:** the swords group
+(stance 3) takes a target (+0xc) ONLY from a ranged hit — a projectile of type ≤ 2 (arrow / bolt; records 0x57a104,
+stride 76) from our side marks the unit hit and records the attacker; melee and catapult stones do not. So 0x48c3fe needs
+OUR archers / crossbowmen standing on ground of kind < 4 (byte 0x5440e7 + 640·row + 8·col: 1 ground, 4 wall, 5 courtyard,
+9 rubble) shooting the stance-3 swords while a breach record exists (0x553c80: 20 pairs [cell offset, claiming group];
+a fallen wall section — catapults, 16 hits — or a castles.dat breach carried from an earlier assault, C(k)+0x1c3 == 2,
+repaired at C(k)+0x1c4 == 100) and the strength ratio 0x4eea98 (AI over ours, % − 100, ±random every ~100 ticks) ≤
+dword 0x552ff0 = 260, with 0x553e64 (our units inside) < 4. siege-castles has no archers on our side. Bring an army with
+archers (+ a catapult, or attack a castle already breached) of more than ~1/3.6 of the garrison's strength.
