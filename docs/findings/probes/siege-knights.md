@@ -306,3 +306,66 @@ The driver's report, as written:
 
 ---
 model claude-opus-5-5, effort high, 116 turns, $3.60, 27 min
+
+# Attempt 7 (run `siegeknights7`, API driver, 2026-11-14) — REACHED (filed as tests/scenarios/siege-knights)
+
+The driver's report, as written:
+
+---
+
+**Run `siegeknights7`: halve_garrison (0x4ad8cc) is reached now, at f119997.** The surrender flag u32(0x56d5c8) went to 1 at f118880, the aftermath ran, and we are back on the map. `rd verify` gives MATCH and the movie is 120,363 frames.
+
+`rd check` gives **FAIL**, but only because of where the run starts. It judges steps only after this run's start_frame (109936), and steps 1–2 happened earlier, in the movie this run inherits. Within my own frames, step 1 holds at f120303 and steps 4 and 5 happened (flag f118880, map f120303). A PASS would need a run that starts before f76851 and replays the whole battle.
+
+**Start:** `siegeknights6:end` (f109936), not custom-tour@600. That checkpoint was a stalemate on the battlefield of the attempt-5/6 siege:
+- The besieger is the Baron's A15 (realm 5) at our royal castle in county 10.
+- AI men u32(0x553f74) = 210: 144 archers and 66 knights (u32(0x57c980) = 66).
+- Engines u32(0x553ff0) = 3: tower 33 at 7 hp, tower 34 at 1 hp, the ram (unit 1) at 25 hp.
+- No breach (u32(0x53e990) = 0), ram mode u32(0x4eeb6c) = 1.
+
+I chose it because it was the only cheap way to make progress on a $6 budget. Setting up a new game would take about 47 seasons.
+
+**Step frames (whole movie):**
+- Step 1, custom game on the map: f1757 (siegeknights5).
+- Step 2, AI army besieging us: f76851 (siegeknights5).
+- Step 3, on the battlefield: f77116 (siegeknights6). Screen 41 from then until f118880.
+- Step 4, flag set: **f118880**. Non-knights reached 0 at f118812 (AI men 66 = knights 66, breaches 0, engines 3). The knights group's 200-tick check then set the flag, and sub_477DFC ended the battle on screen 43.
+- Step 5, back on the map: **f120303**. "The siege is lifted / Your remaining enemies have fled" scroll was closed with RMB at f119998. The result screen 19 was closed with `c@result_continue`.
+- halve_garrison runs at f119997, inside the aftermath (0x4ab383).
+
+**Checkpoints:** s0 f111136, a111 f116116 (111 AI men left), flag f118880, map f120363.
+
+**What broke the stalemate (unit records 0x554480 + 0x1b0·u):**
+- Field offsets: class +0x12, side +0x13, col / row +0x20 / +0x22, order +0x31, target +0x174 (u8), group +0x178, men +0x1a0.
+- Screen position on this camera: x = (col−33)·32+16, y = (row−52)·32+65.
+
+What happened at the start:
+- Our shooters were locked on the ram, which was out of range; the AI archers (order 17) were shooting at our unit 44 behind the battlements and doing no damage.
+- The AI archers stood at the ram-mode staging point (u32(0x55cdd0)+10, u32(0x55cdd4)+10) = (47,63). The knights stood at (39,68).
+
+The inputs, in three steps:
+1. **Attack order:** `d290,45-395,125 .*10 h432,417 c432,417`. This drag-selected our archers 44 and crossbows 45 and 46 and gave them an attack order on AI archer unit 6. 44 and 45 walked to the south-east tower rim, (45,56) and (43,56), and shot the archers one after another. That killed about 2 men per 100 frames.
+2. **Keep tower 34 alive:** in a first try, unit 46 retargeted tower 34 (1 hp) and killed it. That freed the ram's path to the gate at (39,56); it rammed at 20 gate damage a frame (breach at 20000, about 1000 frames). I loaded s0 and replayed step 1 exactly. Then I drag-selected 46 alone (`d188,76-230,120`) and marched it into the courtyard with a minimap click (`c560,90`). With 46 gone, both towers and the ram stayed alive, and the moat-side tower kept the ram blocked.
+3. **Waited** about 6,700 frames. Unit 44 died and 45 kept firing (30 → 25 men). AI men went 210 → 66 with no breach, all 3 engines alive, and the knights untouched.
+
+**Game facts learned:**
+- engine_rng_step's dword_58FD7C is 0..127, so ram mode = rand < 128 − 20·towers − 10·catapults (69 % with 2 towers and a ram).
+- In ram mode the AI archer group parks at ram staging +10,+10 and does nothing more. Its targets come from sub_48C974 (nearest enemy within 40, order 17).
+- 0x553f74 counts every AI man, knights included, so the flag condition means every AI non-knight is dead.
+- Our ranged units with an explicit attack order find a wall position in range by themselves. They only pile up at the gatehouse when the route they take is bad, and that depends on which units are in the group.
+- Once the archers are dead the knights do not need to reach the walls. The 200-tick clock fires with them standing at (39,68).
+- The result: screen 43 shows "The siege is lifted" (closed with RMB, not a left click), then screen 19 (`c@result_continue`), then the map.
+
+**rd cov:**
+- Functions: 1070 reached, **1 new**: 004ad8cc engine_combat_halve_garrison (277 B, first f119997).
+- Blocks: 16149 reached, **117 new** (2122 B). The ones this run added: halve_garrison 8, sub_477DFC 3 (the surrender end, f118879), sub_4784CA 3, engine_combat_aftermath 0x4ab383 2, sub_478419 3, sub_48D9CE 4 (now including the flag store).
+- The rest come from the inherited siegeknights5/6 prefix: sub_48DDC7 13, sub_453E71 29, sub_49459A 6, and others.
+
+**What the tool lacked:**
+- `rd check` judges steps only after the run's own start, so a run resumed from another run's checkpoint cannot PASS steps that happened in the inherited prefix. An option to judge the inherited prefix would help.
+- `rd cell` / `@A` do not work on the battlefield. I worked out screen positions from the unit records and a picture.
+- There is no "attack unit N" order and no way to keep a unit from auto-targeting an engine.
+- The `cam_col` / `cam_row` vars do not hold the battlefield camera.
+
+---
+model claude-opus-5-5, effort high, 64 turns, $2.02, 24 min
