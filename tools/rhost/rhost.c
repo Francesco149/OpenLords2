@@ -574,10 +574,12 @@ static void end_of_frame(void)
     }
 }
 typedef void (__cdecl *frame_fn_t)(void);
+uint32_t rh_fw_frame;   /* frame_wrap's own depth: its caller's esp before the call − esp at its frame call (compiler-dependent) */
 static void __cdecl frame_wrap(void)
 {
     if (g_finished) return;
     if (g_nw) watch_arm_due();
+    { uint32_t sp_; __asm__ volatile("movl %%esp, %0" : "=r"(sp_)); rh_fw_frame = (uint32_t)(uintptr_t)__builtin_dwarf_cfa() - sp_; }
     ((frame_fn_t)(uintptr_t)L2_FRAME_FN)();
     end_of_frame();
     if (g_frame + 1 >= O.frames && !O.finish_late) { g_frame++; finish("frames"); }
@@ -896,7 +898,6 @@ static void sa_entry(void)
     int code = rl_crt_start();
     ((void (WINAPI *)(UINT))iat_lookup("ExitProcess"))((UINT)code);
 }
-static int sa_frame_driver(void) { frame_wrap(); return 0; }
 
 void __cdecl rh_game_main(void)                    /* game_tramp: retail's entry returned */
 {
@@ -972,7 +973,7 @@ int main(int argc, char **argv)
     rh_win_install();
     rh_smack_install();                      /* last: smackw32's imports bind to every layer above */
     if (O.standalone) rl_plat_bind_imports();   /* retail's slots; the CRT is the port of retail's (rl_crt.c) */
-    rl_frame_driver = sa_frame_driver;       /* the port's frame guard (rl_40e890): this frame boundary */
+    rl_frame_driver = (int (*)(void))frame_wrap;   /* the port's 0x40e890 calls it as retail's redirected call site does (no frame between) */
     if (!O.standalone) {                     /* (standalone: no call sites — the port's 0x40e890 calls rl_frame_driver) */
         int nf = redirect_calls(L2_FRAME_FN, (void *)frame_wrap);
         if (nf < 1) rh_fatal("frame driver %08x: no call sites", L2_FRAME_FN);

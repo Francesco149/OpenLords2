@@ -8239,3 +8239,13 @@ field-orders / bot-s16-t20 hybrid PASS.
 
 > 📍 `src/rl_ui4.c` (rl_40e890), `src/rl_main.c/.h` (rl_frame_port_guard), `tools/rhost/rh_hooks_rl_host.c`
 > (e0_4b99c0_model), `src/engine_bf_unit.c` / `src/engine_bf_action.c` (the model).
+
+**Update 2026-11-14:** the constant (`RH_RETAIL_E0_4B99C0` = 0x58fffdcc) went stale: frame_wrap's frame grew by 8
+(rhost edits), pure retail entered 0x4b99c0 at 0x58fffdd4 (the warning fired), and field-orders / ai-sally failed the
+hybrid and the standalone again — a dead unit's sprite frame byte (0x488793 run on a slot 0x48f1dd(0) just cleared)
+0x80 / 0x8c vs retail's 0x88. The model now takes retail's chain constant — esp before retail's call at 0x40e896,
+`RH_RETAIL_CFA_FW` = 0x58fffe18 (retail code only) — minus frame_wrap's own frame, measured every frame
+(`rh_fw_frame`: `__builtin_dwarf_cfa()` − esp at the frame call). The port's WinMain / 0x40e8bb / 0x40e890 are now
+retail's frames instruction for instruction (naked asm) and the WinMain row enters with the stack untouched, so a
+hybrid whose battlefield is retail stores the same stack pointers too. Evidence (wine): full hybrid 78/78 PASS,
+standalone 77/78 = pure retail (hotkeys: gap 0x43f7e3), snap-check PASS.

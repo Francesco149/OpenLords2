@@ -113,75 +113,53 @@ int rl_4b2258(HINSTANCE inst)
  * Translate / Dispatch (WM_QUIT → exit), else the input poll 0x4b8c3a and, active (0x4e65a8) and not paused (0x4e65d0),
  * the frame guard 0x40e8bb, else Sleep(200); the quit request byte 0x5aeb68 posts WM_CLOSE. Exit: WinHelp(HELP_QUIT),
  * 0x49767d, 0x4b2636; EAX = the last message's wParam. __stdcall (ret 0x10). */
-int __stdcall rl_40e9ab(HINSTANCE inst, HINSTANCE prev, LPSTR cmdline, int show)
+/* Written as retail's frame, instruction for instruction (push ebp / sub esp, 1Ch / push ebx esi edi; MSG at ebp−1Ch;
+ * every call with retail's pushes): everything WinMain calls — the frame guard, the WndProc through DispatchMessage,
+ * the whole game — then runs at retail's stack depth. A compiled frame shifted it, and retail stores stack residue
+ * holding stack pointers (0x488793: a dead unit's frame byte) — the hybrid / standalone differed from pure retail
+ * there (ai-sally: units 35 / 36, 0x88 vs 0x34). */
+__attribute__((naked)) int __stdcall rl_40e9ab(HINSTANCE inst, HINSTANCE prev, LPSTR cmdline, int show)
 {
-    (void)prev; (void)cmdline; (void)show;
-    MSG msg;
-    V32(0x553c5c) = 1;
-    V32(0x52af94) = 0;
-    V32(0x5cd414) = rl_plat_getdrive();
-    rl_plat_getcwd((char *)(uintptr_t)0x58fe30u, 100);
-    rl_4af8d9(0x4d2784 /* "l2.eng" */, 0x591580, 0x1d4c0, 0);
-    rl_4ae1b8();
-    rl_40ecc4();
-    if (rl_4b2258(inst) == 0) {
-        rl_4afab9(0x4d278c, 0, 0);
-        return 0;
-    }
-    rl_425b10();
-    rl_4263ad(0x4d27ac /* "setup.wav" */, 0, 0);
-    rl_426d11(0);
-    V32(0x553c5c) = 0;
-    rl_4afab9(0x4d27b8, 0, 0);
-    rl_4aef7e();
-    V32(0x58fd84) = V32(0x5c9a74);
-    V32(0x55305c) = 1;
-    V32(0x55305c) = 0;
-    V32(0x52af94) = 1;
-    rl_4b3571(0);
-    if (rl_4975d3() == 0) {
-        rl_4afab9(0x4d27d4, 0, 0);
-        goto out;
-    }
-    if (rl_497500() == 0) {
-        rl_4afab9(0x4d27f4, 0, 0);
-        goto out;
-    }
-    rl_4afab9(0x4d2814, 0, 0);
-    V32(0x53f684) = 0;
-    V32(0x553018) = 1;
-    if (V32(0x53f684) == 1) {
-        V32(0x5c9a74) = 1;
-        V32(0x58fd84) = V32(0x5c9a74);
-    }
-    rl_42d179();
-    rl_40f10f();
-    rl_476a5d();
-    V32(0x553030) = 0;
-    rl_4978ad();
-    for (;;) {
-        if (IAT(BOOL (WINAPI *)(MSG *, HWND, UINT, UINT, UINT), 0x5cf4f0u)(&msg, NULL, 0, 0, 0)) {
-            if (!IAT(BOOL (WINAPI *)(MSG *, HWND, UINT, UINT), 0x5cf58cu)(&msg, NULL, 0, 0)) break;
-            IAT(BOOL (WINAPI *)(const MSG *), 0x5cf590u)(&msg);
-            IAT(LRESULT (WINAPI *)(const MSG *), 0x5cf510u)(&msg);
-        } else {
-            rl_4b8c3a();
-            if (V32(0x4e65d0) != 0 || V32(0x4e65a8) == 0)
-                IAT(void (WINAPI *)(DWORD), 0x5cf4acu)(200);
-            else
-                rl_40e8bb();
-        }
-        if (V8(0x5aeb68) == 1) {
-            IAT(BOOL (WINAPI *)(HWND, UINT, WPARAM, LPARAM), 0x5cf514u)((HWND)(uintptr_t)(uint32_t)V32(0x4e5a00), WM_CLOSE, 0, 0);
-            V8(0x5aeb68) = 0;
-        }
-    }
-out:
-    IAT(BOOL (WINAPI *)(HWND, LPCSTR, UINT, ULONG_PTR), 0x5cf518u)((HWND)(uintptr_t)(uint32_t)V32(0x4e5a00),
-                                                                   (LPCSTR)(uintptr_t)0x4d282cu, HELP_QUIT, 1);
-    rl_49767d();
-    rl_4b2636();
-    return (int)msg.wParam;   /* (the exits before the loop return retail's uninitialized MSG too) */
+    __asm__(
+        "pushl %ebp\n\t movl %esp, %ebp\n\t subl $0x1c, %esp\n\t pushl %ebx\n\t pushl %esi\n\t pushl %edi\n\t"
+        "movl $1, 0x553c5c\n\t movl $0, 0x52af94\n\t"
+        "call _rl_plat_getdrive\n\t movl %eax, 0x5cd414\n\t"
+        "pushl $0x64\n\t pushl $0x58fe30\n\t call _rl_plat_getcwd\n\t addl $8, %esp\n\t"
+        "pushl $0\n\t pushl $0x1d4c0\n\t pushl $0x591580\n\t pushl $0x4d2784\n\t call _rl_4af8d9\n\t addl $0x10, %esp\n\t"
+        "call _rl_4ae1b8\n\t call _rl_40ecc4\n\t"
+        "movl 8(%ebp), %eax\n\t pushl %eax\n\t call _rl_4b2258\n\t addl $4, %esp\n\t testl %eax, %eax\n\t jnz 1f\n\t"
+        "pushl $0\n\t pushl $0\n\t pushl $0x4d278c\n\t call _rl_4afab9\n\t addl $0xc, %esp\n\t xorl %eax, %eax\n\t jmp 9f\n"
+        "1:\n\t call _rl_425b10\n\t"
+        "pushl $0\n\t pushl $0\n\t pushl $0x4d27ac\n\t call _rl_4263ad\n\t addl $0xc, %esp\n\t"
+        "pushl $0\n\t call _rl_426d11\n\t addl $4, %esp\n\t"
+        "movl $0, 0x553c5c\n\t"
+        "pushl $0\n\t pushl $0\n\t pushl $0x4d27b8\n\t call _rl_4afab9\n\t addl $0xc, %esp\n\t"
+        "call _rl_4aef7e\n\t movl 0x5c9a74, %eax\n\t movl %eax, 0x58fd84\n\t"
+        "movl $1, 0x55305c\n\t movl $0, 0x55305c\n\t movl $1, 0x52af94\n\t"
+        "pushl $0\n\t call _rl_4b3571\n\t addl $4, %esp\n\t"
+        "call _rl_4975d3\n\t testl %eax, %eax\n\t jnz 2f\n\t"
+        "pushl $0\n\t pushl $0\n\t pushl $0x4d27d4\n\t call _rl_4afab9\n\t addl $0xc, %esp\n\t jmp 8f\n"
+        "2:\n\t call _rl_497500\n\t testl %eax, %eax\n\t jnz 3f\n\t"
+        "pushl $0\n\t pushl $0\n\t pushl $0x4d27f4\n\t call _rl_4afab9\n\t addl $0xc, %esp\n\t jmp 8f\n"
+        "3:\n\t pushl $0\n\t pushl $0\n\t pushl $0x4d2814\n\t call _rl_4afab9\n\t addl $0xc, %esp\n\t"
+        "movl $0, 0x53f684\n\t movl $1, 0x553018\n\t"
+        "cmpl $1, 0x53f684\n\t jnz 4f\n\t movl $1, 0x5c9a74\n\t movl 0x5c9a74, %eax\n\t movl %eax, 0x58fd84\n"   /* dead in retail too */
+        "4:\n\t call _rl_42d179\n\t call _rl_40f10f\n\t call _rl_476a5d\n\t movl $0, 0x553030\n\t call _rl_4978ad\n"
+        "5:\n\t pushl $0\n\t pushl $0\n\t pushl $0\n\t pushl $0\n\t leal -0x1c(%ebp), %eax\n\t pushl %eax\n\t"
+        "call *0x5cf4f0\n\t testl %eax, %eax\n\t jz 6f\n\t"                                    /* PeekMessageA */
+        "pushl $0\n\t pushl $0\n\t pushl $0\n\t leal -0x1c(%ebp), %eax\n\t pushl %eax\n\t call *0x5cf58c\n\t"   /* GetMessageA */
+        "testl %eax, %eax\n\t jz 8f\n\t"
+        "leal -0x1c(%ebp), %eax\n\t pushl %eax\n\t call *0x5cf590\n\t"                         /* TranslateMessage */
+        "leal -0x1c(%ebp), %eax\n\t pushl %eax\n\t call *0x5cf510\n\t jmp 7f\n"               /* DispatchMessageA */
+        "6:\n\t call _rl_4b8c3a\n\t cmpl $0, 0x4e65d0\n\t jnz 61f\n\t cmpl $0, 0x4e65a8\n\t jz 61f\n\t"
+        "call _rl_40e8bb\n\t jmp 7f\n"
+        "61:\n\t pushl $0xc8\n\t call *0x5cf4ac\n"                                              /* Sleep(200) */
+        "7:\n\t xorl %eax, %eax\n\t movb 0x5aeb68, %al\n\t cmpl $1, %eax\n\t jnz 5b\n\t"
+        "pushl $0\n\t pushl $0\n\t pushl $0x10\n\t movl 0x4e5a00, %eax\n\t pushl %eax\n\t call *0x5cf514\n\t"   /* PostMessageA WM_CLOSE */
+        "movb $0, 0x5aeb68\n\t jmp 5b\n"
+        "8:\n\t pushl $1\n\t pushl $2\n\t pushl $0x4d282c\n\t movl 0x4e5a00, %eax\n\t pushl %eax\n\t call *0x5cf518\n\t"   /* WinHelpA(HELP_QUIT) */
+        "call _rl_49767d\n\t call _rl_4b2636\n\t movl -0x14(%ebp), %eax\n"                     /* the last MSG's wParam */
+        "9:\n\t popl %edi\n\t popl %esi\n\t popl %ebx\n\t leave\n\t ret $0x10");
 }
 
 /* ---------------------------------------------------------------- the CRT entry */

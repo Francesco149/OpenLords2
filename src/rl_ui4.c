@@ -116,9 +116,9 @@ static int terrain_panel(void) { return (int)engine_retail_call(0x41b032u, 0); }
 static int screen_41e5d0(void) { return (int)engine_retail_call(0x41e5d0u, 0); }   /* TODO(rl-extern): 0x41e5d0 (screen 0x45) */
 static int screen_425a6a(void) { return (int)engine_retail_call(0x425a6au, 0); }   /* TODO(rl-extern): 0x425a6a (screen 0x44) */
 static int quit_4b2234(void) { return (int)engine_retail_call(0x4b2234u, 0); }     /* TODO(rl-extern): 0x4b2234 (the fatal-load exit) */
-static int gfx_restore(void) { return (int)engine_retail_call(0x4b2730u, 0); }     /* TODO(rl-extern): gfx_restore 0x4b2730 */
-static int lost_4b26b8(void) { return (int)engine_retail_call(0x4b26b8u, 0); }     /* TODO(rl-extern): 0x4b26b8 (the surfaces cannot be restored) */
-static int save_49792e(void) { return (int)engine_retail_call(0x49792eu, 0); }     /* TODO(rl-extern): 0x49792e (the MP save pump) */
+__attribute__((used)) static int gfx_restore(void) { return (int)engine_retail_call(0x4b2730u, 0); }     /* TODO(rl-extern): gfx_restore 0x4b2730 */
+__attribute__((used)) static int lost_4b26b8(void) { return (int)engine_retail_call(0x4b26b8u, 0); }     /* TODO(rl-extern): 0x4b26b8 (the surfaces cannot be restored) */
+__attribute__((used)) static int save_49792e(void) { return (int)engine_retail_call(0x49792eu, 0); }     /* TODO(rl-extern): 0x49792e (the MP save pump) */
 
 /* ================================================================ strutil (0x401000..0x401666) */
 
@@ -792,14 +792,14 @@ int rl_40e7e4(void)
 /* Port of FUN_0040e890 (43 B) — one frame (0x4b99c0); then engine state >= 9 sets the save-pump flag DAT_005c9274.
  * EAX 0. HOST-LEVEL: rhost's frame boundary is every call of 0x4b99c0 (rhost.c frame_wrap) — no row
  * (docs/findings/rl-ui4.md). */
-int rl_40e890(void)
+__attribute__((naked)) int rl_40e890(void)   /* retail's frame (push ebp / ebx esi edi): see rl_40e8bb */
 {
-    rl_frame_port_guard = 1;                  /* the frame runs under the port's WinMain chain, not retail's */
-    if (rl_frame_driver) rl_frame_driver();   /* rhost: its frame boundary (0x4b99c0 by address) */
-    else rl_4b99c0();
-    rl_frame_port_guard = 0;
-    if (g_engine_state >= 9) g_rl_5c9274 = 1;
-    return 0;
+    __asm__("pushl %ebp\n\t movl %esp, %ebp\n\t pushl %ebx\n\t pushl %esi\n\t pushl %edi\n\t"
+            "movl $1, _rl_frame_port_guard\n\t"                 /* the frame runs under the port's WinMain chain */
+            "movl _rl_frame_driver, %eax\n\t testl %eax, %eax\n\t jz 1f\n\t call *%eax\n\t jmp 2f\n"   /* rhost: frame_wrap */
+            "1:\t call _rl_4b99c0\n"
+            "2:\t movl $0, _rl_frame_port_guard\n\t cmpl $9, _g_engine_state\n\t jl 3f\n\t movb $1, _g_rl_5c9274\n"
+            "3:\t xorl %eax, %eax\n\t popl %edi\n\t popl %esi\n\t popl %ebx\n\t leave\n\t ret");
 }
 
 /* Port of FUN_0040e8bb (240 B) — the message loop's frame guard: a lost primary DAT_004eabd0 or composition surface
@@ -812,28 +812,24 @@ static HRESULT surface_islost(uint32_t obj)   /* IDirectDrawSurface::IsLost (vta
     void *o = (void *)(uintptr_t)obj;
     return ((rl_islost_fn)(*(void ***)o)[0x60 / 4])(o);
 }
-int rl_40e8bb(void)
+/* Written as retail's frame, instruction for instruction (as WinMain, rl_main.c, and 0x40e890): the frame — all of
+ * the game — runs at retail's stack depth, so stack residue that holds stack pointers (0x488793) equals pure retail's. */
+__attribute__((naked)) int rl_40e8bb(void)
 {
-    uint32_t primary = (uint32_t)AT(int32_t, g_rl_4eabd0, 0x4eabd0u, 0x4eabd0u);
-    int lost = (primary != 0 && surface_islost(primary) == (HRESULT)0x887601c2u) ||
-               (g_rl_4eafac != 0 && surface_islost((uint32_t)g_rl_4eafac) == (HRESULT)0x887601c2u);
-    if (lost && gfx_restore() == 0) {
-        lost_4b26b8();
-        return 0;
-    }
-    if (g_gfx_last_error == 3) g_gfx_last_error = 1;
-    if (g_rl_5c9274 != 0) {
-        if (g_sim_mp_active == 0) {
-            rl_4978ad();
-            rl_497a34(0);
-        } else {
-            save_49792e();
-            rl_497a34(1);
-        }
-    }
-    if (g_gfx_last_error == 1) return 0;
-    rl_40e890();
-    return 1;
+    __asm__("pushl %ebp\n\t movl %esp, %ebp\n\t pushl %ebx\n\t pushl %esi\n\t pushl %edi\n\t"
+            "movl _g_rl_4eabd0, %eax\n\t testl %eax, %eax\n\t jz 1f\n\t"
+            "pushl %eax\n\t movl (%eax), %eax\n\t call *0x60(%eax)\n\t cmpl $0x887601c2, %eax\n\t jz 2f\n"      /* IsLost */
+            "1:\t movl _g_rl_4eafac, %eax\n\t testl %eax, %eax\n\t jz 3f\n\t"
+            "pushl %eax\n\t movl (%eax), %eax\n\t call *0x60(%eax)\n\t cmpl $0x887601c2, %eax\n\t jnz 3f\n"
+            "2:\t call _gfx_restore\n\t testl %eax, %eax\n\t jnz 3f\n\t call _lost_4b26b8\n\t xorl %eax, %eax\n\t jmp 9f\n"
+            "3:\t xorl %eax, %eax\n\t movb _g_gfx_last_error, %al\n\t cmpl $3, %eax\n\t jnz 4f\n\t movb $1, _g_gfx_last_error\n"
+            "4:\t xorl %eax, %eax\n\t movb _g_rl_5c9274, %al\n\t testl %eax, %eax\n\t jz 6f\n\t"
+            "cmpl $0, _g_sim_mp_active\n\t jnz 5f\n\t"
+            "call _rl_4978ad\n\t pushl $0\n\t call _rl_497a34\n\t addl $4, %esp\n\t jmp 6f\n"
+            "5:\t call _save_49792e\n\t pushl $1\n\t call _rl_497a34\n\t addl $4, %esp\n"
+            "6:\t xorl %eax, %eax\n\t movb _g_gfx_last_error, %al\n\t cmpl $1, %eax\n\t jnz 7f\n\t xorl %eax, %eax\n\t jmp 9f\n"
+            "7:\t call _rl_40e890\n\t movl $1, %eax\n"
+            "9:\t popl %edi\n\t popl %esi\n\t popl %ebx\n\t leave\n\t ret");
 }
 
 /* Port of FUN_0040ecc4 (1099 B) — the hardware defaults: CD letter 'D', CDROM speed 2, 8000 KB physical memory, CPU
