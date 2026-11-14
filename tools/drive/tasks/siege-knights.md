@@ -44,3 +44,11 @@ the breach count (+1 per courtyard wall cell to rubble, +4 gate broken by a ram 
 tower, +3 at all_ida.c:75454). The knights' group must be untargeted when its 200-tick clock fires. Skirmish attackers
 are fixed presets (the Cust. page edits only the human's army); none is knights-only. Skirmish battles never run the
 aftermath 0x4ab383 — halve_garrison needs a campaign siege of OUR castle by an AI with knights, fought on the field.
+
+**Campaign 7 (attempt 4) — the tools the third attempt lacked now exist:** `rd seasons R N --feed` keeps our counties
+fed and calm before each End turn (rations / the grain-meat slider / tax: attempt 3's county ate its herd at meat 100 %
+with grain unused and starved); `--until` no longer stops inside turn processing; `@raise_more` / `@raise_continue` follow
+the mercenary box. Attempt 3's run `siegeknights3` (checkpoints t3 t6 won1 won2 sown fed: the Baron at −30, vendetta
+stage 2 by turn 17) is a valid start (`--from siegeknights3:won2`) — one more won battle against the Baron should give
+vendetta stage 3; then `rd seasons --feed --until "<step 2>"`. Or follow attempt 2's advice (probes/siege-knights.md):
+a start next to the armour-building AI. Check the besieger has knights (unit class 6) before taking the field.
