@@ -96,6 +96,10 @@ and printf's unreached callees `_flsbuf` 0x4c6650 (a string stream never fills) 
   alone (the field-orders class below: retail's WinMain entered from the port's start runs on another stack depth).
   Full hybrid (every row) on the MP scenarios: mp-dp-p2 / mp-play-p1 / -p2 / mp-war-p1 / -p2 fail with the same state
   hashes with and without the 11 new rows (pre-existing).
+- **Whole corpus, 92 rows (2026-11-14)**, `verify --target wine -j 3 --hooks '^rl_crt_'`, 91 scenarios: 92/92 reached,
+  0 divergences. Hybrid (CRT rows replaced): 88/91 — ai-sally, field-orders, mp-dp-p2 fail, each reproduced by the
+  `start` row 0x4c3370 replaced ALONE and passing with the 11 new rows alone (the stack-depth class below; ai-sally and
+  mp-dp-p2 are scenarios added since the 64/64 run).
 - **Shadow plumbing added** (rhost): `rh_handles`' meta keeps each live file's OS position (a shadowed `_read` /
   `_lseek` / `_write` on a file opened before the call), re-opens a file the shadowed call closed (CreateFileA's
   arguments, OPEN_EXISTING) and closes the port side's discarded opens (a leaked handle blocks a later remove /
