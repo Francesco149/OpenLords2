@@ -137,6 +137,9 @@ static int insn_len(const uint8_t *p, int *rel)  /* *rel: offset of a rel32 to r
     case 0x81: case 0xc7: return 5 + modrm_len(p + 1);                    /* imm32 */
     case 0xf7: if (((p[1] >> 3) & 7) <= 1) return 5 + modrm_len(p + 1);   /* test r/m32, imm32 (the CRT's strlen) */
         break;
+    case 0xff: { int r = (p[1] >> 3) & 7;                                  /* call / jmp / push r/m32: an import thunk's */
+        if (r == 2 || r == 4 || r == 6) return 1 + modrm_len(p + 1);       /* jmp [IAT] — absolute, nothing to relocate */
+        break; }
     }
     return 0;
 }
