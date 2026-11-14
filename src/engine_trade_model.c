@@ -32,6 +32,7 @@
 #include "engine_combat.h"          /* g_combat_audio_latch (DAT_005533f0) */
 #include "engine_menu_input.h"      /* engine_menu_button_accel (DAT_00591554) */
 #include "save.h"                   /* g_per_army_768 / g_player_strategic_352 / g_per_territory_420 */
+#include "rl_glue.h"                 /* rl_43eda0 (the MP message send) */
 #include "save_schema_globals.h"    /* s_slot_0053e9bc / 0056d8ac / 0057c8cc / 0057c93c / 00553c64 / 005532a0 */
 
 #define ARMY_REC(base, key)  ((base) + (size_t)(key) * 0x300)   /* g_per_army_768 */
@@ -260,8 +261,9 @@ void engine_trade_sell_all(void)
 /* ── FUN_00435286 — commit the transaction (the "Complete?" seal) ───────
  * Single-player applies the buy/sell directly through the shared executor
  * (FUN_004284ce, the same the AI trades through); the caller then returns to
- * the merchant scene.  The multiplayer send (0x43eda0(0x28,0)) is
- * deferred.  Returns nothing — the screen flip is the input hook's job. */
+ * the merchant scene.  Multiplayer (DAT_00553030) sends MP message 0x28
+ * instead (0x43eda0(0x28, 0) → rl_43eda0).  Returns nothing — the screen
+ * flip is the input hook's job. */
 void engine_trade_confirm(void)
 {
     if (g_sim_mp_active == 0) {
@@ -269,14 +271,15 @@ void engine_trade_confirm(void)
                                      (int)s_slot_0056d8ac, g_trade_max,
                                      g_trade_offer, (int)s_slot_0057c8cc,
                                      (int)s_slot_0057c93c);     /* FUN_004284ce */
+    } else {
+        rl_43eda0(0x28, 0);
     }
-    /* else: MP command 0x43eda0(0x28,0) — deferred. */
 }
 
 /* ── FUN_00435286 / FUN_004352f2 in retail layout — the "Complete?" seal and
  * the cancel seal: commit (single player), then back to the merchant scene
- * (DAT_004eac50 = 8) with a full demand redraw (DAT_0057d340 = 2).  The MP
- * send 0x43eda0(0x28, 0) is deferred (rhost: DirectPlay is stubbed). */
+ * (DAT_004eac50 = 8) with a full demand redraw (DAT_0057d340 = 2); MP:
+ * the send 0x43eda0(0x28, 0) instead of the commit. */
 void engine_trade_seal_confirm(void)
 {
     engine_trade_confirm();

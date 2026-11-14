@@ -24,6 +24,7 @@
 #include "save.h"                   /* g_player_strategic_352, g_per_army_768 */
 #include "save_schema_globals.h"    /* s_slot_0057c8cc / _00553fbc / _0057a0f8 / _005530b0 / _00567d10 */
 #include "strutil.h"                /* strutil_bounded_copy (FUN_00401136) */
+#include "rl_glue.h"                 /* rl_43eda0 (the MP message send) */
 
 #define SREC(s) (g_player_strategic_352 + (size_t)(s) * 0x160)
 #define AREC(k) (g_per_army_768 + (size_t)(k) * 0x300)
@@ -102,8 +103,9 @@ static void diplo_notice(engine_event_queue_state_t *q, int code)
  *         5 (ask to raise a keep) needs ours 0xf2 and building 0xf3; 6 (ask to
  *         attack) refuses ours / our liege's 0xf4 — each a notice, no action;
  *   3     to a partner who is in the game and has a liege: notice 0xdb;
- * then queue the action (FUN_004a2621) — single player; the MP send
- * 0x43eda0(0x48 / 0x49, 0) is deferred (rhost: DirectPlay is stubbed). */
+ * then single player: queue the action (FUN_004a2621); MP (DAT_00553030):
+ * send it to the peers instead — message 0x49 when the partner is in the
+ * game (+0x05), else 0x48 (0x43eda0(id, 0) → rl_43eda0, broadcast). */
 void engine_diplomacy_action_seal(int yes, text_input_state_t *ed,
                                   engine_event_queue_state_t *q)
 {
@@ -149,5 +151,7 @@ void engine_diplomacy_action_seal(int yes, text_input_state_t *ed,
     }
     if (g_sim_mp_active == 0) {
         engine_diplomacy_queue_action(local, partner, mode, (int)s_slot_0057a0f8, target);
+        return;
     }
+    rl_43eda0(SREC(partner)[F_ACTIVE] != 0 ? 0x49 : 0x48, 0);
 }

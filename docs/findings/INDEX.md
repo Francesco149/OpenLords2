@@ -52,6 +52,7 @@ session — they outlive the conversation context.
 |-----|--------|
 | [in-process-retail-host.md](in-process-retail-host.md) | **rhost** (2026-10-23): retail in-process, deterministic; Lords2's runtime surface, the GOG patch code past .text, measurements |
 | [multiplayer-rhost.md](multiplayer-rhost.md) | **multiplayer under rhost** (2026-11-14): retail's DirectPlay / SIGS transports, the fake SIGS (SierraNW exports, the monitor-thread coroutine, poll-stamped deliveries), `mp-record` with a broker; mp-start-p1/p2 (+85 functions) |
+| [rl-mpnet.md](rl-mpnet.md) | **partition mpnet** (2026-11-14): the SIGS session class (thiscall rows), the monitor thread on rh_net's coroutine, the session open / DLGPROC / ring send, the MP setup pages + MP message popup (0x475e07's residue quirk); the old ports' deferred MP sends (diplomacy seal, trade seal) |
 | [game-state-map.md](game-state-map.md) | strategic game state VAs (realms, counties, armies, date) — the autoplay bot's reader |
 | [hybrid-pilot-ai.md](hybrid-pilot-ai.md) | **hybrid pilot** (2026-10-23): the AI realm turn under rhost — 88/89 verified, bugs #227/#228, binding cost, blockers, recommendation |
 | [hybrid-batch2-combat.md](hybrid-batch2-combat.md) | **hybrid batch 2** (2026-10-23): battle resolver + army movement under rhost — 50/59 reached, 0 divergences, hybrid 149 hooks PASS; #229–#231; shadow fidelity (host layers, stack residue) |

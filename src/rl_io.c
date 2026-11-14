@@ -1933,7 +1933,7 @@ static uint32_t __cdecl thiscall_adapter(uint32_t fn, uint32_t self, uint32_t n,
     return ((tc3_t)(uintptr_t)fn)(self, a, b, c);
 }
 static uint32_t nw_call(uint32_t va, uint32_t self, uint32_t n, uint32_t a, uint32_t b, uint32_t c)
-{   /* TODO(rl-extern): the SierraNW methods 0x4b6d44 / 0x4b6a15 / 0x4b6e1b / 0x4b6b71 / 0x4b92a0 */
+{   /* TODO(rl-extern): the SierraNW methods 0x4b6a15 (Close) / 0x4b92a0 (delete); the others: rl_mpnet.c */
     return engine_retail_call((uint32_t)(uintptr_t)thiscall_adapter, 6, va, self, n, a, b, c);
 }
 static void mp_event(int kind, int arg) { engine_retail_call(0x43e6a2u, 2, (uint32_t)kind, (uint32_t)arg); }   /* TODO(rl-extern) */
@@ -1969,7 +1969,7 @@ int rl_4b8c3a(void)
         } else {
             if (NW == 0)
                 return 0;
-            if (nw_call(0x4b6d44u, (uint32_t)NW, 0, 0, 0, 0) == 0) {
+            if (rl_4b6d44((uint32_t)NW) == 0) {
                 rl_plat_OutputDebugStringA(RS(g_rl_4e2eb0, 0x4e2eb0u, 0x4e2eb0u));   /* "RGM SIGS disconnected, shut down\n" */
                 engine_retail_call(0x43f43eu, 0);   /* TODO(rl-extern) */
                 g_rl_568464 = 0;
@@ -1993,7 +1993,7 @@ int rl_4b8c3a(void)
             }
             if (any == 1 && g_rl_553248 == 0) {
                 int all = 1;
-                int n = (int)nw_call(0x4b6e1bu, (uint32_t)NW, 0, 0, 0, 0);
+                int n = rl_4b6e1b((uint32_t)NW);
                 for (int j = 0; n > j; j++)
                     if (g_rl_4e5a90[j] == 0) {
                         all = 0;
@@ -2003,7 +2003,7 @@ int rl_4b8c3a(void)
                     mp_event(4, 0);
             }
             to = 0;
-            size = nw_call(0x4b6b71u, (uint32_t)NW, 3, (uint32_t)(uintptr_t)g_rl_515c50, 0x104, (uint32_t)(uintptr_t)&from);
+            size = (uint32_t)rl_4b6b71((uint32_t)NW, (int)(uintptr_t)g_rl_515c50, 0x104, (int)(uintptr_t)&from);
             hr = size != 0 ? 0 : (HRESULT)0x887700be;
             from++;
         }

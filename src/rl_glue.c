@@ -1417,18 +1417,18 @@ int rl_43eda0(int id, int dest)
     slot[3] = (uint8_t)g_rl_512f4c;
     slot[2] = (uint8_t)rl_440038(g_rl_4d5b90[k], (int)(uintptr_t)(g_rl_512fb0 + 260 * g_rl_512f4c));   /* checksum */
     int len = g_rl_4d5b90[k] + 4;
-    /* TODO(rl-extern): 0x4b90fb (the DirectPlay send) */
+    /* the send: rl_4b90fb (partition mpnet) */
     if (k == 10 || k == 89 || k == 67 || k == 68 || k == 66 || k == 39 || k == 49 || k == 35 || k == 14 ||
         k == 84 || k == 29) {
-        engine_retail_call(0x4b90fbu, 4, (uint32_t)dest, (uint32_t)g_rl_512f4c, (uint32_t)len, 0u);
+        rl_4b90fb(dest, g_rl_512f4c, len, 0);
         g_rl_569580++;
     } else {
-        engine_retail_call(0x4b90fbu, 4, (uint32_t)dest, (uint32_t)g_rl_512f4c, (uint32_t)len, 1u);
+        rl_4b90fb(dest, g_rl_512f4c, len, 1);
         slot[3] |= 0x40;
-        engine_retail_call(0x4b90fbu, 4, (uint32_t)dest, (uint32_t)g_rl_512f4c, (uint32_t)len, 1u);
+        rl_4b90fb(dest, g_rl_512f4c, len, 1);
         slot[3] &= 0x3f;
         slot[3] |= 0x80;
-        engine_retail_call(0x4b90fbu, 4, (uint32_t)dest, (uint32_t)g_rl_512f4c, (uint32_t)len, 1u);
+        rl_4b90fb(dest, g_rl_512f4c, len, 1);
         g_rl_569580 += 3;
     }
     if (++g_rl_512f4c >= 40)
