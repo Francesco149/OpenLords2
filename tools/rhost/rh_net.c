@@ -163,9 +163,13 @@ int nw_validate(int game, char *ip, int *a, int *b, const char *path, const char
 }
 int nw_init(const char *ip, int a, int b) { rh_log("net: InitializeDLL(%s, %d, %d) (f%u)\n", ip ? ip : "", a, b, g_frame); return 1; }
 int nw_close(void) { rh_log("net: CloseDLL (f%u)\n", g_frame); return 0; }
+/* 1: the lobby started a game. After GameClose (0x4b6ab6: leaving the MP game) the fake lobby starts the next one
+ * 3 polls later (the monitor polls every 350 ms): the monitor logs GameEnd, then GameStart and signals the event a
+ * re-entered 0x4b7a9a waits on (0x4b63d0) — before, the status stayed 0 and that wait never ended (mpbot deadlock:
+ * File > New Game, Load from the MP setup page) */
 static int g_game_closed;
-int nw_check_conn(void) { return g_game_closed ? 0 : 1; }      /* 1: the lobby started the game */
-int nw_game_close(void) { rh_log("net: GameClose (f%u)\n", g_frame); g_game_closed = 1; return 0; }
+int nw_check_conn(void) { if (g_game_closed) { g_game_closed--; return 0; } return 1; }
+int nw_game_close(void) { rh_log("net: GameClose (f%u)\n", g_frame); g_game_closed = 3; return 0; }
 int nw_any(void)
 {
     g_poll++;
