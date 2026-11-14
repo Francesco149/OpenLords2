@@ -39,7 +39,7 @@ typedef struct { uint32_t n; int from; uint32_t len; uint8_t *d; int kind; } msg
 enum { NK_DATA, NK_LEFT, NK_CHAT };   /* a message; a peer left the game; a lobby chat line (text in d) */
 static msg_t *g_sched; static uint32_t g_nsched, g_isched;      /* replay: stamped deliveries from the trace */
 static msg_t g_pend[256]; static uint32_t g_npend;                 /* visible, not yet received */
-static msg_t g_arr[256]; static uint32_t g_narr;                   /* record: arrived from the broker, not stamped */
+static msg_t g_arr[8192]; static uint32_t g_narr;                   /* record: arrived from the broker, not stamped */
 
 static void pend_push(msg_t m)          /* the queue owns a copy: a receive frees it, a rollback revives the schedule's */
 {
@@ -115,11 +115,11 @@ static void sock_read_one(void)
     if (h.len) recv_all(d, h.len);
     if (h.type == 'C') { g_peer_clock = h.clock; free(d); }
     else if (h.type == 'L') {   /* a peer left the game (the broker saw it quit) */
-        if (g_narr >= 256) rh_fatal("net: arrival queue overflow");
+        if (g_narr >= 8192) rh_fatal("net: arrival queue overflow");
         g_arr[g_narr++] = (msg_t){ 0, h.a, 0, d, NK_LEFT };
     }
     else if (h.type == 'M') {
-        if (g_narr >= 256) rh_fatal("net: arrival queue overflow");
+        if (g_narr >= 8192) rh_fatal("net: arrival queue overflow");
         g_arr[g_narr++] = (msg_t){ 0, g_dp ? (h.a == 0xfe ? 0 : h.a + 1) : h.a, h.len, d, NK_DATA };   /* DP: the sender's DPID */
     } else { rh_log("net: broker frame type %c ignored\n", h.type); free(d); }
 }
@@ -350,7 +350,7 @@ static int net_poll(void)   /* one receive poll: stamp + reveal deliveries (SIGS
 void rh_net_inject_chat(int from, const char *text)
 {
     if (!g_on) return;
-    if (g_narr >= 256) rh_fatal("net: arrival queue overflow");
+    if (g_narr >= 8192) rh_fatal("net: arrival queue overflow");
     size_t n = strlen(text); uint8_t *d = malloc(n ? n : 1); memcpy(d, text, n);
     g_arr[g_narr++] = (msg_t){ 0, from, (uint32_t)n, d, NK_CHAT };
     if (!g_live) rh_log("net: a chat line queued without a broker: it is stamped at the next poll only in a live (record / bot) run\n");

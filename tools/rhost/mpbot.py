@@ -90,13 +90,13 @@ class Side:
 
 
 class MP:
-    def __init__(self, name, n=2, target="wine", log=print, dp=False):
+    def __init__(self, name, n=2, target="wine", log=print, dp=False, gtype=None):
         self.n, self.name = n, name
         self.broker = rhnet.Broker(n, log=log)
         self.s = []
         for k in range(n):
             self.s.append(rhbot.Session(f"{name}-p{k + 1}", target=target,
-                                        extra=["--net-sigs", f"{'dp:' if dp else ''}{k}/{n}", "--net-peer", f"127.0.0.1:{self.broker.port}"]))
+                                        extra=["--net-sigs", f"{'dp:' if dp else ''}{k}/{n}{',' + gtype if gtype else ''}", "--net-peer", f"127.0.0.1:{self.broker.port}"]))
 
     def run(self, frames):
         errs = []
@@ -273,9 +273,9 @@ def py_env(mp, out):
     return _ENV
 
 
-def serve(name, n, target, dp=False):
+def serve(name, n, target, dp=False, gtype=None):
     os.makedirs(STATE, exist_ok=True)
-    mp = MP(name, n, target, dp=dp)
+    mp = MP(name, n, target, dp=dp, gtype=gtype)
     mp.run(1500)
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.bind(("127.0.0.1", 0))
@@ -336,6 +336,7 @@ if __name__ == "__main__":
     sub = ap.add_subparsers(dest="op", required=True)
     p = sub.add_parser("serve"); p.add_argument("name"); p.add_argument("-n", type=int, default=2)
     p.add_argument("--target", default="wine", choices=("wine", "win"))
+    p.add_argument("--type", choices=("full", "skirmish"), help="SIGS GameType (GetGameOption)")
     p.add_argument("--dp", action="store_true", help="the DirectPlay transport (the host then picks Full game c190,128 / Skirmish c440,128 after the shield page)")
     p = sub.add_parser("do"); p.add_argument("name"); p.add_argument("steps")
     p = sub.add_parser("py"); p.add_argument("name"); p.add_argument("code")
@@ -343,7 +344,7 @@ if __name__ == "__main__":
     p = sub.add_parser("quit"); p.add_argument("name")
     a = ap.parse_args()
     if a.op == "serve":
-        serve(a.name, a.n, a.target, a.dp)
+        serve(a.name, a.n, a.target, a.dp, a.type)
     elif a.op == "do":
         sys.exit(client(a.name, {"op": "do", "steps": a.steps}))
     elif a.op == "py":
