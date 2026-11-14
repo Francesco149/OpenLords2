@@ -62,3 +62,46 @@ The Baron did choose county 5 as his target twice and launched an attack around 
 
 ---
 model claude-opus-5-5, effort high, 194 turns, $5.23, 78 min
+
+
+# Campaign 6 attempt (run `siegeknights3`, API driver, 2026-11-14) — blocked
+
+The driver's report, as written:
+
+---
+
+**Run `siegeknights3`: blocked.** Only step 1 holds. No AI army with knights besieged us, so the flag u32(0x56d5c8) was never set and halve_garrison (0x4ad8cc) was not reached. I did not run `rd check`, since steps 2–5 do not hold in the current movie, and I did not run `rd verify`.
+
+**Where the run stands:** I loaded it back to checkpoint `fed`, so the movie ends at f22084: custom-strong, turn 17, Winter 1272. Our county is Cordova (county 5): 727 people, 4 wheat fields sown, meat ration 23%, a garrison of 187 men (A11). The Baron (realm 5) is at attitude −30 toward us with vendetta stage 2. Other checkpoints still there: t3, t6, won1, won2, sown.
+
+**rd cov:** 903 retail functions reached, 0 new to the corpus. I did not run `--blocks`.
+
+**What I tried:**
+1. **Started from `siegeknights2:t30`** (f31520). Step 2's predicate already held there: realm 3's A16 (305 men, no knights) was besieging Cordova.
+   - The siege battle prompt came at f32753 (turn 33). The left gauntlet put us on the battlefield at f32756 (screen 41), so step 3 also holds on that branch.
+   - The flag cannot be set in that battle. The attacker has no knights, so it has no stance-4 group (see the first code fact below).
+   - That county then dies regardless: realm 4's 286-man army camps in it, health drops to 0, and the county goes neutral at turn 46. I abandoned that branch.
+2. **Started over from `custom-strong`** (f13360):
+   - **Insults:** two insults to the Baron (f13530, f15012) put him at −30 by turn 4. Diplomacy is the map icon c623,444, then face (90,390), insult (410,218), Dispatch (303,307).
+   - **Garrison:** raised 187 men (50 swords, 50 pikes, 50 bows, 37 peasants) and marched them into the level-3 keep. The march is a left click on the army, then a left click on the castle cell. They garrisoned at turn 2.
+   - **Vendetta:** Baron raiders (40–46 peasants) come to Cordova and eat the herd. I beat two of them with freshly raised peasant armies (order: left click our army, left click the enemy piece; then auto-resolve). The Baron's vendetta stage went 0→1 at f16694 and 1→2 at f20951. One more win should give stage 3 (war, target = us).
+   - **Food:** the diet starts at meat_pct 100, and with the herd gone the people starve with grain unused in store. The ration panel is c600,218; dragging its slider `d324,230-222,230` sets meat to 23%. I sowed 4 wheat fields in Winter (field click, then @field_wheat) and moved 570 idle workers to grain in the Town Center (box drag, then a click on the wheat field).
+   - **Still collapsing:** health fell to Sick and then 0, and crowns went 1000 → 16. In the season run from `fed` (since cut from the movie), the armies deserted by turn 26 and population was down to 24. The Baron chose Cordova as his target at turn 13 and again at turn 24, but only raiders arrived, and no knight army came before the county failed.
+
+**Game facts from the decompile — these correct the task card:**
+- **Knights are required after all.** A stance-4 group, whose handler 0x48d9ce is the only code that sets 0x56d5c8, is created only for unit class 6, the knights (sub_480662, all_ida.c:69239). The siege army I fought had attacker stances 1/2/3/5/6 and no 4.
+- **"Only engines left" cannot work.** 0x477DFC ends the battle as soon as the attacker's class<7 men (0x53F028) reach 0. There is only a narrow window: 0x481B9A counts once per frame, and 0x489401 runs before 0x477DFC in each sub-step. It would need a stance-4 group anyway.
+- **Killing the AI's engines kills the flag.** Each siege sub-step with both sides alive, 0x477DFC checks 0x53E990 == 0 and 0x553FF0 == 0. If the attacker's kit 0x55401C ≤ 2, it sets 0x53E990 = 0x553FB0 = 4, and 0x48d9ce then refuses the flag. If the kit is > 2, the battle ends as a defender win instead.
+  - 0x553FF0 was 5 at the start, matching the AI's 5 engine units.
+- **AI besiegers do bring engines.** Realm 3's army had 3 class-7 and 2 class-8 units, with kit 0x55401C = 2. Our garrison had 3 class-10 units.
+- **Battlefield unit layout:** units at 0x554490 + 432·i, with class at +2, the side flag +3 (0 for the AI) and owner at +0x1c. Units 1–46 were the AI's, 47–70 ours.
+
+**What the task needs:** a Baron army with knights besieging our castle, and on the field its non-knights killed first while its engines are left alive. Before that, the county has to stay alive for 20+ seasons, which none of my attempts managed.
+
+**What the tool lacked:**
+- `rd seasons` stopped mid-processing of an End turn ("the bot's settling stopped as it held"). My next panel clicks then landed while the season was still ending.
+- There is no county-upkeep helper (diet, food, bankruptcy) for long `seasons` runs.
+- `@raise_more` is wrong when the mercenary box is shown: the arrow moves to y=174 and Continue to (490,362).
+
+---
+model claude-opus-5-5, effort high, 141 turns, $3.33, 39 min
