@@ -9,8 +9,9 @@ poll it became visible at ({"n": POLL, "p": FROM, "d": HEX}) — so each side th
 A side's input trace carries {"meta": {"net": "ME/N[,full|skirmish]"}} (ME = its player index).
 
 Wire format (little endian): header {u8 type, u8 a, u16 len, u32 clock} + payload.
-  process → broker: H (a = me, payload u8 nplayers), C (clock), S (a = dest player | 0xff broadcast, payload), Q
-  broker → process: C (clock = the slowest OTHER live peer), M (a = from, payload)"""
+  process → broker: H (a = me, payload u8 nplayers), C (clock), S (a = dest player | 0xff broadcast, payload),
+                    Y (a DirectPlay system message to every other side), P (paused on its controller), Q
+  broker → process: C (clock = the slowest OTHER live peer), M (a = from, payload; 0xfe = a system message)"""
 import os
 import socket
 import struct
@@ -103,6 +104,10 @@ class Broker:
                         dests = [q for q in self.conns if q != me] if a == 0xff else [a]
                         for q in dests:
                             self._send(q, ord("M"), me, clock, payload)
+                    elif typ == ord("Y"):          # a DirectPlay system message (rh_net DP mode): to every other side, from DPID 0
+                        self.clock[me] = clock
+                        for q in [q for q in self.conns if q != me]:
+                            self._send(q, ord("M"), 0xfe, clock, payload)
                     elif typ == ord("Q"):
                         break
                     self._retell()
@@ -129,7 +134,7 @@ def cmd_mp_record(a, R):
         meta = R.trace_meta(tr)
         if not meta.get("net"):
             raise SystemExit(f"{tr}: no \"net\" in its meta")
-        me = int(str(meta["net"]).split("/")[0])
+        me = int(str(meta["net"]).split(":")[-1].split("/")[0])   # "ME/N" or "dp:ME/N"
         if me != k:
             raise SystemExit(f"{tr}: net {meta['net']} — side {k + 1} must be player {k}")
         meta = dict(meta)

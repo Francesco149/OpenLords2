@@ -93,6 +93,25 @@ setup) → Start → the game: host Lincolnshire, client the Duchy of Cornwall, 
 
 - `rd` on an MP scenario: savestates carry rh_net's state now, but drive.py does not pass `--net-sigs` from a movie's
   meta, and its movie truncation drops the `"n"` delivery lines — untested.
-- The DirectPlay path (a fake IDirectPlay2A + the 0x6c / 0x82 / 0x74 dialogs) — same delivery model, more COM.
 - Deeper MP play: end turn in lockstep, diplomacy between humans, battles between humans, chat, a player leaving
   (TellMePlayerLeftGame's callback 0x4b7a7c), the slow-link flag, a 3–5 player game, MP save / load (0x49792e).
+
+## DirectPlay (`"net": "dp:ME/N"`, 2026-11-14)
+
+The other transport, same delivery model (`mp-dp-p1 / -p2`: +9 functions, 3.4 KB — the dialogs 0x4b8335 / 0x4b8439 /
+0x4b85b7 and callbacks 0x4b82bf / 0x4b8b87 / 0x4b8243, the DirectPlayCreate thunk, 0x43338e, 0x43e6a2):
+- DirectPlayEnumerateA lists one provider ("Internet TCP/IP Connection For DirectPlay", a fixed GUID); rh_win.c's
+  dialogs pick it in 0x81 (LBN_SELCHANGE on its row, IDOK → 0x4b8243 → DirectPlayCreate → QueryInterface), then
+  0x6c Host (player 0: 1004) / Join (1002), 0x74 the default session name ("Lords2 Session1": an edit control model —
+  WM_SETTEXT / EM_LINELENGTH / EM_GETLINE), 0x82 the one session EnumSessions reports (LBN_SELCHANGE + IDOK →
+  Open join).
+- The IDirectPlay2A object (DAT_004e2a2c), its vtable and 16-byte method thunks live on the fixed export page
+  (0x5e100400 / 0x800 / 0x900). Faked: QueryInterface, AddRef, Release, Close, CreatePlayer (DPID = index + 1),
+  DestroyPlayer, EnumSessions, GetCaps (not the slow-link triple), Open, Receive, Send, SetSessionDesc (+124, 0x4b7514
+  at Start: "no new players"); any other slot is fatal. Every Receive is a receive poll (DPERR_NOMESSAGES 0x887700be
+  when none). CreatePlayer / DestroyPlayer send a DirectPlay system message to the other sides through the broker
+  ('Y' → 'M' from 0xfe = DPID 0): DPSYS_CREATEPLAYERORGROUP (3) / DESTROYPLAYERORGROUP (5), which 0x4b8c3a hands to
+  0x43e6a2.
+- **A page SIGS never shows:** after the shield page the DirectPlay host gets "Expansion pack installed, choose: Full
+  game (c190,128) / Skirmish (c440,128)" (0x43338e) — under SIGS the lobby's GameOption decided. Then the usual setup
+  page and Start.

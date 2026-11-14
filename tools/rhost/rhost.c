@@ -391,8 +391,17 @@ static FARPROC WINAPI my_GetProcAddress(HMODULE h, LPCSTR n) { FARPROC f; return
 static BOOL WINAPI my_FreeLibrary(HMODULE h) { return rh_net_free(h) ? TRUE : FreeLibrary(h); }
 
 /* ---- imports rhost supplies instead of a DLL ---- */
-static HRESULT WINAPI dp_Create(void *a, void *b, void *c) { (void)a; (void)b; (void)c; rh_log("DPLAYX DirectPlayCreate: unavailable (f%u)\n", g_frame); return 0x88770082; /* DPERR_UNAVAILABLE */ }
-static HRESULT WINAPI dp_Enumerate(void *a, void *b) { (void)a; (void)b; rh_log("DPLAYX DirectPlayEnumerateA: none (f%u)\n", g_frame); return 0; }
+static HRESULT WINAPI dp_Create(void *a, void *b, void *c)
+{
+    (void)c;
+    if (rh_net_dp_create(a, (void **)b)) return 0;   /* --net-sigs dp:ME/N: rh_net's IDirectPlay2A */
+    rh_log("DPLAYX DirectPlayCreate: unavailable (f%u)\n", g_frame); return 0x88770082; /* DPERR_UNAVAILABLE */
+}
+static HRESULT WINAPI dp_Enumerate(void *a, void *b)
+{
+    if (rh_net_dp_enumerate(a, b)) return 0;
+    rh_log("DPLAYX DirectPlayEnumerateA: none (f%u)\n", g_frame); return 0;
+}
 /* Smacker, movies off: SmackOpen fails — retail logs "ERR" and skips the movie (FUN_0042da18) */
 static void *WINAPI sm_Open(const char *n, uint32_t f, int32_t b) { (void)f; (void)b; rh_log("movie: SmackOpen(%s) skipped (f%u)\n", n ? n : "", g_frame); return NULL; }
 static uint32_t WINAPI sm_1(void *a) { (void)a; return 0; }

@@ -233,9 +233,16 @@ static int WINAPI my_MessageBoxA(HWND h, LPCSTR text, LPCSTR cap, UINT t)
 #define FAKE_DLG 0x0d1a0000u
 static struct { char s[64]; LPARAM data; } g_lb[32]; static int g_lbn, g_lbsel = -1, g_dlg_ended; static INT_PTR g_dlg_res;
 static int is_dlg_ctl(HWND h) { uint32_t v = (uint32_t)(uintptr_t)h; return v > FAKE_DLG && v < FAKE_DLG + 0x10000u; }
+static char g_edit[128];          /* the one edit control (the session name, dialog 0x74) */
 static LRESULT lb_msg(UINT m, WPARAM w, LPARAM l)
 {
     switch (m) {
+    case WM_SETTEXT: snprintf(g_edit, sizeof g_edit, "%s", l ? (const char *)l : ""); return TRUE;
+    case EM_LINELENGTH: return (LRESULT)strlen(g_edit);
+    case EM_GETLINE: {   /* the buffer's first WORD = its capacity; no terminator */
+        size_t cap = *(const uint16_t *)l, n = strlen(g_edit); if (n > cap) n = cap;
+        memcpy((void *)l, g_edit, n); return (LRESULT)n;
+    }
     case LB_ADDSTRING: if (g_lbn >= 32) return LB_ERR; snprintf(g_lb[g_lbn].s, 64, "%s", (const char *)l); g_lb[g_lbn].data = 0; return g_lbn++;
     case LB_SETITEMDATA: if ((int)w < 0 || (int)w >= g_lbn) return LB_ERR; g_lb[w].data = l; return 0;
     case LB_GETITEMDATA: if ((int)w < 0 || (int)w >= g_lbn) return LB_ERR; return g_lb[w].data;
@@ -251,14 +258,28 @@ static INT_PTR WINAPI my_DialogBoxParamA(HINSTANCE i, LPCSTR t, HWND p, DLGPROC 
     if (!rh_net_on()) { rh_log("DialogBoxParamA(template %p, proc %p): not shown, -1 (frame %u)\n", (void *)t, (void *)fn, g_frame); return -1; }
     HWND d = (HWND)(uintptr_t)FAKE_DLG;
     g_lbn = 0; g_lbsel = -1; g_dlg_ended = 0; g_dlg_res = -1;
+    g_edit[0] = 0;
     fn(d, WM_INITDIALOG, 0, l);
     for (int k = 0; k < g_lbn; k++) rh_log("dialog %p: item %d \"%s\" data %08lx%s\n", (void *)t, k, g_lb[k].s, (unsigned long)g_lb[k].data, k == g_lbsel ? " (selected)" : "");
+    uint32_t tid = (uint32_t)(uintptr_t)t;
+    if (!g_dlg_ended && rh_net_dp()) {   /* DirectPlay: the provider row, Host (player 0) / Join, the first session */
+        if (tid == 0x81) {
+            for (int k = 0; k < g_lbn; k++) if (g_lb[k].data) { g_lbsel = k; break; }
+            fn(d, WM_COMMAND, MAKEWPARAM(1001, LBN_SELCHANGE), (LPARAM)(uintptr_t)(FAKE_DLG + 1001));
+        } else if (tid == 0x6c) {
+            fn(d, WM_COMMAND, rh_net_me() == 0 ? 1004 : 1002, 0);
+        } else if (tid == 0x82 && g_lbn) {
+            g_lbsel = 0;
+            fn(d, WM_COMMAND, MAKEWPARAM(1024, LBN_SELCHANGE), (LPARAM)(uintptr_t)(FAKE_DLG + 1024));
+        }
+    }
     if (!g_dlg_ended) fn(d, WM_COMMAND, MAKEWPARAM(IDOK, 0), 0);
     rh_log("DialogBoxParamA(template %p, proc %p): %s %ld (frame %u)\n", (void *)t, (void *)fn, g_dlg_ended ? "ended" : "left open,", (long)g_dlg_res, g_frame);
     return g_dlg_res;
 }
 static HWND WINAPI my_GetDlgItem(HWND d, int id) { return rh_net_on() && (uint32_t)(uintptr_t)d == FAKE_DLG ? (HWND)(uintptr_t)(FAKE_DLG + (uint32_t)id) : NULL; }
-static LRESULT WINAPI my_SendDlgItemMessageA(HWND d, int id, UINT m, WPARAM w, LPARAM l) { (void)d; (void)id; (void)m; (void)w; (void)l; return 0; }
+static LRESULT WINAPI my_SendDlgItemMessageA(HWND d, int id, UINT m, WPARAM w, LPARAM l)
+{ (void)id; return rh_net_on() && (uint32_t)(uintptr_t)d == FAKE_DLG ? lb_msg(m, w, l) : 0; }
 static BOOL WINAPI my_EndDialog(HWND d, INT_PTR r) { (void)d; g_dlg_ended = 1; g_dlg_res = r; return TRUE; }
 static UINT_PTR WINAPI my_SetTimer(HWND h, UINT_PTR id, UINT ms, TIMERPROC fn) { (void)h; (void)fn; rh_log("win: SetTimer %u ms (virtual, never fires)\n", ms); return id ? id : 1; }
 static BOOL WINAPI my_KillTimer(HWND h, UINT_PTR id) { (void)h; (void)id; return TRUE; }
