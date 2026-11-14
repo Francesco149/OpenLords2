@@ -126,4 +126,9 @@
     BFA(g_rl_5aeb3c,0x5aeb3c) \
     BFA(g_rl_5bb4c8,0x5bb4c8) \
     BFA(g_rl_5bb534,0x5bb534) \
+    BFA(g_rl_4d5f28,0x4d5f28) \
+    BFA(g_rl_51591c,0x51591c) \
+    BFA(g_rl_515b24,0x515b24) \
+    BFA(g_rl_515b30,0x515b30) \
+    BFA(g_rl_565700,0x565700) \
 

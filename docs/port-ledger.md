@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **1599** (65.3%) — tested 788, ported 811
-- code bytes touched: **78.4%** (657,561 / 838,629 B)
-- unported: **848**
+- touched: **1603** (65.5%) — tested 788, ported 815
+- code bytes touched: **78.5%** (657,988 / 838,629 B)
+- unported: **844**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (788) — ported + host unit suite
@@ -298,7 +298,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x43e433 | FUN_0043e433 | 218 | engine.h, engine_rate.c |
 | 0x43e50d | FUN_0043e50d | 180 | engine.h, engine_rate.c |
 | 0x43e9e2 | FUN_0043e9e2 | 223 | engine_roster.c, engine_roster.h, main.c (+1) |
-| 0x43ffc3 | FUN_0043ffc3 | 117 | engine_state_hash.c |
+| 0x43ffc3 | FUN_0043ffc3 | 117 | engine_state_hash.c, rl_host.c |
 | 0x44015a | FUN_0044015a | 96 | engine.h, engine_state_hash.c |
 | 0x440231 | FUN_00440231 | 1077 | engine.h, engine_state_hash.c |
 | 0x4472ce | FUN_004472ce | 1046 | engine.c, engine_delayed_action.c, engine_delayed_action.h (+1) |
@@ -810,7 +810,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (811) — reimplemented, no host test yet
+## ported (815) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -1156,8 +1156,12 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x43f352 | FUN_0043f352 | 236 | rl_ui2.c |
 | 0x43f43e | FUN_0043f43e | 70 | rl_quit.c |
 | 0x43f484 | FUN_0043f484 | 51 | rl_ui2.c |
+| 0x43f7e3 | FUN_0043f7e3 | 114 | rl_host.c |
+| 0x43ff08 | FUN_0043ff08 | 91 | rl_host.c |
+| 0x43ff63 | FUN_0043ff63 | 96 | rl_host.c |
 | 0x440666 | FUN_00440666 | 383 | rl_glue.c |
 | 0x44098f | FUN_0044098f | 595 | rl_render.c |
+| 0x446f06 | FUN_00446f06 | 126 | rl_host.c |
 | 0x4477e7 | FUN_004477e7 | 503 | rl_ui3.c |
 | 0x448d7e | FUN_00448d7e | 148 | rl_glue.c |
 | 0x44ff4a | FUN_0044ff4a | 182 | rl_ui2.c |

@@ -43,7 +43,7 @@ int32_t g_rl_553f04;
 int32_t g_rl_553fe8;
 int32_t g_rl_553ff8;
 int32_t g_rl_5681f4;
-uint8_t g_rl_569530;
+uint8_t g_rl_569530[60];
 int32_t g_rl_56d654;
 int32_t g_rl_57cab8;
 int32_t g_rl_57cb14;

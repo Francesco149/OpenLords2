@@ -147,3 +147,10 @@ extern int32_t g_rl_5aeb38;                  /* .data 0x5aeb38..0x5aeb3c: dword_
 extern int32_t g_rl_5aeb3c;                  /* .data 0x5aeb3c..0x5aeb40: dword_5AEB3C(rw)  DUP 5aeb3c */
 extern int32_t g_rl_5bb4c8;                  /* .data 0x5bb4c8..0x5bb4cc: dword_5BB4C8(w)  DUP 5bb4c8 */
 extern uint8_t g_rl_5bb534;                  /* .data 0x5bb534..0x5bb535: byte_5BB534(rw) */
+/* added by hand (the F8 old-turn reload 0x43f7e3 and its clears) */
+extern uint8_t g_rl_4d5f28[0x40];            /* .data 0x4d5f28..0x4d5f68: aLastturnSva aLastturnSvb aOldTurnSva aOldTurnSvb (k_mp_turn_save_names) */
+extern int32_t g_rl_51591c;                  /* .data 0x51591c..0x515920: dword_51591C(rw) — the .rec replay buffer's count */
+extern int32_t g_rl_515b24;                  /* .data 0x515b24..0x515b28: dword_515B24(rw) */
+extern uint8_t g_rl_515b30[0x120];           /* .data 0x515b30..0x515c50: byte_515B30(rw) — MP resend buffers, 7 x 41 */
+extern uint8_t g_rl_565700[3600];            /* .data 0x565700..0x566510: byte_565700(rw) — the state-hash regions, 600 B per player */
+extern uint8_t g_rl_569530[60];              /* .data 0x569530..0x56956c: byte_569530[6][10] (rl_ui4_globals.h widened it)  DUP 569530 */

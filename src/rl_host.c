@@ -1990,6 +1990,75 @@ int rl_4b99c0(void)
     return 0;
 }
 
+/* ================================================================ the F8 old-turn reload (0x43f7e3) */
+
+/* Port of FUN_0043ff63 (96 B) — clear the MP resend buffers byte_515B30: 7 peers × 40 bytes, stride 41 (written by
+ * the packet resend 0x43eac1). EAX: 41 * 6 (the last row's offset; nobody reads it). */
+int rl_43ff63(void)
+{
+    for (int i = 0; i < 7; i++)
+        for (int j = 0; j < 40; j++)
+            g_rl_515b30[41 * i + j] = 0;
+    return 41 * 6;
+}
+
+/* Port of FUN_00446f06 (126 B) — reset the .rec replay buffer: the counters dword_51591C / dword_515B24 /
+ * dword_512F6C / dword_512FA0 = 0, each of the 400 × 56 B records' state byte (+0x36) and time (+0) = 0.
+ * EAX: 7 * 399 (IDA's `result = 7 * i`; nobody reads it). */
+int rl_446f06(void)
+{
+    g_rl_51591c = 0;
+    g_rl_515b24 = 0;
+    g_rl_512f6c = 0;
+    g_rl_512fa0 = 0;
+    for (int i = 0; i < 400; i++) {
+        AT(uint8_t, g_rl_50d7c0, 0x50d7c0u, 0x50d7f6 + 56 * i) = 0;
+        AT(int32_t, g_rl_50d7c0, 0x50d7c0u, 0x50d7c0 + 56 * i) = 0;
+    }
+    return 7 * 399;
+}
+
+/* Port of FUN_0043ff08 (91 B) — clear byte_569530[6][10]. EAX: 5 * 5. */
+int rl_43ff08(void)
+{
+    for (int i = 0; i < 6; i++)
+        for (int j = 0; j < 10; j++)
+            g_rl_569530[10 * i + j] = 0;
+    return 5 * 5;
+}
+
+/* Port of FUN_0043ffc3 (117 B) — clear the local player's 600-byte state-hash region byte_565700[600 * DAT_0057c8cc]
+ * (3 × 200; the hash 0x440231 fills it). EAX: the last row's offset 600 * player + 400. */
+int rl_43ffc3(void)
+{
+    int r = 0;
+    for (int i = 0; i < 3; i++)
+        for (int j = 0; j < 200; j++) {
+            r = 600 * LOCAL + 200 * i;
+            g_rl_565700[r + j] = 0;
+        }
+    return r;
+}
+
+/* Port of FUN_0043f7e3 (114 B) — F8 (the window procedure, after message 18) and 0x442b08: reload the previous
+ * turn's MP snapshot — save_load("old_turn.sva") on the host (DAT_00553248), else "old_turn.svb" (k_mp_turn_save_names
+ * 0x4d5f48 / 0x4d5f58; the load's result is ignored); the render-dirty mode DAT_0052afcc = 1; clear the resend buffers,
+ * the replay buffer, byte_569530, the state hash; the battle reset 0x43f304; DAT_005440c8 = DAT_0053f26c + 10;
+ * DAT_00568d9c = timeGetTime, also EAX (0x442b08 returns it). */
+int rl_43f7e3(void)
+{
+    rl_4adfe6((int)(uintptr_t)&AT(uint8_t, g_rl_4d5f28, 0x4d5f28u, g_rl_553248 != 0 ? 0x4d5f48 : 0x4d5f58));
+    g_combat_render_dirty = 1;
+    rl_43ff63();
+    rl_446f06();
+    rl_43ff08();
+    rl_43ffc3();
+    bf_43f304();
+    s_slot_005440c8 = s_slot_0053f26c + 10;
+    g_combat_anim_deadline = rl_plat_timeGetTime();
+    return (int)g_combat_anim_deadline;
+}
+
 /* ================================================================ the window procedure */
 
 static int defwnd(int w, int m, int wp, int lp)
@@ -2172,7 +2241,7 @@ int rl_4b29be(int hwnd, int msg, int wparam, int lparam)
             break;
         case 119:
             rl_43eda0(18, 0);
-            engine_retail_call(0x43f7e3u, 0);   /* TODO(rl-extern): 0x43f7e3 */
+            rl_43f7e3();
             break;
         case 120:
             if (engine_current_screen() == 32 && g_sim_mp_active != 0)

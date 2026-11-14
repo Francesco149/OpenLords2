@@ -114,7 +114,9 @@ debug keys of 0x4b29be (F3..F9, F12: DAT_0053f684), 0x4b284e's surface-failure p
   event-queue argument), 0x4050c0 (the map scene tick), 0x4bc1d1 / 0x4bc142 (the battlefield frame / scroll),
   0x40f7d3 / 0x41a734 (the HUD panels), 0x423b4f / 0x41f15a (the MP HUD), 0x476e95 (the tooltip).
 - TODO(rl-extern) (unported, in no partition): 0x4a599d, 0x4ae539, 0x41f4a1, 0x4bbf89, 0x4bbfd2, 0x4247f5,
-  0x4b26b8, 0x42e50d, 0x42e3ba, 0x4b2730, 0x43f7e3 (and rl_42eaa6 / rl_42dfe2 / rl_425d35 / rl_4b7180: quit, by name).
+  0x4b26b8, 0x42e50d, 0x42e3ba, 0x4b2730 (and rl_42eaa6 / rl_42dfe2 / rl_425d35 / rl_4b7180: quit, by name).
+- Ported 2026-11-14: 0x43f7e3 (F8: reload old_turn.sv[ab]) + 0x43ff63 / 0x446f06 / 0x43ff08 / 0x43ffc3 (its clears),
+  rows in rh_hooks_rl_host.c; g_rl_569530 widened to [60] (byte_569530[6][10]).
 - Replaced in the done partitions (one-line seams → rl_<va>): rl_glue (0x4b1deb, 0x4b18e3, 0x4a8426, 0x4af502),
   rl_skirmish / rl_render / rl_ui2 (0x4af502, 0x4af8d9, 0x4b25b0, 0x4b0ab5, 0x4b1867), rl_ui3 (0x4af8d9, 0x4a9f72),
   rl_io (0x4b0ab5, 0x4b1867, 0x4ae310 ×2, 0x4af54a, 0x4af502), engine_bf_extern (0x4af8d9, 0x4af502, 0x4b25b0),

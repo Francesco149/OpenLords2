@@ -60,6 +60,11 @@ int rl_4b25b0(int a0);                           /* 76 B, coverage 59 */
 int rl_4b27bf(void);                             /* 143 B, coverage 59 */
 int rl_4b284e(void);                             /* 127 B, coverage 59 */
 int rl_4b2922(void);                             /* 156 B, coverage 59 */
+int rl_43ff63(void);                             /* 96 B */
+int rl_446f06(void);                             /* 126 B */
+int rl_43ff08(void);                             /* 91 B */
+int rl_43ffc3(void);                             /* 117 B */
+int rl_43f7e3(void);                             /* 114 B — F8: reload old_turn.sv[ab] */
 int rl_4b29be(int hwnd, int msg, int wparam, int lparam);   /* 2962 B, coverage 59 — __stdcall (the window procedure; was a 0-argument guess) */
 int rl_4b35c1(int a0, int a1);                   /* 255 B, coverage 54 */
 int rl_4b3768(int a0);                           /* 84 B, coverage 1 */

@@ -111,6 +111,7 @@ enum {
     X_rl_4a8e0b, X_rl_4a91ba, X_rl_4a9252, X_rl_4a9372, X_rl_4a960f, X_rl_4a975d, X_rl_4a983b, X_rl_4a98fe,
     X_rl_4ac904, X_rl_4ae74d, X_rl_4ae8a9, X_rl_4ade93, X_rl_4adfe6, X_rl_4ae310, X_rl_4ad9f0, X_rl_4ba26e,
     X_rl_4ba9c8, X_rl_4b99c0, X_rl_4b284e, X_rl_4b2922, X_rl_4bc020, X_rl_4b29be,
+    X_rl_43ff63, X_rl_446f06, X_rl_43ff08, X_rl_43ffc3, X_rl_43f7e3,
 };
 
 HOOK_R(rl_4a57ac, 1, rl_4a57ac(I(0)))
@@ -183,6 +184,11 @@ HOOK_R(rl_4b284e, 0, rl_4b284e())   /* host-level: creates the DirectDraw object
 HOOK_R(rl_4b2922, 0, rl_4b2922())   /* host-level: through 0x4b284e (RH_SH_HOST) */
 HOOK_R11(rl_4bc020, 11, rl_4bc020(I(0), I(1), I(2), I(3), I(4), I(5), I(6), I(7), I(8), I(9), (int)G32(s_e0_11 + 44)))   /* the 11th argument from the caller's stack */
 HOOK_R_STD16(rl_4b29be, 4, rl_4b29be(I(0), I(1), I(2), I(3)))   /* __stdcall: ret 0x10; host-level (RH_SH_HOST: the teardown / re-init arms) */
+HOOK_V(rl_43ff63, 0, rl_43ff63())
+HOOK_V(rl_446f06, 0, rl_446f06())
+HOOK_V(rl_43ff08, 0, rl_43ff08())
+HOOK_V(rl_43ffc3, 0, rl_43ffc3())
+HOOK_R(rl_43f7e3, 0, rl_43f7e3())   /* 0x442b08 returns its EAX (timeGetTime) */
 
 hook_t RH_HOOKS_RL_HOST[] = {
     { "rl_4a57ac", 0x4a57acu, (void *)w_rl_4a57ac, 0, 0, 0, 0, "" },
@@ -255,5 +261,10 @@ hook_t RH_HOOKS_RL_HOST[] = {
     { "rl_4b2922", 0x4b2922u, (void *)w_rl_4b2922, 0, 0, 0, 0, "", 0, RH_SH_HOST },
     { "rl_4bc020", 0x4bc020u, (void *)w_rl_4bc020, 0, 0, 0, 0, "" },
     { "rl_4b29be", 0x4b29beu, (void *)w_rl_4b29be, 0, 0, 0, 0, "", 0, RH_SH_HOST },
+    { "rl_43ff63", 0x43ff63u, (void *)w_rl_43ff63, 0, 0, 0, 0, "" },
+    { "rl_446f06", 0x446f06u, (void *)w_rl_446f06, 0, 0, 0, 0, "" },
+    { "rl_43ff08", 0x43ff08u, (void *)w_rl_43ff08, 0, 0, 0, 0, "" },
+    { "rl_43ffc3", 0x43ffc3u, (void *)w_rl_43ffc3, 0, 0, 0, 0, "" },
+    { "rl_43f7e3", 0x43f7e3u, (void *)w_rl_43f7e3, 0, 0, 0, 0, "" },
 };
 const int RH_HOOKS_RL_HOST_N = sizeof RH_HOOKS_RL_HOST / sizeof *RH_HOOKS_RL_HOST;

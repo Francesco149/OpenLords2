@@ -62,8 +62,8 @@
    retail's stack 16 bytes low (rd verify MISMATCH on any run through siege-castles' battle; 0ae40e4); the battle
    residue model's 0x4b99c0 e0 was a constant gone stale by 8 (frame_wrap's frame grew) — now retail's chain constant
    minus frame_wrap's measured frame, and the port's WinMain / 0x40e8bb / 0x40e890 have retail's frames: **field-orders'
-   long-standing hybrid / standalone FAIL is gone — full hybrid 78/78, standalone 77/78 = pure retail** (hotkeys stops at
-   the unported 0x43f7e3, the F8 old-turn path).
+   long-standing hybrid / standalone FAIL is gone — full hybrid 78/78; standalone 78/78 = pure retail** since the F8 old-turn
+   reload 0x43f7e3 + its clears 0x43ff63 / 0x446f06 / 0x43ff08 / 0x43ffc3 were ported (rl_host.c, 2026-11-14).
    2026-11-13 totals: 4 campaigns, 15 drivers (11 subagents, 4 API drivers for $9.12), 13 scenarios
    filed; corpus 22,673 → 23,255 basic blocks (62.9 % → 64.6 % of retail code bytes), 1,527 → 1,533 functions (lord_move
    0x4a599d and the F8 old-turn path among them); `rhost.py verify` on the first 5 new scenarios: 0 divergences, hybrid

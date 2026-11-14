@@ -63,7 +63,7 @@ extern int32_t g_rl_553ff8;                  /* .data 0x553ff8..0x553ffc: dword_
 extern int32_t g_rl_5681f4;                  /* .data 0x5681f4..0x5681f8: dword_5681F4(rw)  DUP 5681f4 */
 extern int32_t g_rl_5694f8;                  /* .data 0x5694f8..0x5694fc: dword_5694F8(r)  DUP 5694f8 */
 extern int32_t g_rl_569500;                  /* .data 0x569500..0x569504: dword_569500(w)  DUP 569500 */
-extern uint8_t g_rl_569530;                  /* NEIGHBOUR of g_rl_569590: access it through g_rl_569590 (AT / BCELL8), never this block — .data 0x569530..0x569531: byte_569530(r)  DUP 569530 */
+extern uint8_t g_rl_569530[60];              /* WIDENED by hand to 0x569530..0x56956c (byte_569530[6][10], cleared by 0x43ff08; byte_56956B = [5][9]) — .data 0x569530: byte_569530(r)  DUP 569530 */
 extern int32_t g_rl_56d654;                  /* .data 0x56d654..0x56d658: dword_56D654(rw)  DUP 56d654 */
 extern int32_t g_rl_57cab8;                  /* .data 0x57cab8..0x57cabc: dword_57CAB8(w)  DUP 57cab8 */
 extern int32_t g_rl_57cb14;                  /* .data 0x57cb14..0x57cb18: dword_57CB14(rw)  DUP 57cb14 */
