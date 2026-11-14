@@ -392,6 +392,10 @@ int net_dp_enumerate_impl(void *cb, void *ctx)
 int net_dp_create_impl(void *guid, void **out)
 {
     if (!g_dp) return 0;
+    /* 0x4b7585's join path keeps &its first argument (the application GUID, on its stack) in DAT_004e5b08 for the
+     * session dialog: a dead-frame pointer whose value depends on the caller's depth — volatile, like the SIGS
+     * session's +28 / +32 */
+    rh_state_volatile_add(0x4e5b08u);
     rh_log("net: DirectPlayCreate(%s) (f%u)\n", guid == (void *)(uintptr_t)DP_GUID ? "the provider" : "?", g_frame);
     *out = (void *)(uintptr_t)DP_OBJ;
     return 1;
