@@ -87,6 +87,7 @@ static int readable(uint32_t va, uint32_t n)
 static void serve(void)
 {
     static char line[1 << 16];
+    rh_net_pause(1);                     /* MP: a side idle on its controller does not hold the others' clocks */
     reply("\"ev\": \"stop\"");
     for (;;) {
         if (!recv_line(line, sizeof line)) { rh_log("bot: controller closed the connection (frame %u)\n", g_frame); rh_finish("bot-closed"); }
@@ -95,6 +96,7 @@ static void serve(void)
         uint32_t v = 0, n = 0, m = 0, w = 0, l = 0;
         if (!strcmp(cmd, "run")) {
             g_run_left = jnum(line, "n", &v) && v ? v : 1;
+            rh_net_pause(0);
             return;
         } else if (!strcmp(cmd, "post")) {
             jnum(line, "m", &m); jnum(line, "w", &w); jnum(line, "l", &l);

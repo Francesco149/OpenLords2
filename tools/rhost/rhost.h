@@ -106,6 +106,7 @@ void rh_net_report(void);
 int  rh_net_on(void);
 void rh_net_tick(void);
 void rh_net_sync(void);
+void rh_net_pause(int on);
 int  rh_net_sleep(DWORD ms);
 int  rh_net_load(const char *n, HMODULE *out);
 int  rh_net_proc(HMODULE m, const char *name, FARPROC *out);

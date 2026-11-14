@@ -15,6 +15,7 @@ import os
 import socket
 import struct
 import threading
+import time
 
 HDR = struct.Struct("<BBHI")
 INF = 0xffffffff
@@ -36,12 +37,15 @@ class Broker:
         self.stats = {"msgs": 0, "bytes": 0}
         self.log = log or (lambda s: None)
         self.done = threading.Event()
+        self.trace = open(os.environ["RHNET_TRACE"], "w") if os.environ.get("RHNET_TRACE") else None
         threading.Thread(target=self._accept, daemon=True).start()
 
     def _send(self, p, typ, a, clock, payload=b""):
         s = self.conns.get(p)
         if s is None or self.clock.get(p) == INF:
             return
+        if self.trace:
+            self.trace.write(f"{time.time():.3f}   to {p} {chr(typ)} a={a} len={len(payload)} clock={clock}\n"); self.trace.flush()
         try:
             with self.wlk[p]:
                 s.sendall(HDR.pack(typ, a, len(payload), clock & 0xffffffff) + payload)
@@ -79,6 +83,8 @@ class Broker:
             while True:
                 typ, a, ln, clock = HDR.unpack(self._recv(s, HDR.size))
                 payload = self._recv(s, ln) if ln else b""
+                if self.trace:
+                    self.trace.write(f"{time.time():.3f} from {me} {chr(typ)} a={a} len={ln} clock={clock}\n"); self.trace.flush()
                 with self.lk:
                     if typ == ord("H"):
                         me = a
@@ -88,6 +94,8 @@ class Broker:
                         self.log(f"broker: player {me} joined (clock {clock})")
                     elif typ == ord("C"):
                         self.clock[me] = clock
+                    elif typ == ord("P"):          # idle on its controller (mpbot): never wait for it
+                        self.clock[me] = INF - 1
                     elif typ == ord("S"):
                         self.clock[me] = clock
                         self.stats["msgs"] += 1

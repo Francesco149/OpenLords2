@@ -120,11 +120,16 @@ void rh_net_sync(void)
     if (!g_live) return;
     uint32_t now = rh_vnow();
     if (now - g_sent_clock >= 50u) sock_send('C', 0, NULL, 0);
-    #define AHEAD() (g_peer_clock != 0xffffffffu && (int32_t)(now - (g_peer_clock + NET_WINDOW)) > 0)   /* ~0: no live peer */
+    #define AHEAD() (g_peer_clock < 0xf0000000u && (int32_t)(now - (g_peer_clock + NET_WINDOW)) > 0)   /* ≥ 0xf0000000: no live / running peer */
     if (!AHEAD()) return;
     if (g_sent_clock != now) sock_send('C', 0, NULL, 0);
+    static uint32_t nblk; DWORD t0 = GetTickCount();
+    if (++nblk <= 20 || !(nblk & 1023)) rh_log("net: f%u clock %u waits for the peers (%u) [%u]\n", g_frame, now, g_peer_clock, nblk);
     while (AHEAD()) sock_read_one();
+    if (GetTickCount() - t0 > 2000) rh_log("net: f%u waited %lu ms wall\n", g_frame, (unsigned long)(GetTickCount() - t0));
 }
+/* a controller (rh_bot.c) holds this side between commands: its clock stops counting for the others' sync */
+void rh_net_pause(int on) { if (g_live) sock_send(on ? 'P' : 'C', 0, NULL, 0); }
 static void live_connect(const char *spec)
 {
     WSADATA w; WSAStartup(MAKEWORD(2, 2), &w);
@@ -143,19 +148,19 @@ static void live_connect(const char *spec)
 }
 
 /* ================================================================ SNWValid.dll / SierraNW.dll (cdecl) */
-static int nw_validate(int game, char *ip, int *a, int *b, const char *path, const char *file, HWND w)
+int nw_validate(int game, char *ip, int *a, int *b, const char *path, const char *file, HWND w)
 {
     (void)game; (void)path; (void)file; (void)w;
     strcpy(ip, "127.0.0.1"); *a = 0; *b = 0;
     rh_log("net: SNWValidate → 0 (f%u)\n", g_frame);
     return 0;
 }
-static int nw_init(const char *ip, int a, int b) { rh_log("net: InitializeDLL(%s, %d, %d) (f%u)\n", ip ? ip : "", a, b, g_frame); return 1; }
-static int nw_close(void) { rh_log("net: CloseDLL (f%u)\n", g_frame); return 0; }
+int nw_init(const char *ip, int a, int b) { rh_log("net: InitializeDLL(%s, %d, %d) (f%u)\n", ip ? ip : "", a, b, g_frame); return 1; }
+int nw_close(void) { rh_log("net: CloseDLL (f%u)\n", g_frame); return 0; }
 static int g_game_closed;
-static int nw_check_conn(void) { return g_game_closed ? 0 : 1; }      /* 1: the lobby started the game */
-static int nw_game_close(void) { rh_log("net: GameClose (f%u)\n", g_frame); g_game_closed = 1; return 0; }
-static int nw_any(void)
+int nw_check_conn(void) { return g_game_closed ? 0 : 1; }      /* 1: the lobby started the game */
+int nw_game_close(void) { rh_log("net: GameClose (f%u)\n", g_frame); g_game_closed = 1; return 0; }
+int nw_any(void)
 {
     g_poll++;
     while (g_isched < g_nsched && g_sched[g_isched].n <= g_poll) pend_push(g_sched[g_isched++]);
@@ -166,13 +171,13 @@ static int nw_any(void)
     }
     return g_npend ? 0 : 1;          /* 0: something is waiting (0x4b6b71) */
 }
-static int nw_peek(void *buf, unsigned size, int player)
+int nw_peek(void *buf, unsigned size, int player)
 {
     (void)buf; (void)size;
     for (uint32_t i = 0; i < g_npend; i++) if (g_pend[i].from == player) return (int)g_pend[i].len;
     return 0;
 }
-static int nw_recv(void *buf, int len, int player)
+int nw_recv(void *buf, int len, int player)
 {
     for (uint32_t i = 0; i < g_npend; i++) if (g_pend[i].from == player) {
         msg_t m = g_pend[i];
@@ -190,46 +195,89 @@ static void digest(int to, const uint8_t *p, int len)
     g_send_hash = (g_send_hash ^ (uint8_t)to) * 16777619u;
     for (int i = 0; i < len; i++) g_send_hash = (g_send_hash ^ p[i]) * 16777619u;
 }
-static int nw_send(const void *buf, int len)
+int nw_send(const void *buf, int len)
 {
     digest(0xff, buf, len);
     if (g_live) sock_send('S', 0xff, buf, (uint16_t)len);
     return 1;
 }
-static int nw_send_to(int player, const void *buf, int len)
+int nw_send_to(int player, const void *buf, int len)
 {
     digest(player, buf, len);
     if (g_live) sock_send('S', (uint8_t)player, buf, (uint16_t)len);
     return 1;
 }
-static int nw_nplayers(int x) { (void)x; return g_np; }
-static int nw_name(char *out, int player) { sprintf(out, "Player%d", player + 1); return 1; }
-static int nw_me(void) { return g_me; }
-static int nw_option(const char *key, char *out)
+int nw_nplayers(int x) { (void)x; return g_np; }
+int nw_name(char *out, int player) { sprintf(out, "Player%d", player + 1); return 1; }
+int nw_me(void) { return g_me; }
+int nw_option(const char *key, char *out)
 {
     if (key && !_stricmp(key, "GameType")) { strcpy(out, g_gametype); return 1; }
     rh_log("net: GetGameOption(%s): none\n", key ? key : "");
     return 0;
 }
-static int nw_tell_game_msg(void) { return 0; }
-static int nw_free_game_msg(void) { return 0; }
-static int nw_ping(int a, int b) { (void)a; (void)b; return 40; }     /* < 100: not the slow-link flag 0x553264 */
+int nw_tell_game_msg(void) { return 0; }
+int nw_free_game_msg(void) { return 0; }
+int nw_ping(int a, int b) { (void)a; (void)b; return 40; }     /* < 100: not the slow-link flag 0x553264 */
 static uint32_t g_cb_special, g_cb_left;
-static int nw_tell_special(int on, uint32_t cb, int a, int b) { (void)on; (void)a; (void)b; g_cb_special = cb; return 1; }
-static int nw_tell_left(int on, uint32_t cb, int a, int b) { (void)on; (void)a; (void)b; g_cb_left = cb; return 1; }
+int nw_tell_special(int on, uint32_t cb, int a, int b) { (void)on; (void)a; (void)b; g_cb_special = cb; return 1; }
+int nw_tell_left(int on, uint32_t cb, int a, int b) { (void)on; (void)a; (void)b; g_cb_left = cb; return 1; }
+
+
+/* ================================================================ residue-neutral entries
+ * Host code called from retail runs on retail's stack and leaves residue below retail's frame; a retail MP path reads an
+ * uninitialized local (mp-start's state changed with an rh_net.c edit). Every entry from retail into this file goes
+ * through a wrapper that, with --net-sigs, zeroes the 16 KB below the caller's stack after the call — the residue no
+ * longer depends on rh_net's code. Without --net-sigs the wrapper tail-jumps: a plain call, every other scenario as
+ * before. (Re-entry: the monitor coroutine only runs inside rh_net_tick / rh_net_wait and enters only nw_* — different
+ * slots; its own Sleep goes through rh_net_sleep, not wrapped.) */
+int rhnet_on;
+__asm__(".text\n_rhnet_scrub:\n\t pushl %eax\n\t pushl %edx\n\t pushl %ecx\n\t pushl %edi\n"
+        "\t leal -16384(%esp), %edi\n\t movl $4096, %ecx\n\t xorl %eax, %eax\n\t cld\n\t rep stosl\n"
+        "\t popl %edi\n\t popl %ecx\n\t popl %edx\n\t popl %eax\n\t ret\n");
+#define SCRUBBED(name, fn) \
+    uint32_t rhnet_ret_##name; \
+    __asm__(".text\n.globl _" #name "\n_" #name ":\n\t cmpl $0, _rhnet_on\n\t je _" #fn "\n\t popl _rhnet_ret_" #name \
+            "\n\t call _" #fn "\n\t pushl _rhnet_ret_" #name "\n\t jmp _rhnet_scrub\n"); \
+    void name##_sym(void) __asm__("_" #name);
+SCRUBBED(w_nw_validate, nw_validate)
+SCRUBBED(w_nw_init, nw_init)
+SCRUBBED(w_nw_close, nw_close)
+SCRUBBED(w_nw_check_conn, nw_check_conn)
+SCRUBBED(w_nw_game_close, nw_game_close)
+SCRUBBED(w_nw_any, nw_any)
+SCRUBBED(w_nw_peek, nw_peek)
+SCRUBBED(w_nw_recv, nw_recv)
+SCRUBBED(w_nw_send, nw_send)
+SCRUBBED(w_nw_send_to, nw_send_to)
+SCRUBBED(w_nw_nplayers, nw_nplayers)
+SCRUBBED(w_nw_name, nw_name)
+SCRUBBED(w_nw_me, nw_me)
+SCRUBBED(w_nw_option, nw_option)
+SCRUBBED(w_nw_tell_game_msg, nw_tell_game_msg)
+SCRUBBED(w_nw_free_game_msg, nw_free_game_msg)
+SCRUBBED(w_nw_ping, nw_ping)
+SCRUBBED(w_nw_tell_special, nw_tell_special)
+SCRUBBED(w_nw_tell_left, nw_tell_left)
+SCRUBBED(rh_net_tick, net_tick_impl)
+SCRUBBED(rh_net_wait, net_wait_impl)
+SCRUBBED(rh_net_load, net_load_impl)
+SCRUBBED(rh_net_proc, net_proc_impl)
+SCRUBBED(rh_net_free, net_free_impl)
+SCRUBBED(rh_net_create_thread, net_create_thread_impl)
 
 static const struct { const char *name; void *fn; } k_nw[] = {
-    { "InitializeDLL", nw_init }, { "CloseDLL", nw_close }, { "CheckGameConnectStatus", nw_check_conn },
-    { "GameClose", nw_game_close }, { "CheckForAnyTCPMessage", nw_any }, { "PeekForTCPMessage", nw_peek },
-    { "GetNumberOfPlayers", nw_nplayers }, { "SendTCPMessage", nw_send }, { "SendTCPPointMessage", nw_send_to },
-    { "RecvTCPMessage", nw_recv }, { "GetPlayerXName", nw_name }, { "GetMyPlayerNumber", nw_me },
-    { "GetGameOption", nw_option }, { "TellMeGameMessReceived", nw_tell_game_msg }, { "FreeGameMessageBuffer", nw_free_game_msg },
-    { "PingTime", nw_ping }, { "TellMeSpecialChatReceived", nw_tell_special }, { "TellMePlayerLeftGame", nw_tell_left },
+    { "InitializeDLL", (void *)w_nw_init_sym }, { "CloseDLL", (void *)w_nw_close_sym }, { "CheckGameConnectStatus", (void *)w_nw_check_conn_sym },
+    { "GameClose", (void *)w_nw_game_close_sym }, { "CheckForAnyTCPMessage", (void *)w_nw_any_sym }, { "PeekForTCPMessage", (void *)w_nw_peek_sym },
+    { "GetNumberOfPlayers", (void *)w_nw_nplayers_sym }, { "SendTCPMessage", (void *)w_nw_send_sym }, { "SendTCPPointMessage", (void *)w_nw_send_to_sym },
+    { "RecvTCPMessage", (void *)w_nw_recv_sym }, { "GetPlayerXName", (void *)w_nw_name_sym }, { "GetMyPlayerNumber", (void *)w_nw_me_sym },
+    { "GetGameOption", (void *)w_nw_option_sym }, { "TellMeGameMessReceived", (void *)w_nw_tell_game_msg_sym }, { "FreeGameMessageBuffer", (void *)w_nw_free_game_msg_sym },
+    { "PingTime", (void *)w_nw_ping_sym }, { "TellMeSpecialChatReceived", (void *)w_nw_tell_special_sym }, { "TellMePlayerLeftGame", (void *)w_nw_tell_left_sym },
 };
 
 int rh_net_on(void) { return g_on; }
 /* LoadLibraryA / GetProcAddress / FreeLibrary: 1 = handled */
-int rh_net_load(const char *n, HMODULE *out)
+int net_load_impl(const char *n, HMODULE *out)
 {
     if (!g_on || !n) return 0;
     const char *b = strrchr(n, '\\'); b = b ? b + 1 : n;
@@ -237,16 +285,16 @@ int rh_net_load(const char *n, HMODULE *out)
     if (!_stricmp(b, "SierraNW.dll")) { *out = MOD_NW; return 1; }
     return 0;
 }
-int rh_net_proc(HMODULE m, const char *name, FARPROC *out)
+int net_proc_impl(HMODULE m, const char *name, FARPROC *out)
 {
-    if (m == MOD_VALID) { *out = (name && !strcmp(name, "SNWValidate")) ? (FARPROC)nw_validate : NULL; return 1; }
+    if (m == MOD_VALID) { *out = (name && !strcmp(name, "SNWValidate")) ? (FARPROC)w_nw_validate_sym : NULL; return 1; }
     if (m != MOD_NW) return 0;
     *out = NULL;
     for (size_t i = 0; i < sizeof k_nw / sizeof *k_nw; i++) if (name && !strcmp(name, k_nw[i].name)) *out = (FARPROC)k_nw[i].fn;
     if (!*out) rh_log("net: SierraNW has no %s\n", name ? name : "(ordinal)");
     return 1;
 }
-int rh_net_free(HMODULE m) { return m == MOD_VALID || m == MOD_NW; }
+int net_free_impl(HMODULE m) { return m == MOD_VALID || m == MOD_NW; }
 
 /* ================================================================ the monitor thread, as a coroutine */
 uint32_t rhnet_m_esp, rhnet_m_hesp;   /* referenced from asm */
@@ -291,7 +339,7 @@ static void m_run_due(void)
 {
     while (m_state == 1 && !m_in && (int32_t)(rh_vnow() - m_wake) >= 0) m_resume();
 }
-int rh_net_create_thread(LPTHREAD_START_ROUTINE fn, LPVOID arg, LPDWORD tid, HANDLE *out)
+int net_create_thread_impl(LPTHREAD_START_ROUTINE fn, LPVOID arg, LPDWORD tid, HANDLE *out)
 {
     if (!g_on) return 0;
     if (m_state == 1) rh_fatal("net: a second retail thread (%p) while the monitor lives", (void *)fn);
@@ -313,7 +361,7 @@ int rh_net_create_thread(LPTHREAD_START_ROUTINE fn, LPVOID arg, LPDWORD tid, HAN
     return 1;
 }
 /* the main thread's Sleep advanced the clock / a frame ended: run the monitor if its sleep is over */
-void rh_net_tick(void) { if (g_on) { m_run_due(); rh_net_sync(); } }
+void net_tick_impl(void) { if (g_on) { m_run_due(); rh_net_sync(); } }
 /* Sleep from the monitor: yield until vclock + ms; 1 = handled */
 int rh_net_sleep(DWORD ms)
 {
@@ -322,7 +370,7 @@ int rh_net_sleep(DWORD ms)
     m_swap_out();
     return 1;
 }
-int rh_net_wait(HANDLE h, DWORD ms, DWORD *ret)
+int net_wait_impl(HANDLE h, DWORD ms, DWORD *ret)
 {
     if (!g_on || m_in || (!m_state && h != MON_THREAD)) return 0;
     uint32_t deadline = ms == INFINITE ? 0xffffffffu : rh_vnow() + ms;
@@ -345,7 +393,7 @@ DWORD rh_net_thread_exit(void) { return m_state == 2 ? m_exit : STILL_ACTIVE; }
 /* --net-sigs ME/N[,full|skirmish] */
 void rh_net_config(const char *spec)
 {
-    g_on = 1;
+    g_on = rhnet_on = 1;
     if (sscanf(spec, "%d/%d", &g_me, &g_np) != 2 || g_me < 0 || g_np < 2 || g_np > 5 || g_me >= g_np)
         rh_fatal("net: --net-sigs ME/N[,full|skirmish] (N 2..5): %s", spec);
     const char *c = strchr(spec, ',');
