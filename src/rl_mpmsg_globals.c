@@ -27,6 +27,7 @@ int32_t g_rl_553ff4;
 int32_t g_rl_55cd38;
 int32_t g_rl_55ce68;
 int32_t g_rl_5656ec;
+int32_t g_rl_567964;
 int32_t g_rl_567d04;
 int32_t g_rl_568958;
 int32_t g_rl_568970;

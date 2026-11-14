@@ -33,6 +33,7 @@ extern int32_t g_rl_553ff4;                  /* .data 0x553ff4..0x553ff8: dword_
 extern int32_t g_rl_55cd38;                  /* .data 0x55cd38..0x55cd3c: dword_55CD38(w)  DUP 55cd38 */
 extern int32_t g_rl_55ce68;                  /* .data 0x55ce68..0x55ce6c: dword_55CE68(rw) */
 extern int32_t g_rl_5656ec;                  /* .data 0x5656ec..0x5656f0: dword_5656EC(w) */
+extern int32_t g_rl_567964;                  /* .data 0x567964..0x567968: dword_567964(w) (hand-added) */
 extern int32_t g_rl_567d04;                  /* .data 0x567d04..0x567d08: dword_567D04(w)  DUP 567d04 */
 extern int32_t g_rl_568958;                  /* .data 0x568958..0x56895c: dword_568958(rw) */
 extern int32_t g_rl_568970;                  /* .data 0x568970..0x568974: dword_568970(w) */

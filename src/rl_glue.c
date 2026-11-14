@@ -1411,12 +1411,11 @@ int rl_43eda0(int id, int dest)
     g_rl_4e59d4 = (int32_t)ticks_ms();
     uint8_t *slot = g_rl_512fb0 + 260 * g_rl_512f4c;
     g_rl_512f8c = (int32_t)(uintptr_t)(slot + 4);
-    engine_retail_call((uint32_t)g_rl_4d57f0[k], 0);   /* TODO(rl-extern): the message's payload builder */
+    rl_mpmsg_build(k);   /* the payload builder (table 0x4d57f0; port side: rl_mpmsg.c) */
     slot[0] = k;
     slot[1] = g_rl_4d5b90[k];
     slot[3] = (uint8_t)g_rl_512f4c;
-    slot[2] = (uint8_t)engine_retail_call(0x440038u, 2, (uint32_t)g_rl_4d5b90[k],   /* TODO(rl-extern): checksum */
-                                          (uint32_t)(uintptr_t)(g_rl_512fb0 + 260 * g_rl_512f4c));
+    slot[2] = (uint8_t)rl_440038(g_rl_4d5b90[k], (int)(uintptr_t)(g_rl_512fb0 + 260 * g_rl_512f4c));   /* checksum */
     int len = g_rl_4d5b90[k] + 4;
     /* TODO(rl-extern): 0x4b90fb (the DirectPlay send) */
     if (k == 10 || k == 89 || k == 67 || k == 68 || k == 66 || k == 39 || k == 49 || k == 35 || k == 14 ||
