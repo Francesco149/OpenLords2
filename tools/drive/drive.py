@@ -507,14 +507,15 @@ class Movie:
     """every input event since boot [(frame, m, w, l)] + the frame it ends at + the start saves (files copied into the
     run dir before boot: the game's *.sav, castles.dat — tests/scenarios/<s>/_saves/)"""
 
-    def __init__(self, events=None, frame=0, saves=None, extra=None):
+    def __init__(self, events=None, frame=0, saves=None, extra=None, net=None):
         self.events, self.frame, self.saves, self.extra = events or [], frame, saves or [], extra or {}
+        self.net = net or []          # a multiplayer side's deliveries ({"n": POLL, ...} lines, rh_net.c): kept whole
 
     @staticmethod
-    def from_server(text, saves, extra=None):
+    def from_server(text, saves, extra=None, net=None):
         kv = dict(t.split("=", 1) for t in text.split()[1:] if "=" in t)
         evs = [tuple(int(x) for x in e.split(":")) for e in filter(None, kv.get("ev", "").split(","))]
-        return Movie(evs, int(kv["frame"]), saves, extra)
+        return Movie(evs, int(kv["frame"]), saves, extra, net)
 
     @staticmethod
     def load(path):
@@ -529,8 +530,12 @@ class Movie:
                 m = d["meta"]
                 if m.get("frames"):
                     mv.frame = int(m["frames"])
-                mv.saves = [os.path.normpath(os.path.join(os.path.dirname(path), s)) for s in m.get("saves", [])]
-                mv.extra = {k: v for k, v in m.items() if k in ("step_ms", "vbase", "movies")}
+                if m.get("saves"):
+                    mv.saves = [os.path.normpath(os.path.join(os.path.dirname(path), s)) for s in m["saves"]]
+                mv.extra.update({k: v for k, v in m.items() if k in ("step_ms", "vbase", "movies", "net")})   # merged: a trace may carry a header meta and a trailing {"frames"} one
+                continue
+            if "n" in d and "m" not in d:   # an MP delivery stamped by receive poll: replayed whole (no frame)
+                mv.net.append(line)
                 continue
             f = int(d.get("f", d.get("t", 0)))
             mv.events.append((f, int(d["m"]), int(d.get("w", 0)), int(d.get("l", 0))))
@@ -552,10 +557,12 @@ class Movie:
                 if fr > self.frame:
                     break
                 f.write(f'{{"f": {fr}, "m": {m}, "w": {w}, "l": {l}}}\n')
+            for line in self.net:
+                f.write(line + "\n")
         os.replace(path + ".tmp", path)
 
     def truncated(self, frame):
-        return Movie([e for e in self.events if e[0] <= frame], min(frame, self.frame), self.saves, self.extra)
+        return Movie([e for e in self.events if e[0] <= frame], min(frame, self.frame), self.saves, self.extra, self.net)
 
 
 # ------------------------------------------------------------------ a live rhost process
@@ -862,6 +869,8 @@ def session_files(ld, movie, upto):
             args += [flag, str(movie.extra[k])]
     if movie.extra.get("movies"):
         args += ["--movies"]
+    if movie.extra.get("net"):           # one side of a multiplayer game (rh_net.c): the rest of it replays from its deliveries
+        args += ["--net-sigs", str(movie.extra["net"])]
     if upto > 0:
         movie.truncated(upto).write(os.path.join(ld, "trace.jsonl"))
         args += ["--trace", "@RUN@\\trace.jsonl", "--live-until", str(upto)]
@@ -1051,7 +1060,7 @@ class Run:
 
     def sync_movie(self):
         r = self.live.cmd("movie")
-        self.movie = Movie.from_server(r, self.movie.saves, self.movie.extra)
+        self.movie = Movie.from_server(r, self.movie.saves, self.movie.extra, self.movie.net)
         self.movie.write(self.movie_p, comment=self.name, rel_to=self.dir)
         if "poked=1" in r:
             self.meta["poked"] = True
@@ -2272,7 +2281,7 @@ def cmd_file(a):
     if os.path.exists(os.path.join(d, "trace.jsonl")) and not a.force:
         raise SystemExit(f"tests/scenarios/{a.name} exists (--force)")
     os.makedirs(d, exist_ok=True)
-    mv = Movie(r.movie.events, r.movie.frame, [], r.movie.extra)
+    mv = Movie(r.movie.events, r.movie.frame, [], r.movie.extra, r.movie.net)
     if r.movie.saves:
         sd = os.path.join(d, "_saves")
         os.makedirs(sd, exist_ok=True)
