@@ -139,8 +139,17 @@ PARTS = {
     "mpnet": _h("41f3e9 41f4a1 41f77a 43306a 433551 46f2f1 475e07 47f937 49b973 49ca60 4b3d5d 4b61b0 4b62ea 4b63d0  "
                "4b64d8 4b6754 4b6ae5 4b6b71 4b6c59 4b6c82 4b6ccb 4b6cee 4b6d19 4b6d44 4b6dc5 4b6de6 4b6e1b 4b6e8e "
                "4b7052 4b7514 4b7a9a 4b7f78 4b90fb 4bbf89 4bbfd2"),
+    # round 2 (mp-trio / mp-skirmish / mp-siege / mp-five / mp-dp / mp-leave): what those newly reach
+    "mpmsg3": _h("43e6a2 43e8f4 44255f 442579 442add 442ae8 442d00 442d60 442dad 442e0d 442e5a 442eec 443043 443083 "
+               "4430d5 443143 44334e 44338b 44356d 443587 4435ce 44363b 443e51 443f09 443fab 44400f 444346 4443aa "
+               "44462f 4446a6 44470a 44475c 4447ab 44480f 444860 4448c4 444b07 444b17 444b27 444bd0 444c66 444cb5 "
+               "444e3f 444f96 445063 4451cc 445458 4454a9 44562e 4456c1 4457a1 445851 445d97 445e0e 4460f8 446171 "
+               "4461f4 44622c 44637e 446389 4463d9 4464e4 446683 44678d 446ba0 446bba 446bec 446c1f 447a59 447ac5 "
+               "447d72 447d9d 447e0b 447f82 448076 448137 44825d 448276 44828f 44829f 4482e9 448308 4483d1"),
+    "mpnet2": _h("40ec2c 420630 42d40b 43338e 43695d 476488 479e0c 49792e 4b64a3 4b6a15 4b6ab6 4b6ef7 4b743b 4b756b "
+               "4b79e3 4b7a7c 4b8243 4b82bf 4b8335 4b8439 4b85b7 4b8b87 4b92a0"),
 }
-FAMILY = {"io": "rl", "glue": "rl", "render": "rl", "misc": "rl", "skirmish": "rl", "ui2": "rl", "ui3": "rl", "ui4": "rl", "ctl": "rl", "terr": "rl", "turn": "rl", "host": "rl", "quit": "rl", "cov3": "rl", "mpmsg": "rl", "mpmsg2": "rl", "mpnet": "rl"}   # default "bf"
+FAMILY = {"io": "rl", "glue": "rl", "render": "rl", "misc": "rl", "skirmish": "rl", "ui2": "rl", "ui3": "rl", "ui4": "rl", "ctl": "rl", "terr": "rl", "turn": "rl", "host": "rl", "quit": "rl", "cov3": "rl", "mpmsg": "rl", "mpmsg2": "rl", "mpnet": "rl", "mpmsg3": "rl", "mpnet2": "rl"}   # default "bf"
 OWNER = {}
 for _p, _vs in PARTS.items():
     for _v in _vs:

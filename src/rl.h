@@ -22,3 +22,5 @@
 #include "rl_mpmsg.h"
 #include "rl_mpmsg2.h"
 #include "rl_mpnet.h"
+#include "rl_mpmsg3.h"
+#include "rl_mpnet2.h"
