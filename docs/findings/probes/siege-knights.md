@@ -158,3 +158,75 @@ The task is not done. The run `siegeknights4` is blocked after step 2: the surre
 model claude-opus-5-5, effort high, 50 turns, $1.46, 18 min
 
 **Orchestrator, after:** the false "held" was `Live.prog`'s id reuse (fixed: pinned programs); the uneaten grain was `--feed` choosing quarter rations from sacks counted as heads (fixed: 6 fed a sack; health then held 2–3 for 20 seasons on the same line).
+
+# Attempt 5 (run `siegeknights5`, API driver, 2026-11-14) — steps 1–3 held, blocked on the battlefield
+
+The driver's report, as written:
+
+---
+
+**Run `siegeknights5`: blocked. Steps 1–3 hold; steps 4–5 were not reached.** The surrender flag u32(0x56d5c8) was never set, so halve_garrison (0x4ad8cc) is still not reached. The movie ends at f86534 on the battlefield (screen 41) with the siege battle still running and nothing breached. I ran out of budget before running `rd check`, `rd verify` or `rd cov`, so the frame numbers below are from my own commands, and there are no coverage numbers.
+
+**Setup that worked (custom-tour@600)**
+- Page 7 clicks: Single (320,103), Custom (320,211), Continue (432,227).
+- Options, each tab then its value:
+  - Weapons "many"
+  - Army Size "large"
+  - Difficulty "hard"
+  - Starting Castle "royal"
+  - County Status "strong"
+  - Crowns 5000
+- Map **France** (548,197), *then* Nobles "two" (218,442 → 218,401), then Start (281,204).
+  - Picking a map resets Nobles to five, so set the nobles last.
+  - The noble roster order is fixed per map. France puts the **Baron** first, so with two nobles the only AI is the Baron (personality 2).
+- Game start f1757. We hold county 10, capital (26,20), royal castle at cell (26,22). The Baron holds county 1, capital (51,51). Every other county is neutral, so no third lord is in the way.
+
+**Step frames**
+- **Step 1 (custom game on the map):** f1757.
+- **Step 2 (AI army besieging us):** held at f76851, turn 47. The Baron's A15 besieges county 10: 916 men (516 peasants, 330 archers, 70 knights) with 3 engines.
+- **Siege prompt:** "The Siege commences", screen 18, at f77113.
+- **Step 3 (on the battlefield):** left gauntlet at f77116, screen 41 from f77116.
+
+**Checkpoints:** start (Scotland), france, insult1, hostile, raised, won1, won2, war, gar450, siege, prompt, field (f77118). Load `prompt` or `field` to retry the battle.
+
+**How it got there (about 47 seasons)**
+- Seasons 1–16 with `rd seasons --feed`.
+- Garrisoned the starting 300-man army A7: select it, then click the castle cell (26,22), then confirm "Garrison castle?" with thumbs (240,218).
+- Two insults at f20907 and f21302: the Baron's attitude to us, s8(0x57c254), went 5 → −15 → −30.
+- **Raiders arrived at once.** In a first try without a field army, Baron raiders camped in our county from turn 20, ate the herd, and the population fell 1630 → 109 by turn 49. I loaded `hostile` and raised a field army A10 instead (150 men: 100 crossbows, 50 peasants).
+- **Three won raider battles gave the full vendetta.** Each was A10 left-clicked onto a raider, then auto-resolve. The vendetta byte u8(0x57c257) went 1 at f29044, 2 at f43423, 3 at f63202, with the war byte and target +0xEB = 1 (us).
+- Garrisoned A10 too, so 450 men are in the royal keep.
+- About 5 seasons later the Baron's knight army besieged us.
+
+**The battlefield (where it stands)**
+- **Three counters stay fine:**
+  - u32(0x553ff0) (engines on the field) = 3, still alive.
+  - The attacker's kit u32(0x55401c) = 4.
+  - The breach count u32(0x53e990) = 0 throughout.
+- **The AI never attacks unprovoked:** after 5,000 ticks it still sits about 25 hexes south (rows 56–68) of the walls.
+- **The obstacle:** the AI's non-knight men (u32(0x553f74)) never dropped, 916 against 70 knights (u32(0x57c980)), so the flag condition was never close. 846 non-knights must die before any breach.
+- **Our melee cannot get out:** sent out, it stops in the closed gatehouse and gets shot (450 → 422).
+- **The siege-action button (560,464), sub_43BBE7 → sub_496B9F, opens the gate, but that adds +4 to 0x53e990 (a breach) and kills the flag.** So no sally is possible.
+- The movie ends with our keep archers (units 41–43) marching toward the gatehouse to shoot from the walls (f86534).
+- Not yet tried: bait the AI with ranged hits so it assaults into fire from the walls, without hitting the knights. My reading is that the moat may stop its towers and ram, so the infantry might die at the moat without a breach — not checked.
+
+**Game facts learned**
+- **AI armour comes only from merchants.** engine_army_ai_reconcile_resources (0x49e39b) buys good v3 from a merchant in the county. v3 is chosen by the county byte +0x290 (byte_53FC40), which engine_army_ai_run_build_orders sets from the per-personality table 0x4d8aa8 + 240·(personality−1) at offsets 0/4/8/12/16/20, in a 10-step cycle (realm +0x6c).
+  - Value 5 = armour (good 14). Only personality 2, the Baron, has it often: 3,5,4,4,3,5.
+  - Personality 4 (the Bishop) never has it, and its armour stayed 0 for 30 seasons (my first, Scotland game).
+  - Realm armour is dword 0x57c054 + 0x160·p.
+- **Royal castle siege, unit layout:** units at 0x554490 + 432·i.
+  - AI: unit 1 is class 9, units 2–4 knights, 5–15 archers, 16–32 peasants, 33–34 class 8.
+  - Ours: units 35–40 are class 10 on the towers, plus archers, crossbows, peasants, swords, pikes.
+  - Royal castles have a moat.
+- **A raider's arrival depopulates a county within seasons.** Kill raiders with a field army as they arrive; each win also advances the vendetta.
+- `C(k).castle` = 5 for a royal castle, which holds 450 men without complaint.
+
+**What the tool lacked**
+- `rd eval` has no tuples.
+- `rd seasons --feed` leaves the ration panel open (screen 25) when `--until` stops it.
+- There is no battlefield helper for selecting by unit class (classes / groups → screen boxes).
+- There is no way to order attacks on a specific enemy unit without hand-computing the camera.
+
+---
+model claude-opus-5-5, effort high, 177 turns, $5.10, 43 min
