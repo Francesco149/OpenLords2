@@ -136,6 +136,10 @@ static void serve(void)
             rh_hash_t h; rh_state_hash(&h);
             char b[128]; snprintf(b, sizeof b, "\"full\": \"%016llx\", \"sem\": \"%016llx\"", (unsigned long long)h.full, (unsigned long long)h.semantic);
             reply(b);
+        } else if (!strcmp(cmd, "netchat")) {   /* MP: a lobby chat line from player p reaches this side (rh_net.c) */
+            char text[256] = ""; jstr(line, "text", text, sizeof text); jnum(line, "p", &v);
+            rh_net_inject_chat((int)v, text);
+            reply("\"ok\": 1");
         } else if (!strcmp(cmd, "quit")) {
             reply("\"ok\": 1");
             rh_finish("bot-quit");

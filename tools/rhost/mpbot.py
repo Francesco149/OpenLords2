@@ -10,6 +10,7 @@ never stall each other. A session is a background server; scripts are sent to it
     mpbot.py quit NAME
 
 Steps (`;`-separated): run N | [p1|p2|..|both] click X Y | rclick X Y | move X Y | key VK [CHAR] | type TEXT |
+  chat P TEXT (this side receives a SIGS lobby chat line from player P: a type-20 popup) |
   u32 VA | read VA N | shot TAG (every side: <rundir>/shot_TAG.png, a montage path is printed) | wait pK SCREEN [MAX].
 `pK` addresses side K (player K-1; p1 hosts); an input step without one goes to p1. Inputs are posted to one side and
 the frames after them run on all.  The out-traces replay alone (rhost.py run / corpus), like mp-record's."""
@@ -105,7 +106,7 @@ class MP:
                 s.run(frames)
             except Exception as e:   # noqa: BLE001
                 errs.append(e)
-        ts = [threading.Thread(target=one, args=(s,)) for s in self.s]
+        ts = [threading.Thread(target=one, args=(s,)) for s in self.s if getattr(s, "alive", True)]
         for t in ts:
             t.start()
         for t in ts:
@@ -139,7 +140,8 @@ class MP:
         self.run(hold)
 
     def status(self):
-        return " | ".join(f"p{k + 1} f{s.frame} scr {s.screen:#x} tick {s.status.get('tick')}" for k, s in enumerate(self.s))
+        return " | ".join(f"p{k + 1} " + (f"f{s.frame} scr {s.screen:#x} tick {s.status.get('tick')}" if getattr(s, "alive", True)
+                                         else f"left at f{s.final_frame}") for k, s in enumerate(self.s))
 
     def script(self, text, out):
         for step in [x.strip() for x in text.replace("\n", ";").split(";") if x.strip()]:
@@ -163,6 +165,17 @@ class MP:
             elif op == "type":
                 for ch in " ".join(a).replace("_", " "):
                     self.key(k, ord(ch.upper()) if ch.isalnum() else (0x20 if ch == " " else 0), ch)
+            elif op == "leave":               # pK leave: side K's process quits (its trace is kept); the others go on
+                kk = 0 if k is None else k
+                s = self.s[kk]
+                s.final_frame = s.frame
+                s.quit()
+                s.alive = False
+                self.run(2)
+            elif op == "chat":                # pK chat P TEXT: side K receives a lobby chat line from player P
+                for kk in (range(self.n) if k is None else [k]):
+                    self.s[kk]._cmd(cmd="netchat", p=int(a[0]), text=" ".join(a[1:]).replace("_", " "))
+                self.run(2)
             elif op == "u32":
                 for kk in (range(self.n) if k is None else [k]):
                     out(f"  p{kk + 1} {a[0]} = {self.s[kk].u32(int(a[0], 16)):#x} ({self.s[kk].i32(int(a[0], 16))})")
@@ -170,7 +183,7 @@ class MP:
                 for kk in (range(self.n) if k is None else [k]):
                     out(f"  p{kk + 1} {a[0]}: {self.s[kk].read(int(a[0], 16), int(a[1], 0)).hex()}")
             elif op == "shot":
-                ps = [s.shot(a[0]) for s in self.s]
+                ps = [s.shot(a[0]) for s in self.s if getattr(s, "alive", True)]
                 m = rhbot.montage(ps, os.path.join(STATE, f"{self.name}_{a[0]}.png"), cols=self.n, scale=1.0)
                 out(f"  shot {m}")
             elif op == "wait":
@@ -195,7 +208,7 @@ class MP:
             lines = [l for l in lines if l.strip()]
             nd = sum(1 for l in lines if '"n":' in l)
             last = max([int(json.loads(l).get("f", 0)) for l in lines if l.startswith("{") and '"f":' in l] or [0])
-            frames = s.frame
+            frames = s.frame if getattr(s, "alive", True) else s.final_frame
             os.makedirs(d, exist_ok=True)
             hdr = [f"# {scen}-p{k + 1}: side {k + 1} of {self.n} of a SIGS game authored over mpbot (rh_net.c); "
                    f"{nd} deliveries stamped by receive poll — replays alone"]
@@ -205,7 +218,7 @@ class MP:
         return made
 
     def quit(self):
-        for s in self.s:
+        for s in [s for s in self.s if getattr(s, "alive", True)]:
             try:
                 s.quit()
             except Exception:   # noqa: BLE001

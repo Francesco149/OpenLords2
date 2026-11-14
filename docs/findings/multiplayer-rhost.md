@@ -115,3 +115,15 @@ The other transport, same delivery model (`mp-dp-p1 / -p2`: +9 functions, 3.4 KB
 - **A page SIGS never shows:** after the shield page the DirectPlay host gets "Expansion pack installed, choose: Full
   game (c190,128) / Skirmish (c440,128)" (0x43338e) — under SIGS the lobby's GameOption decided. Then the usual setup
   page and Start.
+
+## Leaving and lobby chat (2026-11-14, `mp-leave`)
+
+Two delivery kinds besides messages, stamped by receive poll the same way: `{"n": N, "p": P, "left": 1}` (the
+broker sends 'L' to the others when a side quits) and `{"n": N, "p": P, "chat": "HEX"}` (injected into a live side:
+rh_bot.c `netchat`, mpbot `pK chat P TEXT`). At the stamped poll rhost calls what the real SierraNW calls from its
+own thread: TellMePlayerLeftGame's callback 0x4b7a7c(player) (DAT_004e5a90[player] = 1 → the pump 0x4b8c3a →
+0x43e6a2(2, player + 1): the departed human's realm leaves the map) / TellMeSpecialChatReceived's 0x4b79e3(text,
+name) — a type-20 popup "From Beyond … Player2: text". **0x4b79e3 prints `"%s: %s"` with `&arg_4`**: SierraNW passes
+the sender's name BY VALUE inline on the stack after the text pointer (a char-array struct), not a pointer. Under
+DirectPlay a departure arrives as DPSYS_DESTROYPLAYERORGROUP (5) from DPID 0. mpbot `pK leave` quits one side's
+process while the others play on.

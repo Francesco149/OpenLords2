@@ -35,7 +35,8 @@ static char g_gametype[16] = "Full";
 static uint32_t g_poll, g_nsent, g_nrecv, g_send_hash = 2166136261u;
 
 /* ================================================================ messages */
-typedef struct { uint32_t n; int from; uint32_t len; uint8_t *d; } msg_t;
+typedef struct { uint32_t n; int from; uint32_t len; uint8_t *d; int kind; } msg_t;   /* kind: NK_* */
+enum { NK_DATA, NK_LEFT, NK_CHAT };   /* a message; a peer left the game; a lobby chat line (text in d) */
 static msg_t *g_sched; static uint32_t g_nsched, g_isched;      /* replay: stamped deliveries from the trace */
 static msg_t g_pend[256]; static uint32_t g_npend;                 /* visible, not yet received */
 static msg_t g_arr[256]; static uint32_t g_narr;                   /* record: arrived from the broker, not stamped */
@@ -54,10 +55,18 @@ static void sched_load(const char *path)
     static char line[8192]; uint32_t cap = 0;
     while (fgets(line, sizeof line, f)) {
         char *pn = strstr(line, "\"n\":"), *pp = strstr(line, "\"p\":"), *pd = strstr(line, "\"d\":");
+        char *pc = strstr(line, "\"chat\":");
+        if (pn && pp && !pd && !pc && strstr(line, "\"left\":")) {   /* {"n": N, "p": P, "left": 1} */
+            if (g_nsched == cap) { cap = cap ? cap * 2 : 256; g_sched = realloc(g_sched, cap * sizeof *g_sched); }
+            g_sched[g_nsched++] = (msg_t){ (uint32_t)strtoul(pn + 4, NULL, 10), (int)strtol(pp + 4, NULL, 10), 0, malloc(1), NK_LEFT };
+            continue;
+        }
+        if (pc && !pd) pd = pc + 3;   /* {"n": N, "p": P, "chat": "HEX"}: the hex parse below finds the quotes after "chat": */
         if (!pn || !pp || !pd || strstr(line, "\"meta\"")) continue;
-        msg_t m; m.n = (uint32_t)strtoul(pn + 4, NULL, 10); m.from = (int)strtol(pp + 4, NULL, 10);
+        msg_t m; m.n = (uint32_t)strtoul(pn + 4, NULL, 10); m.from = (int)strtol(pp + 4, NULL, 10); m.kind = NK_DATA;
         char *q = strchr(pd + 4, '"'); if (!q) continue; q++;
         char *e = strchr(q, '"'); if (!e) continue;
+        if (pc) m.kind = NK_CHAT;
         m.len = (uint32_t)(e - q) / 2; m.d = malloc(m.len ? m.len : 1);
         for (uint32_t i = 0; i < m.len; i++) m.d[i] = (uint8_t)(hexv(q[2 * i]) << 4 | hexv(q[2 * i + 1]));
         if (g_nsched == cap) { cap = cap ? cap * 2 : 256; g_sched = realloc(g_sched, cap * sizeof *g_sched); }
@@ -71,7 +80,8 @@ static void sched_load(const char *path)
 static void log_delivery(const msg_t *m)
 {
     char *b = malloc(64 + 2 * m->len);
-    int k = sprintf(b, "{\"n\": %u, \"p\": %d, \"d\": \"", m->n, m->from);
+    if (m->kind == NK_LEFT) { sprintf(b, "{\"n\": %u, \"p\": %d, \"left\": 1}\n", m->n, m->from); rh_trace_write_raw(b); free(b); return; }
+    int k = sprintf(b, "{\"n\": %u, \"p\": %d, \"%s\": \"", m->n, m->from, m->kind == NK_CHAT ? "chat" : "d");
     for (uint32_t i = 0; i < m->len; i++) k += sprintf(b + k, "%02x", m->d[i]);
     sprintf(b + k, "\"}\n");
     rh_trace_write_raw(b);
@@ -104,9 +114,13 @@ static void sock_read_one(void)
     uint8_t *d = malloc(h.len ? h.len : 1);
     if (h.len) recv_all(d, h.len);
     if (h.type == 'C') { g_peer_clock = h.clock; free(d); }
+    else if (h.type == 'L') {   /* a peer left the game (the broker saw it quit) */
+        if (g_narr >= 256) rh_fatal("net: arrival queue overflow");
+        g_arr[g_narr++] = (msg_t){ 0, h.a, 0, d, NK_LEFT };
+    }
     else if (h.type == 'M') {
         if (g_narr >= 256) rh_fatal("net: arrival queue overflow");
-        g_arr[g_narr++] = (msg_t){ 0, g_dp ? (h.a == 0xfe ? 0 : h.a + 1) : h.a, h.len, d };   /* DP: the sender's DPID */
+        g_arr[g_narr++] = (msg_t){ 0, g_dp ? (h.a == 0xfe ? 0 : h.a + 1) : h.a, h.len, d, NK_DATA };   /* DP: the sender's DPID */
     } else { rh_log("net: broker frame type %c ignored\n", h.type); free(d); }
 }
 static int sock_readable(DWORD ms)
@@ -297,16 +311,49 @@ HRESULT WINAPI dp_open(void *t, void *desc, DWORD fl)
     rh_log("net: DP Open %s (f%u)\n", fl == 2 ? "create" : "join", g_frame);
     return 0;
 }
+/* a delivery becomes visible: a message joins the queue; a peer leaving calls SIGS's TellMePlayerLeftGame callback
+ * (0x4b7a7c: DAT_004e5a90[player] = 1 → 0x4b8c3a → 0x43e6a2(2, player + 1)) or, under DirectPlay, arrives as
+ * DPSYS_DESTROYPLAYERORGROUP (5) from DPID 0; a lobby chat line calls TellMeSpecialChatReceived's (0x4b79e3(text,
+ * name): a type-20 popup) — the real DLLs call them from their own threads, rhost at the stamped poll */
+static void deliver(msg_t m)
+{
+    if (m.kind == NK_DATA) { pend_push(m); return; }
+    if (m.kind == NK_LEFT && g_dp) {
+        uint32_t sys[12] = { 5, 1, (uint32_t)m.from + 1, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+        pend_push((msg_t){ m.n, 0, sizeof sys, (uint8_t *)sys, NK_DATA });
+        return;
+    }
+    rh_log("net: f%u poll %u: %s from player %d\n", g_frame, m.n, m.kind == NK_LEFT ? "left" : "lobby chat", m.from);
+    if (m.kind == NK_LEFT && g_cb_left) ((int (__cdecl *)(int))(uintptr_t)g_cb_left)(m.from);
+    if (m.kind == NK_CHAT && g_cb_special) {   /* 0x4b79e3 prints "%s: %s" with &arg_4: the sender's name is passed BY
+                                                 * VALUE, inline on the stack after the text pointer (a char-array struct) */
+        typedef struct { char s[32]; } name32_t;
+        char text[256]; name32_t name;
+        uint32_t n = m.len < sizeof text - 1 ? m.len : sizeof text - 1;
+        memcpy(text, m.d, n); text[n] = 0;
+        memset(&name, 0, sizeof name); sprintf(name.s, "Player%d", m.from + 1);
+        ((void (__cdecl *)(const char *, name32_t))(uintptr_t)g_cb_special)(text, name);
+    }
+}
 static int net_poll(void)   /* one receive poll: stamp + reveal deliveries (SIGS CheckForAnyTCPMessage, DP Receive) */
 {
     g_poll++;
-    while (g_isched < g_nsched && g_sched[g_isched].n <= g_poll) pend_push(g_sched[g_isched++]);
+    while (g_isched < g_nsched && g_sched[g_isched].n <= g_poll) deliver(g_sched[g_isched++]);
     if (g_live) {
         sock_drain();
-        for (uint32_t i = 0; i < g_narr; i++) { g_arr[i].n = g_poll; log_delivery(&g_arr[i]); pend_push(g_arr[i]); free(g_arr[i].d); }
+        for (uint32_t i = 0; i < g_narr; i++) { g_arr[i].n = g_poll; log_delivery(&g_arr[i]); deliver(g_arr[i]); free(g_arr[i].d); }
         g_narr = 0;
     }
     return (int)g_npend;
+}
+/* the controller injects a lobby chat line from player P (rh_bot.c "netchat": record / bot mode) */
+void rh_net_inject_chat(int from, const char *text)
+{
+    if (!g_on) return;
+    if (g_narr >= 256) rh_fatal("net: arrival queue overflow");
+    size_t n = strlen(text); uint8_t *d = malloc(n ? n : 1); memcpy(d, text, n);
+    g_arr[g_narr++] = (msg_t){ 0, from, (uint32_t)n, d, NK_CHAT };
+    if (!g_live) rh_log("net: a chat line queued without a broker: it is stamped at the next poll only in a live (record / bot) run\n");
 }
 HRESULT WINAPI dp_receive(void *t, uint32_t *from, uint32_t *to, DWORD fl, void *buf, DWORD *size) __asm__("_rhnet_dp_receive");
 HRESULT WINAPI dp_receive(void *t, uint32_t *from, uint32_t *to, DWORD fl, void *buf, DWORD *size)

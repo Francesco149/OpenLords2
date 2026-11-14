@@ -117,6 +117,8 @@ class Broker:
             if me is not None:
                 self.clock[me] = INF
                 self.log(f"broker: player {me} left")
+                for q in [q for q in self.conns if q != me]:   # the others learn it (SIGS: TellMePlayerLeftGame)
+                    self._send(q, ord("L"), me, 0)
                 self._retell()
                 if all(v == INF for v in self.clock.values()) and len(self.clock) == self.n:
                     self.done.set()
