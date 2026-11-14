@@ -77,10 +77,18 @@ def on_view(p, margin=4):
 
 
 def minimap(s, col, row):
+    """recentre the battlefield view on (col, row) via the minimap. In multiplayer the camera moves frames later
+    (inputs go through the MP action pipeline) — wait until it has moved (≤ 60 frames) before callers read it."""
     x, y = MINIMAP_X0 + 2 * col + 1, MINIMAP_Y0 + 2 * row + 1
+    cam = (s.i32(CAM_COL), s.i32(CAM_ROW))
     s.move(x, y, frames=4)
     s.click(x, y)
     s.run(6)
+    for _ in range(27):
+        if (s.i32(CAM_COL), s.i32(CAM_ROW)) != cam:
+            s.run(2)
+            break
+        s.run(2)
 
 
 def drag(s, x0, y0, x1, y1, steps=8):
