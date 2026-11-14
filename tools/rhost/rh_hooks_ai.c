@@ -229,15 +229,19 @@ void rh_evq_store(void)
     PUT(0x543fd0u, (uint32_t)s_evq.write_idx); PUT(0x553ec4u, (uint32_t)s_evq.read_idx);
     PUT(0x565484u, (uint32_t)s_evq.notify_flag); PUT(0x57c954u, (uint32_t)s_evq.consumer_cooldown);
 }
+/* 1 while port code runs with the file-static mirrors authoritative (no retail code since the last sync_in) */
+static int s_port_live;
 void rh_port_retail_enter(void)
 {
     rh_port_sync_out();
     if (s_evq_open) { rh_evq_store(); s_evq_open = 1; }
+    s_port_live = 0;
 }
 void rh_port_retail_leave(void)
 {
     if (s_evq_open) rh_evq_load();
     rh_port_sync_in();
+    s_port_live = 1;
 }
 
 /* ---------------------------------------------------------------- the generic wrapper body */
@@ -298,11 +302,19 @@ static void ctx_port(void *c)
 {
     port_ctx_t *x = c;
     rh_port_bind_once();
+    /* entered from port code by address (a hooked VA called through a pointer / by number, no retail in between): the
+     * caller's mirrors are live — store them first, or the reload drops what the caller computed (mp-leave-p1 f3352:
+     * resign 0x49cf20 → plan_realm's eval scratch 0x55cd6c / 0x5656f0 lost to a nested row's sync_in; cf. rl_crt.c's
+     * alloc hook) */
+    int live = s_port_live;
+    if (live) rh_port_sync_out();
     rh_port_sync_in();
+    s_port_live = 1;
     x->nput = 0; x->outer = g_cur; g_cur = x;
     x->ret_p = x->port(x->a);
     g_cur = x->outer;
     rh_port_sync_out();
+    s_port_live = live;
 }
 uint32_t rh_port_run(hook_t *h, void *self, rh_port_fn port, int has_ret, uint32_t e0)
 {

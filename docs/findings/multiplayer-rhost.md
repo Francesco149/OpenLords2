@@ -127,3 +127,20 @@ name) — a type-20 popup "From Beyond … Player2: text". **0x4b79e3 prints `"%
 the sender's name BY VALUE inline on the stack after the text pointer (a char-array struct), not a pointer. Under
 DirectPlay a departure arrives as DPSYS_DESTROYPLAYERORGROUP (5) from DPID 0. mpbot `pK leave` quits one side's
 process while the others play on.
+
+## The last two MP divergences (2026-11-14, evening) — both harness
+
+- **Shadow-only, mp-skirmish-p2 f32583** (rl_42ff10 / 4ba9c8 / 432b05 / 4b7250 on 16 dwords: tick stamps 0x4e59d4 /
+  0x4e59e0 / 0x4e5a7c, the clock string 0x4e5b48): the post-Back rejoin resumes the session, waits for the monitor's
+  GameStart (0x4b63d0, ~1 s), then Close 0x4b6a15 does `CloseHandle(hObject)`. In the shadow, retail's run closed the
+  REAL event; the pre-state restore gave the port side the same fake → dead real handle → WaitForSingleObject =
+  WAIT_FAILED at once (rhost.log: the port side printed "NewGame ACK" with no MonitorThread-GameEnd / GameStart).
+  Fix (rh_handles.c): inside a shadow a non-file handle's CloseHandle is deferred; the real close happens at the first
+  meta restore whose table no longer holds it.
+- **Hybrid / standalone, mp-leave-p1 f3352** (0x55cd6c 3 → 4, 0x5656f0 13 → 1; first differing frame found with
+  `--hash-every`, then `--watch-write`): Player2 leaves → 0x43e6a2(2) → resign 0x49cf20 → demolish 0x4ac3c6 →
+  plan_realm 0x4485a5 → the army-economy evaluator, whose scratch pair is a FILE-STATIC mirror (engine_army_economy.c,
+  synced by rh_port_sync_in / _out). Later in the same port chain the frame driver 0x4b99c0 is entered BY ADDRESS
+  (rhost's frame boundary) → its row's ctx_port → rh_port_sync_in reloaded the mirrors from retail memory and dropped
+  the evaluator's result. Fix (rh_hooks_ai.c): a row entered from live port code (no retail since the last sync_in)
+  stores the mirrors first (sync_out, then sync_in) — the general form of rl_crt.c's alloc-hook workaround.
