@@ -12,8 +12,9 @@ int rl_43306a(void);                             /* 92 B, coverage 3 */
 int rl_433551(void);                             /* 159 B, coverage 3 */
 int rl_46f2f1(void);                             /* 220 B, coverage 4 */
 int rl_475e07(void);                             /* 1665 B, coverage 4 */
-int rl_475e07_r(int kind_in);                    /* … with its stack residue (the previous call's kind) */
+int rl_475e07_r(int kind_in);                    /* … with its stack residue (quirk #240) */
 extern int rl_475e07_res_set, rl_475e07_res_kind, rl_475e07_res_who;   /* what it leaves at e0 - 12 / e0 - 8 */
+extern int rl_475e07_res_in;                    /* the port's model of retail's residue in its [ebp-8] (quirk #240) */
 int rl_47f937(void);                             /* 714 B, coverage 1 */
 int rl_49b973(int fresh);                           /* 374 B, coverage 4 */
 int rl_49ca60(int seat, int who);                   /* 74 B, coverage 3 */

@@ -914,12 +914,16 @@ int rl_41f77a(int tab)
     return rl_420147(0);
 }
 
-/* 0x475e07's stack residue (quirk: its [ebp-8] is read before any store — the previous call's popup kind): the row's
- * adapter passes the dword at e0 - 12 and puts what the function leaves at e0 - 12 / e0 - 8 */
+/* 0x475e07's stack residue (quirk #240: its [ebp-8] is read before any store): the row's adapter passes the dword at
+ * e0 - 12 and puts what the function leaves at e0 - 12 / e0 - 8. A port caller passes rl_475e07_res_in, the port's
+ * model of what retail's frame leaves in that slot (engine_tick's body esp - 92): the map scene's imprint 0x405ac5
+ * (set by rl_4b99c0 after the scene; the last row's last tile call 0x405ac0 in 0x4059af), the popup tail's
+ * DAT_00553064 push (set by rl_47309e). Never 3 in either: the liege dismiss below is dead under both. */
 int rl_475e07_res_set, rl_475e07_res_kind, rl_475e07_res_who;
+int rl_475e07_res_in;
 
 /* Port of FUN_00475e07 (1665 B) — the popup panel 12 (rl_47309e): the MP messages between humans, kind = DAT_0053e910 -
- * 245 (0..10), sender DAT_00553ee0. First the uninitialized local `kind` (the previous call's, `res_kind`): 3 with a
+ * 245 (0..10), sender DAT_00553ee0. First the uninitialized local `kind` (stack residue, `kind_in`): 3 with a
  * liege (+0x81 of the local realm) → dismiss the popup (0x476768) instead. At the open (DAT_0057c954 == 2000)
  * "ff_msg.wav" (DAT_005533f0 = 0) and the sender's portrait (0x475d73). The box: x 16, w 448, y / h = 16 × the row
  * DAT_004d6f30[kind]; the bevel panel, the sender's shield, the seal, the portrait frame, group 109's line 0 + the
@@ -1002,5 +1006,5 @@ int rl_475e07_r(int kind_in)
     wrap_line(100, g_rl_55ce54 + 20 * (int32_t)s_slot_0053f034, g_rl_553060 + 32, g_rl_553064 + 120, FONT);
     return rl_410c71(g_rl_55ce54, g_rl_553060 + 256, g_rl_553064 + 64);
 }
-/* a port caller has no retail frame: the residue reads as 0 (not 3) */
-int rl_475e07(void) { return rl_475e07_r(0); }
+/* a port caller: the residue is the port's model of retail's frame (rl_475e07_res_in) */
+int rl_475e07(void) { return rl_475e07_r(rl_475e07_res_in); }

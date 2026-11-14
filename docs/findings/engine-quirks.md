@@ -8249,3 +8249,29 @@ hybrid and the standalone again — a dead unit's sprite frame byte (0x488793 ru
 retail's frames instruction for instruction (naked asm) and the WinMain row enters with the stack untouched, so a
 hybrid whose battlefield is retail stores the same stack pointers too. Evidence (wine): full hybrid 78/78 PASS,
 standalone 77/78 = pure retail (hotkeys: gap 0x43f7e3), snap-check PASS.
+
+## 240 — the MP message panel's liege check reads a render_tile return address: never 3 on the map
+
+FUN_00475e07 (popup panel 12, the MP messages between humans) starts with `cmp [ebp-8], 3` → if the local realm has a
+liege (+0x81) the popup is dismissed (0x476768) — before any store to that local.  The call chain is fixed:
+engine_tick 0x4b99c0 → the popup step 0x472e46 (0x4b9ef4) → 0x47309e → 0x475e07 (0x474c5f), so the slot is engine_tick's
+body esp − 92 (rhost: 0x58fffd60; entry esp 0x58fffd6c).  Measured in pure retail (mp-trio-p3 f56019 / f56020,
+`--watch-write 58fffd60`): its last writer before the read is the map scene 0x4b9ce4 → 0x4050c0 → render_frame 0x405487
+→ row_phase0 / row_phase1 (0x4059af), whose `call engine_map_render_tile` pushes its return address on that very slot;
+the frame's last one is 0x405ac5 (phase1's last tile, 0x405ac0).  So on the map screens the check sees a code address and
+the liege dismiss never fires.  After the read 0x475e07 stores its kind there (0x475e9a), then 0x47309e's common tail
+pushes DAT_00553064 (the box y, 0x475b23) as the dirty mark's 4th argument onto it.
+
+The port had modelled the read as "the previous call's kind": under the standalone the slot is the port's native stack
+and kept the 3 of an earlier kind-3 popup → mp-trio-p3 f56021 dismissed an open type-12 popup (0x53e910 0x100 → 0, the
+cue buffer released, full redraw) that retail keeps.  (The 2026-11-14 note in multiplayer-rhost.md watched 0x58fffd98,
+which is 0x47309e's own local, not this slot.)
+
+Port: `rl_475e07_res_in` = the port's model of the slot: rl_4b99c0 sets 0x405ac5 after the map scene, rl_47309e's tail
+sets the box y; rl_47309e's case 12 calls the port `rl_475e07()` with it (was an `engine_retail_call` seam).  The row's
+adapter (entered from retail code) still reads the real dword (rh_res_get(12)).  Not modelled: screens without the map
+scene (the slot then holds the previous popup's box y, never 3 either), render_frame's tail-row render_tile local
+([ebp-0x14] of a call from render_frame's own depth lands on the slot).  Evidence (wine): standalone `--only '^mp-'`
+24/25 = pure retail (mp-trio-p3 fixed; was 23/25).
+
+> 📍 `src/rl_mpnet.c/.h` (rl_475e07, rl_475e07_res_in), `src/rl_turn.c` (rl_47309e), `src/rl_host.c` (rl_4b99c0).

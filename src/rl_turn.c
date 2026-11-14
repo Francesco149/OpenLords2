@@ -121,6 +121,7 @@ int rl_4a545f(int a0, int a1) { engine_combat_pool_commit(a0, a1); return 0; }
 
 /* ================================================================ route (b): fresh ports on retail's layout */
 #include "rl_turn_globals.h"
+#include "rl_mpnet.h"             /* rl_475e07 + its residue model */
 #include "rl_io_plat.h"         /* timeGetTime, malloc, exit, remove, rename */
 #include "engine.h"             /* g_sim_mp_active (DAT_00553030), the screen / redraw bridges */
 #include "engine_combat.h"      /* g_combat_flag_530d0, g_combat_flag_53f284, g_combat_anim_scratch */
@@ -661,7 +662,7 @@ int rl_47309e(void)
         break;
     }
     case 12:
-        engine_retail_call(0x475e07u, 0);   /* TODO(rl-extern): the panel 12 renderer 0x475e07 */
+        rl_475e07();   /* the panel 12 renderer (rl mpnet; its [ebp-8] residue: rl_475e07_res_in, quirk #240) */
         break;
     case 20:
         rl_476488();   /* the panel 20 renderer (rl mpnet2) */
@@ -807,6 +808,7 @@ seal_tail:
 tail:
     g_rl_5681dc = g_gfx_seal_x;
     g_rl_56950c = g_gfx_seal_y;
+    rl_475e07_res_in = PY;   /* the dirty mark's 4th push lands on 0x475e07's [ebp-8] (0x475b23; quirk #240) */
     rl_4527a6(PX, PY, PW / 16 + 1, PH / 16 + 1, 2);
     g_gfx_uppercase_highlight = 0;
     return 0;

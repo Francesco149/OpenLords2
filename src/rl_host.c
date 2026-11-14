@@ -27,6 +27,7 @@
 #include "engine_territory.h"         /* the dirty state (DAT_0053e9ac …: rhost mirrors) */
 #include "engine_army_move.h"         /* engine_army_move_terrain_passable (0x469e0e) */
 #include "engine_army_state.h"        /* engine_army_state_res_ai_step: the driver's residue window */
+#include "rl_mpnet.h"                /* rl_475e07_res_in (quirk #240) */
 #include "engine_trade.h"             /* g_trade_buttons / g_trade_widget_count (DAT_004dd838 / DAT_00553f58) */
 #include "engine_treasury.h"          /* g_treasury_buttons / g_treasury_widget_count */
 #include "engine_noble_faces.h"       /* g_noble_buttons / g_noble_action_count */
@@ -1854,8 +1855,10 @@ int rl_4b99c0(void)
     if (g_rl_56d650 != 0) {
         engine_retail_call(0x4247f5u, 0);   /* TODO(rl-extern): 0x4247f5 */
     } else if ((int)s_slot_0057c8fc == 0) {
-        if (engine_current_screen() == 0 || engine_current_screen() == 16)
+        if (engine_current_screen() == 0 || engine_current_screen() == 16) {
             engine_retail_call(0x4050c0u, 0);   /* TODO(rl-link): engine_map_scene_tick (engine_map_scene.c, its binder) */
+            rl_475e07_res_in = 0x405ac5;        /* the scene's imprint on 0x475e07's [ebp-8] (quirk #240) */
+        }
     } else if ((int)s_slot_0057c8fc == 2 && engine_current_screen() >= 0x28 && engine_current_screen() < 0x2b) {
         if (engine_territory_dirty_state()->below_status_redraw != 0) {
             engine_retail_call(0x4bc1d1u, 1, 80u);   /* TODO(rl-link): engine_battlefield_render_minimap_scroll */
