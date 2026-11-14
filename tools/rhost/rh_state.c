@@ -128,6 +128,7 @@ static int add_media(uint32_t (*r)[2], int n, int media) { return media ? n + rh
  * Returns the differing units: 1 for a state dword, the differing bytes (pixels) for a surface dword. */
 static int diff_note(char *why, size_t whyn, int *w, int *k, uint32_t va, uint32_t a, uint32_t b)
 {
+    if (g_nvol && is_vol(va)) return 0;   /* a volatile slot (environment-dependent: DLL / dead-frame pointers) */
     uint32_t pitch = 0, lo = rh_media_in_pool(va) ? rh_media_surface_at(va, &pitch) : 0;
     if (!lo) {
         if ((*k)++ < 6 && *w < (int)whyn - 48) *w += snprintf(why + *w, whyn - *w, " %08x r%08x/p%08x", va, a, b);
@@ -155,12 +156,12 @@ static void diff_total(char *why, size_t whyn, int w, long st, long px)
  * with the state: the port run starts from the host state retail's run started from (a port that calls back
  * into retail — an audio cue loads a WAV and creates a buffer, FUN_00427990 — would otherwise see it
  * advanced), and retail's post-state is put back after the comparison. */
-typedef struct { void *heap, *media, *ds, *dd, *hnd, *win, *files; } meta_t;
+typedef struct { void *heap, *media, *ds, *dd, *hnd, *win, *files, *net; } meta_t;
 static meta_t *meta_save(void)
 {
     meta_t *m = malloc(sizeof *m);
     m->heap = rh_heap_meta_save(); m->media = rh_media_meta_save(); m->ds = rh_ds_meta_save(); m->dd = rh_dd_meta_save(); m->hnd = rh_handles_meta_save();
-    m->win = rh_win_meta_save(); m->files = rh_files_meta_save();
+    m->win = rh_win_meta_save(); m->files = rh_files_meta_save(); m->net = rh_net_meta_save();
     return m;
 }
 static void meta_restore(const meta_t *m)
@@ -172,8 +173,9 @@ static void meta_restore(const meta_t *m)
     if (m->hnd) rh_handles_meta_restore(m->hnd);
     rh_win_meta_restore(m->win);
     rh_files_meta_restore(m->files);
+    rh_net_meta_restore(m->net);
 }
-static void meta_free(meta_t *m) { rh_heap_meta_free(m->heap); free(m->media); free(m->ds); free(m->dd); free(m->hnd); free(m->win); rh_files_meta_free(m->files); free(m); }
+static void meta_free(meta_t *m) { rh_heap_meta_free(m->heap); free(m->media); free(m->ds); free(m->dd); free(m->hnd); free(m->win); rh_files_meta_free(m->files); rh_net_meta_free(m->net); free(m); }
 
 static int shadow_copy(const char *name, void (*retail)(void *), void (*port)(void *), void *ctx, char *why, size_t whyn, int media)
 {

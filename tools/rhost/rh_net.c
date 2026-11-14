@@ -39,9 +39,10 @@ static msg_t *g_sched; static uint32_t g_nsched, g_isched;      /* replay: stamp
 static msg_t g_pend[256]; static uint32_t g_npend;                 /* visible, not yet received */
 static msg_t g_arr[256]; static uint32_t g_narr;                   /* record: arrived from the broker, not stamped */
 
-static void pend_push(msg_t m)
+static void pend_push(msg_t m)          /* the queue owns a copy: a receive frees it, a rollback revives the schedule's */
 {
     if (g_npend >= 256) rh_fatal("net: pending queue overflow");
+    uint8_t *d = malloc(m.len ? m.len : 1); memcpy(d, m.d, m.len); m.d = d;
     g_pend[g_npend++] = m;
 }
 static int hexv(int c) { return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1; }
@@ -152,6 +153,11 @@ int nw_validate(int game, char *ip, int *a, int *b, const char *path, const char
 {
     (void)game; (void)path; (void)file; (void)w;
     strcpy(ip, "127.0.0.1"); *a = 0; *b = 0;
+    /* the session (DAT_004e5a08, set by 0x4b62ea) keeps +28 / +32 = the addresses of 0x4b7a9a's stack buffers (the
+     * exe's directory and path): dangling after the call, and their value depends on the caller's stack depth (a port
+     * frame differs from retail's; retail on another OS differs too) — volatile, like the system-DLL pointer slots */
+    uint32_t self = G32(0x4e5a08u);
+    if (self) { rh_state_volatile_add(self + 28); rh_state_volatile_add(self + 32); }
     rh_log("net: SNWValidate → 0 (f%u)\n", g_frame);
     return 0;
 }
@@ -166,7 +172,7 @@ int nw_any(void)
     while (g_isched < g_nsched && g_sched[g_isched].n <= g_poll) pend_push(g_sched[g_isched++]);
     if (g_live) {
         sock_drain();
-        for (uint32_t i = 0; i < g_narr; i++) { g_arr[i].n = g_poll; log_delivery(&g_arr[i]); pend_push(g_arr[i]); }
+        for (uint32_t i = 0; i < g_narr; i++) { g_arr[i].n = g_poll; log_delivery(&g_arr[i]); pend_push(g_arr[i]); free(g_arr[i].d); }
         g_narr = 0;
     }
     return g_npend ? 0 : 1;          /* 0: something is waiting (0x4b6b71) */
@@ -275,6 +281,21 @@ static const struct { const char *name; void *fn; } k_nw[] = {
     { "PingTime", (void *)w_nw_ping_sym }, { "TellMeSpecialChatReceived", (void *)w_nw_tell_special_sym }, { "TellMePlayerLeftGame", (void *)w_nw_tell_left_sym },
 };
 
+/* retail keeps the export pointers in its session object (+44..+112): they must not move with rhost's code, so
+ * GetProcAddress hands out jmp thunks on a page at a fixed address (one per k_nw row; SNWValidate last) */
+#define THUNK_PAGE 0x5e100000u
+static void thunks_init(void)
+{
+    if (VirtualAlloc((void *)(uintptr_t)THUNK_PAGE, 0x1000, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE) != (void *)(uintptr_t)THUNK_PAGE)
+        rh_fatal("net: the export thunk page %08x is taken", THUNK_PAGE);
+    size_t n = sizeof k_nw / sizeof *k_nw;
+    for (size_t i = 0; i <= n; i++) {
+        uint8_t *t = (uint8_t *)(uintptr_t)(THUNK_PAGE + 8 * i);
+        uint32_t to = (uint32_t)(uintptr_t)(i < n ? k_nw[i].fn : (void *)w_nw_validate_sym);
+        t[0] = 0xe9; *(uint32_t *)(t + 1) = to - (uint32_t)(uintptr_t)(t + 5);
+    }
+    FlushInstructionCache(GetCurrentProcess(), (void *)(uintptr_t)THUNK_PAGE, 0x1000);
+}
 int rh_net_on(void) { return g_on; }
 /* LoadLibraryA / GetProcAddress / FreeLibrary: 1 = handled */
 int net_load_impl(const char *n, HMODULE *out)
@@ -287,10 +308,10 @@ int net_load_impl(const char *n, HMODULE *out)
 }
 int net_proc_impl(HMODULE m, const char *name, FARPROC *out)
 {
-    if (m == MOD_VALID) { *out = (name && !strcmp(name, "SNWValidate")) ? (FARPROC)w_nw_validate_sym : NULL; return 1; }
+    if (m == MOD_VALID) { *out = (name && !strcmp(name, "SNWValidate")) ? (FARPROC)(uintptr_t)(THUNK_PAGE + 8 * (sizeof k_nw / sizeof *k_nw)) : NULL; return 1; }
     if (m != MOD_NW) return 0;
     *out = NULL;
-    for (size_t i = 0; i < sizeof k_nw / sizeof *k_nw; i++) if (name && !strcmp(name, k_nw[i].name)) *out = (FARPROC)k_nw[i].fn;
+    for (size_t i = 0; i < sizeof k_nw / sizeof *k_nw; i++) if (name && !strcmp(name, k_nw[i].name)) *out = (FARPROC)(uintptr_t)(THUNK_PAGE + 8 * i);
     if (!*out) rh_log("net: SierraNW has no %s\n", name ? name : "(ordinal)");
     return 1;
 }
@@ -389,6 +410,47 @@ int net_wait_impl(HANDLE h, DWORD ms, DWORD *ret)
 int rh_net_thread_handle(HANDLE h) { return g_on && h == MON_THREAD; }
 DWORD rh_net_thread_exit(void) { return m_state == 2 ? m_exit : STILL_ACTIVE; }
 
+/* ================================================================ rollback (shadow) / savestates
+ * Everything a retail call can change here: counters, the visible queue (deep copies), the monitor coroutine (its
+ * registers and the live part of its stack). The broker link is not rolled back (verify / rd never run live). */
+typedef struct {
+    uint32_t poll, isched, nrecv, nsent, send_hash, npend, cb_special, cb_left; int game_closed;
+    uint32_t m_esp, m_fn, m_arg, m_wake, m_exit; int m_state; uint32_t stack_n;
+    msg_t pend[256]; uint8_t *stack;
+} net_meta_t;
+void *rh_net_meta_save(void)
+{
+    if (!g_on) return NULL;
+    if (m_in) rh_fatal("net: a rollback point inside the monitor coroutine");
+    net_meta_t *m = malloc(sizeof *m);
+    m->poll = g_poll; m->isched = g_isched; m->nrecv = g_nrecv; m->nsent = g_nsent; m->send_hash = g_send_hash;
+    m->npend = g_npend; m->cb_special = g_cb_special; m->cb_left = g_cb_left; m->game_closed = g_game_closed;
+    for (uint32_t i = 0; i < g_npend; i++) { m->pend[i] = g_pend[i]; m->pend[i].d = malloc(g_pend[i].len ? g_pend[i].len : 1); memcpy(m->pend[i].d, g_pend[i].d, g_pend[i].len); }
+    m->m_esp = rhnet_m_esp; m->m_fn = m_fn; m->m_arg = m_arg; m->m_wake = m_wake; m->m_exit = m_exit; m->m_state = m_state;
+    m->stack_n = m_state == 1 ? MON_HI - rhnet_m_esp : 0;
+    m->stack = m->stack_n ? malloc(m->stack_n) : NULL;
+    if (m->stack_n) memcpy(m->stack, (void *)(uintptr_t)rhnet_m_esp, m->stack_n);
+    return m;
+}
+void rh_net_meta_restore(const void *p)
+{
+    const net_meta_t *m = p;
+    if (!m) return;
+    for (uint32_t i = 0; i < g_npend; i++) free(g_pend[i].d);
+    g_poll = m->poll; g_isched = m->isched; g_nrecv = m->nrecv; g_nsent = m->nsent; g_send_hash = m->send_hash;
+    g_npend = m->npend; g_cb_special = m->cb_special; g_cb_left = m->cb_left; g_game_closed = m->game_closed;
+    for (uint32_t i = 0; i < g_npend; i++) { g_pend[i] = m->pend[i]; g_pend[i].d = malloc(m->pend[i].len ? m->pend[i].len : 1); memcpy(g_pend[i].d, m->pend[i].d, m->pend[i].len); }
+    rhnet_m_esp = m->m_esp; m_fn = m->m_fn; m_arg = m->m_arg; m_wake = m->m_wake; m_exit = m->m_exit; m_state = m->m_state;
+    if (m->stack_n) memcpy((void *)(uintptr_t)rhnet_m_esp, m->stack, m->stack_n);
+}
+void rh_net_meta_free(void *p)
+{
+    net_meta_t *m = p;
+    if (!m) return;
+    for (uint32_t i = 0; i < m->npend; i++) free(m->pend[i].d);
+    free(m->stack); free(m);
+}
+
 /* ================================================================ setup / report */
 /* --net-sigs ME/N[,full|skirmish] */
 void rh_net_config(const char *spec)
@@ -402,6 +464,7 @@ void rh_net_config(const char *spec)
 void rh_net_install(const char *peer)
 {
     if (!g_on) return;
+    thunks_init();
     if (O.trace) sched_load(O.trace);
     if (peer) live_connect(peer);
     rh_log("net: SIGS fake, me %d of %d, game type %s%s\n", g_me, g_np, g_gametype, g_live ? ", live" : "");

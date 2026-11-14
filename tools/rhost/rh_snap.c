@@ -126,7 +126,7 @@ static void tracked(plist_t *l)
 typedef struct snap {
     int id; uint32_t n, *pg, *h; uint8_t *kind;
     uint8_t *host; uint32_t clock[3];
-    void *heap, *media, *ds, *dd, *win, *handles, *files;
+    void *heap, *media, *ds, *dd, *win, *handles, *files, *net;
     uint32_t smk_top, frame;
 } snap_t;
 #define MAX_SNAP 65536
@@ -140,7 +140,7 @@ static void snap_free_one(snap_t *s)
 {
     for (uint32_t i = 0; i < s->n; i++) slab_unref(s->h[i]);
     free(s->pg); free(s->h); free(s->kind); free(s->host);
-    rh_heap_meta_free(s->heap); free(s->media); free(s->ds); free(s->dd); free(s->win); free(s->handles); rh_files_snap_free(s->files);
+    rh_heap_meta_free(s->heap); free(s->media); free(s->ds); free(s->dd); free(s->win); free(s->handles); rh_files_snap_free(s->files); rh_net_meta_free(s->net);
     g_snap[s->id] = NULL; g_live_snaps--;
     if (g_cur == s) g_cur = NULL;
     free(s);
@@ -177,7 +177,7 @@ int rh_snap_take(void)
     for (int i = 0; i < g_nblk; i++) { memcpy(s->host + o, g_blk[i].p, g_blk[i].n); o += g_blk[i].n; }
     rh_clock_save(s->clock);
     s->heap = rh_heap_meta_save(); s->media = rh_media_meta_save(); s->ds = rh_ds_meta_save(); s->dd = rh_dd_meta_save();
-    s->win = rh_win_meta_save(); s->handles = rh_handles_snap(); s->files = rh_files_snap();
+    s->win = rh_win_meta_save(); s->handles = rh_handles_snap(); s->files = rh_files_snap(); s->net = rh_net_meta_save();
     s->smk_top = O.movies ? rh_smack_heap_top() : 0;
     g_snap[id] = s; g_live_snaps++; g_cur = s; g_takes++;
     g_take_ms += now_ms() - t0;
@@ -216,7 +216,7 @@ int rh_snap_restore(int id)
     for (int k = 0; k < g_nblk; k++) { memcpy(g_blk[k].p, s->host + o, g_blk[k].n); o += g_blk[k].n; }
     rh_clock_restore(s->clock);
     rh_heap_meta_restore_snap(s->heap); rh_media_meta_restore(s->media); rh_ds_meta_restore(s->ds); rh_dd_meta_restore(s->dd);
-    rh_win_meta_restore(s->win); rh_handles_unsnap(s->handles); rh_files_unsnap(s->files);
+    rh_win_meta_restore(s->win); rh_handles_unsnap(s->handles); rh_files_unsnap(s->files); rh_net_meta_restore(s->net);
     if (O.movies) rh_smack_heap_top_set(s->smk_top);
     g_cur = s; g_restores++;
     g_restore_ms += now_ms() - t0;

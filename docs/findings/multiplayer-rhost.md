@@ -55,11 +55,30 @@ Sends: 0x43eda0 builds the payload (table 0x4d57f0[id]) into the ring DAT_00512f
   behave as on a LAN. A side's trace replays alone because nothing it reads depends on the peer except the stamped
   deliveries.
 
+- **Residue-neutral entries.** rh_net's host code runs on retail's stack, and a retail MP path reads an uninitialized
+  local: an rh_net.c edit changed mp-start's state. Every entry from retail into rh_net.c (the SierraNW / SNWValid
+  exports, rh_net_tick / _wait / _load / _proc / _free / _create_thread) goes through an asm wrapper that, with
+  --net-sigs, zeroes the 16 KB below the caller's esp after the call (without it: a tail jump, a plain call).
+- **Fixed export addresses.** Retail stores the GetProcAddress results in its session object (+44..+112), so they are
+  state: GetProcAddress hands out `jmp` thunks on a page at 0x5e100000 (one per export, SNWValidate last), never
+  rhost's own code addresses. Checked: shifting rhost's code (a dummy function in rhost.c and rh_net.c) leaves every
+  MP scenario's state_sem unchanged; so does a 3 KB junk-writing CheckForAnyTCPMessage.
+- **Rollback / savestates**: rh_net_meta_save / _restore (counters, the visible queue as deep copies, the monitor
+  coroutine's registers + the live part of its stack) join the shadow's host-state rollback (rh_state.c) and rd's
+  savestates (rh_snap.c). The broker link is never rolled back.
+
 ```
 rhost.py mp-record NAME --side P1.jsonl --side P2.jsonl [--frames N] --target wine [--shot-every 500]
     → tests/scenarios/NAME-p1, NAME-p2 (each checked: replay alone ≡ its recording run)
 ```
 A side's input trace = ordinary events + `{"meta": {"net": "ME/N"}}` (side k = player k − 1; player 0 hosts).
+
+**Authoring live: `tools/rhost/mpbot.py`** — N rhbot sessions joined through the broker and always stepped together
+(`serve NAME [-n N]` in the background, `do NAME "p2 click 230 170; run 60; both click …; shot TAG"`, `py NAME
+"code"` with p1 / p2 as rhbot-Session-like sides so tools/bot's `actions` / `UI` / `l2state` work, `settle_all()` /
+`end_turn_all()`, `save NAME SCEN` → SCEN-p1 / -p2, `quit NAME`). A side idle on its controller tells the broker it is
+paused ('P'), so the others never wait on it. `mp-play` was authored this way (both raise armies, End turn, a
+compliment and a gift between the humans — the receiver gets a type-12 popup, 0x475e07 —, a march into Caernarvon).
 
 ## The lobby (inputs that worked, 640×480)
 
@@ -72,8 +91,8 @@ setup) → Start → the game: host Lincolnshire, client the Duchy of Cornwall, 
 
 ## Not done yet
 
-- Savestates (`rd`, `--live`, snap-check) do not carry the monitor coroutine or the delivery queues: MP scenarios are
-  replay-only for now.
+- `rd` on an MP scenario: savestates carry rh_net's state now, but drive.py does not pass `--net-sigs` from a movie's
+  meta, and its movie truncation drops the `"n"` delivery lines — untested.
 - The DirectPlay path (a fake IDirectPlay2A + the 0x6c / 0x82 / 0x74 dialogs) — same delivery model, more COM.
 - Deeper MP play: end turn in lockstep, diplomacy between humans, battles between humans, chat, a player leaving
   (TellMePlayerLeftGame's callback 0x4b7a7c), the slow-link flag, a 3–5 player game, MP save / load (0x49792e).

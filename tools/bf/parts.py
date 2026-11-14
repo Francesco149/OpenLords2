@@ -124,8 +124,23 @@ PARTS = {
     "quit": _h("42dfe2 425d35 4ae15f 49767d 42eaa6 4b7180 4b2636 43f43e"),
     # retail seams the battlefield calls that stay out of scope (audio streams, sprite loads): stubs only
     "extern": _h("43f304 477b2f 4987b7 499d97"),
+    # --- multiplayer (2026-11-14, docs/findings/multiplayer-rhost.md): what the mp-* scenarios newly reach ---
+    # the MP message layer: the receive dispatcher 0x43eac1, the payload builders (table 0x4d57f0) and receivers
+    "mpmsg": _h("43e330 43e433 43e50d 43e5c1 43e98b 43eac1 43f01d 43f4b7 43f8ff 43fd2a 43fed2 440038 44015a 4401ba  "
+               "4401f6 440231 4407e5 440dd2 441066 4410bd 44121a 4412cc 4413a4 44164d 441905 4419f9 441b4e 441b86  "
+               "441d2a 441e1f 441f2a 441f50 441f76 442014 4420ad 4421c3 442309 442361 4423b9 44240a 442448 4424d6 "
+               "4425bf 4427d1 4429f2 442a25 442afd 442b08 442bad 442c01 442c3f 442c82 442cb9 442cd6"),
+    "mpmsg2": _h("4431ef 443286 4433d9 44341b 44348c 4434eb 443748 4437aa 44381d 4438c3 443990 443a2d 443ad5 443b8d  "
+               "443c2f 443ca6 443d0a 443dba 444060 444100 444191 44419c 4441d7 444280 4443fb 444415 4449a0 4449f1  "
+               "444a2f 444a9b 444d04 444d68 4458e5 445960 445c99 445d23 445e6f 445ea7 445f43 445f80 4462c5 4462df  "
+               "446e21 446f84 447026 447136 4476e4 447740 4479de 4479e9 447b8e 447c68 447c99 447d22 447db6 44800e "
+               "448339 448422"),
+    # the SIGS transport class 0x4b61b0.., the monitor thread, the provider dialog, the MP title pages, MP popups
+    "mpnet": _h("41f3e9 41f4a1 41f77a 43306a 433551 46f2f1 475e07 47f937 49b973 49ca60 4b3d5d 4b61b0 4b62ea 4b63d0  "
+               "4b64d8 4b6754 4b6ae5 4b6b71 4b6c59 4b6c82 4b6ccb 4b6cee 4b6d19 4b6d44 4b6dc5 4b6de6 4b6e1b 4b6e8e "
+               "4b7052 4b7514 4b7a9a 4b7f78 4b90fb 4bbf89 4bbfd2"),
 }
-FAMILY = {"io": "rl", "glue": "rl", "render": "rl", "misc": "rl", "skirmish": "rl", "ui2": "rl", "ui3": "rl", "ui4": "rl", "ctl": "rl", "terr": "rl", "turn": "rl", "host": "rl", "quit": "rl", "cov3": "rl"}   # default "bf"
+FAMILY = {"io": "rl", "glue": "rl", "render": "rl", "misc": "rl", "skirmish": "rl", "ui2": "rl", "ui3": "rl", "ui4": "rl", "ctl": "rl", "terr": "rl", "turn": "rl", "host": "rl", "quit": "rl", "cov3": "rl", "mpmsg": "rl", "mpmsg2": "rl", "mpnet": "rl"}   # default "bf"
 OWNER = {}
 for _p, _vs in PARTS.items():
     for _v in _vs:

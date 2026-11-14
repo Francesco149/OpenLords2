@@ -19,3 +19,6 @@
 #include "rl_host.h"
 #include "rl_quit.h"
 #include "rl_cov3.h"
+#include "rl_mpmsg.h"
+#include "rl_mpmsg2.h"
+#include "rl_mpnet.h"
