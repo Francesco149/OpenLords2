@@ -149,5 +149,9 @@ process while the others play on.
 local; 0x475e07's [ebp-8] is 0x58fffd60 (entry esp 0x58fffd6c, `--trap 475e07`), engine_tick's body esp − 92. Its last
 writer each map frame is the scene's `call engine_map_render_tile` from row_phase0 / phase1 (return address 0x405ac5),
 then 0x475e07's kind, then 0x47309e's tail push of the box y. The port models it (`rl_475e07_res_in`). Standalone
-`--only '^mp-'`: **24/25 = pure retail**. Open: **mp-trio-p1, fb only** (state_sem equal on every one of 56975 frames,
-`--hash-every 1`).
+`--only '^mp-'`: **24/25 = pure retail**. **mp-trio-p1** (fb only; state_sem equal on all 56975 frames,
+`--hash-every 1`): the first differing presented frame (`--extra=--fb-hash`) is f53108, the MP lobby's first drawn
+frame — the local seat's name "aaaaaa" red in retail, blue in the standalone. The roster port reads its seats from
+the row adapter's snapshot (`seats_load` in TR()), taken BEFORE the port's prep seam runs 0x49caaa, which reassigns the
+seats' name colours (+8); retail reads the records after it. Fix: the prep seam reloads the seats. **Standalone 105/105
+= pure retail** (whole corpus, wine).

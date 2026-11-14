@@ -57,9 +57,10 @@
    MP state: mpmsg 54, mpmsg2 58, mpnet 35, mpmsg3 83, mpnet2 23** (0 pending) + 12 CRT functions + the old seal ports'
    MP arms. 2026-11-14 evening: the two last MP divergences were harness (multiplayer-rhost.md §The last two): a shadowed
    CloseHandle of the game-start event (rh_handles.c defers it) and a nested row's sync_in dropping live port mirrors
-   (rh_hooks_ai.c ctx_port). **Standalone `--only '^mp-'`: 25/25 run to the end, 24/25 = pure retail** — mp-trio-p3 fixed
-   (quirk #240: 0x475e07's uninitialized [ebp-8] = the map scene's render_tile return address, never 3); open: mp-trio-p1,
-   fb only (state_sem equal every frame). Next: (a) attribute mp-trio-p1's fb difference; (b) one verify
+   (rh_hooks_ai.c ctx_port). **Standalone: 105/105 scenarios = pure retail, all 25 MP sides included** (2026-11-14 late):
+   mp-trio-p3 = quirk #240 (0x475e07's uninitialized [ebp-8] = the map scene's render_tile return address, never 3);
+   mp-trio-p1 (fb only, the lobby's first frame f53108: name colour) = the roster row's seat snapshot was taken before
+   0x49caaa reassigns the seats (rh_hooks_screens.c reloads after the prep seam). Next: (b) one verify
    over every MP row on all MP scenarios; (c) unreached MP
    ids 16 / 19 / 26 (debug gate) / 38 / 52 / 53 / 58 / 70 / 81 / 89–94 (resync / error paths); (d) mp-war's shadow pass 3.
 0b. **rd campaigns** — **campaign 6 (2026-11-14, API drivers):** ai-recall filed (sub_48B7FC 0x48b7fc first time: an Equal

@@ -177,8 +177,10 @@ static void seam_title_page(int page)
 /* the setup page's preview blit FUN_00410c71(mode, x, y) and seat setup FUN_0049caaa (unported here) */
 static void seam_title_preview(int mode, int x, int y)
 { scr_retail_enter(); ((void (__cdecl *)(int, int, int))(uintptr_t)0x410c71u)(mode, x, y); scr_retail_leave(); }
+static void seats_load(void);
+/* 0x49caaa (re)assigns the seats (type / portrait / name colour): the roster reads the records after it, so reload */
 static void seam_title_roster_prep(void)
-{ scr_retail_enter(); ((void (__cdecl *)(void))(uintptr_t)0x49caaau)(); scr_retail_leave(); }
+{ scr_retail_enter(); ((void (__cdecl *)(void))(uintptr_t)0x49caaau)(); scr_retail_leave(); seats_load(); }
 /* the roster's seats over retail's strategic records (+5 type, +7 portrait, +8 name colour, +0xa shield) and the
  * seat-enabled bytes DAT_005530e0; the names DAT_00553d54 (0x2c a seat) */
 static void seats_load(void)
