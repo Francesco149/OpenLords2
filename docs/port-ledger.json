@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 788,
-  "ported": 864,
-  "unported": 795,
+  "ported": 921,
+  "unported": 738,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 1652,
-  "pct_touched": 67.5,
+  "touched": 1709,
+  "pct_touched": 69.8,
   "pct_tested": 32.2,
   "bytes_total": 838629,
-  "bytes_touched": 668545,
-  "pct_bytes_touched": 79.7
+  "bytes_touched": 675976,
+  "pct_bytes_touched": 80.6
  },
  "orphan_refs": [
   "0x004148",
@@ -9411,16 +9411,20 @@
    "name": "FUN_004431ef",
    "size": 151,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x443286",
    "name": "FUN_00443286",
    "size": 156,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x443322",
@@ -9475,32 +9479,40 @@
    "name": "FUN_004433d9",
    "size": 66,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x44341b",
    "name": "FUN_0044341b",
    "size": 113,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x44348c",
    "name": "FUN_0044348c",
    "size": 95,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x4434eb",
    "name": "FUN_004434eb",
    "size": 130,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x44356d",
@@ -9555,96 +9567,120 @@
    "name": "FUN_00443748",
    "size": 98,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x4437aa",
    "name": "FUN_004437aa",
    "size": 115,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x44381d",
    "name": "FUN_0044381d",
    "size": 166,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x4438c3",
    "name": "FUN_004438c3",
    "size": 205,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x443990",
    "name": "FUN_00443990",
    "size": 157,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x443a2d",
    "name": "FUN_00443a2d",
    "size": 168,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x443ad5",
    "name": "FUN_00443ad5",
    "size": 184,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x443b8d",
    "name": "FUN_00443b8d",
    "size": 162,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x443c2f",
    "name": "FUN_00443c2f",
    "size": 119,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x443ca6",
    "name": "FUN_00443ca6",
    "size": 100,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x443d0a",
    "name": "FUN_00443d0a",
    "size": 176,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x443dba",
    "name": "FUN_00443dba",
    "size": 151,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x443e51",
@@ -9683,48 +9719,60 @@
    "name": "FUN_00444060",
    "size": 160,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x444100",
    "name": "FUN_00444100",
    "size": 145,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x444191",
    "name": "FUN_00444191",
    "size": 11,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x44419c",
    "name": "FUN_0044419c",
    "size": 59,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x4441d7",
    "name": "FUN_004441d7",
    "size": 169,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x444280",
    "name": "FUN_00444280",
    "size": 198,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x444346",
@@ -9747,16 +9795,20 @@
    "name": "FUN_004443fb",
    "size": 26,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x444415",
    "name": "FUN_00444415",
    "size": 100,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x444479",
@@ -9875,32 +9927,40 @@
    "name": "FUN_004449a0",
    "size": 81,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x4449f1",
    "name": "FUN_004449f1",
    "size": 62,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x444a2f",
    "name": "FUN_00444a2f",
    "size": 108,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x444a9b",
    "name": "FUN_00444a9b",
    "size": 108,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x444b07",
@@ -9955,16 +10015,20 @@
    "name": "FUN_00444d04",
    "size": 100,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x444d68",
    "name": "FUN_00444d68",
    "size": 81,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x444db9",
@@ -10099,32 +10163,40 @@
    "name": "FUN_004458e5",
    "size": 123,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x445960",
    "name": "FUN_00445960",
    "size": 825,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x445c99",
    "name": "FUN_00445c99",
    "size": 138,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x445d23",
    "name": "FUN_00445d23",
    "size": 116,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x445d97",
@@ -10147,32 +10219,40 @@
    "name": "FUN_00445e6f",
    "size": 56,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x445ea7",
    "name": "FUN_00445ea7",
    "size": 156,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x445f43",
    "name": "FUN_00445f43",
    "size": 61,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x445f80",
    "name": "FUN_00445f80",
    "size": 190,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x44603e",
@@ -10275,16 +10355,20 @@
    "name": "FUN_004462c5",
    "size": 26,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x4462df",
    "name": "FUN_004462df",
    "size": 130,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x44637e",
@@ -10499,8 +10583,10 @@
    "name": "FUN_00446e21",
    "size": 229,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x446f06",
@@ -10517,16 +10603,20 @@
    "name": "FUN_00446f84",
    "size": 162,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x447026",
    "name": "FUN_00447026",
    "size": 158,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x4470c4",
@@ -10541,8 +10631,10 @@
    "name": "FUN_00447136",
    "size": 408,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x4472ce",
@@ -10562,16 +10654,20 @@
    "name": "FUN_004476e4",
    "size": 92,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x447740",
    "name": "FUN_00447740",
    "size": 92,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x44779c",
@@ -10598,7 +10694,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_handlers_da.h"
+    "src/engine_handlers_da.h",
+    "src/rl_mpmsg2.c"
    ]
   },
   {
@@ -10606,8 +10703,10 @@
    "name": "FUN_004479e9",
    "size": 112,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x447a59",
@@ -10654,8 +10753,10 @@
    "name": "FUN_00447b8e",
    "size": 64,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x447bce",
@@ -10694,16 +10795,20 @@
    "name": "FUN_00447c68",
    "size": 49,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x447c99",
    "name": "FUN_00447c99",
    "size": 53,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x447cce",
@@ -10726,8 +10831,10 @@
    "name": "FUN_00447d22",
    "size": 31,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x447d41",
@@ -10758,8 +10865,10 @@
    "name": "FUN_00447db6",
    "size": 37,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x447ddb",
@@ -10840,8 +10949,10 @@
    "name": "FUN_0044800e",
    "size": 25,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x448027",
@@ -10944,8 +11055,10 @@
    "name": "FUN_00448339",
    "size": 152,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x4483d1",
@@ -11000,8 +11113,10 @@
    "name": "FUN_00448422",
    "size": 26,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg2.c"
+   ]
   },
   {
    "va": "0x448440",
@@ -12547,7 +12662,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/blit_table_452820.h"
    ]
   },
   {
@@ -12557,7 +12673,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/blit_table_45337b.h"
    ]
   },
   {
@@ -12567,7 +12684,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/blit_table_4538f6.h"
    ]
   },
   {
@@ -12577,7 +12695,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/drawb_table_453e71.h"
    ]
   },
   {
@@ -12587,7 +12706,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/drawb_stripb_455f04.h"
    ]
   },
   {
@@ -12597,7 +12717,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/drawb_stripb_456fd8.h"
    ]
   },
   {
@@ -12607,7 +12728,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/drawb_stripb_4580a9.h"
    ]
   },
   {
@@ -12617,7 +12739,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/drawb_stripb_459258.h"
    ]
   },
   {
@@ -12787,7 +12910,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/blit_table_463b42.h"
    ]
   },
   {
@@ -12797,7 +12921,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/blit_table_463c06.h"
    ]
   },
   {
@@ -12807,7 +12932,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/blit_table_463c62.h"
    ]
   },
   {
@@ -12817,7 +12943,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/drawb_table_463cbe.h"
    ]
   },
   {
@@ -12827,7 +12954,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/drawb_table_463e91.h"
    ]
   },
   {
@@ -12837,7 +12965,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/drawb_table_463fa5.h"
    ]
   },
   {
@@ -12847,7 +12976,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/drawb_stripb_4640b6.h"
    ]
   },
   {
@@ -12857,7 +12987,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/drawb_stripb_464209.h"
    ]
   },
   {
@@ -17732,6 +17863,7 @@
     "src/engine_pl8.h",
     "src/game_init.c",
     "src/game_init.h",
+    "src/gen/pl8_table.h",
     "src/main.c",
     "src/rl_turn.c"
    ]
