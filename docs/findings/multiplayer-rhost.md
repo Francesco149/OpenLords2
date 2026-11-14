@@ -144,3 +144,18 @@ process while the others play on.
   (rhost's frame boundary) → its row's ctx_port → rh_port_sync_in reloaded the mirrors from retail memory and dropped
   the evaluator's result. Fix (rh_hooks_ai.c): a row entered from live port code (no retail since the last sync_in)
   stores the mirrors first (sync_out, then sync_in) — the general form of rl_crt.c's alloc-hook workaround.
+
+**Still open: the standalone on mp-trio-p3 (state + fb) / mp-trio-p1 (fb only)** — 23/25 MP sides = pure retail.
+mp-trio-p3 first differs IN frame 56021 (f56020 equal, rhost.py diff of dumps): the standalone dismisses the open
+type-12 popup (0x53e910 = 0x100 → 0, the cue buffer 0x522aec released, cooldown 0x57c954 → 0, full redraw). The
+full hybrid (all 1829 rows replace) reproduces it; delta bisection of the rows (scratch script over `run --hook`):
+the minimal failing set is **mv_scene_tick (0x4050c0) + rl_4b99c0** (each alone passes). `--trap 0x476768`: the
+dismiss comes from 0x475e07 (+0x38), which reads its uninitialized `[ebp-8]` (`cmp [ebp+var_8], 3` → liege check →
+dismiss; rl_mpnet.c models it as "the previous call's kind", the row passes rh_res_get(12)). In pure retail that slot
+is rewritten every frame before the popup step (engine_tick 0x4b9ef4): `--watch-write 0x58fffd98@56020` — the scene
+0x4050c0's call pushes, then last `push edi` in sub_412795's prologue (called at 0x4b9ed6) = engine_tick's
+pass-through EDI (1 here; engine_tick never touches edi). In the port the slot holds the previous call's kind (3) →
+dismiss. A --watch-write run of the pair hybrid PASSES (the debug exception's frames rewrite the residue) — the
+signature of a stack-residue read. Fix needs the 0x475e07 port's `kind_in` modeled as retail's residue at that call
+site (the caller chain's EDI), not the previous kind. mp-trio-p1's fb-only difference: not yet attributed (likely the
+same popup path).

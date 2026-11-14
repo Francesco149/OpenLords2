@@ -55,9 +55,12 @@
    faked (SIGS, DirectPlay), each side's trace replays alone; `mpbot.py` authors live. **25 MP side traces**
    (mp-start / play / war / duel / dp / leave / trio / skirmish / siege / five), Windows ≡ wine. **Ported + verified on
    MP state: mpmsg 54, mpmsg2 58, mpnet 35, mpmsg3 83, mpnet2 23** (0 pending) + 12 CRT functions + the old seal ports'
-   MP arms. Next: (a) one verify over every MP row on all MP scenarios (per-partition runs passed; a pre-merge run had
-   rl_42ff10 diverge on mp-skirmish-p2 f32583 — clock reads in a busy-wait at the post-Back rejoin); (b) the standalone
-   on MP scenarios (`rhost.py standalone --only '^mp-'`; gaps: 0x4470c4, 0x49bb9d — TODO(rl-link)); (c) unreached MP
+   MP arms. 2026-11-14 evening: the two last MP divergences were harness (multiplayer-rhost.md §The last two): a shadowed
+   CloseHandle of the game-start event (rh_handles.c defers it) and a nested row's sync_in dropping live port mirrors
+   (rh_hooks_ai.c ctx_port). **Standalone `--only '^mp-'`: 25/25 run to the end, 23/25 = pure retail**; open: mp-trio-p3
+   (state + fb) / -p1 (fb) — 0x475e07's uninitialized [ebp-8] (retail: engine_tick's pass-through EDI pushed by
+   sub_412795; the port: the previous popup kind 3 → dismiss), same doc. Next: (a) that residue model; (b) one verify
+   over every MP row on all MP scenarios; (c) unreached MP
    ids 16 / 19 / 26 (debug gate) / 38 / 52 / 53 / 58 / 70 / 81 / 89–94 (resync / error paths); (d) mp-war's shadow pass 3.
 0b. **rd campaigns** — **campaign 6 (2026-11-14, API drivers):** ai-recall filed (sub_48B7FC 0x48b7fc first time: an Equal
    field skirmish after a Play Now → New Game trip — a cold skirmish leaves byte_553080 zero, so the recall never fires;
