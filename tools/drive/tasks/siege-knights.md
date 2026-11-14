@@ -2,9 +2,9 @@
 start: custom-tour@600        # the title (custom setup reachable) — or any custom-game start you prefer; say which and why
 steps:
   - a custom game in progress: state == 3 and screen == 0
-  - an AI army with knights besieging a county of ours: count(A, owner != me and owner >= 1 and owner <= 5 and kind == 1 and knights > 0 and besieging != 0 and C(besieging).owner == me) >= 1
+  - an AI army besieging a county of ours: count(A, owner != me and owner >= 1 and owner <= 5 and kind == 1 and besieging != 0 and C(besieging).owner == me) >= 1
   - the siege battle on the battlefield: screen >= 40 and screen <= 43
-  - the AI knights' wall flag set (halve_garrison armed): u32(0x56d5c8) == 1
+  - the AI attacker's surrender flag set (halve_garrison armed): u32(0x56d5c8) == 1
   - back on the map after the battle: screen == 0
 forbid:
   - quit to the title: state == 2
@@ -35,3 +35,16 @@ the clamp, two seasons — one message per lord per season), that an AI's weapon
 spends them. So: pick the AI with the best armour economy, insult it to −30, give it battles (attack its armies), let
 it arm, keep our castle garrisoned and fed; on the field, kill its non-knights first (archers / foot) so only knights
 remain before any breach.
+
+**Campaign 6 correction (orchestrator, read the code to confirm): knights are NOT required.** sub_481B9A (all_ida.c:69750)
+counts only AI units of class < 7 (unit +0x12; +0x13 == 0 marks the AI's units: set at spawn for a human owner).
+Classes 7..10 are the siege ENGINES and are not counted. So 0x48d9ce arms the flag (0x553f74 ≤ 0x57c980) also when
+**every AI soldier is dead and only its engines remain** (0 ≤ 0), provided 0x53e990 == 0 (0 until the first wall hit
+in a fresh siege: siege-defence's catapult battle keeps it 0 for ~9700 frames; read sub_477DFC all_ida.c:65653 for the
+other way it becomes 4) and the AI's stance-4 group (the lord's: table 0x4d91d0) has no target when its 200-tick clock
+fires. The aftermath 0x4ab383 (all_ida.c:85755/85798) then halves the LOSER (the AI army) via 0x4ad8cc. Skirmish
+battles never run the aftermath — this needs a campaign siege of OUR castle by an AI, fought on the field.
+So the target is any AI siege of our castle (does an AI besieger bring engines? find out — 0x1d / the AI's siege
+preparations), and on the field: kill its foot / archers fast (a garrison heavy in crossbows / archers on the walls)
+while its engines are still short of a hit. Task `ai-surrender` (skirmish) proves the flag first; read its report if
+it exists (docs/findings/probes/ai-surrender.md).
