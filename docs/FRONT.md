@@ -51,20 +51,14 @@
 
 ## ★ Next micro-tasks
 
-0. **Multiplayer under rhost (2026-11-14, `docs/findings/multiplayer-rhost.md`)** — the fake SIGS transport (`rh_net.c`:
-   SierraNW / SNWValid answered by rhost on fixed-address thunks, the monitor thread as a virtual-time coroutine,
-   deliveries stamped by receive poll in the trace, residue-neutral entries, rollback + savestates), `rhost.py
-   mp-record` (a broker) and **`tools/rhost/mpbot.py`** (author live: N rhbot sides stepped together; tools/bot's
-   actions on a side). **8 scenarios** (mp-start / mp-play / mp-war / mp-duel × 2 sides; each side replays alone,
-   Windows ≡ wine): lobby, setup options, chat, trade, armoury, field battles, F8 restart, alliances / gifts / insults
-   between humans (type-12 popups), a human-vs-human battle, save / load, an elimination. **~245 functions only MP
-   reaches**; verify on the MP scenarios: 724 rows reached, 0 divergences except `diplo_seal` (an old port defers the
-   MP send — many old ports do: "MP … deferred"). Partitions **mpmsg / mpmsg2 / mpnet** (147 functions,
-   `tools/bf/parts.py`) being ported by three worktree agents; a second MP driver round targets the unreached
-   message ids (sieges, 3 players, a player leaving). `rd` opens MP sides (`rd new X --from mp-play-p2@6000`).
-   Next: merge the partitions + verify / hybrid / standalone on MP; the 12 CRT functions MP reaches (`_sprintf` /
-   `__output`, `__splitpath`, …); the DirectPlay transport (dialogs 0x6c / 0x82 / 0x74, IDirectPlay2A) — same
-   delivery model.
+0. **Multiplayer under rhost (2026-11-14, `docs/findings/multiplayer-rhost.md`, PROGRESS 2026-11-14)** — both transports
+   faked (SIGS, DirectPlay), each side's trace replays alone; `mpbot.py` authors live. **25 MP side traces**
+   (mp-start / play / war / duel / dp / leave / trio / skirmish / siege / five), Windows ≡ wine. **Ported + verified on
+   MP state: mpmsg 54, mpmsg2 58, mpnet 35, mpmsg3 83, mpnet2 23** (0 pending) + 12 CRT functions + the old seal ports'
+   MP arms. Next: (a) one verify over every MP row on all MP scenarios (per-partition runs passed; a pre-merge run had
+   rl_42ff10 diverge on mp-skirmish-p2 f32583 — clock reads in a busy-wait at the post-Back rejoin); (b) the standalone
+   on MP scenarios (`rhost.py standalone --only '^mp-'`; gaps: 0x4470c4, 0x49bb9d — TODO(rl-link)); (c) unreached MP
+   ids 16 / 19 / 26 (debug gate) / 38 / 52 / 53 / 58 / 70 / 81 / 89–94 (resync / error paths); (d) mp-war's shadow pass 3.
 0b. **rd campaigns** — **campaign 6 (2026-11-14, API drivers):** ai-recall filed (sub_48B7FC 0x48b7fc first time: an Equal
    field skirmish after a Play Now → New Game trip — a cold skirmish leaves byte_553080 zero, so the recall never fires;
    +12 blocks); ai-surrender blocked (probe: no skirmish attacker is knights-only; the battle ends when a side has 0 men
@@ -94,8 +88,7 @@
    2026-11-13 totals: 4 campaigns, 15 drivers (11 subagents, 4 API drivers for $9.12), 13 scenarios
    filed; corpus 22,673 → 23,255 basic blocks (62.9 % → 64.6 % of retail code bytes), 1,527 → 1,533 functions (lord_move
    0x4a599d and the F8 old-turn path among them); `rhost.py verify` on the first 5 new scenarios: 0 divergences, hybrid
-   PASS. Remaining block gaps are mostly multiplayer, dead code, device behaviour or long setups (siege on our walls with
-   AI knights; county captures; a won campaign) — `rd cov --blocks --fn X --disasm` per function.
+   PASS. Remaining block gaps are mostly multiplayer, dead code, device behaviour or long setups (county captures; a won campaign) — `rd cov --blocks --fn X --disasm` per function.
    Campaign 1–2 (7 driver subagents): filed split-arm, castle-labor (+17 blocks),
    hotkeys (+167, 5 new functions), terrain-info (+91), piece-kinds (+55); ev-13d and split-arm drove covered code (the
    premise check `rd covered` came from that). **siege-knights (halve_garrison 0x4ad8cc) blocked**: AI knights take years
