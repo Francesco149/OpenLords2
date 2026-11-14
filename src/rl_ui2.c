@@ -987,7 +987,7 @@ static int bind_hex_grid(const uint32_t a[11])   /* TODO(rl-link): engine_battle
 { return (int)engine_retail_call((uint32_t)(uintptr_t)call11_adapter, 2, 0x4bc020u, (uint32_t)(uintptr_t)a); }
 static int bind_minimap(int a, int b, int c, int d, int e, int f)   /* TODO(rl-link): engine_battlefield_render_bind_minimap_context 0x4bc107 */
 { return (int)engine_retail_call(0x4bc107u, 6, (uint32_t)a, (uint32_t)b, (uint32_t)c, (uint32_t)d, (uint32_t)e, (uint32_t)f); }
-static void mp_leave_session(void) { engine_retail_call(0x4b743bu, 0); }   /* TODO(rl-extern): 0x4b743b */
+static void mp_leave_session(void) { rl_4b743b(); }   /* leave the MP session (rl mpnet2) */
 static void mp_close(int a) { engine_retail_call(0x43e8f4u, 1, (uint32_t)a); }   /* TODO(rl-extern): 0x43e8f4 */
 
 /* Port of FUN_0043d5b7 (146 B) — Go (the skirmish's battle start): in MP only when the host's ready flag
@@ -1401,7 +1401,7 @@ static void dp_drop(int close)   /* Close (+0x10) when asked, Release (+8), forg
 /* the dialog procs (unported; retail's entries) — TODO(rl-extern): 0x4b7f78 (DialogFunc), 0x4b8335, 0x4b8439, 0x4b85b7 */
 #define DLG(va) ((DLGPROC)(uintptr_t)(va))
 static int mp_resume(void) { return (int)engine_retail_call(0x4b7a9au, 0); }   /* TODO(rl-extern): 0x4b7a9a */
-static int mp_lobby_load(void) { return (int)engine_retail_call(0x49792eu, 0); }   /* TODO(rl-link): 0x49792e (engine.c / game_init.c) */
+static int mp_lobby_load(void) { return rl_49792e(); }   /* the MP lobby's game start (rl mpnet2) */
 static void log3(uint32_t fmt_va, int a, int n) { rl_4afab9((int)(uintptr_t)&AT(uint8_t, g_rl_4e2ae4, 0x4e2ae4u, fmt_va), a, n); }
 
 /* Port of FUN_004b7585 (1118 B) — open the DirectPlay session for the session GUID `g0..g3` (by value): with a

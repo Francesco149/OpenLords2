@@ -1631,8 +1631,7 @@ static int p5_minimap_plot(int county, int x, int y, int mode)   /* TODO(rl-link
 { return (int)engine_retail_call(0x410cbdu, 4, (uint32_t)county, (uint32_t)x, (uint32_t)y, (uint32_t)mode); }
 static int p5_title_setup(int tab) { return (int)engine_retail_call(0x41f6c7u, 1, (uint32_t)tab); }   /* TODO(rl-link): engine_title_render_setup_screen 0x41f6c7 */
 static int p5_title_41f77a(int tab) { return (int)engine_retail_call(0x41f77au, 1, (uint32_t)tab); }  /* TODO(rl-link): 0x41f77a (engine_title_render) */
-/* unported — TODO(rl-extern) */
-static int p5_title_420630(int tab) { return (int)engine_retail_call(0x420630u, 1, (uint32_t)tab); }  /* TODO(rl-extern): 0x420630 */
+static int p5_title_420630(int tab) { return rl_420630(tab); }  /* the MP skirmish setup page (rl mpnet2) */
 
 /* ================================================================ the menu bar */
 
