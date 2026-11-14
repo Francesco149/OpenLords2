@@ -63,3 +63,15 @@ Then: insult it to −30 (two seasons), win battles against it for vendetta stag
 6 per sack, buys grain), keep a garrisoned castle (build one if the start has none). Before taking the field, check
 the besieger carries class-6 knights AND engines. On the field kill its non-knights first, keep its engines alive, no
 breach. Checkpoint every stage so a later attempt can resume.
+
+**Attempt 6 (2026-11-14 night) — resume attempt 5 at the battle.** Attempt 5 (`siegeknights5`, report in
+docs/findings/probes/siege-knights.md) reached step 3: the Baron's A15 (916 men: 516 peasants, 330 archers, 70
+knights, 3 engines) besieges our royal castle (county 10, France, two nobles), taken to the field; checkpoints
+`siegeknights5:prompt` (screen 18, f77113) and `:field` (f77118). Counters there: engines u32(0x553ff0) = 3, breaches
+u32(0x53e990) = 0, AI non-knights u32(0x553f74) = 916 vs knights u32(0x57c980) = 70. The AI sat ~25 hexes south and
+never assaulted; opening our gate (sub_43BBE7 → 0x496b9f) counts as a breach (+4). Work only on the battle: make the
+AI's peasants / archers die while its knights and engines live and nothing breaches — e.g. provoke it with ranged hits
+on its NON-knight groups so it advances into the walls' fire (read 0x48d9ce and the AI's group stance code first:
+what makes an attacker group advance?), or retreat-and-return tricks; try alternatives with checkpoints (`rd search`
+over battlefield actions is possible). If the royal castle's moat makes it hopeless, say so and say which earlier
+checkpoint + castle choice would work. `rd cov --blocks` at the end.
