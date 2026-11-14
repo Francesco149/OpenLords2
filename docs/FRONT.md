@@ -52,11 +52,19 @@
 ## ★ Next micro-tasks
 
 0. **Multiplayer under rhost (2026-11-14, `docs/findings/multiplayer-rhost.md`)** — the fake SIGS transport (`rh_net.c`:
-   SierraNW / SNWValid answered by rhost, the monitor thread as a virtual-time coroutine, deliveries stamped by receive
-   poll in the trace) + `rhost.py mp-record` (a broker, two wine processes): a 2-player game from the title to 1268
-   Winter (`mp-start-p1` / `-p2`), each side replays alone, Windows ≡ wine; +85 functions / 21.5 KB. Next: play
-   deeper MP (turns in lockstep, diplomacy / battles between humans, chat, a player leaving, 3–5 players), savestate
-   support (rd on MP), then verify + port the MP rows (★4's 0x4d57f0 / 0x4d5c98 tables).
+   SierraNW / SNWValid answered by rhost on fixed-address thunks, the monitor thread as a virtual-time coroutine,
+   deliveries stamped by receive poll in the trace, residue-neutral entries, rollback + savestates), `rhost.py
+   mp-record` (a broker) and **`tools/rhost/mpbot.py`** (author live: N rhbot sides stepped together; tools/bot's
+   actions on a side). **8 scenarios** (mp-start / mp-play / mp-war / mp-duel × 2 sides; each side replays alone,
+   Windows ≡ wine): lobby, setup options, chat, trade, armoury, field battles, F8 restart, alliances / gifts / insults
+   between humans (type-12 popups), a human-vs-human battle, save / load, an elimination. **~245 functions only MP
+   reaches**; verify on the MP scenarios: 724 rows reached, 0 divergences except `diplo_seal` (an old port defers the
+   MP send — many old ports do: "MP … deferred"). Partitions **mpmsg / mpmsg2 / mpnet** (147 functions,
+   `tools/bf/parts.py`) being ported by three worktree agents; a second MP driver round targets the unreached
+   message ids (sieges, 3 players, a player leaving). `rd` opens MP sides (`rd new X --from mp-play-p2@6000`).
+   Next: merge the partitions + verify / hybrid / standalone on MP; the 12 CRT functions MP reaches (`_sprintf` /
+   `__output`, `__splitpath`, …); the DirectPlay transport (dialogs 0x6c / 0x82 / 0x74, IDirectPlay2A) — same
+   delivery model.
 0b. **rd campaigns** — **campaign 6 (2026-11-14, API drivers):** ai-recall filed (sub_48B7FC 0x48b7fc first time: an Equal
    field skirmish after a Play Now → New Game trip — a cold skirmish leaves byte_553080 zero, so the recall never fires;
    +12 blocks); ai-surrender blocked (probe: no skirmish attacker is knights-only; the battle ends when a side has 0 men
