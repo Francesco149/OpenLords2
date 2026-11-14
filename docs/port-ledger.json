@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 788,
-  "ported": 815,
-  "unported": 844,
+  "ported": 864,
+  "unported": 795,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 1603,
-  "pct_touched": 65.5,
+  "touched": 1652,
+  "pct_touched": 67.5,
   "pct_tested": 32.2,
   "bytes_total": 838629,
-  "bytes_touched": 657988,
-  "pct_bytes_touched": 78.5
+  "bytes_touched": 668545,
+  "pct_bytes_touched": 79.7
  },
  "orphan_refs": [
   "0x004148",
@@ -8418,7 +8418,8 @@
     "src/engine.c",
     "src/engine.h",
     "src/engine_rate.c",
-    "src/engine_turn.c"
+    "src/engine_turn.c",
+    "src/rl_mpmsg.c"
    ]
   },
   {
@@ -8429,7 +8430,8 @@
    "status": "tested",
    "src": [
     "src/engine.h",
-    "src/engine_rate.c"
+    "src/engine_rate.c",
+    "src/rl_mpmsg.c"
    ]
   },
   {
@@ -8440,7 +8442,8 @@
    "status": "tested",
    "src": [
     "src/engine.h",
-    "src/engine_rate.c"
+    "src/engine_rate.c",
+    "src/rl_mpmsg.c"
    ]
   },
   {
@@ -8448,8 +8451,10 @@
    "name": "FUN_0043e5c1",
    "size": 167,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x43e668",
@@ -8480,8 +8485,10 @@
    "name": "FUN_0043e98b",
    "size": 87,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x43e9e2",
@@ -8501,8 +8508,10 @@
    "name": "FUN_0043eac1",
    "size": 735,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x43eda0",
@@ -8519,8 +8528,10 @@
    "name": "FUN_0043f01d",
    "size": 558,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x43f24b",
@@ -8577,8 +8588,10 @@
    "name": "FUN_0043f4b7",
    "size": 270,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x43f5c5",
@@ -8611,8 +8624,10 @@
    "name": "FUN_0043f8ff",
    "size": 58,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x43f939",
@@ -8667,8 +8682,10 @@
    "name": "FUN_0043fd2a",
    "size": 413,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x43fec7",
@@ -8683,8 +8700,10 @@
    "name": "FUN_0043fed2",
    "size": 54,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x43ff08",
@@ -8722,8 +8741,10 @@
    "name": "FUN_00440038",
    "size": 81,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x440089",
@@ -8749,7 +8770,8 @@
    "status": "tested",
    "src": [
     "src/engine.h",
-    "src/engine_state_hash.c"
+    "src/engine_state_hash.c",
+    "src/rl_mpmsg.c"
    ]
   },
   {
@@ -8757,16 +8779,20 @@
    "name": "FUN_004401ba",
    "size": 60,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x4401f6",
    "name": "FUN_004401f6",
    "size": 59,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x440231",
@@ -8776,7 +8802,8 @@
    "status": "tested",
    "src": [
     "src/engine.h",
-    "src/engine_state_hash.c"
+    "src/engine_state_hash.c",
+    "src/rl_mpmsg.c"
    ]
   },
   {
@@ -8794,8 +8821,10 @@
    "name": "FUN_004407e5",
    "size": 426,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x44098f",
@@ -8820,8 +8849,10 @@
    "name": "FUN_00440dd2",
    "size": 638,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x441050",
@@ -8844,192 +8875,240 @@
    "name": "FUN_00441066",
    "size": 87,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x4410bd",
    "name": "FUN_004410bd",
    "size": 349,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x44121a",
    "name": "FUN_0044121a",
    "size": 178,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x4412cc",
    "name": "FUN_004412cc",
    "size": 216,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x4413a4",
    "name": "FUN_004413a4",
    "size": 681,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x44164d",
    "name": "FUN_0044164d",
    "size": 696,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x441905",
    "name": "FUN_00441905",
    "size": 244,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x4419f9",
    "name": "FUN_004419f9",
    "size": 341,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x441b4e",
    "name": "FUN_00441b4e",
    "size": 56,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x441b86",
    "name": "FUN_00441b86",
    "size": 420,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x441d2a",
    "name": "FUN_00441d2a",
    "size": 245,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x441e1f",
    "name": "FUN_00441e1f",
    "size": 267,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x441f2a",
    "name": "FUN_00441f2a",
    "size": 38,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x441f50",
    "name": "FUN_00441f50",
    "size": 38,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x441f76",
    "name": "FUN_00441f76",
    "size": 158,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x442014",
    "name": "FUN_00442014",
    "size": 153,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x4420ad",
    "name": "FUN_004420ad",
    "size": 278,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x4421c3",
    "name": "FUN_004421c3",
    "size": 326,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x442309",
    "name": "FUN_00442309",
    "size": 88,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x442361",
    "name": "FUN_00442361",
    "size": 88,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x4423b9",
    "name": "FUN_004423b9",
    "size": 81,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x44240a",
    "name": "FUN_0044240a",
    "size": 62,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x442448",
    "name": "FUN_00442448",
    "size": 142,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x4424d6",
    "name": "FUN_004424d6",
    "size": 137,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x44255f",
@@ -9052,32 +9131,40 @@
    "name": "FUN_004425bf",
    "size": 530,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x4427d1",
    "name": "FUN_004427d1",
    "size": 545,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x4429f2",
    "name": "FUN_004429f2",
    "size": 51,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x442a25",
    "name": "FUN_00442a25",
    "size": 90,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x442a7f",
@@ -9116,16 +9203,20 @@
    "name": "FUN_00442afd",
    "size": 11,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x442b08",
    "name": "FUN_00442b08",
    "size": 16,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x442b18",
@@ -9148,48 +9239,60 @@
    "name": "FUN_00442bad",
    "size": 84,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x442c01",
    "name": "FUN_00442c01",
    "size": 62,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x442c3f",
    "name": "FUN_00442c3f",
    "size": 67,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x442c82",
    "name": "FUN_00442c82",
    "size": 55,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x442cb9",
    "name": "FUN_00442cb9",
    "size": 29,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x442cd6",
    "name": "FUN_00442cd6",
    "size": 42,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg.c"
+   ]
   },
   {
    "va": "0x442d00",
@@ -12444,8 +12547,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/blit_table_452820.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12455,8 +12557,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/blit_table_45337b.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12466,8 +12567,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/blit_table_4538f6.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12477,8 +12577,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_table_453e71.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12488,8 +12587,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_455f04.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12499,8 +12597,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_456fd8.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12510,8 +12607,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_4580a9.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12521,8 +12617,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_459258.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12692,8 +12787,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/blit_table_463b42.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12703,8 +12797,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/blit_table_463c06.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12714,8 +12807,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/blit_table_463c62.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12725,8 +12817,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_table_463cbe.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12736,8 +12827,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_table_463e91.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12747,8 +12837,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_table_463fa5.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12758,8 +12847,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_4640b6.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -12769,8 +12857,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_464209.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -17645,7 +17732,6 @@
     "src/engine_pl8.h",
     "src/game_init.c",
     "src/game_init.h",
-    "src/gen/pl8_table.h",
     "src/main.c",
     "src/rl_turn.c"
    ]

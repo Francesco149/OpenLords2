@@ -11,10 +11,10 @@ void engine_retail_call_bind(engine_retail_call_fn fn) { s_fn = fn; }
 
 uint32_t engine_retail_call(uint32_t va, int n, ...)
 {
-    uint32_t a[8] = {0};
+    uint32_t a[12] = {0};
     va_list ap;
     va_start(ap, n);
-    for (int i = 0; i < n && i < 8; i++)
+    for (int i = 0; i < n && i < 12; i++)
         a[i] = va_arg(ap, uint32_t);
     va_end(ap);
     if (!s_fn) {

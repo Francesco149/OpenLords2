@@ -12,4 +12,4 @@
 
 typedef uint32_t (*engine_retail_call_fn)(uint32_t va, int n, const uint32_t *args);
 void     engine_retail_call_bind(engine_retail_call_fn fn);
-uint32_t engine_retail_call(uint32_t va, int n, ...);   /* n <= 8 int arguments */
+uint32_t engine_retail_call(uint32_t va, int n, ...);   /* n <= 12 int arguments (0x447136 takes 12) */

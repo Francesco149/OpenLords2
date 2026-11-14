@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **1603** (65.5%) — tested 788, ported 815
-- code bytes touched: **78.5%** (657,988 / 838,629 B)
-- unported: **844**
+- touched: **1652** (67.5%) — tested 788, ported 864
+- code bytes touched: **79.7%** (668,545 / 838,629 B)
+- unported: **795**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (788) — ported + host unit suite
@@ -294,13 +294,13 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x43ce1a | FUN_0043ce1a | 1263 | engine.c, engine_army_select.c, engine_army_select.h (+4) |
 | 0x43d309 | FUN_0043d309 | 675 | engine_army_select.c, engine_army_select.h, rl_ctl.c |
 | 0x43de70 | FUN_0043de70 | 1211 | engine.c, engine.h, engine_rate.c (+1) |
-| 0x43e330 | FUN_0043e330 | 259 | engine.c, engine.h, engine_rate.c (+1) |
-| 0x43e433 | FUN_0043e433 | 218 | engine.h, engine_rate.c |
-| 0x43e50d | FUN_0043e50d | 180 | engine.h, engine_rate.c |
+| 0x43e330 | FUN_0043e330 | 259 | engine.c, engine.h, engine_rate.c (+2) |
+| 0x43e433 | FUN_0043e433 | 218 | engine.h, engine_rate.c, rl_mpmsg.c |
+| 0x43e50d | FUN_0043e50d | 180 | engine.h, engine_rate.c, rl_mpmsg.c |
 | 0x43e9e2 | FUN_0043e9e2 | 223 | engine_roster.c, engine_roster.h, main.c (+1) |
 | 0x43ffc3 | FUN_0043ffc3 | 117 | engine_state_hash.c, rl_host.c |
-| 0x44015a | FUN_0044015a | 96 | engine.h, engine_state_hash.c |
-| 0x440231 | FUN_00440231 | 1077 | engine.h, engine_state_hash.c |
+| 0x44015a | FUN_0044015a | 96 | engine.h, engine_state_hash.c, rl_mpmsg.c |
+| 0x440231 | FUN_00440231 | 1077 | engine.h, engine_state_hash.c, rl_mpmsg.c |
 | 0x4472ce | FUN_004472ce | 1046 | engine.c, engine_delayed_action.c, engine_delayed_action.h (+1) |
 | 0x4479de | FUN_004479de | 11 | engine_handlers_da.h |
 | 0x447ddb | FUN_00447ddb | 11 | engine_handlers_da.h |
@@ -548,7 +548,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x497ced | FUN_00497ced | 376 | engine_load_pump.c, engine_territory.c, engine_territory.h (+4) |
 | 0x497e65 | FUN_00497e65 | 1025 | engine.c, engine.h, game_init.c (+2) |
 | 0x498270 | FUN_00498270 | 327 | engine_map_init.c, engine_map_init.h, main.c (+1) |
-| 0x4984dc | FUN_004984dc | 731 | engine.c, engine_ingame_input.c, engine_pl8.c (+6) |
+| 0x4984dc | FUN_004984dc | 731 | engine.c, engine_ingame_input.c, engine_pl8.c (+5) |
 | 0x499034 | FUN_00499034 | 197 | engine_menu_input.c, gfx.c, gfx.h (+1) |
 | 0x4997bf | FUN_004997bf | 151 | engine_workforce_hud.c, engine_workforce_hud.h, rl_turn.c |
 | 0x499a1c | FUN_00499a1c | 174 | engine.c, gfx.c, gfx.h (+2) |
@@ -810,7 +810,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (815) — reimplemented, no host test yet
+## ported (864) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -1150,17 +1150,66 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x43dc1d | FUN_0043dc1d | 358 | rl_ui2.c |
 | 0x43dd83 | FUN_0043dd83 | 113 | rl_ui2.c |
 | 0x43ddf4 | FUN_0043ddf4 | 114 | rl_ui2.c |
+| 0x43e5c1 | FUN_0043e5c1 | 167 | rl_mpmsg.c |
+| 0x43e98b | FUN_0043e98b | 87 | rl_mpmsg.c |
+| 0x43eac1 | FUN_0043eac1 | 735 | rl_mpmsg.c |
 | 0x43eda0 | FUN_0043eda0 | 637 | rl_glue.c |
+| 0x43f01d | FUN_0043f01d | 558 | rl_mpmsg.c |
 | 0x43f24b | FUN_0043f24b | 185 | rl_ui2.c |
 | 0x43f304 | FUN_0043f304 | 78 | engine_bf_extern.c |
 | 0x43f352 | FUN_0043f352 | 236 | rl_ui2.c |
 | 0x43f43e | FUN_0043f43e | 70 | rl_quit.c |
 | 0x43f484 | FUN_0043f484 | 51 | rl_ui2.c |
+| 0x43f4b7 | FUN_0043f4b7 | 270 | rl_mpmsg.c |
 | 0x43f7e3 | FUN_0043f7e3 | 114 | rl_host.c |
+| 0x43f8ff | FUN_0043f8ff | 58 | rl_mpmsg.c |
+| 0x43fd2a | FUN_0043fd2a | 413 | rl_mpmsg.c |
+| 0x43fed2 | FUN_0043fed2 | 54 | rl_mpmsg.c |
 | 0x43ff08 | FUN_0043ff08 | 91 | rl_host.c |
 | 0x43ff63 | FUN_0043ff63 | 96 | rl_host.c |
+| 0x440038 | FUN_00440038 | 81 | rl_mpmsg.c |
+| 0x4401ba | FUN_004401ba | 60 | rl_mpmsg.c |
+| 0x4401f6 | FUN_004401f6 | 59 | rl_mpmsg.c |
 | 0x440666 | FUN_00440666 | 383 | rl_glue.c |
+| 0x4407e5 | FUN_004407e5 | 426 | rl_mpmsg.c |
 | 0x44098f | FUN_0044098f | 595 | rl_render.c |
+| 0x440dd2 | FUN_00440dd2 | 638 | rl_mpmsg.c |
+| 0x441066 | FUN_00441066 | 87 | rl_mpmsg.c |
+| 0x4410bd | FUN_004410bd | 349 | rl_mpmsg.c |
+| 0x44121a | FUN_0044121a | 178 | rl_mpmsg.c |
+| 0x4412cc | FUN_004412cc | 216 | rl_mpmsg.c |
+| 0x4413a4 | FUN_004413a4 | 681 | rl_mpmsg.c |
+| 0x44164d | FUN_0044164d | 696 | rl_mpmsg.c |
+| 0x441905 | FUN_00441905 | 244 | rl_mpmsg.c |
+| 0x4419f9 | FUN_004419f9 | 341 | rl_mpmsg.c |
+| 0x441b4e | FUN_00441b4e | 56 | rl_mpmsg.c |
+| 0x441b86 | FUN_00441b86 | 420 | rl_mpmsg.c |
+| 0x441d2a | FUN_00441d2a | 245 | rl_mpmsg.c |
+| 0x441e1f | FUN_00441e1f | 267 | rl_mpmsg.c |
+| 0x441f2a | FUN_00441f2a | 38 | rl_mpmsg.c |
+| 0x441f50 | FUN_00441f50 | 38 | rl_mpmsg.c |
+| 0x441f76 | FUN_00441f76 | 158 | rl_mpmsg.c |
+| 0x442014 | FUN_00442014 | 153 | rl_mpmsg.c |
+| 0x4420ad | FUN_004420ad | 278 | rl_mpmsg.c |
+| 0x4421c3 | FUN_004421c3 | 326 | rl_mpmsg.c |
+| 0x442309 | FUN_00442309 | 88 | rl_mpmsg.c |
+| 0x442361 | FUN_00442361 | 88 | rl_mpmsg.c |
+| 0x4423b9 | FUN_004423b9 | 81 | rl_mpmsg.c |
+| 0x44240a | FUN_0044240a | 62 | rl_mpmsg.c |
+| 0x442448 | FUN_00442448 | 142 | rl_mpmsg.c |
+| 0x4424d6 | FUN_004424d6 | 137 | rl_mpmsg.c |
+| 0x4425bf | FUN_004425bf | 530 | rl_mpmsg.c |
+| 0x4427d1 | FUN_004427d1 | 545 | rl_mpmsg.c |
+| 0x4429f2 | FUN_004429f2 | 51 | rl_mpmsg.c |
+| 0x442a25 | FUN_00442a25 | 90 | rl_mpmsg.c |
+| 0x442afd | FUN_00442afd | 11 | rl_mpmsg.c |
+| 0x442b08 | FUN_00442b08 | 16 | rl_mpmsg.c |
+| 0x442bad | FUN_00442bad | 84 | rl_mpmsg.c |
+| 0x442c01 | FUN_00442c01 | 62 | rl_mpmsg.c |
+| 0x442c3f | FUN_00442c3f | 67 | rl_mpmsg.c |
+| 0x442c82 | FUN_00442c82 | 55 | rl_mpmsg.c |
+| 0x442cb9 | FUN_00442cb9 | 29 | rl_mpmsg.c |
+| 0x442cd6 | FUN_00442cd6 | 42 | rl_mpmsg.c |
 | 0x446f06 | FUN_00446f06 | 126 | rl_host.c |
 | 0x4477e7 | FUN_004477e7 | 503 | rl_ui3.c |
 | 0x448d7e | FUN_00448d7e | 148 | rl_glue.c |
@@ -1172,14 +1221,14 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x451f8a | FUN_00451f8a | 66 | rl_glue.c |
 | 0x45242b | FUN_0045242b | 11 | rl_misc.c |
 | 0x45280b | FUN_0045280b | 11 | rl_io.c |
-| 0x452820 | FUN_00452820 | 2907 | engine_map_terrain.c, blit_table_452820.h |
-| 0x45337b | FUN_0045337b | 1403 | engine_map_terrain.c, blit_table_45337b.h |
-| 0x4538f6 | FUN_004538f6 | 1403 | engine_map_terrain.c, blit_table_4538f6.h |
-| 0x453e71 | FUN_00453e71 | 8339 | engine_map_terrain.c, drawb_table_453e71.h |
-| 0x455f04 | FUN_00455f04 | 4308 | engine_map_terrain.c, drawb_stripb_455f04.h |
-| 0x456fd8 | FUN_00456fd8 | 4305 | engine_map_terrain.c, drawb_stripb_456fd8.h |
-| 0x4580a9 | FUN_004580a9 | 4527 | engine_map_terrain.c, drawb_stripb_4580a9.h |
-| 0x459258 | FUN_00459258 | 4377 | engine_map_terrain.c, drawb_stripb_459258.h |
+| 0x452820 | FUN_00452820 | 2907 | engine_map_terrain.c |
+| 0x45337b | FUN_0045337b | 1403 | engine_map_terrain.c |
+| 0x4538f6 | FUN_004538f6 | 1403 | engine_map_terrain.c |
+| 0x453e71 | FUN_00453e71 | 8339 | engine_map_terrain.c |
+| 0x455f04 | FUN_00455f04 | 4308 | engine_map_terrain.c |
+| 0x456fd8 | FUN_00456fd8 | 4305 | engine_map_terrain.c |
+| 0x4580a9 | FUN_004580a9 | 4527 | engine_map_terrain.c |
+| 0x459258 | FUN_00459258 | 4377 | engine_map_terrain.c |
 | 0x460501 | FUN_00460501 | 668 | engine_map_terrain.c |
 | 0x46079d | FUN_0046079d | 321 | engine_map_terrain.c |
 | 0x4608de | FUN_004608de | 318 | engine_map_terrain.c |
@@ -1188,14 +1237,14 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x461623 | FUN_00461623 | 1073 | engine_map_terrain.c |
 | 0x461a54 | FUN_00461a54 | 1191 | engine_map_terrain.c |
 | 0x461efb | FUN_00461efb | 1145 | engine_map_terrain.c |
-| 0x463b42 | FUN_00463b42 | 196 | engine_map_terrain.c, blit_table_463b42.h |
-| 0x463c06 | FUN_00463c06 | 92 | engine_map_terrain.c, blit_table_463c06.h |
-| 0x463c62 | FUN_00463c62 | 92 | engine_map_terrain.c, blit_table_463c62.h |
-| 0x463cbe | FUN_00463cbe | 467 | engine_map_terrain.c, drawb_table_463cbe.h |
-| 0x463e91 | FUN_00463e91 | 276 | engine_map_terrain.c, drawb_table_463e91.h |
-| 0x463fa5 | FUN_00463fa5 | 273 | engine_map_terrain.c, drawb_table_463fa5.h |
-| 0x4640b6 | FUN_004640b6 | 339 | engine_map_terrain.c, drawb_stripb_4640b6.h |
-| 0x464209 | FUN_00464209 | 345 | engine_map_terrain.c, drawb_stripb_464209.h |
+| 0x463b42 | FUN_00463b42 | 196 | engine_map_terrain.c |
+| 0x463c06 | FUN_00463c06 | 92 | engine_map_terrain.c |
+| 0x463c62 | FUN_00463c62 | 92 | engine_map_terrain.c |
+| 0x463cbe | FUN_00463cbe | 467 | engine_map_terrain.c |
+| 0x463e91 | FUN_00463e91 | 276 | engine_map_terrain.c |
+| 0x463fa5 | FUN_00463fa5 | 273 | engine_map_terrain.c |
+| 0x4640b6 | FUN_004640b6 | 339 | engine_map_terrain.c |
+| 0x464209 | FUN_00464209 | 345 | engine_map_terrain.c |
 | 0x46a101 | FUN_0046a101 | 165 | rl_io.c |
 | 0x46c40c | FUN_0046c40c | 57 | engine_bf_setup.c |
 | 0x46c4a3 | FUN_0046c4a3 | 277 | rl_glue.c |
