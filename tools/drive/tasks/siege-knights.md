@@ -75,3 +75,10 @@ on its NON-knight groups so it advances into the walls' fire (read 0x48d9ce and 
 what makes an attacker group advance?), or retreat-and-return tricks; try alternatives with checkpoints (`rd search`
 over battlefield actions is possible). If the royal castle's moat makes it hopeless, say so and say which earlier
 checkpoint + castle choice would work. `rd cov --blocks` at the end.
+
+**Attempt 7 brief (after attempt 6, probes/siege-knights.md):** with a ram among the attacker's engines, "ram mode"
+u32(0x4eeb6c) (rand < 128 − 20·towers − 10·catapults if a ram) keeps every AI group at a staging point until a breach,
+and dead peasants filling the moat (0x553fb0) wake the engines; the ram's gate breach (+4) then kills the flag. Needs
+a siege by an AI army with NO ram (ram mode off: the groups come to the walls) or our castle without a moat (Starting
+Castle below royal). Checkpoint `siegeknights6:nopeas` (all peasants dead, engines whole) is a fallback: kill the ram
+first (slow), keep a tower alive out of range, shoot the archers from the south-east tower.

@@ -230,3 +230,79 @@ The driver's report, as written:
 
 ---
 model claude-opus-5-5, effort high, 177 turns, $5.10, 43 min
+
+# Attempt 6 (run `siegeknights6`, API driver, 2026-11-14) — the battle from siegeknights5:prompt; blocked by ram mode
+
+The driver's report, as written:
+
+---
+
+**Run `siegeknights6`: blocked. Steps 1–3 hold, steps 4–5 were not reached.** The surrender flag u32(0x56d5c8) was never set, so halve_garrison (0x4ad8cc) is still unreached. The movie is 109,936 frames, `rd verify` gives MATCH, and the battle is still running at the end with no breach. I did not run `rd check`, because it would fail on steps 4 and 5.
+
+**Start:** `siegeknights5:prompt` (f77113, screen 18), as attempt 6 asks. This is the Baron's A15 besieging our royal castle in county 10: 516 peasants, 330 archers, 70 knights, 2 siege towers and 1 ram.
+
+**Step frames:**
+- Step 1 (game on the map): carried over from siegeknights5, f1757.
+- Step 2 (AI besieging us): carried over from siegeknights5, f76851.
+- Step 3 (on the battlefield): left gauntlet at f77116, screen 41 from then on.
+
+**Where the AI army stands at the end:**
+
+| | start of battle | end (f109936) |
+|---|---|---|
+| AI non-knights, u32(0x553f74) | 916 | 210 (144 archers left) |
+| AI knights, u32(0x57c980) | 70 | 66 |
+| Our garrison | 450 | 375 |
+| Engines alive, u32(0x553ff0) | 3 | 3, but towers at 7 and 1 hp, ram at 25 |
+| Breaches, u32(0x53e990) | 0 | 0 |
+
+**Checkpoints:**
+- `nopeas` f95878: all peasants dead, engines whole.
+- `t2` f98246, `t3` f102787.
+- `end` f109936.
+
+**Why the AI never assaults (decompile, named state):**
+- **Ram mode, u32(0x4eeb6c).** It is set at battle setup (all_ida.c:67608) as rand < v3. v3 is 128 if the army has a ram (piece +0x17E), minus 20 per tower (+0x17C), minus 10 per catapult (+0x17A). Here it is 1, the same for every press frame 0–60 on the prompt. It is cleared only when no class-9 unit (the ram) is left (all_ida.c:69865).
+- **What ram mode does.** Advance orders (sub_48D013, sub_48BCFB) send every group to a staging point: (u32(0x55cdd0)+2, u32(0x55cdd4)+12) = (39,65), about 12 rows south of the gate.
+- **The real attack branches need a breach.** They all require u32(0x553fb0) > 2 and u32(0x53e990) != 0. So in a battle with no breach, the AI just stands and shoots.
+- **What u32(0x553fb0) counts.** It is +1 per moat or wall-edge cell that turns into ground (sub_47DD86): peasants dying in the moat fill it. At 8 or more the ram's stance 7 (0x48dfbb) sends the ram to the gate. Above 10 the towers' stance 6 (0x48ddc7) look for a wall to dock at.
+- **Stance tables.** Siege-attacker stances come from the table at 0x4d91d0: 1 = 0x48d16e (archers), 2 = 0x48d412 (peasants), 4 = 0x48d9ce (knights), 6 = 0x48ddc7 (towers), 7 = 0x48dfbb (ram).
+- **The flag.** 0x48d9ce sets it when 0x553f74 <= 0x57c980 and 0x53e990 == 0, on the knights group's 200-tick clock while +0xd is 0. Once set, sub_477DFC ends the battle at once as a surrender, and the aftermath (all_ida.c:85755 / 85798) calls halve_garrison whichever side won.
+- **Engines must stay alive.** If 0x553ff0 reaches 0 with no breach and kit 0x55401C > 2, the defender wins at once (all_ida.c:65653).
+
+**What worked on the field:**
+- **Peasants:** our crossbows and archers, marched by minimap click onto the south-west tower (33–35, 54–56), killed all 516 while the peasants waited at the moat bank. This took about 14,000 frames, and we lost only about 30 men (f81000–f95700).
+- **Archers:** moving our shooters to the south-east tower (42–45, 54–55) brought the AI archers from 297 down to about 144.
+
+**What blocked it:**
+1. **Dead peasants filled the moat** (0x553fb0 went 0 → 12 from f84600), which woke the engines. The towers stuck at the moat bank and never docked.
+2. **Tower 33 was in the ram's way.** Our units shot it on their own; once it died (f102351) the ram walked to the gate at (39,56) and started ramming. Gate damage u32(0x568da4) climbed about 400 per 20 frames, passed 20000, and gave the +4 breach at f104529. I loaded back to `nopeas` and avoided this on the second branch.
+3. **Our units auto-target the nearest enemy, and the engines are always nearest.** An explicit attack order on an AI archer out of range makes our units leave the wall and pile up at the closed gatehouse, where they do nothing.
+4. **The AI archers stay put.** They hold (45–50, 63–65), which only the south-east tower can reach, and tower 33 at (41,57) is closer to that tower than they are. The remaining 144 cannot be killed without also killing the engines.
+
+**Advice for the next attempt:**
+- **Best start:** a siege where the attacker has no ram, so ram mode is off and the AI comes to the walls. Or a castle without a moat (no moat filling).
+- **Resuming from `nopeas`:** kill the ram first while it is stuck (but slowly: about 1 hp per 300 frames). Leave a tower with hp that is out of our range. Then shoot archers from the south-east tower rim around (48,55).
+- **A tool would make the battle playable:** a battlefield helper that orders a unit to attack a given unit index, plus a "hold position / fire only" order.
+
+**Game facts learned:**
+- Battlefield group IDs get reused: a new drag selection takes a free group number, such as an emptied AI group 5.
+- Unit +0x164 is the target unit and +0x21 the state (1 move, 3 approach, 5 fire, 14 ramming, 17 AI attack).
+- Our class-10 tower crews can be selected and wander off; one died.
+- ESC on the battlefield opens "Exit the game?". Its thumbs-down at (285,222) only registers if mouse moves follow the click.
+
+**rd cov:**
+- Functions: 1060 reached, 0 new.
+- Blocks: 15987 reached, 101 new to the corpus (1608 B). The main ones:
+  - siege AI stances: sub_48DDC7 (13 blocks, f79561), sub_48D412 (5), sub_48D9CE (2, f79361 — the flag store itself not reached), sub_48DFBB (2, f88040)
+  - movement / targeting: sub_48BCFB (4), sub_48D013 (1)
+  - other battlefield code: sub_49459A (6), sub_492C8B (7), sub_478987 (3), sub_490FA2 / sub_491147 (2 each)
+  - sub_453E71 (29 blocks, f17480), from the inherited setup.
+
+**What the tool lacked:**
+- `rd cell` and `@A` do not work on the battlefield. I worked around it with `rd ram define` expressions that turn a unit index into screen coordinates (`bf_tgt`, `bf_tx`, `bf_ty` in this run's vars).
+- There is no "hold position" or attack-unit-N command.
+- `--until` fires on the transient screen 42 during a drag, which stopped two plays early.
+
+---
+model claude-opus-5-5, effort high, 116 turns, $3.60, 27 min
