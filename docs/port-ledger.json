@@ -5,14 +5,14 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 788,
-  "ported": 1071,
-  "unported": 588,
+  "ported": 1072,
+  "unported": 587,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 1859,
+  "touched": 1860,
   "pct_touched": 76.0,
   "pct_tested": 32.2,
   "bytes_total": 838629,
-  "bytes_touched": 705881,
+  "bytes_touched": 706043,
   "pct_bytes_touched": 84.2
  },
  "orphan_refs": [
@@ -23624,8 +23624,10 @@
    "name": "operator_delete",
    "size": 162,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt.c"
+   ]
   },
   {
    "va": "0x4c2a80",

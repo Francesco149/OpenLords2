@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **1859** (76.0%) — tested 788, ported 1071
-- code bytes touched: **84.2%** (705,881 / 838,629 B)
-- unported: **588**
+- touched: **1860** (76.0%) — tested 788, ported 1072
+- code bytes touched: **84.2%** (706,043 / 838,629 B)
+- unported: **587**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (788) — ported + host unit suite
@@ -810,7 +810,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (1071) — reimplemented, no host test yet
+## ported (1072) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -1822,6 +1822,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4c24e0 | _localtime | 597 | rl_crt.c |
 | 0x4c2740 | _time | 390 | rl_crt.c |
 | 0x4c28d0 | _strncpy | 254 | rl_crt.c |
+| 0x4c29d0 | operator_delete | 162 | rl_crt.c |
 | 0x4c2a80 | _sprintf | 236 | rl_crt.c |
 | 0x4c2fb0 | __splitpath | 578 | rl_crt.c |
 | 0x4c3200 | operator_new | 30 | rl_crt.c |

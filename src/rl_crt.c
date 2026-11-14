@@ -754,6 +754,22 @@ uint32_t rl_crt_4c3200(uint32_t size)
     return rl_crt_4bfa60(size, 1);
 }
 
+/* Port of FUN_004c29d0 (162 B) — operator delete (dbgdel.cpp): NULL is a no-op; else the debug header's block use
+ * (header = p − 0x20, +0x14) must be 1 / 2 / 3 or its low word 4 (an _IGNORE_BLOCK), else _CrtDbgReport(_CRT_ASSERT,
+ * "dbgdel.cpp", 47, 0, "_BLOCK_TYPE_IS_VALID(pHead->nBlockUse)") (1 → int 3); then _free_dbg(p, that use). The MP
+ * session's delete (0x4b92a0) reaches it (mp-skirmish's rejoin). */
+void rl_crt_4c29d0(uint32_t p)
+{
+    if (p == 0)
+        return;
+    uint32_t use = U32(p - 0x20 + 0x14);
+    if ((use & 0xffff) != 4 && use != 1 && (use & 0xffff) != 2 && use != 3 &&
+        engine_retail_call(VA_CRTDBGREPORT, 5, 2u, (uint32_t)(uintptr_t)"dbgdel.cpp", 47u, 0u,
+                           (uint32_t)(uintptr_t)"_BLOCK_TYPE_IS_VALID(pHead->nBlockUse)") == 1)
+        __asm__ volatile("int3");
+    rl_4c05a0((int)p, (int)use);
+}
+
 /* Port of FUN_004c28d0 (254 B) — strncpy: copies up to n bytes, stops after the terminator and zero-fills the rest of
  * the n (retail's dword loop writes exactly those bytes: the dwords it stores past the terminator are zeros inside n);
  * no terminator when the source is n bytes or longer. Returns the destination. */

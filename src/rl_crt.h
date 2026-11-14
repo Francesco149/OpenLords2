@@ -19,7 +19,8 @@ uint32_t rl_crt_4c3760(uint32_t size);                                          
 int      rl_crt_alloc_hook(uint32_t hook, int type, uint32_t data, uint32_t size, int use, int32_t req, uint32_t file,
                            int line);                                               /* call _pfnAllocHook */
 int      rl_crt_4c4070(int type, uint32_t data, int size, int use, int req, uint32_t file, int line); /* default alloc hook */
-void     rl_crt_4c4370(uint32_t p);                                                 /* _free_base */
+void     rl_crt_4c4370(uint32_t p);
+void     rl_crt_4c29d0(uint32_t p);                                                 /* operator delete */                                                 /* _free_base */
 int      rl_crt_4c4480(void);                                                       /* _heap_init */
 uint32_t rl_crt_4c45b0(void);                                                       /* __sbh_new_region */
 uint32_t rl_crt_4c49d0(uint32_t p, uint32_t *hdr, uint32_t *page);                  /* __sbh_find_block */

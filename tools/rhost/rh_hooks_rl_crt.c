@@ -37,7 +37,7 @@ enum {
     X_rl_crt_4cc5e0, X_rl_crt_4cd2f0, X_rl_crt_4cd270, X_rl_crt_4cd3d0, X_rl_crt_4cd3b0, X_rl_crt_4cc740,
     X_rl_crt_4cd4f0, X_rl_crt_4cd5b0, X_rl_crt_4cd5e0, X_rl_crt_4cc950, X_rl_crt_4cc930, X_rl_crt_4cca20,
     X_rl_crt_4bf870, X_rl_crt_4bf6a0, X_rl_crt_4bf770, X_rl_crt_4bf6f0, X_rl_crt_4c3370,
-    X_rl_crt_4bfa60, X_rl_crt_4c3200, X_rl_crt_4c28d0, X_rl_crt_4c8870, X_rl_crt_4c2fb0, X_rl_crt_4bf60e,
+    X_rl_crt_4bfa60, X_rl_crt_4c3200, X_rl_crt_4c28d0, X_rl_crt_4c8870, X_rl_crt_4c2fb0, X_rl_crt_4bf60e, X_rl_crt_4c29d0,
     X_rl_crt_4c77b0, X_rl_crt_4c7680, X_rl_crt_4c7700, X_rl_crt_4c7750, X_rl_crt_4c68f0, X_rl_crt_4c2a80,
 };
 
@@ -267,6 +267,7 @@ HOOK_SO(rl_crt_4c8870, 3, SPEC({ 0, 1, 2 }), rl_crt_4c8870(a[0], a[1], a[2]))
     { return rh_port_run(&RH_TABLE[X_##NAME], (void *)w_##NAME, p_##NAME, 1, e0); } \
     RH_ENTRY_STD8(w_##NAME, b_##NAME)
 HOOK_R_STD8(rl_crt_4bf60e, 2, rl_crt_4bf60e(I(0), I(1)))
+HOOK_V(rl_crt_4c29d0, 1, rl_crt_4c29d0(I(0)))
 HOOK_SO(rl_crt_4c2fb0, 5, SPEC({ 1, 0, 3 }, { 2, 3, 16 }, { 3, 3, 16 }, { 4, 3, 16 }), rl_crt_4c2fb0(a[0], a[1], a[2], a[3], a[4]))
 HOOK_SO(rl_crt_4c77b0, 1, SPEC({ 0, 0, 4 }), rl_crt_4c77b0(a[0]))
 HOOK_SO(rl_crt_4c7680, 3, SPEC({ 1, 0, 8 }, { 1, 4, 1 }, { 2, 0, 4 }), rl_crt_4c7680(I(0), a[1], a[2]))
@@ -362,6 +363,7 @@ hook_t RH_HOOKS_RL_CRT[] = {
     { "rl_crt_4c8870", 0x4c8870u, (void *)w_rl_crt_4c8870, 0, 0, 0, 0, "", 0, 0 },
     { "rl_crt_4c2fb0", 0x4c2fb0u, (void *)w_rl_crt_4c2fb0, 0, 0, 0, 0, "", 0, 0 },
     { "rl_crt_4bf60e", 0x4bf60eu, (void *)w_rl_crt_4bf60e, 0, 0, 0, 0, "", 0, 0 },
+    { "rl_crt_4c29d0", 0x4c29d0u, (void *)w_rl_crt_4c29d0, 0, 0, 0, 0, "", 0, 0 },
     { "rl_crt_4c77b0", 0x4c77b0u, (void *)w_rl_crt_4c77b0, 0, 0, 0, 0, "", 0, RH_SH_SAMPLE },
     { "rl_crt_4c7680", 0x4c7680u, (void *)w_rl_crt_4c7680, 0, 0, 0, 0, "", 0, RH_SH_SAMPLE },
     { "rl_crt_4c7700", 0x4c7700u, (void *)w_rl_crt_4c7700, 0, 0, 0, 0, "", 0, RH_SH_SAMPLE },

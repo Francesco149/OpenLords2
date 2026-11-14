@@ -180,7 +180,7 @@ int rl_4b92a0(uint32_t self, int flags)
 {
     rl_4b64a3(self);
     if (flags & 1)
-        engine_retail_call(VA_OPERATOR_DELETE, 1, self);   /* TODO(rl-extern): operator delete */
+        rl_crt_4c29d0(self);   /* operator delete (rl_crt.c) */
     return (int)self;
 }
 
