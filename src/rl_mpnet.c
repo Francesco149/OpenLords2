@@ -107,11 +107,6 @@ static HRESULT w_DirectPlayEnumerateA(uint32_t cb, void *ctx)
 #define VA_OPERATOR_NEW 0x4c3200u   /* ??2@YAPAXI@Z */
 #define VA_SPLITPATH    0x4c2fb0u
 #define VA_SPRINTF      0x4c2a80u
-/* the session's other methods (not in the partition: __thiscall, called through a cdecl adapter) */
-typedef uint32_t (__attribute__((thiscall)) *tc0_t)(uint32_t self);
-static uint32_t __cdecl tc0_adapter(uint32_t fn, uint32_t self) { return ((tc0_t)(uintptr_t)fn)(self); }
-static uint32_t tc0(uint32_t va, uint32_t self)   /* TODO(rl-extern): 0x4b6a15 (Close), 0x4b6ab6 */
-{ return engine_retail_call((uint32_t)(uintptr_t)tc0_adapter, 2, va, self); }
 
 /* the SierraNW exports by their session slot */
 typedef int (__cdecl *nw0_t)(void);
@@ -364,14 +359,12 @@ int rl_4b6e8e(uint32_t self, int name, int dst, unsigned count)
 
 /* ================================================================ the transport's users */
 
-typedef uint32_t (__attribute__((thiscall)) *tc1_t)(uint32_t self, uint32_t a);
-static uint32_t __cdecl tc1_adapter(uint32_t fn, uint32_t self, uint32_t a) { return ((tc1_t)(uintptr_t)fn)(self, a); }
-/* the session's scalar deleting destructor 0x4b92a0(self, 1) — TODO(rl-extern) */
-static void nw_delete(uint32_t self) { engine_retail_call((uint32_t)(uintptr_t)tc1_adapter, 3, 0x4b92a0u, self, 1u); }
+/* the session's scalar deleting destructor 0x4b92a0(self, 1) (rl mpnet2) */
+static void nw_delete(uint32_t self) { rl_4b92a0(self, 1); }
 /* close the session and delete it (retail's inlined `Close(); delete s; s = 0`) */
 static void nw_close_delete(void)
 {
-    tc0(0x4b6a15u, (uint32_t)NW);   /* TODO(rl-extern): Close */
+    rl_4b6a15((uint32_t)NW);   /* Close (rl mpnet2) */
     uint32_t s = (uint32_t)NW;
     if (s != 0)
         nw_delete(s);
@@ -393,7 +386,7 @@ int rl_4b7a9a(void)
     int r = 0;
     if (g_rl_4e2a60 != 0) {
         g_rl_4e2a60 = 0;
-        tc0(0x4b6ab6u, (uint32_t)NW);   /* TODO(rl-extern) */
+        rl_4b6ab6((uint32_t)NW);   /* (rl mpnet2) */
     }
     int resumed = 0;
     if (NW != 0) {
@@ -557,7 +550,7 @@ int rl_4b7f78(int hdlg, unsigned msg, unsigned wp, int lp)
             LRESULT d = w_SendMessageA((HWND)(uintptr_t)*lbox, LB_GETITEMDATA, (WPARAM)*sel, 0);
             if (d != 0) {
                 rl_4afab9((int)(uintptr_t)STR2C(0x4e2ca4u), 0, 0);   /* "OK :Got lpGUID." */
-                engine_retail_call(0x4b8243u, 1, (uint32_t)d);        /* TODO(rl-extern): the provider's connection */
+                rl_4b8243((int)d);   /* the provider's connection (rl mpnet2) */
                 w_EndDialog(dlg, 1);
             } else {
                 w_EndDialog(dlg, 1003);
@@ -578,7 +571,7 @@ int rl_4b7f78(int hdlg, unsigned msg, unsigned wp, int lp)
         return 0;
     LRESULT d = w_SendMessageA(ctl, LB_GETITEMDATA, (WPARAM)*sel, 0);
     if (d != 0) {
-        engine_retail_call(0x4b8243u, 1, (uint32_t)d);   /* TODO(rl-extern) */
+        rl_4b8243((int)d);   /* (rl mpnet2) */
         w_EndDialog(dlg, 1);
     } else {
         w_EndDialog(dlg, 1003);

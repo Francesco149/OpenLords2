@@ -1155,7 +1155,7 @@ int rl_433155(void)
     rl_49bae9(999, LOCAL, (int)(uintptr_t)g_tr_p4_name_buf);
     if (PARAM0 == 1) {
         if (MP_ON) {
-            engine_retail_call(0x4b743bu, 0);          /* TODO(rl-extern): leave the MP session */
+            rl_4b743b();                               /* leave the MP session (rl mpnet2) */
             engine_retail_call(0x43e8f4u, 1, 1u);      /* TODO(rl-extern) */
         }
         g_tr_page = 1;
@@ -1233,7 +1233,7 @@ int rl_4335f0(void)
     switch (PARAM0) {
     case 1:
         if (MP_ON) {
-            engine_retail_call(0x4b743bu, 0);          /* TODO(rl-extern): leave the MP session */
+            rl_4b743b();                               /* leave the MP session (rl mpnet2) */
             engine_retail_call(0x43e8f4u, 1, 1u);      /* TODO(rl-extern) */
         }
         g_tr_page = 1;

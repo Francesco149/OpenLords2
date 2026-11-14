@@ -664,7 +664,7 @@ int rl_47309e(void)
         engine_retail_call(0x475e07u, 0);   /* TODO(rl-extern): the panel 12 renderer 0x475e07 */
         break;
     case 20:
-        engine_retail_call(0x476488u, 0);   /* TODO(rl-extern): the panel 20 renderer 0x476488 */
+        rl_476488();   /* the panel 20 renderer (rl mpnet2) */
         break;
     case 13:
         rl_4b1de0();

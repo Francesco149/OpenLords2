@@ -1885,7 +1885,7 @@ int rl_497a34(int fresh)
     rl_499034();   /* gfx_load_misc_sheet (rl turn) */
     if (g_sim_mp_active != 0) {
         engine_set_current_screen(0x1f);
-        engine_retail_call(0x4b756bu, 0);   /* TODO(rl-extern) */
+        rl_4b756b();   /* (rl mpnet2) */
         g_rl_57c940 = 0;
         g_rl_55ce74 = (int32_t)rl_plat_timeGetTime();
         g_rl_5530f0 = 4;
@@ -1921,21 +1921,7 @@ int rl_497a34(int fresh)
 
 /* ---------------------------------------------------------------- multiplayer: the message pump */
 
-/* the SierraNW object's methods are __thiscall (ECX = the object): engine_retail_call is cdecl, so it calls this
- * cdecl adapter, which makes the thiscall (rhost: bracketed like any retail call; the standalone stops) */
-typedef uint32_t (__attribute__((thiscall)) *tc0_t)(uint32_t self);
-typedef uint32_t (__attribute__((thiscall)) *tc1_t)(uint32_t self, uint32_t a);
-typedef uint32_t (__attribute__((thiscall)) *tc3_t)(uint32_t self, uint32_t a, uint32_t b, uint32_t c);
-static uint32_t __cdecl thiscall_adapter(uint32_t fn, uint32_t self, uint32_t n, uint32_t a, uint32_t b, uint32_t c)
-{
-    if (n == 0) return ((tc0_t)(uintptr_t)fn)(self);
-    if (n == 1) return ((tc1_t)(uintptr_t)fn)(self, a);
-    return ((tc3_t)(uintptr_t)fn)(self, a, b, c);
-}
-static uint32_t nw_call(uint32_t va, uint32_t self, uint32_t n, uint32_t a, uint32_t b, uint32_t c)
-{   /* TODO(rl-extern): the SierraNW methods 0x4b6a15 (Close) / 0x4b92a0 (delete); the others: rl_mpnet.c */
-    return engine_retail_call((uint32_t)(uintptr_t)thiscall_adapter, 6, va, self, n, a, b, c);
-}
+/* the SierraNW object's methods (__thiscall in retail): the ports take the session first (rl mpnet / mpnet2) */
 static void mp_event(int kind, int arg) { rl_43e6a2(kind, arg); }   /* the DirectPlay system events (rl_mpmsg3.c) */
 #define NW   g_rl_4e2a30                                            /* DAT_004e2a30: the SierraNW session */
 #define DPLAY AT(uint32_t, g_rl_4e2a28, 0x4e2a28u, 0x4e2a2cu)     /* DAT_004e2a2c: the IDirectPlay */
@@ -1973,9 +1959,9 @@ int rl_4b8c3a(void)
                 rl_plat_OutputDebugStringA(RS(g_rl_4e2eb0, 0x4e2eb0u, 0x4e2eb0u));   /* "RGM SIGS disconnected, shut down\n" */
                 engine_retail_call(0x43f43eu, 0);   /* TODO(rl-extern) */
                 g_rl_568464 = 0;
-                nw_call(0x4b6a15u, (uint32_t)NW, 0, 0, 0, 0);
+                rl_4b6a15((uint32_t)NW);          /* Close (rl mpnet2) */
                 if (NW != 0)
-                    nw_call(0x4b92a0u, (uint32_t)NW, 1, 1, 0, 0);
+                    rl_4b92a0((uint32_t)NW, 1);   /* the scalar deleting destructor (rl mpnet2) */
                 NW = 0;
                 g_sim_mp_active = 0;
                 engine_set_current_screen(0x1f);

@@ -130,9 +130,9 @@ int rl_4b7180(int go)
         *dp = 0;
         rl_4afab9((int)(uintptr_t)(g_rl_4e2a64 + 0), 0, 0);
     } else if (g_rl_4e2a30 != 0) {
-        engine_retail_call(0x4b6a15u, 1, (uint32_t)g_rl_4e2a30);   /* TODO(rl-extern): the link close */
+        rl_4b6a15((uint32_t)g_rl_4e2a30);                 /* the session's Close (rl mpnet2; __thiscall in retail) */
         if (g_rl_4e2a30 != 0)
-            engine_retail_call(0x4b92a0u, 1, 1u);                   /* TODO(rl-extern) */
+            rl_4b92a0((uint32_t)g_rl_4e2a30, 1);          /* its scalar deleting destructor (rl mpnet2) */
         g_rl_4e2a30 = 0;
         rl_4afab9((int)(uintptr_t)(g_rl_4e2a64 + 20), 0, 0);
     }

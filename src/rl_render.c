@@ -957,7 +957,7 @@ static void labor_render(void) { rl_412b33(); }   /* engine_labor_render (rl ui4
 static void fill4(int x, int y, int c) { engine_retail_call(0x4b4056u, 3, (uint32_t)x, (uint32_t)y, (uint32_t)c); }   /* TODO(rl-link): engine_overlay_render's 4-byte fill 0x4b4056 */
 static void movie_text_box(int x, int y, int w, int h)   /* TODO(rl-extern): 0x42e45e */
 { engine_retail_call(0x42e45eu, 4, (uint32_t)x, (uint32_t)y, (uint32_t)w, (uint32_t)h); }
-static void mp_session_end(void) { engine_retail_call(0x4b743bu, 0); }   /* TODO(rl-extern): 0x4b743b */
+static void mp_session_end(void) { rl_4b743b(); }   /* leave the MP session (rl mpnet2) */
 static void map_build_cells(int a) { rl_4298c1(a); }   /* engine_map_init_build_cells (rl ui4) */
 static void map_set_camera(int a) { rl_451fcc(a); }   /* 0x451fcc (rl_ctl) */
 static void classify_feature_tiles(void) { rl_46dbf5(); }
