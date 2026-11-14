@@ -14,7 +14,8 @@ Round 3: every function had an old port, none on retail's layout under rhost.
 - **(a) wrap** — the old port is linked in rhost and works on retail's layout (verified as a whole under an older row):
   `rl_<va>` forwards to it (its `static` dropped; retail's EAX modelled where the old port returned void).
   engine_army_ai.c (under `ai_run_movement` 0x4a5667): 0x4a58f4, 0x4a5b1f, 0x4a5f0a, 0x4a6270, 0x4a64ca, 0x4a65a3,
-  0x4a6735. engine_combat.c (under `combat_spawn_unit` / `combat_begin_siege` / `combat_rotate_merc_offers`):
+  0x4a6735; 0x4a599d (order 6, lord_move — added 2026-11-14 once lord-move reached it: 1 call, 0 divergences).
+  engine_combat.c (under `combat_spawn_unit` / `combat_begin_siege` / `combat_rotate_merc_offers`):
   0x4a7e0a, 0x4a7eb5, 0x4a9eb1, 0x4a9f18, 0x4a9f72, 0x4ac7f3, 0x4acb54. engine_realm_upkeep.c (under
   `realm_pay_upkeep`): 0x4ad0e8, 0x4ad16c, 0x4ad230, 0x4ad316, 0x4ad39a. gfx_sprite_rle.c: 0x4b495a.
   engine_battlefield_render.c: 0x4bc020.

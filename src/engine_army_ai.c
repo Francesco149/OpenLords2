@@ -2546,7 +2546,7 @@ int engine_army_ai_order_advance(int occ)
  * target (+0x19b); if it cleared, downgrade to order 2 and run the advance
  * handler; else intercept the nearest engageable army in that region when within
  * 21 tiles.  Returns 1 when it set a destination, else 0. */
-static int engine_army_ai_order_lord_move(int occ)
+int engine_army_ai_order_lord_move(int occ)
 {
     if (OCC_REC(occ)[OCC_HELD] != 0)
         return 0;

@@ -73,6 +73,7 @@ int engine_army_ai_set_deploy_cell(int occ, unsigned region);
 int engine_army_ai_order_attack_march(int occ);
 int engine_army_ai_order_advance(int occ);
 int engine_army_ai_order_intercept(int occ);
+int engine_army_ai_order_lord_move(int occ);
 int engine_army_ai_order_garrison(int occ);
 /* engine_combat.c (under combat_spawn_unit 0x4a9a9a, combat_begin_siege 0x4a7ca2, combat_rotate_merc_offers 0x4aca2b) */
 void spawn_debit_provision(int key);
@@ -100,7 +101,7 @@ int rl_4a57ac(int occ)
 {
     switch (ARMS8(occ, 0x52f0cau)) {
     case 7: return rl_4a58f4(occ);
-    case 6: return (int)engine_retail_call(0x4a599du, 1, (uint32_t)occ);   /* TODO(rl-extern): 0x4a599d (no partition) */
+    case 6: return rl_4a599d(occ);
     case 2: return rl_4a5b1f(occ);
     case 3: return rl_4a5f0a(occ);
     case 4: return rl_4a6270(occ);
@@ -113,6 +114,11 @@ int rl_4a57ac(int occ)
 /* Port of FUN_004a58f4 (169 B) — order 7 (attack-march): unless held (+0x199), the deploy cell toward the target
  * realm +0x151 (0x4a689d) → destination +0x16/+0x17, placed +0x150 = 0; 1 (0 when held). Wrap. */
 int rl_4a58f4(int occ) { return engine_army_ai_order_attack_march(occ); }
+
+/* Port of 0x4a599d (386 B) — order 6 (lord-directed move): unless held (+0x199), re-validate the campaign target
+ * +0x19b (0x49ff71); cleared → order 2 + the advance handler; else an engageable army of that region within 20
+ * (0x467532) → destination its cell, placed +0x150 = 0, 1; else 0. Wrap. */
+int rl_4a599d(int occ) { return engine_army_ai_order_lord_move(occ); }
 
 /* Port of FUN_004a5b1f (1003 B) — order 2 (advance): intercept a hostile army within 6 (0x4673b8), else keep /
  * re-pick the target realm (0x467eb0, 0x467f2e, 0x4a0649) and deploy toward it (0x4a64ca). Wrap. */

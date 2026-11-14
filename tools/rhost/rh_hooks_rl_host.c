@@ -111,7 +111,7 @@ enum {
     X_rl_4a8e0b, X_rl_4a91ba, X_rl_4a9252, X_rl_4a9372, X_rl_4a960f, X_rl_4a975d, X_rl_4a983b, X_rl_4a98fe,
     X_rl_4ac904, X_rl_4ae74d, X_rl_4ae8a9, X_rl_4ade93, X_rl_4adfe6, X_rl_4ae310, X_rl_4ad9f0, X_rl_4ba26e,
     X_rl_4ba9c8, X_rl_4b99c0, X_rl_4b284e, X_rl_4b2922, X_rl_4bc020, X_rl_4b29be,
-    X_rl_43ff63, X_rl_446f06, X_rl_43ff08, X_rl_43ffc3, X_rl_43f7e3,
+    X_rl_43ff63, X_rl_446f06, X_rl_43ff08, X_rl_43ffc3, X_rl_43f7e3, X_rl_4a599d,
 };
 
 HOOK_R(rl_4a57ac, 1, rl_4a57ac(I(0)))
@@ -189,6 +189,7 @@ HOOK_V(rl_446f06, 0, rl_446f06())
 HOOK_V(rl_43ff08, 0, rl_43ff08())
 HOOK_V(rl_43ffc3, 0, rl_43ffc3())
 HOOK_R(rl_43f7e3, 0, rl_43f7e3())   /* 0x442b08 returns its EAX (timeGetTime) */
+HOOK_R(rl_4a599d, 1, rl_4a599d(I(0)))
 
 hook_t RH_HOOKS_RL_HOST[] = {
     { "rl_4a57ac", 0x4a57acu, (void *)w_rl_4a57ac, 0, 0, 0, 0, "" },
@@ -266,5 +267,6 @@ hook_t RH_HOOKS_RL_HOST[] = {
     { "rl_43ff08", 0x43ff08u, (void *)w_rl_43ff08, 0, 0, 0, 0, "" },
     { "rl_43ffc3", 0x43ffc3u, (void *)w_rl_43ffc3, 0, 0, 0, 0, "" },
     { "rl_43f7e3", 0x43f7e3u, (void *)w_rl_43f7e3, 0, 0, 0, 0, "" },
+    { "rl_4a599d", 0x4a599du, (void *)w_rl_4a599d, 0, 0, 0, 0, "" },
 };
 const int RH_HOOKS_RL_HOST_N = sizeof RH_HOOKS_RL_HOST / sizeof *RH_HOOKS_RL_HOST;

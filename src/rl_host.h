@@ -6,6 +6,7 @@
 int rl_4a57ac(int a0);                           /* 328 B, coverage 53 */
 int rl_4a58f4(int a0);                           /* 169 B, coverage 21 */
 int rl_4a5b1f(int a0);                           /* 1003 B, coverage 38 */
+int rl_4a599d(int a0);                           /* 386 B, order 6 */
 int rl_4a5f0a(int a0);                           /* 431 B, coverage 5 */
 int rl_4a60b9(int a0);                           /* 439 B, coverage 51 */
 int rl_4a6270(int a0);                           /* 602 B, coverage 53 */

@@ -75,7 +75,7 @@
    (armour only from a smithy), an AI targets a garrisoned castle only under a vendetta (−30 attitude + 3 battles), and
    0x48d9ce arms the flag only when every AI unit left is a knight before any wall breach — a 30–40-season managed game
    (driver report in the 2026-11-13 session; furthest checkpoint run `siegeknights:t27`). Next: `rd seasons` makes long
-   setups cheap; lord_move 0x4a599d and 0x48e774 are the other real function gaps; block gaps by `rd cov --blocks --fn`.
+   setups cheap; lord_move 0x4a599d now has its row (rl_4a599d, 2026-11-14) and 0x48e774 is reached; block gaps by `rd cov --blocks --fn`.
    Recipe: `tools/drive/README.md` §Campaign recipe. Tool work left: savestates cost ~9 % of search time (not worth
    optimizing yet).
 
