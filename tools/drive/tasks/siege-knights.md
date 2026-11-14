@@ -52,3 +52,14 @@ the mercenary box. Attempt 3's run `siegeknights3` (checkpoints t3 t6 won1 won2 
 stage 2 by turn 17) is a valid start (`--from siegeknights3:won2`) — one more won battle against the Baron should give
 vendetta stage 3; then `rd seasons --feed --until "<step 2>"`. Or follow attempt 2's advice (probes/siege-knights.md):
 a start next to the armour-building AI. Check the besieger has knights (unit class 6) before taking the field.
+
+**Attempt 5 (2026-11-14 night) — change the geometry, not the patience.** Attempt 4 (probes/siege-knights.md) got the
+Baron's knight army A26 launched at us (turn 46) but it died crossing realm 2's land. So: start a NEW custom game and
+pick the map / our start county so that the AI with the best armour economy (the one with smithies / armour stock —
+read realm records and county buildings early with `rd eval`) is our direct neighbour with no third realm's county on
+the path between its muster county (realm +0xE5) and our castle. Survey several custom starts cheaply first (new game,
+read realm owners per county + adjacency + each AI's armour / weapons, discard bad ones) before investing seasons.
+Then: insult it to −30 (two seasons), win battles against it for vendetta stages, `rd seasons --feed` (now feeds right:
+6 per sack, buys grain), keep a garrisoned castle (build one if the start has none). Before taking the field, check
+the besieger carries class-6 knights AND engines. On the field kill its non-knights first, keep its engines alive, no
+breach. Checkpoint every stage so a later attempt can resume.
