@@ -164,6 +164,8 @@ def rhost_args(a, run_win, trace_win, meta):
             args += [flag, str(v)]
     if meta.get("movies"):                      # recorded with deterministic Smacker (rh_smack.c)
         args += ["--movies"]
+    if meta.get("net"):                         # a multiplayer side: the fake SIGS transport (rh_net.c), "ME/N[,type]"
+        args += ["--net-sigs", str(meta["net"])]
     if getattr(a, "frames", None) is None and meta.get("frames"):
         args += ["--frames", str(meta["frames"])]
     for k, flag in (("frames", "--frames"), ("dump_at", "--dump-at"), ("hash_every", "--hash-every"),
@@ -1080,6 +1082,9 @@ def main():
     sp = sub.add_parser("diff"); sp.add_argument("a"); sp.add_argument("b"); sp.add_argument("--show-n", type=int, default=40); sp.set_defaults(fn=cmd_diff)
     sp = sub.add_parser("record"); common(sp); sp.add_argument("name"); sp.add_argument("--from", dest="from_scen")
     sp.add_argument("--force", action="store_true"); sp.set_defaults(fn=cmd_record)
+    sp = sub.add_parser("mp-record"); common(sp); sp.add_argument("name"); sp.add_argument("--side", action="append", default=[])
+    sp.add_argument("--force", action="store_true"); sp.add_argument("--no-check", dest="no_check", action="store_true")
+    sp.set_defaults(fn=lambda a: __import__("rhnet").cmd_mp_record(a, sys.modules[__name__]))
     sp = sub.add_parser("snap-check"); common(sp); sp.add_argument("--only"); sp.add_argument("--windows", type=int, default=2)
     sp.set_defaults(fn=cmd_snap_check)
     sp = sub.add_parser("standalone"); common(sp); sp.add_argument("--only"); sp.set_defaults(fn=cmd_standalone)

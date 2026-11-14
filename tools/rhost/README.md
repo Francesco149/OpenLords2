@@ -94,7 +94,7 @@ k-th call of `FUN_004b99c0` (the sim + render driver). Coordinates are 640×480 
 | command line, environment, version, memory status, code pages, cursors/icons, stock objects | constants |
 | the user's saves / any game-dir write; save-list timestamps | `rh_files.c`: game dir read-only, writes copy-on-write into the run dir; `FindFirstFile` merges both, sorted, fixed timestamps |
 | Smacker movies (smackw32: its own CRT heap, clock, file handles, waveOut soundtrack) | default: not loaded, `SmackOpen` fails, retail logs `ERR:SMK` and skips the movie. `--movies` (trace meta `"movies": true`): `rh_smack.c` maps smackw32 itself at 0x18000000, binds its imports to these layers (its heap on a fixed region outside the hashed arena), and runs its waveOut soundtrack on the virtual clock (Smacker paces video by polling WHDR_DONE) — the real boot plays intro / imptitle / credits to their natural ends, Windows ≡ wine |
-| DirectPlay (multiplayer) | stubbed: unavailable |
+| DirectPlay (multiplayer) | stubbed: unavailable; the SIGS transport is faked with `--net-sigs ME/N` (rh_net.c, `rhost.py mp-record`: docs/findings/multiplayer-rhost.md) |
 
 Residual: **none measured** — `det` finds 0 differing dwords between runs (full hash identical), no
 `volatile.txt` needed, on both targets.

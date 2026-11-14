@@ -79,21 +79,23 @@ static HANDLE WINAPI h_CreateFileA(LPCSTR p, DWORD a, DWORD s, LPSECURITY_ATTRIB
 }
 static HANDLE WINAPI h_CreateThread(LPSECURITY_ATTRIBUTES sa, SIZE_T st, LPTHREAD_START_ROUTINE fn, LPVOID arg, DWORD fl, LPDWORD tid)
 {
+    HANDLE co; if (rh_net_create_thread(fn, arg, tid, &co)) return co;   /* the MP monitor thread: a coroutine */
     rh_log("WARNING: retail CreateThread(%p) at frame %u — a second retail thread is not deterministic\n", (void *)fn, g_frame);
     return fake_of(p_CreateThread(sa, st, fn, arg, fl, tid));
 }
 static HANDLE WINAPI h_CreateEventA(LPSECURITY_ATTRIBUTES sa, BOOL man, BOOL init, LPCSTR name) { return fake_of(CreateEventA(sa, man, init, NULL)); (void)name; }
 static BOOL WINAPI h_SetEvent(HANDLE h) { return SetEvent(real_of(h)); }
 static BOOL WINAPI h_ResetEvent(HANDLE h) { return ResetEvent(real_of(h)); }
-static DWORD WINAPI h_WaitForSingleObject(HANDLE h, DWORD ms) { return WaitForSingleObject(real_of(h), ms); }
-static BOOL WINAPI h_GetExitCodeThread(HANDLE h, LPDWORD c) { return GetExitCodeThread(real_of(h), c); }
-static BOOL WINAPI h_TerminateThread(HANDLE h, DWORD c) { return TerminateThread(real_of(h), c); }
+static DWORD WINAPI h_WaitForSingleObject(HANDLE h, DWORD ms) { DWORD r; return rh_net_wait(h, ms, &r) ? r : WaitForSingleObject(real_of(h), ms); }
+static BOOL WINAPI h_GetExitCodeThread(HANDLE h, LPDWORD c) { if (rh_net_thread_handle(h)) { *c = rh_net_thread_exit(); return TRUE; } return GetExitCodeThread(real_of(h), c); }
+static BOOL WINAPI h_TerminateThread(HANDLE h, DWORD c) { if (rh_net_thread_handle(h)) return FALSE; return TerminateThread(real_of(h), c); }
 /* a file closed inside a shadowed call: the shadow puts the pre-state back before the port side runs, so the file
  * must be open again there (the port's own close / read / seek would otherwise fail on a dead handle) */
 typedef struct { HANDLE real; fopen_t fo; } closed_t;
 static closed_t g_closed[64]; static int g_nclosed;
 static BOOL WINAPI h_CloseHandle(HANDLE h)
 {
+    if (rh_net_thread_handle(h)) return TRUE;
     uint32_t v = (uint32_t)(uintptr_t)h;
     if (rh_in_shadow() && v >= FAKE_BASE && v < FAKE_BASE + 4u * FAKE_MAX && !(v & 3) && g_fo[(v - FAKE_BASE) >> 2] &&
         g_real[(v - FAKE_BASE) >> 2] && g_nclosed < 64) {

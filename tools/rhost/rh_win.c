@@ -21,6 +21,8 @@
 #define SCR_W 640
 #define SCR_H 480
 
+static int is_dlg_ctl(HWND h);
+static LRESULT lb_msg(UINT m, WPARAM w, LPARAM l);
 static WNDPROC g_retail_proc;        /* retail's class procedure (0x4b29be) */
 static HWND g_real;                  /* rhost's real window */
 static int g_created, g_visible, g_activated;
@@ -109,6 +111,7 @@ static BOOL WINAPI my_PostMessageA(HWND h, UINT m, WPARAM w, LPARAM l)
 static LRESULT WINAPI my_SendMessageA(HWND h, UINT m, WPARAM w, LPARAM l)
 {
     if ((uint32_t)(uintptr_t)h == RH_FAKE_HWND) return call_retail(m, w, l);
+    if (is_dlg_ctl(h)) return lb_msg(m, w, l);
     rh_log("win: SendMessageA to foreign hwnd %p msg %04x\n", (void *)h, m);
     return 0;
 }
@@ -224,11 +227,39 @@ static HCURSOR WINAPI my_SetCursor(HCURSOR c) { uint32_t was = g_cursor_handle; 
 static BOOL WINAPI my_WinHelpA(HWND h, LPCSTR f, UINT c, ULONG_PTR d) { (void)h; (void)f; (void)c; (void)d; return TRUE; }
 static int WINAPI my_MessageBoxA(HWND h, LPCSTR text, LPCSTR cap, UINT t)
 { (void)h; (void)t; rh_log("MessageBoxA [%s] %s (frame %u)\n", cap ? cap : "", text ? text : "", g_frame); return IDOK; }
+/* dialogs: without --net-sigs none is shown (-1). With it, a modal dialog runs against a fake dialog window whose
+ * controls are list boxes (rh_net.c: the DirectPlay provider list 0x81 → "Sierra Internet Gaming System"): retail's
+ * DLGPROC gets WM_INITDIALOG, then IDOK on whatever it selected; the result is its EndDialog code. */
+#define FAKE_DLG 0x0d1a0000u
+static struct { char s[64]; LPARAM data; } g_lb[32]; static int g_lbn, g_lbsel = -1, g_dlg_ended; static INT_PTR g_dlg_res;
+static int is_dlg_ctl(HWND h) { uint32_t v = (uint32_t)(uintptr_t)h; return v > FAKE_DLG && v < FAKE_DLG + 0x10000u; }
+static LRESULT lb_msg(UINT m, WPARAM w, LPARAM l)
+{
+    switch (m) {
+    case LB_ADDSTRING: if (g_lbn >= 32) return LB_ERR; snprintf(g_lb[g_lbn].s, 64, "%s", (const char *)l); g_lb[g_lbn].data = 0; return g_lbn++;
+    case LB_SETITEMDATA: if ((int)w < 0 || (int)w >= g_lbn) return LB_ERR; g_lb[w].data = l; return 0;
+    case LB_GETITEMDATA: if ((int)w < 0 || (int)w >= g_lbn) return LB_ERR; return g_lb[w].data;
+    case LB_SETCURSEL: g_lbsel = (int)w < g_lbn ? (int)w : -1; return g_lbsel;
+    case LB_GETCURSEL: return g_lbsel;
+    case LB_GETCOUNT: return g_lbn;
+    default: rh_log("win: dialog control msg %04x unsupported\n", m); return 0;
+    }
+}
 static INT_PTR WINAPI my_DialogBoxParamA(HINSTANCE i, LPCSTR t, HWND p, DLGPROC fn, LPARAM l)
-{ (void)i; (void)p; (void)l; rh_log("DialogBoxParamA(template %p, proc %p): not shown, -1 (frame %u)\n", (void *)t, (void *)fn, g_frame); return -1; }
-static HWND WINAPI my_GetDlgItem(HWND d, int id) { (void)d; (void)id; return NULL; }
+{
+    (void)i; (void)p;
+    if (!rh_net_on()) { rh_log("DialogBoxParamA(template %p, proc %p): not shown, -1 (frame %u)\n", (void *)t, (void *)fn, g_frame); return -1; }
+    HWND d = (HWND)(uintptr_t)FAKE_DLG;
+    g_lbn = 0; g_lbsel = -1; g_dlg_ended = 0; g_dlg_res = -1;
+    fn(d, WM_INITDIALOG, 0, l);
+    for (int k = 0; k < g_lbn; k++) rh_log("dialog %p: item %d \"%s\" data %08lx%s\n", (void *)t, k, g_lb[k].s, (unsigned long)g_lb[k].data, k == g_lbsel ? " (selected)" : "");
+    if (!g_dlg_ended) fn(d, WM_COMMAND, MAKEWPARAM(IDOK, 0), 0);
+    rh_log("DialogBoxParamA(template %p, proc %p): %s %ld (frame %u)\n", (void *)t, (void *)fn, g_dlg_ended ? "ended" : "left open,", (long)g_dlg_res, g_frame);
+    return g_dlg_res;
+}
+static HWND WINAPI my_GetDlgItem(HWND d, int id) { return rh_net_on() && (uint32_t)(uintptr_t)d == FAKE_DLG ? (HWND)(uintptr_t)(FAKE_DLG + (uint32_t)id) : NULL; }
 static LRESULT WINAPI my_SendDlgItemMessageA(HWND d, int id, UINT m, WPARAM w, LPARAM l) { (void)d; (void)id; (void)m; (void)w; (void)l; return 0; }
-static BOOL WINAPI my_EndDialog(HWND d, INT_PTR r) { (void)d; (void)r; return TRUE; }
+static BOOL WINAPI my_EndDialog(HWND d, INT_PTR r) { (void)d; g_dlg_ended = 1; g_dlg_res = r; return TRUE; }
 static UINT_PTR WINAPI my_SetTimer(HWND h, UINT_PTR id, UINT ms, TIMERPROC fn) { (void)h; (void)fn; rh_log("win: SetTimer %u ms (virtual, never fires)\n", ms); return id ? id : 1; }
 static BOOL WINAPI my_KillTimer(HWND h, UINT_PTR id) { (void)h; (void)id; return TRUE; }
 /* GDI on the fake screen DC */
@@ -348,7 +379,7 @@ static void trace_load(const char *path)
     while (fgets(line, sizeof line, f)) {
         ln++;
         char *s = line; while (*s == ' ' || *s == '\t') s++;
-        if (*s != '{' || strstr(s, "\"meta\"")) continue;
+        if (*s != '{' || strstr(s, "\"meta\"") || strstr(s, "\"n\":")) continue;   /* "n": an MP delivery (rh_net.c) */
         const char *pf = num_after(s, "\"f\":"); if (!pf) pf = num_after(s, "\"t\":");
         const char *pm = num_after(s, "\"m\":");
         if (!pf || !pm) { rh_log("trace line %u: not an event (skipped): %s", ln, s); continue; }
@@ -365,6 +396,7 @@ static void trace_load(const char *path)
     rh_log("trace: %u events, last frame %u (%s)\n", g_nev, g_last, path);
 }
 uint32_t rh_trace_last_frame(void) { return g_last; }
+void rh_trace_write_raw(const char *line) { if (g_recf) { fputs(line, g_recf); fflush(g_recf); } }
 void rh_win_snap_register(void) { rh_snap_register("trace.cursor", &g_iev, sizeof g_iev); }   /* --snap-test replays the trace again */
 static void rec_write(uint32_t f, UINT m, uint32_t w, uint32_t l)
 {
@@ -475,9 +507,10 @@ void rh_win_install(void)
     if (O.out_trace) {   /* every injected event (trace prefix, human, bot): the replayable record of this run */
         g_recf = fopen(O.out_trace, "w");
         if (!g_recf) rh_fatal("cannot write %s", O.out_trace);
-        fprintf(g_recf, "{\"meta\": {\"game\": \"lords2\", \"step_ms\": %u, \"vbase\": %u, \"source\": \"%s\"%s}}\n",
-                O.step_ms, O.vbase, O.record ? "human" : O.bot ? "bot" : "replay",
-                O.movies ? ", \"movies\": true" : "");   /* rhost.py replays with --movies */
+        fprintf(g_recf, "{\"meta\": {\"game\": \"lords2\", \"step_ms\": %u, \"vbase\": %u, \"source\": \"%s\"%s%s%s%s}}\n",
+                O.step_ms, O.vbase, O.record ? "human" : O.bot ? "bot" : O.net_peer ? "mp-record" : "replay",
+                O.movies ? ", \"movies\": true" : "",   /* rhost.py replays with --movies */
+                O.net_sigs ? ", \"net\": \"" : "", O.net_sigs ? O.net_sigs : "", O.net_sigs ? "\"" : "");
     }
     /* frame-0 events: queued before retail starts (dispatched by its first pump) */
     while (g_iev < g_nev && g_ev[g_iev].f == 0) { ev_t *e = &g_ev[g_iev++]; inject(0, e->m, e->w, e->l); }

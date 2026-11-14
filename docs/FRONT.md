@@ -51,7 +51,13 @@
 
 ## ★ Next micro-tasks
 
-0. **rd campaigns** — **campaign 6 (2026-11-14, API drivers):** ai-recall filed (sub_48B7FC 0x48b7fc first time: an Equal
+0. **Multiplayer under rhost (2026-11-14, `docs/findings/multiplayer-rhost.md`)** — the fake SIGS transport (`rh_net.c`:
+   SierraNW / SNWValid answered by rhost, the monitor thread as a virtual-time coroutine, deliveries stamped by receive
+   poll in the trace) + `rhost.py mp-record` (a broker, two wine processes): a 2-player game from the title to 1268
+   Winter (`mp-start-p1` / `-p2`), each side replays alone, Windows ≡ wine; +85 functions / 21.5 KB. Next: play
+   deeper MP (turns in lockstep, diplomacy / battles between humans, chat, a player leaving, 3–5 players), savestate
+   support (rd on MP), then verify + port the MP rows (★4's 0x4d57f0 / 0x4d5c98 tables).
+0b. **rd campaigns** — **campaign 6 (2026-11-14, API drivers):** ai-recall filed (sub_48B7FC 0x48b7fc first time: an Equal
    field skirmish after a Play Now → New Game trip — a cold skirmish leaves byte_553080 zero, so the recall never fires;
    +12 blocks); ai-surrender blocked (probe: no skirmish attacker is knights-only; the battle ends when a side has 0 men
    of class < 7, so halve_garrison needs AI knights in a campaign siege after all); siege-knights blocked a third time (run

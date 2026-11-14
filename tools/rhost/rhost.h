@@ -75,6 +75,8 @@ typedef struct {
     int standalone;             /* --standalone: NO retail code — only the data sections are mapped (the code range is
                                    INT3 + a jmp thunk into port code at every hook row's entry); the entry is the port's
                                    rl_crt_start; <rundir>\standalone_audit.txt proves it (docs/findings/standalone-path.md) */
+    const char *net_sigs;       /* --net-sigs ME/N[,full|skirmish]: the fake SIGS multiplayer transport (rh_net.c) */
+    const char *net_peer;       /* --net-peer HOST:PORT: record a live game through a broker (tools/rhost/rhnet.py) */
 } rh_opts_t;
 
 extern rh_opts_t O;
@@ -96,6 +98,24 @@ void *rh_fixed_alloc(size_t n);
 typedef struct { uint32_t va; void *target; const char *name; } rh_thunk_t;
 int  rh_hooks_thunks(const rh_thunk_t **out);
 int  rh_in_shadow(void);
+
+/* rh_net.c — multiplayer: the fake SIGS transport, the monitor-thread coroutine, poll-stamped deliveries */
+void rh_net_config(const char *spec);
+void rh_net_install(const char *peer);
+void rh_net_report(void);
+int  rh_net_on(void);
+void rh_net_tick(void);
+void rh_net_sync(void);
+int  rh_net_sleep(DWORD ms);
+int  rh_net_load(const char *n, HMODULE *out);
+int  rh_net_proc(HMODULE m, const char *name, FARPROC *out);
+int  rh_net_free(HMODULE m);
+int  rh_net_create_thread(LPTHREAD_START_ROUTINE fn, LPVOID arg, LPDWORD tid, HANDLE *out);
+int  rh_net_wait(HANDLE h, DWORD ms, DWORD *ret);
+int  rh_net_thread_handle(HANDLE h);
+DWORD rh_net_thread_exit(void);
+void rh_vclock_set(uint32_t t);
+void rh_trace_write_raw(const char *line);
 
 /* rh_heap.c */
 int  rh_heap_init(void);

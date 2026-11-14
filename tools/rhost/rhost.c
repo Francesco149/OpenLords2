@@ -325,7 +325,7 @@ void rh_clock_save(uint32_t s[3]) { s[0] = g_vclock; s[1] = g_calls_since_frame;
 void rh_clock_restore(const uint32_t s[3]) { g_vclock = s[0]; g_calls_since_frame = s[1]; g_creep_total = s[2]; }
 static DWORD vread(void)
 {
-    if (++g_calls_since_frame > O.creep_after) { g_vclock++; g_creep_total++; }
+    if (++g_calls_since_frame > O.creep_after) { g_vclock++; g_creep_total++; if (O.net_peer) rh_net_sync(); }
     return g_vclock;
 }
 static DWORD WINAPI my_timeGetTime(void) { return vread(); }
@@ -339,7 +339,13 @@ static void WINAPI my_GetLocalTime(SYSTEMTIME *t)
 }
 static void WINAPI my_GetSystemTime(SYSTEMTIME *t) { my_GetLocalTime(t); }
 static DWORD WINAPI my_GetTimeZoneInformation(TIME_ZONE_INFORMATION *z) { memset(z, 0, sizeof *z); return TIME_ZONE_ID_UNKNOWN; }
-static void WINAPI my_Sleep(DWORD ms) { g_vclock += ms; if (O.realtime && ms) Sleep(ms > 50 ? 50 : ms); }
+static void WINAPI my_Sleep(DWORD ms)
+{
+    if (rh_net_sleep(ms)) return;                     /* the MP monitor coroutine yields (rh_net.c) */
+    g_vclock += ms; if (O.realtime && ms) Sleep(ms > 50 ? 50 : ms);
+    rh_net_tick();
+}
+void rh_vclock_set(uint32_t t) { g_vclock = t; }
 
 /* ---- process identity the CRT copies into retail memory ---- */
 static char *g_cmdline, *g_envA;
@@ -354,7 +360,7 @@ static HANDLE WINAPI my_GetStdHandle(DWORD n) { (void)n; return INVALID_HANDLE_V
 static DWORD WINAPI my_GetVersion(void) { return 0x0a280105u; }          /* Windows XP (5.1.2600): an NT CRT path, as on Win11 */
 static UINT WINAPI my_GetACP(void) { return 1252; }
 static UINT WINAPI my_GetOEMCP(void) { return 437; }
-static HMODULE WINAPI my_GetModuleHandleA(LPCSTR n) { return n ? GetModuleHandleA(n) : (HMODULE)0x400000; }
+static HMODULE WINAPI my_GetModuleHandleA(LPCSTR n) { return n && _stricmp(n, "lords2.exe") ? GetModuleHandleA(n) : (HMODULE)0x400000; }
 static DWORD WINAPI my_GetModuleFileNameA(HMODULE h, LPSTR buf, DWORD n)
 {
     if (!h || h == (HMODULE)0x400000) { snprintf(buf, n, "%s\\Lords2.exe", g_gamedir_abs); return (DWORD)strlen(buf); }
@@ -375,7 +381,14 @@ static void WINAPI my_GlobalMemoryStatus(LPMEMORYSTATUS m)
 static BOOL WINAPI my_SetConsoleCtrlHandler(PHANDLER_ROUTINE h, BOOL a) { (void)h; (void)a; return TRUE; }
 static void WINAPI my_OutputDebugStringA(LPCSTR s) { rh_log("retail OutputDebugString: %s\n", s ? s : ""); }
 static void WINAPI my_DebugBreak(void) { rh_fatal("retail DebugBreak at frame %u", g_frame); }
-static HMODULE WINAPI my_LoadLibraryA(LPCSTR n) { rh_log("retail LoadLibraryA(%s) at frame %u\n", n ? n : "", g_frame); return LoadLibraryA(n); }
+static HMODULE WINAPI my_LoadLibraryA(LPCSTR n)
+{
+    HMODULE m; int net = rh_net_load(n, &m);
+    rh_log("retail LoadLibraryA(%s) at frame %u%s\n", n ? n : "", g_frame, net ? " (rh_net)" : "");
+    return net ? m : LoadLibraryA(n);
+}
+static FARPROC WINAPI my_GetProcAddress(HMODULE h, LPCSTR n) { FARPROC f; return rh_net_proc(h, n, &f) ? f : GetProcAddress(h, n); }
+static BOOL WINAPI my_FreeLibrary(HMODULE h) { return rh_net_free(h) ? TRUE : FreeLibrary(h); }
 
 /* ---- imports rhost supplies instead of a DLL ---- */
 static HRESULT WINAPI dp_Create(void *a, void *b, void *c) { (void)a; (void)b; (void)c; rh_log("DPLAYX DirectPlayCreate: unavailable (f%u)\n", g_frame); return 0x88770082; /* DPERR_UNAVAILABLE */ }
@@ -589,6 +602,7 @@ static void __cdecl frame_wrap(void)
     rh_smack_frame();
     rh_ds_mix();
     rh_win_frame();
+    rh_net_tick();
     if (O.finish_late && g_frame >= O.frames) finish("frames");   /* after the timers + input of the boundary, like a live session */
     rh_bot_frame();
     if (O.live || O.snap_test) { yield_to_host(); return; }
@@ -603,6 +617,7 @@ static void finish(const char *why)
 {
     if (g_finished) return;
     g_finished = 1;
+    rh_net_report();
     rh_trace_finish();
     rh_cap_finish();
     cov_dump();
@@ -663,6 +678,8 @@ static void parse(int argc, char **argv)
         else if (!strcmp(a, "--run")) O.rundir = ARG();
         else if (!strcmp(a, "--frames")) O.frames = strtoul(ARG(), 0, 0);
         else if (!strcmp(a, "--trace")) O.trace = ARG();
+        else if (!strcmp(a, "--net-sigs")) { O.net_sigs = ARG(); rh_net_config(O.net_sigs); }
+        else if (!strcmp(a, "--net-peer")) O.net_peer = ARG();
         else if (!strcmp(a, "--record")) { O.record = ARG(); O.realtime = 1; O.show = 1; O.audible = 1; }
         else if (!strcmp(a, "--audible")) O.audible = 1;
         else if (!strcmp(a, "--silent")) O.audible = -1;
@@ -960,6 +977,8 @@ int main(int argc, char **argv)
     iat_override("OutputDebugStringA", my_OutputDebugStringA);
     iat_override("DebugBreak", my_DebugBreak);
     iat_override("LoadLibraryA", my_LoadLibraryA);
+    iat_try("GetProcAddress", my_GetProcAddress);
+    iat_try("FreeLibrary", my_FreeLibrary);
     iat_override("timeGetTime", my_timeGetTime);
     iat_override("GetTickCount", my_GetTickCount);
     iat_override("GetLocalTime", my_GetLocalTime);
@@ -971,6 +990,7 @@ int main(int argc, char **argv)
     rh_handles_install();                    /* after files: wraps their overrides */
     rh_mm_install();
     rh_win_install();
+    rh_net_install(O.net_peer);
     rh_smack_install();                      /* last: smackw32's imports bind to every layer above */
     if (O.standalone) rl_plat_bind_imports();   /* retail's slots; the CRT is the port of retail's (rl_crt.c) */
     rl_frame_driver = (int (*)(void))frame_wrap;   /* the port's 0x40e890 calls it as retail's redirected call site does (no frame between) */
