@@ -5,6 +5,7 @@ never stall each other. A session is a background server; scripts are sent to it
 
     mpbot.py serve NAME [-n 2] [--target wine]        start (boots every side to the title, frame 1500), stays up
     mpbot.py do NAME "run 600; p1 click 320 139; both click 430 226; shot lobby"
+    mpbot.py py NAME "u = UI(p1); actions.raise_army(p1, u, 100)"   (tools/bot on a side; out(...) prints)
     mpbot.py save NAME SCEN [--force]                 → tests/scenarios/SCEN-p1 … (each side's input + deliveries)
     mpbot.py quit NAME
 
@@ -26,6 +27,65 @@ import rhbot  # noqa: E402
 import rhnet  # noqa: E402
 
 STATE = os.path.join(rhost.EPH, "mpbot")
+
+
+class Side:
+    """one side as an rhbot Session (tools/bot's actions / UI take it): inputs go to this side, every frame advance
+    runs all sides"""
+    def __init__(self, mp, k):
+        self.mp, self.k, self.s = mp, k, mp.s[k]
+        self.name = self.s.name
+
+    def run(self, n=1):
+        self.mp.run(int(n))
+        return self.s.status
+
+    def post(self, m, w=0, l=0):
+        return self.s.post(m, w, l)
+
+    def read(self, va, n):
+        return self.s.read(va, n)
+
+    def u8(self, va):
+        return self.s.u8(va)
+
+    def u16(self, va):
+        return self.s.u16(va)
+
+    def u32(self, va):
+        return self.s.u32(va)
+
+    def i32(self, va):
+        return self.s.i32(va)
+
+    def shot(self, tag):
+        return self.s.shot(tag)
+
+    def move(self, x, y, frames=None):
+        self.s.post(rhbot.WM_MOUSEMOVE, 0, rhbot.lp(x, y))
+        self.mp.run(frames or 2)
+
+    def click(self, x, y, right=False, frames=None):
+        self.mp.click(self.k, x, y, right=right, hold=frames or 2)
+
+    def key(self, vk, char=None, frames=None):
+        self.mp.key(self.k, vk, char, hold=frames or 2)
+
+    def type(self, text):
+        for ch in text:
+            self.key(ord(ch.upper()) if ch.isalnum() else (0x20 if ch == " " else 0), ch)
+
+    @property
+    def frame(self):
+        return self.s.frame
+
+    @property
+    def screen(self):
+        return self.s.screen
+
+    @property
+    def status(self):
+        return self.s.status
 
 
 class MP:
@@ -152,6 +212,54 @@ class MP:
                 pass
 
 
+_ENV = {}
+
+
+def py_env(mp, out):
+    if not _ENV:
+        sys.path.insert(0, os.path.join(rhost.ROOT, "tools", "bot"))
+        import actions, l2state, mapview, ui as uimod   # noqa: E401
+        _ENV.update(actions=actions, l2state=l2state, mapview=mapview, UI=uimod.UI, uimod=uimod)
+        for k in range(mp.n):
+            _ENV[f"p{k + 1}"] = Side(mp, k)
+        _ENV["mp"] = mp
+        uis = [_ENV["UI"](_ENV[f"p{k + 1}"], log=lambda m: _ENV["out"](m)) for k in range(mp.n)]
+        _ENV["uis"] = uis
+
+        def settle_all(max_frames=6000):
+            """every side to an idle map (each side's UI answers its own scrolls / prompts)"""
+            idle = 0
+            for _ in range(max_frames // 40):
+                for u in uis:
+                    try:
+                        u.settle(max_frames=40, step=20)
+                    except uimod.Stuck:
+                        pass
+                if all(u.s.screen == 0 and not u.modal() for u in uis):
+                    idle += 1
+                    if idle >= 2:
+                        return True
+                else:
+                    idle = 0
+            return False
+
+        def end_turn_all(max_frames=30000):
+            """every side presses End turn; returns when every side's season moved and the maps are idle"""
+            before = [(u.season(), u.year()) for u in uis]
+            for u in uis:
+                u.s.move(*uimod.END_TURN, frames=4)
+                u.s.click(*uimod.END_TURN)
+            for _ in range(max_frames // 400):
+                settle_all(400)
+                if all((u.season(), u.year()) != b for u, b in zip(uis, before)) and settle_all(2000):
+                    return [(u.season(), u.year()) for u in uis]
+            raise uimod.Stuck(f"end_turn_all: seasons {[(u.season(), u.year()) for u in uis]} from {before}")
+        _ENV.update(settle_all=settle_all, end_turn_all=end_turn_all)
+    _ENV["out"] = lambda *a: out(" ".join(str(x) for x in a))
+    _ENV["print"] = _ENV["out"]
+    return _ENV
+
+
 def serve(name, n, target):
     os.makedirs(STATE, exist_ok=True)
     mp = MP(name, n, target)
@@ -173,6 +281,10 @@ def serve(name, n, target):
         try:
             if req["op"] == "do":
                 mp.script(req["steps"], lines.append)
+            elif req["op"] == "py":          # tools/bot on a side: p1, p2 … (Side), mp, UI, actions, l2state, mapview
+                env = py_env(mp, lines.append)
+                exec(compile(req["code"], "<mpbot py>", "exec"), env)
+                lines.append(mp.status())
             elif req["op"] == "save":
                 lines += mp.save(req["scen"], req.get("force"))
             elif req["op"] == "quit":
@@ -212,6 +324,7 @@ if __name__ == "__main__":
     p = sub.add_parser("serve"); p.add_argument("name"); p.add_argument("-n", type=int, default=2)
     p.add_argument("--target", default="wine", choices=("wine", "win"))
     p = sub.add_parser("do"); p.add_argument("name"); p.add_argument("steps")
+    p = sub.add_parser("py"); p.add_argument("name"); p.add_argument("code")
     p = sub.add_parser("save"); p.add_argument("name"); p.add_argument("scen"); p.add_argument("--force", action="store_true")
     p = sub.add_parser("quit"); p.add_argument("name")
     a = ap.parse_args()
@@ -219,6 +332,8 @@ if __name__ == "__main__":
         serve(a.name, a.n, a.target)
     elif a.op == "do":
         sys.exit(client(a.name, {"op": "do", "steps": a.steps}))
+    elif a.op == "py":
+        sys.exit(client(a.name, {"op": "py", "code": a.code}))
     elif a.op == "save":
         sys.exit(client(a.name, {"op": "save", "scen": a.scen, "force": a.force}))
     else:
