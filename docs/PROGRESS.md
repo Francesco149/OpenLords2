@@ -7,6 +7,36 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-11-14 — Multiplayer under rhost: both transports faked, 25 MP sides, 253 MP functions ported; halve_garrison reached
+
+Overnight session (coordinator + 2 MP drivers + 7 porting agents in worktrees + API drivers for siege-knights).
+- **Multiplayer runs in rhost** (`docs/findings/multiplayer-rhost.md`): `tools/rhost/rh_net.c` answers SierraNW /
+  SNWValid (SIGS) and DirectPlay (a fake IDirectPlay2A), runs retail's monitor thread as a virtual-time coroutine,
+  simulates the transport dialogs, stamps every delivery (message, a peer leaving, a lobby chat line) with the receive
+  poll it became visible at — so each side's trace replays ALONE. Recording: `rhost.py mp-record` (a broker with
+  conservative clock sync) and `tools/rhost/mpbot.py` (live authoring, the autoplay bot's actions on any side).
+  State stability: residue-neutral entries (16 KB scrub below the caller), the exports / COM object on a fixed page,
+  dead-frame pointer slots volatile (shadow + semantic hash), rollback + savestates of rh_net's state.
+- **25 MP side traces** (mp-start, -play, -war 104k frames, -duel, -dp (DirectPlay), -leave, -trio, -skirmish, -siege,
+  -five: 2–5 players), Windows ≡ wine, each blessed: lobby, setup options, chat, trade, armoury, battles incl.
+  human-vs-human and spectators, sieges, alliances / gifts / insults between humans, F8 restart, save / load,
+  elimination, a player leaving, the MP skirmish type. ~270 retail functions only MP reaches.
+- **Ported on retail's layout, verified on MP state**: partitions mpmsg 54, mpmsg2 58, mpnet 35, mpmsg3 83, mpnet2 23
+  (every one reached, 0 divergences, hybrid PASS per partition) + the 12 CRT functions MP reaches (`__output` /
+  `sprintf` / `_splitpath` …) + the MP arms the old diplomacy / trade seal ports had deferred. Retail facts on the way:
+  0x4b79e3 takes the chat sender's name BY VALUE; ram mode; the DirectPlay host's "Full game / Skirmish" page; a
+  dozen quirks in rl-mp*.md. Host: the entry patcher decodes `ff /4` (import thunks); engine_retail_call takes 12
+  arguments; a real bug fixed in rl_4b7180 (a cdecl call of the thiscall Close).
+- **siege-knights filed** (attempts 5–7, $10.72): halve_garrison 0x4ad8cc reached — the last named single-player
+  coverage target of round 3.
+- **rd** opens MP sides (`rd new X --from mp-play-p2@6000`); a trace's trailing meta no longer drops the header's keys.
+- **Open**: a verify over every MP row on all MP scenarios at once (per-partition runs each passed; one pre-merge run
+  showed rl_42ff10 diverging on mp-skirmish-p2 at the post-Back rejoin: a busy-wait reading the clock a different
+  number of times — under investigation); the standalone on MP scenarios; mp-war's shadow pass 3 not transparent
+  (seen once by the mpnet agent).
+
+---
+
 ## 2026-11-05 — Round 3: every reached function on retail's layout (1028 in 21 partitions); 1475 rows; the standalone path
 
 Overnight continuation (coordinator + 9 agents in worktrees). Design unchanged (`docs/findings/battlefield-sim-port.md`).
