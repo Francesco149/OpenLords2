@@ -114,10 +114,14 @@ __attribute__((used)) void __cdecl rec_record(uint32_t kind)
     uint16_t n = 0; while (n < sizeof r->s && str[n]) n++;
     memcpy(r->s, str, n); r->len = n;
 }
+/* The thunk leaves retail exactly as the direct call would: every register and EFLAGS restored (a callee that reserves
+ * a local with `push ecx` would store the recorder's ecx — residue a plain replay does not have), the jump through
+ * memory (no register carries the target), nothing written below retail's ESP. */
 #define REC_THUNK(name, k, target) \
+    __attribute__((used)) static const uint32_t name##_to = target; \
     __attribute__((naked)) static void name(void) { \
-        __asm__("movl %esp, _g_rec_esp\n\t movl _g_rec_stack, %esp\n\t pushl $" #k "\n\t call _rec_record\n\t" \
-                "movl _g_rec_esp, %esp\n\t movl $" #target ", %eax\n\t jmp *%eax"); }
+        __asm__("movl %esp, _g_rec_esp\n\t movl _g_rec_stack, %esp\n\t pushfl\n\t pushal\n\t pushl $" #k "\n\t call _rec_record\n\t" \
+                "addl $4, %esp\n\t popal\n\t popfl\n\t movl _g_rec_esp, %esp\n\t jmp *_" #name "_to"); }
 REC_THUNK(rec_text, 0, 0x402637)
 REC_THUNK(rec_text_c, 1, 0x4025d7)
 REC_THUNK(rec_hot_click, 2, 0x40e3ee)

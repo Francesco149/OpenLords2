@@ -299,7 +299,10 @@ void rh_step(void)                                    /* the host's side: one fr
 }
 uint32_t g_entry;
 void __cdecl rh_game_main(void);
-__attribute__((naked)) static void game_tramp(void) { __asm__("fninit\n\t fldcw _g_cw0\n\t call _rh_game_main\n\t hlt"); }
+/* retail's entry is called from here directly, at call_on_stack's depth: an intermediate C frame shifted retail's whole
+ * stack 16 bytes down, and stack pointers left as residue (0x488793 stores an uninitialized local: a dead unit's frame
+ * byte) then differed from a plain replay's — siege-castles@13263, rd verify MISMATCH on one byte */
+__attribute__((naked)) static void game_tramp(void) { __asm__("fninit\n\t fldcw _g_cw0\n\t call *_g_entry\n\t call _rh_game_main\n\t hlt"); }
 static void coro_init(void *entry)
 {
     NT_TIB *tib = (NT_TIB *)NtCurrentTeb();
@@ -895,9 +898,8 @@ static void sa_entry(void)
 }
 static int sa_frame_driver(void) { frame_wrap(); return 0; }
 
-void __cdecl rh_game_main(void)                    /* the game coroutine's body (game_tramp) */
+void __cdecl rh_game_main(void)                    /* game_tramp: retail's entry returned */
 {
-    ((void (*)(void))(uintptr_t)g_entry)();
     finish("entry-returned");
 }
 
