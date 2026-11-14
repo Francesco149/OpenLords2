@@ -82,3 +82,7 @@ and dead peasants filling the moat (0x553fb0) wake the engines; the ram's gate b
 a siege by an AI army with NO ram (ram mode off: the groups come to the walls) or our castle without a moat (Starting
 Castle below royal). Checkpoint `siegeknights6:nopeas` (all peasants dead, engines whole) is a fallback: kill the ram
 first (slow), keep a tower alive out of range, shoot the archers from the south-east tower.
+Attempt 7 plan: repeat attempt 5's recipe (custom-tour@600 → France, two nobles = only the Baron; insult twice to
+−30; win 3 raider battles for vendetta 3; garrison; `rd seasons --feed`) but with Starting Castle "stone" or "keep"
+(no moat — check the battlefield map for moat cells at the siege), and watch the besieger's engines at the siege
+prompt (piece +0x17A catapults / +0x17C towers / +0x17E rams): with no ram, ram mode is off. Checkpoint per stage.
