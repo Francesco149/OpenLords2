@@ -616,6 +616,7 @@ DWORD rh_net_thread_exit(void) { return m_state == 2 ? m_exit : STILL_ACTIVE; }
  * registers and the live part of its stack). The broker link is not rolled back (verify / rd never run live). */
 typedef struct {
     uint32_t poll, isched, nrecv, nsent, send_hash, npend, cb_special, cb_left, dp_open; int game_closed;
+    uint32_t ev_handle; int ev_set;   /* retail's hObject DAT_004e5a04 (the monitor's GameStart event): a kernel object */
     uint32_t m_esp, m_fn, m_arg, m_wake, m_exit; int m_state; uint32_t stack_n;
     msg_t pend[256]; uint8_t *stack;
 } net_meta_t;
@@ -628,6 +629,11 @@ void *rh_net_meta_save(void)
     m->npend = g_npend; m->cb_special = g_cb_special; m->cb_left = g_cb_left; m->game_closed = g_game_closed; m->dp_open = g_dp_open;
     for (uint32_t i = 0; i < g_npend; i++) { m->pend[i] = g_pend[i]; m->pend[i].d = malloc(g_pend[i].len ? g_pend[i].len : 1); memcpy(m->pend[i].d, g_pend[i].d, g_pend[i].len); }
     m->m_esp = rhnet_m_esp; m->m_fn = m_fn; m->m_arg = m_arg; m->m_wake = m_wake; m->m_exit = m_exit; m->m_state = m_state;
+    /* the event the monitor signals and 0x4b63d0 waits on / resets is a real (manual-reset) kernel event: its state
+     * is host state the shadow's memory rollback misses (a port run after retail's saw it reset: mp-skirmish-p2's
+     * rejoin waited ~1 s longer, 4 UI rows diverged on clock stamps) */
+    m->ev_handle = G32(0x4e5a04u); m->ev_set = 0;
+    if (m->ev_handle) m->ev_set = WaitForSingleObject(rh_handle_real((HANDLE)(uintptr_t)m->ev_handle), 0) == WAIT_OBJECT_0;
     m->stack_n = m_state == 1 ? MON_HI - rhnet_m_esp : 0;
     m->stack = m->stack_n ? malloc(m->stack_n) : NULL;
     if (m->stack_n) memcpy(m->stack, (void *)(uintptr_t)rhnet_m_esp, m->stack_n);
@@ -643,6 +649,10 @@ void rh_net_meta_restore(const void *p)
     for (uint32_t i = 0; i < g_npend; i++) { g_pend[i] = m->pend[i]; g_pend[i].d = malloc(m->pend[i].len ? m->pend[i].len : 1); memcpy(g_pend[i].d, m->pend[i].d, m->pend[i].len); }
     rhnet_m_esp = m->m_esp; m_fn = m->m_fn; m_arg = m->m_arg; m_wake = m->m_wake; m_exit = m->m_exit; m_state = m->m_state;
     if (m->stack_n) memcpy((void *)(uintptr_t)rhnet_m_esp, m->stack, m->stack_n);
+    if (m->ev_handle && m->ev_handle == G32(0x4e5a04u)) {
+        HANDLE ev = rh_handle_real((HANDLE)(uintptr_t)m->ev_handle);
+        if (m->ev_set) SetEvent(ev); else ResetEvent(ev);
+    }
 }
 void rh_net_meta_free(void *p)
 {
