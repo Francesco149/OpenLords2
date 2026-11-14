@@ -1936,7 +1936,7 @@ static uint32_t nw_call(uint32_t va, uint32_t self, uint32_t n, uint32_t a, uint
 {   /* TODO(rl-extern): the SierraNW methods 0x4b6a15 (Close) / 0x4b92a0 (delete); the others: rl_mpnet.c */
     return engine_retail_call((uint32_t)(uintptr_t)thiscall_adapter, 6, va, self, n, a, b, c);
 }
-static void mp_event(int kind, int arg) { engine_retail_call(0x43e6a2u, 2, (uint32_t)kind, (uint32_t)arg); }   /* TODO(rl-extern) */
+static void mp_event(int kind, int arg) { rl_43e6a2(kind, arg); }   /* the DirectPlay system events (rl_mpmsg3.c) */
 #define NW   g_rl_4e2a30                                            /* DAT_004e2a30: the SierraNW session */
 #define DPLAY AT(uint32_t, g_rl_4e2a28, 0x4e2a28u, 0x4e2a2cu)     /* DAT_004e2a2c: the IDirectPlay */
 #define SELF_ID AT(int32_t, g_rl_4e2a28, 0x4e2a28u, 0x4e2a28u)    /* DAT_004e2a28: our player id */
