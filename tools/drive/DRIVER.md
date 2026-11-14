@@ -45,8 +45,12 @@ rd rec R A|C|R [SLOT]   (a record's fields: the pieces in use, a county, a realm
 rd cell R COL,ROW ..    (where a map cell is on screen now)
 rd sweep R --wait A..B [--then SPEC] [--frames N] [--until EXPR] --read EXPR,.. [--where EXPR] [--apply N]
                         (from a savestate: wait N, THEN, read — one row per N; --apply N keeps one)
-rd seasons R N [--until EXPR] [--watch EXPR,..] [--battle auto|field]   (End turn N times, the bot's settling: scrolls,
-                        popups, confirms (no), sieges (no engines), battles auto-resolved / fought; ~0.1 s a season)
+rd seasons R N [--until EXPR] [--watch EXPR,..] [--battle auto|field] [--feed] [--at-once]   (End turn N times, the bot's
+                        settling: scrolls, popups, confirms (no), sieges (no engines), battles auto-resolved / fought;
+                        ~0.1 s a season. --until held inside turn processing: runs on with NO input to the first screen
+                        that wants input (a prompt the predicate is about stays up; --at-once stops on the frame).
+                        --feed: before each End turn, per county of ours: rations / grain-meat slider from its stores
+                        (grain first, dairy, meat only above 20 head), tax 0 under 35 happiness — long setups survive)
 rd covered VA|NAME ..   (is a retail function reached by the corpus, by which scenarios — before you start)
 rd check R TASK.md      rd verify R      rd cov R [--blocks]      rd lint TASK.md --on RUN      rd movie R      rd stop R      rd ls
 ```
@@ -155,7 +159,8 @@ the other hosts.
   0x48b7fc can never fire). Play Now first, then File → New Game → thumbs-up (240,218) back to the title: the table
   survives into the skirmish. An Equal field skirmish ("A Bridge Too Far", we defend): the AI crosses on its own.
 - **Armies** (probe split-arm): an army needs ≥ 50 men ("Army too small"); raise = map icon `c@raise_army` → slider
-  `c@raise_more` (+4–5 men a click, `drafted`) → `c@raise_continue` twice; an army's info panel (screen 4) = RMB on an
+  `c@raise_more` (+4–5 men a click, `drafted`) → `c@raise_continue` twice (both points follow the mercenary box:
+  `C(sel_county).merc_offer != 0` moves the slider 32 px up and the buttons 16 px down — picked when played); an army's info panel (screen 4) = RMB on an
   army that is NOT selected (RMB on a selected one deselects): move / disband / split (`@army_split`, refused once the
   army moved); Army Division 0x11: per class row y = 128 + 32·i, arrows (268,y) / (298,y), `c@split_yes`. Weapons are
   assigned on the armoury wall (screen 0xa: `@armory_bows`, `@armory_swords` → overlay 0x0d `@assign_plus` …). Play
@@ -217,6 +222,9 @@ the other hosts.
   0x554490 + 432·i; cell kinds byte 0x5440e7 + 640·row + 8·col (1 ground, 4 wall, 5 courtyard, 9 rubble). An AI group
   takes a target only from a RANGED hit (arrow / bolt), never from melee or stones; 0x4eea98 = AI strength over ours
   (% − 100). `rd cell` / `@A` do not work on the battlefield (map positions from the minimap / `enemy_under_cursor`).
+- **Rations** (screen 0x19, `c600,218`): level arrows (356,141) up / (380,141) down (`C(k)` +0x15e); the grain .. meat
+  slider `C(k)` +0x15f: one click on its track at x sets it to x − 224 (`c254,231` → 30 %). Dairy (5 a cow) is free;
+  meat is slaughtered cattle — at the default 100 % a county eats its herd with grain unused (campaign 6).
 - **Farming** (probe farming): wheat is sown in Winter on fallow fields (10 sacks seed a field; ×12 in 4 seasons
   before events / weather / fertility); with Advanced farming the Town Center layout shifts ~70 px down. Herd crowding
   = herd / pastures (≤10 low … >30 massive). Field events need ≥ 50 sacks / ≥ 40 head. County fields `weather`,

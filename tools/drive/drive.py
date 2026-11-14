@@ -73,7 +73,11 @@ def split_coord(s):
         pts = ui_points()
         if s[1:] not in pts:
             raise SystemExit(f"unknown UI point {s!r} (tools/drive/ui.json: {' '.join(sorted(pts))})")
-        return tuple(pts[s[1:]]["xy"])
+        pt = pts[s[1:]]
+        if "alt" in pt:                                   # a layout that moves with state: {EXPR} coordinates picked when played
+            w, (ax, ay), (x, y) = pt["alt"]["when"], pt["alt"]["xy"], pt["xy"]
+            return tuple(("expr", f"{a} if ({w}) else {b}") if a != b else b for a, b in ((ax, x), (ay, y)))
+        return tuple(pt["xy"])
     parts = split_top(s, ",")
     if len(parts) != 2:
         raise SystemExit(f"bad coordinates {s!r}: X,Y | @name | {{EXPR}},{{EXPR}}")
@@ -1446,6 +1450,7 @@ def cmd_seasons(a):
     tools/bot/battle.py); stops early when --until holds after a season"""
     sys.path.insert(0, os.path.join(ROOT, "tools", "bot"))
     import ui as UIM
+    import actions as AM
     r = Run(a.run)
     lv = r.attach()
     r.push_undo()
@@ -1463,6 +1468,8 @@ def cmd_seasons(a):
         if s.screen != 0 or u.modal():
             u.settle()
         for done in range(1, a.n + 1):
+            if a.feed:
+                AM.upkeep(s, u, log=lambda m: print(m, flush=True))
             u.end_turn()
             line = f"  season {done}: frame {s.frame}  turn {fmt(r.ev('turn')[0])}"
             if a.watch:
@@ -1472,7 +1479,17 @@ def cmd_seasons(a):
                 why = "until"
                 break
     except UntilHit:
-        why = "until (mid-season: the bot's settling stopped as it held)"
+        hit = s.frame
+        s.until = None
+        if a.at_once:
+            why = f"until, f{hit} (mid-season, --at-once)"
+        else:                                             # finish retail's own turn processing with no input, stop where it
+            n = 0                                         # wants input: the map, a scroll, a prompt the predicate may be about
+            while s.screen in (0x23, 0x24) and n < 20000:
+                s.run(10)
+                n += 10
+            why = (f"until, held at f{hit}" + (f" inside turn processing; ran {n} frames with no input to screen {s.screen:#x}"
+                                                + (" (modal scroll up)" if s.screen == 0 and u.modal() else "") if n else ""))
     except (UIM.Stuck, UIM.GameEnded) as e:
         why = f"{type(e).__name__}: {e}"
     r.sync_movie()
@@ -2462,7 +2479,10 @@ def main():
     p = sp.add_parser("hot"); p.add_argument("run"); p.set_defaults(fn=cmd_hot)
     p = sp.add_parser("rec"); p.add_argument("run"); p.add_argument("rec"); p.add_argument("slot", nargs="?", type=int); p.set_defaults(fn=cmd_rec)
     p = sp.add_parser("seasons"); p.add_argument("run"); p.add_argument("n", type=int); p.add_argument("--until"); p.add_argument("--watch")
-    p.add_argument("--battle", choices=("auto", "field"), default="auto"); p.set_defaults(fn=cmd_seasons)
+    p.add_argument("--battle", choices=("auto", "field"), default="auto")
+    p.add_argument("--at-once", action="store_true", help="--until: stop on the frame it holds, even inside turn processing")
+    p.add_argument("--feed", action="store_true", help="county upkeep before each End turn: rations, the grain / meat slider, tax (tools/bot/actions.py upkeep)")
+    p.set_defaults(fn=cmd_seasons)
     p = sp.add_parser("sweep", help="restore, wait N, THEN, read: one row per N"); p.add_argument("run"); p.add_argument("--wait", required=True, help="A..B")
     p.add_argument("--then"); p.add_argument("--frames", type=int, default=0, help="frames to run after THEN before reading"); p.add_argument("--until")
     p.add_argument("--read", required=True); p.add_argument("--where"); p.add_argument("--step", type=int, default=1); p.add_argument("--apply", type=int)

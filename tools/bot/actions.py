@@ -360,3 +360,78 @@ def custom_game(s, ui, map_name="England"):
     s.click(*CUSTOM_START); s.run(300)
     ui.settle()
     return l2state.snapshot(s.read)["map"]
+
+
+# ---- county upkeep for long unattended runs (rd seasons --feed) ----
+MEAT_TRACK_X0 = 224                        # rations panel: a click on the track at x sets meat_pct = x - 224 (0..100)
+MEAT_TRACK_Y = 231                         # (engine_county_ration_slider_render 0x411fde: track 224..323 at y 230..233) [live]
+RATION_SHARE = {1: 0.25, 2: 0.5, 3: 1.0}  # food a head per season: quarter, half, normal (tools/bot/policy.py)
+DAIRY_PER_COW = 5
+
+
+def feed_plan(c):
+    """→ (ration level 1..3, meat_pct) that a county's stores carry: grain first (half the store a season, the rest
+    stays for the seasons to the harvest), dairy (5 a cow) free, meat — slaughtered cattle — only for a shortfall
+    and never below 20 head (the herd breeds; campaign 6's county ate it at meat 100 % with grain unused)"""
+    pop = max(1, c.get("population") or 0)
+    food = c.get("food") or {}
+    grain, cattle = max(0, food.get("grain") or 0), max(0, food.get("cattle") or 0)
+    dairy = DAIRY_PER_COW * cattle
+    meat_ok = max(0, cattle - 20) * 4       # a slaughtered cow feeds ~4 (rough; a ceiling on the slider below)
+    budget = grain // 2 + dairy
+    level = 1
+    for r in (2, 3):
+        if pop * RATION_SHARE[r] <= budget:
+            level = r
+    need = max(0, pop * RATION_SHARE[level] - dairy)
+    from_meat = 0 if need <= grain // 2 else min(meat_ok, need - grain // 2)
+    pct = 0 if need <= 0 else min(100, round(100 * from_meat / need))
+    return level, pct
+
+
+def set_meat(s, ui, pct, read_pct):
+    """the rations panel's grain .. meat slider: one click on its track"""
+    ui._panel((600, 218), 0x19)
+    s.click(MEAT_TRACK_X0 + max(0, min(100, pct)), MEAT_TRACK_Y, frames=4)
+    s.run(6)
+    ui.close()
+    return read_pct()
+
+
+def upkeep(s, ui, log=print, tax_floor_happy=35):
+    """keep every county of ours fed and calm before an End turn: rations / meat slider by feed_plan, tax to 0 when
+    happiness drops under `tax_floor_happy` (rebels at < 25), back to 5 % when crowns run under 200 and the county is
+    content (> 60). → [(county, what changed)]"""
+    st = l2state.snapshot(s.read)
+    me, out = st["me"], []
+    CB, CS = l2state.COUNTY_BASE, l2state.COUNTY_STRIDE
+    crowns = next((r.get("crowns", 0) for r in st["realms"] if r["id"] == me), 0)
+    for c in st["counties"]:
+        if c["owner"] != me or "food" not in c:
+            continue
+        cid = c["id"]
+        if s.u32(l2state.SEL_COUNTY) != cid:
+            if not c.get("minimap_click"):
+                continue
+            s.click(*c["minimap_click"]); s.run(GAP)
+            ui.settle(max_frames=600)
+            if s.u32(l2state.SEL_COUNTY) != cid:
+                out.append((cid, "not selected"))
+                continue
+        rd = lambda o: s.read(CB + cid * CS + o, 1)[0]
+        level, pct = feed_plan(c)
+        did = {}
+        if rd(0x15E) != level:
+            did["ration"] = set_rations(s, ui, level, lambda: rd(0x15E))
+        cur = rd(0x15F)
+        if abs(cur - pct) > 3:
+            did["meat_pct"] = set_meat(s, ui, pct, lambda: rd(0x15F))
+        happy, tax = c.get("happiness", 50), rd(0xB9)
+        want = 0 if happy < tax_floor_happy else (5 if crowns < 200 and happy > 60 and tax < 5 else tax)
+        if want != tax:
+            did["tax"] = ui.set_tax(want, lambda: rd(0xB9))
+        if did:
+            out.append((cid, did))
+    for cid, d in out:
+        log(f"  upkeep: county {cid} {d}")
+    return out

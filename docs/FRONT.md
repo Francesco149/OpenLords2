@@ -55,9 +55,11 @@
    field skirmish after a Play Now → New Game trip — a cold skirmish leaves byte_553080 zero, so the recall never fires;
    +12 blocks); ai-surrender blocked (probe: no skirmish attacker is knights-only; the battle ends when a side has 0 men
    of class < 7, so halve_garrison needs AI knights in a campaign siege after all); siege-knights blocked a third time (run
-   `siegeknights3`: Baron at −30 / vendetta 2 by turn 17, but our county starves before a knight army comes — needs a
-   county-upkeep helper for long `rd seasons` runs; `rd seasons` can stop mid End turn; `@raise_more` moves when the
-   mercenary box shows). Campaign 6 total $7.52. **campaign 5 (2026-11-14, 4 API drivers, $13.03):** knight-garrison filed (sub_48E774 0x48e774 —
+   `siegeknights3`: Baron at −30 / vendetta 2 by turn 17, but our county starves before a knight army comes). Its tool
+   gaps fixed (2026-11-14): `rd seasons --feed` (county upkeep: rations, the grain / meat slider, tax — 12 seasons from
+   custom-strong: happiness 100, herd 229 → 251), `--until` inside turn processing runs on input-free to the next
+   screen that wants input (`--at-once` = old stop), `@raise_more` / `@raise_continue` follow the mercenary box
+   (ui.json `alt`: {EXPR} coordinates). Next: siege-knights attempt 4 with `--feed`. Campaign 6 total $7.52. **campaign 5 (2026-11-14, 4 API drivers, $13.03):** knight-garrison filed (sub_48E774 0x48e774 —
    AI siege-defender knights, the Baron's Germany garrison, custom-strong + 4 seasons; +27 blocks), ai-sally filed
    (sub_48C3FE 0x48c3fe → sub_496D76 0x496d76: a skirmish siege, a docked tower = a breach record, our archers' hits give
    the AI swords a target; +41 blocks; attempt 1 named the condition); **siege-knights blocked again** (probe

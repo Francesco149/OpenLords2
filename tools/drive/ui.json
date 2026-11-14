@@ -123,7 +123,14 @@
   "screens": [
    23
   ],
-  "note": "raise: slider right arrow (+4..5 men)"
+  "note": "raise: slider right arrow (+4..5 men); mercenary box shown (county +0x1ad != 0): 32 px higher (0x418653 v1 128 vs 160)",
+  "alt": {
+   "when": "C(sel_county).merc_offer != 0",
+   "xy": [
+    310,
+    174
+   ]
+  }
  },
  "raise_continue": {
   "xy": [
@@ -133,7 +140,14 @@
   "screens": [
    23
   ],
-  "note": "raise: Continue (the first click after slider clicks is ignored: click twice)"
+  "note": "raise: Continue (the first click after slider clicks is ignored: click twice); mercenary box shown: the button list drawn 16 px lower (screen 23 render)",
+  "alt": {
+   "when": "C(sel_county).merc_offer != 0",
+   "xy": [
+    490,
+    362
+   ]
+  }
  },
  "armory_create": {
   "xy": [
