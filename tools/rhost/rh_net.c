@@ -630,8 +630,8 @@ void *rh_net_meta_save(void)
     for (uint32_t i = 0; i < g_npend; i++) { m->pend[i] = g_pend[i]; m->pend[i].d = malloc(g_pend[i].len ? g_pend[i].len : 1); memcpy(m->pend[i].d, g_pend[i].d, g_pend[i].len); }
     m->m_esp = rhnet_m_esp; m->m_fn = m_fn; m->m_arg = m_arg; m->m_wake = m_wake; m->m_exit = m_exit; m->m_state = m_state;
     /* the event the monitor signals and 0x4b63d0 waits on / resets is a real (manual-reset) kernel event: its state
-     * is host state the shadow's memory rollback misses (a port run after retail's saw it reset: mp-skirmish-p2's
-     * rejoin waited ~1 s longer, 4 UI rows diverged on clock stamps) */
+     * is host state the shadow's memory rollback misses. (mp-skirmish-p2's f32583 shadow divergence was the event's
+     * HANDLE closed in retail's run — rh_handles.c now defers a shadowed close of a non-file handle.) */
     m->ev_handle = G32(0x4e5a04u); m->ev_set = 0;
     if (m->ev_handle) m->ev_set = WaitForSingleObject(rh_handle_real((HANDLE)(uintptr_t)m->ev_handle), 0) == WAIT_OBJECT_0;
     m->stack_n = m_state == 1 ? MON_HI - rhnet_m_esp : 0;

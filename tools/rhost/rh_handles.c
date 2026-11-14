@@ -93,10 +93,25 @@ static BOOL WINAPI h_TerminateThread(HANDLE h, DWORD c) { if (rh_net_thread_hand
  * must be open again there (the port's own close / read / seek would otherwise fail on a dead handle) */
 typedef struct { HANDLE real; fopen_t fo; } closed_t;
 static closed_t g_closed[64]; static int g_nclosed;
+/* a NON-file kernel handle (an event) closed inside a shadowed call: the close is deferred — the restore of the pre-state
+ * hands the port side the same real handle, which must still be alive (mp-skirmish-p2 f32583: Close 0x4b6a15 closed the
+ * game-start event hObject in retail's run; the port side's 0x4b63d0 then waited on a dead handle → WAIT_FAILED at
+ * once, no 1 s wait for the monitor's GameStart: 4 rows diverged on tick stamps). Closed for real at the first restore
+ * whose table no longer holds it (retail's post-state). */
+static HANDLE g_dclose[64]; static int g_ndclose;
 static BOOL WINAPI h_CloseHandle(HANDLE h)
 {
     if (rh_net_thread_handle(h)) return TRUE;
     uint32_t v = (uint32_t)(uintptr_t)h;
+    if (rh_in_shadow() && v >= FAKE_BASE && v < FAKE_BASE + 4u * FAKE_MAX && !(v & 3) && !g_fo[(v - FAKE_BASE) >> 2] &&
+        g_real[(v - FAKE_BASE) >> 2]) {
+        HANDLE real = g_real[(v - FAKE_BASE) >> 2];
+        int seen = 0;
+        for (int i = 0; i < g_ndclose; i++) seen |= g_dclose[i] == real;
+        if (!seen) { if (g_ndclose >= 64) rh_fatal("rh_handles: more than 64 deferred closes"); g_dclose[g_ndclose++] = real; }
+        rh_handle_forget(h);
+        return TRUE;
+    }
     if (rh_in_shadow() && v >= FAKE_BASE && v < FAKE_BASE + 4u * FAKE_MAX && !(v & 3) && g_fo[(v - FAKE_BASE) >> 2] &&
         g_real[(v - FAKE_BASE) >> 2] && g_nclosed < 64) {
         g_closed[g_nclosed].real = g_real[(v - FAKE_BASE) >> 2];
@@ -242,6 +257,11 @@ void rh_handles_meta_restore(const void *p)
         if (g_sopen[i].gen == g_gen && !keep) CloseHandle(g_sopen[i].real);
     }
     g_nsopen = 0;
+    for (int i = 0; i < g_ndclose; i++) {   /* deferred closes no longer held by the restored table: close now */
+        int keep = 0;
+        for (uint32_t k = 0; k < m->next && !keep; k++) keep = g_real[k] == g_dclose[i];
+        if (!keep) { CloseHandle(g_dclose[i]); g_dclose[i--] = g_dclose[--g_ndclose]; }
+    }
     for (uint32_t k = 0; k < m->next; k++)
         if (g_real[k] && pos[k] >= 0) {
             LARGE_INTEGER to = { .QuadPart = pos[k] };
