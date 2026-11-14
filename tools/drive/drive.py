@@ -594,12 +594,20 @@ class Live:
     def kv(r):
         return dict(t.split("=", 1) for t in r.split()[1:] if "=" in t)
 
-    def prog(self, tokens):
+    def prog(self, tokens, pin=False):
+        """→ a server program id. Ids are reused round-robin (0..249): a program that must outlive later compiles
+        (rd seasons --until across 30+ seasons of --watch / status evals) is pinned, or its id gets overwritten"""
         prog_check(tokens, "program " + " ".join(tokens[:8]))
-        if self.nprog >= 250:
-            self.nprog = 0
-        pid = self.nprog
-        self.nprog += 1
+        pinned = self.__dict__.setdefault("pinned", set())
+        while True:
+            if self.nprog >= 250:
+                self.nprog = 0
+            pid = self.nprog
+            self.nprog += 1
+            if pid not in pinned:
+                break
+        if pin:
+            pinned.add(pid)
         self.cmd(f"prog {pid} " + " ".join(tokens))
         return pid
 
@@ -1462,7 +1470,7 @@ def cmd_seasons(a):
         return UIM.default_ask(kind, info)
     u = UIM.UI(s, log=lambda *x: None, ask=ask)
     if a.until:
-        s.until = lv.prog(r.vars.program(a.until))       # checked every frame the bot steps, inside a season too
+        s.until = lv.prog(r.vars.program(a.until), pin=True)   # checked every frame the bot steps, inside a season too
     done, why = 0, "seasons"
     try:
         if s.screen != 0 or u.modal():
@@ -1507,8 +1515,8 @@ def cmd_sweep(a):
     exprs = split_top(a.read)
     then_items = parse_spec(a.then) if a.then else []
     tsegs, tframes = items_to_segs(then_items, lambda e: lv.prog(r.vars.compile(e)), resolve=r.screen_point) if then_items else ("", 0)
-    ids, sl = sampled_cols(lv, r.vars, exprs)
-    u = f" u={lv.prog(r.vars.program(a.until))}" if a.until else ""
+    ids, sl = sampled_cols(lv, r.vars, exprs + ([a.where] if a.where else []))   # compiled once: nothing is compiled
+    u = f" u={lv.prog(r.vars.program(a.until))}" if a.until else ""                 # per row (ids are reused round-robin)
     root = r.snap()
     print("     N  " + "  ".join(exprs))
     try:
@@ -1518,8 +1526,11 @@ def cmd_sweep(a):
             if segs:
                 lv.cmd(f"run {segs}{u}")
             vals = fold_row([float(x) for x in Live.kv(lv.cmd("eval " + ",".join(map(str, ids))))["v"].split(":")], sl)
-            if not a.where or r.ev(a.where)[0]:
-                print(f"  {n:5d}  " + "  ".join(fmt(v) for v in vals), flush=True)
+            if a.where:
+                *vals, keep = vals
+                if not keep:
+                    continue
+            print(f"  {n:5d}  " + "  ".join(fmt(v) for v in vals), flush=True)
     finally:
         lv.cmd(f"restore {root}")
         lv.cmd(f"free {root}", check=False)

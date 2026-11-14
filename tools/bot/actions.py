@@ -367,24 +367,27 @@ MEAT_TRACK_X0 = 224                        # rations panel: a click on the track
 MEAT_TRACK_Y = 231                         # (engine_county_ration_slider_render 0x411fde: track 224..323 at y 230..233) [live]
 RATION_SHARE = {1: 0.25, 2: 0.5, 3: 1.0}  # food a head per season: quarter, half, normal (tools/bot/policy.py)
 DAIRY_PER_COW = 5
+FED_PER_SACK = 6                           # a grain sack feeds 6 (rations panel: Fed 168 / Eaten 28 grain at 653 people, quarter) [live]
 
 
 def feed_plan(c):
-    """→ (ration level 1..3, meat_pct) that a county's stores carry: grain first (half the store a season, the rest
-    stays for the seasons to the harvest), dairy (5 a cow) free, meat — slaughtered cattle — only for a shortfall
+    """→ (ration level 1..3, meat_pct) that a county's stores carry: grain first (half the store a season, 6 fed a
+    sack; the rest stays for the seasons to the harvest — siegeknights4's quarter rations from counting sacks as heads
+    took health to 0 with grain in store), dairy (5 a cow) free, meat — slaughtered cattle — only for a shortfall
     and never below 20 head (the herd breeds; campaign 6's county ate it at meat 100 % with grain unused)"""
     pop = max(1, c.get("population") or 0)
     food = c.get("food") or {}
-    grain, cattle = max(0, food.get("grain") or 0), max(0, food.get("cattle") or 0)
+    grain = max(0, food.get("grain") or 0) * FED_PER_SACK // 2     # heads half the store feeds this season
+    cattle = max(0, food.get("cattle") or 0)
     dairy = DAIRY_PER_COW * cattle
-    meat_ok = max(0, cattle - 20) * 4       # a slaughtered cow feeds ~4 (rough; a ceiling on the slider below)
-    budget = grain // 2 + dairy
+    meat_ok = max(0, cattle - 20) * 4       # a slaughtered cow feeds ~4 (unmeasured; a ceiling on the slider below)
+    budget = grain + dairy
     level = 1
     for r in (2, 3):
         if pop * RATION_SHARE[r] <= budget:
             level = r
     need = max(0, pop * RATION_SHARE[level] - dairy)
-    from_meat = 0 if need <= grain // 2 else min(meat_ok, need - grain // 2)
+    from_meat = 0 if need <= grain else min(meat_ok, need - grain)
     pct = 0 if need <= 0 else min(100, round(100 * from_meat / need))
     return level, pct
 
@@ -398,10 +401,12 @@ def set_meat(s, ui, pct, read_pct):
     return read_pct()
 
 
-def upkeep(s, ui, log=print, tax_floor_happy=35):
+def upkeep(s, ui, log=print, tax_floor_happy=35, buy=True):
     """keep every county of ours fed and calm before an End turn: rations / meat slider by feed_plan, tax to 0 when
     happiness drops under `tax_floor_happy` (rebels at < 25), back to 5 % when crowns run under 200 and the county is
-    content (> 60). → [(county, what changed)]"""
+    content (> 60); first, grain from a merchant in the county (up to 3 seasons at normal rations, 60 a trade, ~3
+    crowns a sack) when the store feeds under two seasons and crowns are over 300 (nothing is sown: a long run's
+    harvest stops). → [(county, what changed)]"""
     st = l2state.snapshot(s.read)
     me, out = st["me"], []
     CB, CS = l2state.COUNTY_BASE, l2state.COUNTY_STRIDE
@@ -419,8 +424,23 @@ def upkeep(s, ui, log=print, tax_floor_happy=35):
                 out.append((cid, "not selected"))
                 continue
         rd = lambda o: s.read(CB + cid * CS + o, 1)[0]
-        level, pct = feed_plan(c)
+        rd4 = lambda o: s.i32(CB + cid * CS + o)
         did = {}
+        sacks = c["food"].get("grain") or 0
+        if buy and sacks * FED_PER_SACK < 2 * c.get("population", 0) and crowns > 300 and any(
+                m["county"] == cid for m in st.get("merchants", [])):
+            want = (3 * c.get("population", 0) + FED_PER_SACK - 1) // FED_PER_SACK - sacks   # 3 seasons, normal
+            res = []
+            while want > 0 and len(res) < 8:
+                before = rd4(0x224)
+                res.append(trade(s, ui, "grain", min(60, want)))
+                if rd4(0x224) <= before:
+                    break
+                want -= rd4(0x224) - before
+            did["bought_grain"] = (res[-1], rd4(0x224) - sacks)
+            crowns = s.i32(l2state.REALM_BASE + me * l2state.REALM_STRIDE + 0x118)
+        c["food"]["grain"] = rd4(0x224)           # after any purchase
+        level, pct = feed_plan(c)
         if rd(0x15E) != level:
             did["ration"] = set_rations(s, ui, level, lambda: rd(0x15E))
         cur = rd(0x15F)

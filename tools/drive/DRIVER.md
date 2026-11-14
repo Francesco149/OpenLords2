@@ -49,8 +49,11 @@ rd seasons R N [--until EXPR] [--watch EXPR,..] [--battle auto|field] [--feed] [
                         settling: scrolls, popups, confirms (no), sieges (no engines), battles auto-resolved / fought;
                         ~0.1 s a season. --until held inside turn processing: runs on with NO input to the first screen
                         that wants input (a prompt the predicate is about stays up; --at-once stops on the frame).
-                        --feed: before each End turn, per county of ours: rations / grain-meat slider from its stores
-                        (grain first, dairy, meat only above 20 head), tax 0 under 35 happiness — long setups survive)
+                        --feed: before each End turn, per county of ours: grain bought from a merchant in the county
+                        when the store feeds < 2 seasons (crowns > 300), rations / grain-meat slider from its stores
+                        (a sack feeds 6; dairy 5 a cow; meat only above 20 head), tax 0 under 35 happiness. It does not
+                        sow: siegeknights3:won2 + --feed peaks at 1158 people (turn 44), starves by turn ~60 when crowns
+                        run out — sow wheat in Winter for longer setups)
 rd covered VA|NAME ..   (is a retail function reached by the corpus, by which scenarios — before you start)
 rd check R TASK.md      rd verify R      rd cov R [--blocks]      rd lint TASK.md --on RUN      rd movie R      rd stop R      rd ls
 ```

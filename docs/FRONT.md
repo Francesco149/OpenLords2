@@ -59,7 +59,13 @@
    gaps fixed (2026-11-14): `rd seasons --feed` (county upkeep: rations, the grain / meat slider, tax — 12 seasons from
    custom-strong: happiness 100, herd 229 → 251), `--until` inside turn processing runs on input-free to the next
    screen that wants input (`--at-once` = old stop), `@raise_more` / `@raise_continue` follow the mercenary box
-   (ui.json `alt`: {EXPR} coordinates). Next: siege-knights attempt 4 with `--feed`. Campaign 6 total $7.52. **campaign 5 (2026-11-14, 4 API drivers, $13.03):** knight-garrison filed (sub_48E774 0x48e774 —
+   (ui.json `alt`: {EXPR} coordinates). Campaign 6 total $7.52. **Attempt 4** (`siegeknights4`, API, $1.46, blocked):
+   vendetta stage 3 at turn 29; the Baron's knight army A26 (417 men, 27 knights) launched at us turn 46 but vanished
+   at (35,26) crossing realm 2's land; his other knight armies target realm 3. It found two bugs of ours, fixed: `--feed`
+   counted grain sacks as heads (a sack feeds 6) → quarter rations, health 0; `Live.prog` reused ids round-robin
+   (250), so a long `seasons --until` was overwritten by a later --watch program (a false "held") — pinned now, and
+   sweep compiles --where once. `--feed` now buys grain too: won2 + 20 seasons peaks at 1158 people, starves ~turn 60
+   (no sowing). Next for siege-knights: a start beside the armour AI (no third realm's land between). **campaign 5 (2026-11-14, 4 API drivers, $13.03):** knight-garrison filed (sub_48E774 0x48e774 —
    AI siege-defender knights, the Baron's Germany garrison, custom-strong + 4 seasons; +27 blocks), ai-sally filed
    (sub_48C3FE 0x48c3fe → sub_496D76 0x496d76: a skirmish siege, a docked tower = a breach record, our archers' hits give
    the AI swords a target; +41 blocks; attempt 1 named the condition); **siege-knights blocked again** (probe

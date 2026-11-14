@@ -105,3 +105,56 @@ The driver's report, as written:
 
 ---
 model claude-opus-5-5, effort high, 141 turns, $3.33, 39 min
+
+# Attempt 4 (run `siegeknights4`, API driver, 2026-11-14) — blocked
+
+The driver's report, as written:
+
+---
+
+The task is not done. The run `siegeknights4` is blocked after step 2: the surrender flag u32(0x56d5c8) was never set, so halve_garrison (0x4ad8cc) is still not reached. The Baron's knight armies do get sent at us, but they never get past the middle of the map, and our county dies within about 10 more seasons.
+
+**Run state**
+- **Start:** `siegeknights3:won2` (f20951, custom-strong, turn 16, Autumn 1271). I picked it because the Baron (realm 5) is already at −30 toward us with vendetta stage 2. We hold Cordova (county 5), with a 187-man garrison (A11).
+- **Movie:** ends at f33497, checkpoint `t42` (turn 42). The run was replayed, not poked.
+- **`rd check`:** FAIL.
+  - Step 1 at f20952.
+  - Step 2 at f27051, but this is realm 3's siege of Cordova (no knights). It was auto-resolved at the f27728 prompt; we won and the garrison fell 187 → 18.
+  - Steps 3–5 were not reached. The forbid never fired in the kept movie.
+- **`rd cov`:** 896 functions, 0 new. I did not run `--blocks` or `rd verify`, because there is no trace worth filing.
+
+**What I did**
+1. `rd seasons 33 --feed` from won2: vendetta stage 2 → 3 at turn 29 (pinned target +0xEB = 1, us). The `--until` claimed it held at f36398, but a scan shows the predicate was never true. That is a tool bug.
+2. Marched the 118 peasants (A16) into the keep (garrison 136), then ran more seasons. The game ended at turn 57 (f40946): Cordova's population fell to about 13 and we lost our last county.
+3. Tried `siegeknights3:fed` (4 wheat fields, 240 grain workers) with `seasons --feed`. The county went neutral at turn 33, with 800–990 grain left in store.
+4. Rebuilt the won2 line (seasons 26 → `t42`), traced the Baron's armies, and ran two 4-session searches:
+   - From `t47` (254 s, 5.5M frames). Goal: a Baron knights army in county 5. Actions: End turn after waits of 0 / 40 / 120 / 230 frames, RMB, auto-resolve, thumbs-down, a map click.
+   - From `t42` (293 s, 6.1M frames), same goal and actions.
+   - Neither found it. No Baron knight army ever got below row 32.
+
+**Game facts learned**
+- **The Baron's attack on us:** at turn 46 his cooldown (realm +0x15a) ran out. Launch_attack set +0x4b = 5 and raised A26 at (32,3) with target byte piece +0x151 = 5 (us).
+  - A26 grew to 417 men: 330 peasants, 54 archers, 6 pikes, 27 knights.
+  - It marched (32,3) → (31,13) → (29,24) → east along row 26. Realm 3's raiders use that same route toward Cordova, via (36,24) and county 4.
+  - It vanished at (35,26) at f36478, probably in a battle in realm 2's county 1, where realm 2's 758-man A30 and its garrison sit.
+- **Other Baron knight armies** (A29: 523 men, 38 knights; A21: 456 men, 20 knights) target realm 3's counties 2, 12 and 13.
+- **Why Cordova dies:**
+  - The people don't eat the stored grain. In the won2 line, grain stayed at 414 for 20 seasons while the population fell 911 → 78. In the fed line, 800+ sacks sat unused.
+  - The ration panel at turn 42 showed "Wanted Quarter", "Fed 168 / Eaten 28 grain" for 653 people, with 256 sacks in store and 0 grain workers.
+  - Health 0 then kills hundreds a season. `--feed` only changes ration, meat % and tax; it does not fix this.
+- **The battle looks out of reach anyway:** even if A26 had arrived, its ~390 non-knights would have to die while its engines live and before any breach. Our garrison was 18 (136 after the march), and a keep holds at most 200.
+- **Code (port `src/engine_army_ai.c`):** target = the most hostile player (the pinned +0xEB, else the lowest attitude below −10). It is scored by Chebyshev distance from the muster county's capital (+40 against a defended keep, must be under 128). The army is raised at the muster county (realm +0xE5; needs ≥ 400 people and happiness ≥ 25). Order 7 re-points it every season at the nearest deployable cell of target +0x151 (0x4a58f4 / 0x4a689d).
+- **0x48d9ce condition:** 0x553F74 and 0x57C980 are recounted every frame (all_ida.c:69761–69800). The condition is live: every remaining AI side-0 man of class < 7 must be a knight.
+
+**What would work next:** a start where our castle sits right next to the armour AI, so its knight army doesn't cross other lords' land. Alternatively, find out why Cordova's grain goes uneaten (the "Fed" cap) so the county lives 20+ more seasons.
+
+**What the tool lacked**
+- `seasons --until` reports "held" when the predicate was never true.
+- `--feed` can't solve the grain-not-eaten collapse (no worker or sowing upkeep).
+- There is no way to see who destroyed a piece (battle log / `rd text` for past frames).
+- `rd eval` has no list comprehensions (`--each` works).
+
+---
+model claude-opus-5-5, effort high, 50 turns, $1.46, 18 min
+
+**Orchestrator, after:** the false "held" was `Live.prog`'s id reuse (fixed: pinned programs); the uneaten grain was `--feed` choosing quarter rations from sacks counted as heads (fixed: 6 fed a sack; health then held 2–3 for 20 seasons on the same line).
