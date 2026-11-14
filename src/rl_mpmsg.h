@@ -2,6 +2,7 @@
  * Canonical names rl_<va>; a function lives in rl_mpmsg.c once ported, else in rl_mpmsg_pending.c
  * (a retail stub). Signatures start at retail's arity with an int return; the owner may refine them. */
 #pragma once
+#include <stdint.h>
 
 int rl_43e330(int a0);                           /* 259 B, coverage 6 */
 int rl_43e433(void);                             /* 218 B, coverage 6 */
@@ -57,3 +58,9 @@ int rl_442c3f(void);                             /* 67 B, coverage 1 */
 int rl_442c82(void);                             /* 55 B, coverage 1 */
 int rl_442cb9(void);                             /* 29 B, coverage 2 */
 int rl_442cd6(void);                             /* 42 B, coverage 2 */
+
+/* the port side's message tables (0x4d57f0 builders / 0x4d5980 receivers): rl_43eda0 / rl_43eac1 call these */
+int rl_mpmsg_build(int id);
+int rl_mpmsg_recv(int id);
+/* 0x440dd2's uninitialized local [ebp-0xc] (the residue at e0 - 0x10): in / out of rl_440dd2 */
+extern uint32_t rl_440dd2_res;

@@ -27,6 +27,7 @@
     BFA(g_rl_55cd38,0x55cd38) \
     BFA(g_rl_55ce68,0x55ce68) \
     BFA(g_rl_5656ec,0x5656ec) \
+    BFA(g_rl_567964,0x567964) \
     BFA(g_rl_567d04,0x567d04) \
     BFA(g_rl_568958,0x568958) \
     BFA(g_rl_568970,0x568970) \

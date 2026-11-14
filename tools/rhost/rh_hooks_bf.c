@@ -23,6 +23,8 @@ typedef uint32_t (__cdecl *r5_t)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_
 typedef uint32_t (__cdecl *r6_t)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
 typedef uint32_t (__cdecl *r7_t)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
 typedef uint32_t (__cdecl *r8_t)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t);
+typedef uint32_t (__cdecl *r12_t)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t,
+                                  uint32_t, uint32_t, uint32_t);
 
 static uint32_t retail_call(uint32_t va, int n, const uint32_t *a)
 {
@@ -37,7 +39,8 @@ static uint32_t retail_call(uint32_t va, int n, const uint32_t *a)
     case 5: r = ((r5_t)va)(a[0], a[1], a[2], a[3], a[4]); break;
     case 6: r = ((r6_t)va)(a[0], a[1], a[2], a[3], a[4], a[5]); break;
     case 7: r = ((r7_t)va)(a[0], a[1], a[2], a[3], a[4], a[5], a[6]); break;
-    default: r = ((r8_t)va)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]); break;
+    case 8: r = ((r8_t)va)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]); break;
+    default: r = ((r12_t)va)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11]); break;   /* 9..12 */
     }
     rh_port_retail_leave();
     return r;
