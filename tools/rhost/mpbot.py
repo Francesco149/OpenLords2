@@ -11,6 +11,8 @@ never stall each other. A session is a background server; scripts are sent to it
 
 Steps (`;`-separated): run N | [p1|p2|..|both] click X Y | rclick X Y | move X Y | key VK [CHAR] | type TEXT |
   chat P TEXT (this side receives a SIGS lobby chat line from player P: a type-20 popup) |
+  forge ID OFF XOR [N] [crc] (this side's next N arriving messages of id ID: byte OFF ^= XOR, checksum fixed unless crc) |
+  lag MS (this side's link is slow: arrivals visible MS ms of virtual time after their send; 0 = off) |
   u32 VA | read VA N | shot TAG (every side: <rundir>/shot_TAG.png, a montage path is printed) | wait pK SCREEN [MAX].
 `pK` addresses side K (player K-1; p1 hosts); an input step without one goes to p1. Inputs are posted to one side and
 the frames after them run on all.  The out-traces replay alone (rhost.py run / corpus), like mp-record's."""
@@ -176,6 +178,15 @@ class MP:
                 for kk in (range(self.n) if k is None else [k]):
                     self.s[kk]._cmd(cmd="netchat", p=int(a[0]), text=" ".join(a[1:]).replace("_", " "))
                 self.run(2)
+            elif op == "feed":                # feed SCEN UNTIL: every side's inputs from SCEN-pK (deliveries come live) to frame UNTIL
+                self.feed(a[0], int(a[1]), out)
+            elif op == "forge":               # pK forge ID OFF XOR [N] [crc]: side K's next N arriving messages of id ID get byte OFF ^= XOR
+                for kk in (range(self.n) if k is None else [k]):
+                    self.s[kk]._cmd(cmd="netforge", id=int(a[0], 0), off=int(a[1], 0), x=int(a[2], 0),
+                                    n=int(a[3]) if len(a) > 3 else 1, bad=1 if "crc" in a[4:] else 0)
+            elif op == "lag":                 # pK lag MS: side K's link is slow (arrivals held MS ms past their send clock; 0 off)
+                for kk in (range(self.n) if k is None else [k]):
+                    self.s[kk]._cmd(cmd="netlag", ms=int(a[0]))
             elif op == "u32":
                 for kk in (range(self.n) if k is None else [k]):
                     out(f"  p{kk + 1} {a[0]} = {self.s[kk].u32(int(a[0], 16)):#x} ({self.s[kk].i32(int(a[0], 16))})")
@@ -196,6 +207,31 @@ class MP:
             else:
                 raise ValueError(f"unknown step {step!r}")
             out(f"{step:30s} -> {self.status()}")
+
+    def feed(self, scen, until, out):
+        """re-play an MP scenario's input events on every side (SCEN-p1 … : f > the current frame, ≤ until), each posted
+        at its own frame; the deliveries are NOT taken from the traces — the sides talk live through the broker, so the
+        game goes as it went if nothing else changed (check the result against the scenario before branching off)"""
+        ev = {}
+        for k in range(self.n):
+            for l in open(os.path.join(rhost.SCEN, f"{scen}-p{k + 1}", "trace.jsonl")):
+                if not l.startswith("{") or '"m":' not in l:
+                    continue
+                e = json.loads(l)
+                if "f" in e and "m" in e:
+                    ev.setdefault(int(e["f"]), []).append((k, e))
+        cur = self.s[0].frame
+        n = 0
+        for f in sorted(x for x in ev if cur <= x <= until):
+            if f > cur:
+                self.run(f - cur)
+                cur = f
+            for k, e in ev[f]:
+                self.s[k].post(e["m"], e.get("w", 0), e.get("l", 0))
+                n += 1
+        if until > cur:
+            self.run(until - cur)
+        out(f"  fed {n} input events of {scen} (to f{until})")
 
     def save(self, scen, force=False):
         made = []

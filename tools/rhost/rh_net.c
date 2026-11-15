@@ -108,6 +108,30 @@ static void recv_all(void *p, int n)
     int off = 0;
     while (off < n) { int r = recv(g_sock, (char *)p + off, n - off, 0); if (r <= 0) rh_fatal("net: broker closed the link (%d)", WSAGetLastError()); off += r; }
 }
+/* live only: a forged wire (rh_bot.c "netforge", mpbot "pK forge ID OFF XOR [N] [crc]"). The next N distinct messages
+ * (by seq; all copies of one) of id ID arriving at this side get message byte OFF (header included: 0 id, 1 size,
+ * 2 checksum, 3 seq | copy flags, payload from 4) XORed with XOR; the checksum byte follows the change unless "crc" asks
+ * for a bad one. Models a peer whose state hash differs (a desync) or a damaged packet; the trace stamps the forged
+ * bytes, so the side still replays alone. */
+static int g_forge_id = -1, g_forge_off, g_forge_xor, g_forge_left, g_forge_badcrc, g_forge_seq = -1;
+void rh_net_forge(int id, int off, int x, int n, int badcrc)
+{
+    g_forge_id = id; g_forge_off = off; g_forge_xor = x & 0xff; g_forge_left = n; g_forge_badcrc = badcrc; g_forge_seq = -1;
+    rh_log("net: forging the next %d message(s) id %d: byte %d ^= 0x%02x%s\n", n, id, off, x & 0xff, badcrc ? " (checksum left bad)" : "");
+}
+static void forge(uint8_t *d, uint32_t len)
+{
+    if (g_forge_id < 0 || len < 4 || d[0] != g_forge_id || (uint32_t)g_forge_off >= len) return;
+    int seq = d[3] & 0x3f;
+    if (seq != g_forge_seq) {
+        if (g_forge_left <= 0) { g_forge_id = -1; return; }   /* done: a later message reusing the seq is left alone */
+        g_forge_left--; g_forge_seq = seq;
+    }
+    uint8_t was = d[g_forge_off];
+    d[g_forge_off] ^= (uint8_t)g_forge_xor;
+    if (g_forge_off >= 4 && !g_forge_badcrc) d[2] = (uint8_t)(d[2] - was + d[g_forge_off]);
+    rh_log("net: forged id %d seq %d byte %d: %02x -> %02x (checksum %02x)\n", d[0], seq, g_forge_off, was, d[g_forge_off], d[2]);
+}
 static void sock_read_one(void)
 {
     nhdr_t h; recv_all(&h, sizeof h);
@@ -120,7 +144,9 @@ static void sock_read_one(void)
     }
     else if (h.type == 'M') {
         if (g_narr >= 8192) rh_fatal("net: arrival queue overflow");
-        g_arr[g_narr++] = (msg_t){ 0, g_dp ? (h.a == 0xfe ? 0 : h.a + 1) : h.a, h.len, d, NK_DATA };   /* DP: the sender's DPID */
+        if (!g_dp || h.a != 0xfe) forge(d, h.len);
+        g_arr[g_narr++] = (msg_t){ h.clock, g_dp ? (h.a == 0xfe ? 0 : h.a + 1) : h.a, h.len, d, NK_DATA };   /* DP: the sender's DPID;
+                                                                       n = the sender's clock until stamped (rh_net_lag) */
     } else { rh_log("net: broker frame type %c ignored\n", h.type); free(d); }
 }
 static int sock_readable(DWORD ms)
@@ -335,14 +361,29 @@ static void deliver(msg_t m)
         ((void (__cdecl *)(const char *, name32_t))(uintptr_t)g_cb_special)(text, name);
     }
 }
+/* live only (record / bot): a slow link. An arrival becomes visible once our virtual clock is LAG ms past the clock the
+ * sender sent it at; arrivals keep their order (the first one still in flight holds the rest). The trace stamps
+ * whatever poll it became visible at, so a replay needs no lag setting. rh_bot.c "netlag", mpbot "pK lag MS". */
+static uint32_t g_lag_ms;
+void rh_net_lag(uint32_t ms)
+{
+    g_lag_ms = ms;
+    rh_log("net: link lag %u ms (arrivals held until the sender's clock + lag)\n", ms);
+}
 static int net_poll(void)   /* one receive poll: stamp + reveal deliveries (SIGS CheckForAnyTCPMessage, DP Receive) */
 {
     g_poll++;
     while (g_isched < g_nsched && g_sched[g_isched].n <= g_poll) deliver(g_sched[g_isched++]);
     if (g_live) {
         sock_drain();
-        for (uint32_t i = 0; i < g_narr; i++) { g_arr[i].n = g_poll; log_delivery(&g_arr[i]); deliver(g_arr[i]); free(g_arr[i].d); }
-        g_narr = 0;
+        uint32_t now = rh_vnow(), i = 0;
+        for (; i < g_narr; i++) {
+            if (g_lag_ms && g_arr[i].kind == NK_DATA && (int32_t)(now - (g_arr[i].n + g_lag_ms)) < 0)
+                break;
+            g_arr[i].n = g_poll; log_delivery(&g_arr[i]); deliver(g_arr[i]); free(g_arr[i].d);
+        }
+        memmove(g_arr, g_arr + i, (g_narr - i) * sizeof g_arr[0]);
+        g_narr -= i;
     }
     return (int)g_npend;
 }

@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **1868** (76.3%) — tested 788, ported 1080
-- code bytes touched: **84.3%** (706,806 / 838,629 B)
-- unported: **579**
+- touched: **1875** (76.6%) — tested 788, ported 1087
+- code bytes touched: **84.4%** (708,016 / 838,629 B)
+- unported: **572**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (788) — ported + host unit suite
@@ -810,7 +810,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (1080) — reimplemented, no host test yet
+## ported (1087) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -1172,7 +1172,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x43f43e | FUN_0043f43e | 70 | rl_quit.c |
 | 0x43f484 | FUN_0043f484 | 51 | rl_ui2.c |
 | 0x43f4b7 | FUN_0043f4b7 | 270 | rl_mpmsg.c |
+| 0x43f5c5 | FUN_0043f5c5 | 542 | rl_mpmsg3.c |
 | 0x43f7e3 | FUN_0043f7e3 | 114 | rl_host.c |
+| 0x43f855 | FUN_0043f855 | 170 | rl_mpmsg3.c |
 | 0x43f8ff | FUN_0043f8ff | 58 | rl_mpmsg.c |
 | 0x43fd2a | FUN_0043fd2a | 413 | rl_mpmsg.c |
 | 0x43fed2 | FUN_0043fed2 | 54 | rl_mpmsg.c |
@@ -1215,6 +1217,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4427d1 | FUN_004427d1 | 545 | rl_mpmsg.c |
 | 0x4429f2 | FUN_004429f2 | 51 | rl_mpmsg.c |
 | 0x442a25 | FUN_00442a25 | 90 | rl_mpmsg.c |
+| 0x442a7f | FUN_00442a7f | 47 | rl_mpmsg3.c |
+| 0x442aae | FUN_00442aae | 47 | rl_mpmsg3.c |
 | 0x442add | FUN_00442add | 11 | rl_mpmsg3.c |
 | 0x442ae8 | FUN_00442ae8 | 21 | rl_mpmsg3.c |
 | 0x442afd | FUN_00442afd | 11 | rl_mpmsg.c |
@@ -1329,6 +1333,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4464e4 | FUN_004464e4 | 415 | rl_mpmsg3.c |
 | 0x446683 | FUN_00446683 | 266 | rl_mpmsg3.c |
 | 0x44678d | FUN_0044678d | 281 | rl_mpmsg3.c |
+| 0x44695f | FUN_0044695f | 36 | rl_mpmsg3.c |
+| 0x446983 | FUN_00446983 | 36 | rl_mpmsg3.c |
 | 0x4469bd | FUN_004469bd | 47 | rl_mpmsg3.c |
 | 0x4469ec | FUN_004469ec | 204 | rl_mpmsg3.c |
 | 0x446ab8 | FUN_00446ab8 | 87 | rl_mpmsg3.c |
@@ -1488,6 +1494,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x47e668 | FUN_0047e668 | 330 | engine_bf_setup.c |
 | 0x47e7b2 | FUN_0047e7b2 | 367 | engine_bf_setup.c |
 | 0x47e926 | FUN_0047e926 | 284 | engine_bf_setup.c |
+| 0x47ebe8 | FUN_0047ebe8 | 332 | rl_mpmsg3.c |
 | 0x47ed9b | FUN_0047ed9b | 590 | engine_bf_setup.c |
 | 0x47efee | FUN_0047efee | 1087 | engine_bf_setup.c |
 | 0x47f42d | FUN_0047f42d | 71 | engine_bf_setup.c |

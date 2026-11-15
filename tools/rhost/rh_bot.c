@@ -140,6 +140,15 @@ static void serve(void)
             char text[256] = ""; jstr(line, "text", text, sizeof text); jnum(line, "p", &v);
             rh_net_inject_chat((int)v, text);
             reply("\"ok\": 1");
+        } else if (!strcmp(cmd, "netlag")) {    /* MP, live: a slow link — arrivals held LAG ms past their send clock (rh_net.c) */
+            jnum(line, "ms", &v);
+            rh_net_lag((uint32_t)v);
+            reply("\"ok\": 1");
+        } else if (!strcmp(cmd, "netforge")) {  /* MP, live: forge arriving messages of one id (rh_net.c rh_net_forge) */
+            uint32_t id = 0, off = 0, x = 0, n = 1, bad = 0;
+            jnum(line, "id", &id); jnum(line, "off", &off); jnum(line, "x", &x); jnum(line, "n", &n); jnum(line, "bad", &bad);
+            rh_net_forge((int)id, (int)off, (int)x, (int)n, (int)bad);
+            reply("\"ok\": 1");
         } else if (!strcmp(cmd, "quit")) {
             reply("\"ok\": 1");
             rh_finish("bot-quit");

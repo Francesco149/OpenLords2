@@ -108,6 +108,8 @@ void rh_net_tick(void);
 void rh_net_sync(void);
 void rh_net_pause(int on);
 void rh_net_inject_chat(int from, const char *text);
+void rh_net_lag(uint32_t ms);
+void rh_net_forge(int id, int off, int x, int n, int badcrc);
 int  rh_net_dp(void);
 int  rh_net_me(void);
 int  rh_net_dp_create(void *guid, void **out);
