@@ -60,9 +60,12 @@
    (rh_hooks_ai.c ctx_port). **Standalone: 105/105 scenarios = pure retail, all 25 MP sides included** (2026-11-14 late):
    mp-trio-p3 = quirk #240 (0x475e07's uninitialized [ebp-8] = the map scene's render_tile return address, never 3);
    mp-trio-p1 (fb only, the lobby's first frame f53108: name colour) = the roster row's seat snapshot was taken before
-   0x49caaa reassigns the seats (rh_hooks_screens.c reloads after the prep seam). Next: (b) one verify
-   over every MP row on all MP scenarios; (c) unreached MP
-   ids 16 / 19 / 26 (debug gate) / 38 / 52 / 53 / 58 / 70 / 81 / 89–94 (resync / error paths); (d) mp-war's shadow pass 3.
+   0x49caaa reassigns the seats (rh_hooks_screens.c reloads after the prep seam); Windows standalone 105/105 too.
+   **`verify --only '^mp-'` (wine, 2026-11-15, `--wine-timeout 18000`): 1541/1829 rows reached, 0 divergences, hybrid
+   PASS (25/25)**; its 1 failed run (mp-war-p2 shadow pass 3 off the corpus state_sem) was harness: the row rl_4b1310
+   (greys the back buffer in place) lacked RH_SH_MEDIA, so the shadow greyed it twice (fixed; mp-war-p2 with the row
+   shadowed ends = corpus, 4 calls, 0 divergences). Next: (c) unreached MP ids 16 / 19 / 26 (debug gate) / 38 / 52 / 53 /
+   58 / 70 / 81 / 89–94 (resync / error paths).
 0b. **rd campaigns** — **campaign 6 (2026-11-14, API drivers):** ai-recall filed (sub_48B7FC 0x48b7fc first time: an Equal
    field skirmish after a Play Now → New Game trip — a cold skirmish leaves byte_553080 zero, so the recall never fires;
    +12 blocks); ai-surrender blocked (probe: no skirmish attacker is knights-only; the battle ends when a side has 0 men

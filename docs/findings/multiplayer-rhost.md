@@ -155,3 +155,17 @@ frame — the local seat's name "aaaaaa" red in retail, blue in the standalone. 
 the row adapter's snapshot (`seats_load` in TR()), taken BEFORE the port's prep seam runs 0x49caaa, which reassigns the
 seats' name colours (+8); retail reads the records after it. Fix: the prep seam reloads the seats. **Standalone 105/105
 = pure retail** (whole corpus, wine).
+
+## MP verify (2026-11-15)
+
+`rhost.py verify --only '^mp-' --target wine --wine-timeout 18000` (mp-war's shadow passes need > 1 h a run: the new
+`--wine-timeout`): **1541/1829 rows reached, 0 divergences, hybrid PASS on all 25 sides**; 288 never called. Its one
+failed run — mp-war-p2, shadow pass 3, end state_sem ≠ corpus with tick / screen / RNG equal throughout — was harness:
+per-frame hashes put the first split at f19245 (the tooltip's backdrop buffer 0x4e6980..0x4e8780, every byte +1, copied
+from the back buffer by 0x4b3f0a; presented frames equal), and a parallel bisect of the pass's 1280 shadow rows (4 rounds,
+8 groups a round, end state at f19246) left one: `rl_4b1310`, which greys the 640×480 back buffer IN PLACE (a lobby /
+the county's fall). Its row had no RH_SH_MEDIA, so the shadow did not roll the surface pixels back between the retail
+and the port side: greyed twice, and `.data` (all the plain shadow compares) agreed. Fixed: the row is RH_SH_MEDIA
+(pixels compared and rolled back); mp-war-p2 with it shadowed ends = corpus (4 calls, 0 divergences). Audit: no other
+rl_ port writes the back buffer DAT_004ea1a8 directly.
+

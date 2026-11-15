@@ -183,7 +183,7 @@ hook_t RH_HOOKS_RL_GLUE[] = {
     { "rl_42a8d1", 0x42a8d1u, (void *)w_rl_42a8d1, 0, 0, 0, 0, "" },
     { "rl_42a9ab", 0x42a9abu, (void *)w_rl_42a9ab, 0, 0, 0, 0, "" },
     { "rl_42d179", 0x42d179u, (void *)w_rl_42d179, 0, 0, 0, 0, "" },
-    { "rl_4b1310", 0x4b1310u, (void *)w_rl_4b1310, 0, 0, 0, 0, "" },
+    { "rl_4b1310", 0x4b1310u, (void *)w_rl_4b1310, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },   /* greys the back buffer IN PLACE: the shadow must roll the pixels back between sides */
     { "rl_409429", 0x409429u, (void *)w_rl_409429, 0, 0, 0, 0, "" },
     { "rl_40f10f", 0x40f10fu, (void *)w_rl_40f10f, 0, 0, 0, 0, "" },
     { "rl_475b41", 0x475b41u, (void *)w_rl_475b41, 0, 0, 0, 0, "" },
