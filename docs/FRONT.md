@@ -67,9 +67,10 @@
    shadowed ends = corpus, 4 calls, 0 divergences). **2026-11-15: `mp-labor`** (p1 double-clicks
    the Town Center's workforce grid → message 38, toggles three task sites on the map → 58; End turn): 38 / 58 ported
    (rl_4436bb / 4436f9 / 444915 / 444948): shadow 8 calls, 0 divergences, hybrid PASS, standalone 2/2 = pure retail,
-   det 0 dwords, Windows ≡ wine. Census (rl-mpmsg3.md): 52 / 53 / 89 are dead (their senders have no reference).
-   Next: (c) unreached MP ids 70 (type-10 "pay the price" popup in MP), 93 / 94 (a different user map picked in the MP
-   skirmish setup's list, 0x434174), 81 (a refused join), 16 / 91 (three hash mismatches: a forged end-of-turn delivery
+   det 0 dwords, Windows ≡ wine. **`mp-skrpick`** (a second .skr staged by `"saves": ["game:USER.SKR=user2.skr"]`,
+   picked in the MP skirmish setup → 93 → the peer's 94): 93 / 94 ported, 0 divergences, hybrid PASS, standalone =
+   pure retail. Census (rl-mpmsg3.md): 52 / 53 / 89 are dead (their senders have no reference).
+   Next: (c) unreached MP ids 70 (type-10 "pay the price" popup in MP), 81 (a refused join), 16 / 91 (three hash mismatches: a forged end-of-turn delivery
    in a trace?), 90 (a late action), 19 / 26 (wndproc).
 0b. **rd campaigns** — **campaign 6 (2026-11-14, API drivers):** ai-recall filed (sub_48B7FC 0x48b7fc first time: an Equal
    field skirmish after a Play Now → New Game trip — a cold skirmish leaves byte_553080 zero, so the recall never fires;

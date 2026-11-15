@@ -964,6 +964,76 @@ int rl_4464e4(void)
     return r;
 }
 
+/* Port of FUN_004469bd (47 B) — builder 93 (the MP skirmish setup's user-map list: another *.skr picked, 0x434174
+ * already loaded it): its name DAT_0053f5fc 65, DAT_005440bc 4. */
+int rl_4469bd(void)
+{
+    PUT(g_rl_53f5fc, 65);
+    return PUT(&g_rl_5440bc, 4);
+}
+
+/* the user-map fallback of 93 / 94: a missing file (DAT_0055cd34 == 1) while the user map is the mode
+ * (DAT_0053e91c == 3) drops to mode 0 and redraws */
+static int skr_fallback(void)
+{
+    int r = 0;
+    if (g_rl_55cd34 == 1 && s_slot_0053e91c == 3) {
+        s_slot_0053e91c = 0;
+        r = setup_redraw();
+        g_bf_57d340 = 2;
+    }
+    return r;
+}
+
+/* Port of FUN_004469ec (204 B) — receiver 93: the name (65, a local), DAT_005691e4 4; 0x42d40b (list the *.skr);
+ * found (DAT_0055cd34 0) → mode 3, the name into DAT_0053f5fc, 0x42d4aa, the redraw, DAT_0057d340 = 2; else the
+ * fallback; message 94 back either way. */
+int rl_4469ec(void)
+{
+    uint8_t buf[68];
+    GET(buf, 65);
+    GET(&g_rl_5691e4[0], 4);
+    rl_42d40b();
+    if (g_rl_55cd34 == 0) {
+        s_slot_0053e91c = 3;
+        CPY(buf, g_rl_53f5fc, 65);
+        rl_42d4aa();
+        setup_redraw();
+        g_bf_57d340 = 2;
+    } else {
+        skr_fallback();
+    }
+    return rl_43eda0(0x5e, 0);
+}
+
+/* Port of FUN_00446ab8 (87 B) — builder 94 (93's / 86's answer): DAT_0055cd34 4; the fallback. */
+int rl_446ab8(void)
+{
+    int r = PUT(&g_rl_55cd34, 4);
+    if (g_rl_55cd34 == 1 && s_slot_0053e91c == 3)
+        r = skr_fallback();
+    return r;
+}
+
+/* Port of FUN_00446b0f (145 B) — receiver 94: the peer's DAT_0055cd34 4; 0 (it has the file) → mode 3, 0x42d4aa,
+ * the redraw, DAT_005530f0 = DAT_00553e5c; 1 with mode 3 → mode 0, the redraw; DAT_0057d340 = 2. */
+int rl_446b0f(void)
+{
+    int r = GET(&g_rl_55cd34, 4);
+    if (g_rl_55cd34 == 0) {
+        s_slot_0053e91c = 3;
+        rl_42d4aa();
+        setup_redraw();
+        r = g_rl_553e5c;
+        g_rl_5530f0 = g_rl_553e5c;
+    } else if (g_rl_55cd34 == 1 && s_slot_0053e91c == 3) {
+        s_slot_0053e91c = 0;
+        r = setup_redraw();
+    }
+    g_bf_57d340 = 2;
+    return r;
+}
+
 /* Port of FUN_00446683 (266 B) — builder 87: the aux bytes 0x553da4 / 0x553dd0 (1), DAT_0053e8fc, DAT_0053ef5c (4);
  * DAT_005533e0[local] = [DAT_0056d5cc] = 0 (host, DAT_00553248) / 2 (client); the chat lines DAT_00553e80 /
  * DAT_00565440 (65 each) cleared; DAT_005533d0 = 1, DAT_0057d340 = 2. */

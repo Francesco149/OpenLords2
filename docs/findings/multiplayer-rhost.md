@@ -169,3 +169,16 @@ and the port side: greyed twice, and `.data` (all the plain shadow compares) agr
 (pixels compared and rolled back); mp-war-p2 with it shadowed ends = corpus (4 calls, 0 divergences). Audit: no other
 rl_ port writes the back buffer DAT_004ea1a8 directly.
 
+
+## Ids 38 / 58 / 93 / 94 (2026-11-15: `mp-labor`, `mp-skrpick`)
+
+- `mp-labor`: the Town Center's workforce grid double-clicked (0x439df0 → 38: both sides run 0x439edb) and three task
+  sites toggled on the map (cells with flag 0x80 in the county's own land: 0x43ce1a → 0x43d309, then 58). The 0x80
+  cells of the visible map: `mapview.visible(side)` + the cell bytes (+1 & 0x80, +0 the type, +7 the county); hover does
+  not set DAT_005440b0 — only the click does.
+- `mp-skrpick` (skirmish type): the setup's user-map box lists `*.skr`; a pristine game has one (USER.SKR), already the
+  chosen name, so 0x434174's pick is a no-op. A second one comes from the trace's start files:
+  `{"meta": {"saves": ["game:USER.SKR=user2.skr"]}}` (rhost.py `stage_save`: the user's own game file copied under a
+  new name into the run dir at run time — no game data in git; rd keeps the entry as is). Picking user2.skr → 93 →
+  the peer loads it (0x42d4aa) and answers 94. While authoring over mpbot: copy the file into each side's
+  `p1.s.rundir` before the setup page lists the files, and add the meta line to the saved traces.

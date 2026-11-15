@@ -531,7 +531,8 @@ class Movie:
                 if m.get("frames"):
                     mv.frame = int(m["frames"])
                 if m.get("saves"):
-                    mv.saves = [os.path.normpath(os.path.join(os.path.dirname(path), s)) for s in m["saves"]]
+                    mv.saves = [s if s.startswith("game:") else os.path.normpath(os.path.join(os.path.dirname(path), s))
+                                for s in m["saves"]]
                 mv.extra.update({k: v for k, v in m.items() if k in ("step_ms", "vbase", "movies", "net")})   # merged: a trace may carry a header meta and a trailing {"frames"} one
                 continue
             if "n" in d and "m" not in d:   # an MP delivery stamped by receive poll: replayed whole (no frame)
@@ -549,7 +550,7 @@ class Movie:
         base = rel_to or os.path.dirname(os.path.abspath(path))
         meta = dict(self.extra, frames=self.frame)
         if self.saves:
-            meta["saves"] = [os.path.relpath(s, base) for s in self.saves]
+            meta["saves"] = [s if s.startswith("game:") else os.path.relpath(s, base) for s in self.saves]
         with open(path + ".tmp", "w") as f:
             f.write(f"# rhost trace (rd movie{': ' + comment if comment else ''}): frame-absolute from boot\n")
             f.write(json.dumps({"meta": meta}) + "\n")
@@ -862,7 +863,7 @@ def win_forward(wpid, wport):
 def session_files(ld, movie, upto):
     """the session's run-dir files: the start saves, the movie prefix as trace.jsonl → rhost args"""
     for s in movie.saves:
-        shutil.copy(s, os.path.join(ld, os.path.basename(s)))
+        RH.stage_save(s, "", ld)
     args = []
     for k, flag in (("step_ms", "--step-ms"), ("vbase", "--vbase")):
         if movie.extra.get(k) is not None:
@@ -1309,6 +1310,9 @@ def cmd_new(a):
     r = Run(a.run, create=True)
     saves = []
     for s in mv.saves:                                    # the run keeps its own copy of the start saves
+        if s.startswith("game:"):                         # the pristine game file under another name: staged per session
+            saves.append(s)
+            continue
         os.makedirs(os.path.join(r.dir, "saves"), exist_ok=True)
         d = os.path.join(r.dir, "saves", os.path.basename(s))
         shutil.copy(s, d)

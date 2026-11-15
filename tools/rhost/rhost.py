@@ -141,7 +141,8 @@ def trace_meta(tr):
 
 def scenario_inputs(name):
     """→ (trace path, meta).  meta may carry step_ms / vbase (the recording's clock) and "saves": [files]
-    copied into the run dir (the game's *.sav, user data: tests/scenarios/<s>/_saves/, gitignored)."""
+    copied into the run dir (the game's *.sav, user data: tests/scenarios/<s>/_saves/, gitignored; or
+    "game:SRC=DEST": the pristine game dir's SRC under the name DEST — stage_save)."""
     if name.endswith(".jsonl") and os.path.exists(name):
         tr = os.path.abspath(name)
     else:
@@ -206,8 +207,7 @@ def make_batch(a, runs, tag, root_local=None):
         if os.path.exists(VOLATILE):
             shutil.copy(VOLATILE, os.path.join(rdir, "volatile.txt"))
         for s in meta.get("saves", []):
-            src = os.path.normpath(os.path.join(os.path.dirname(trace), s)) if trace else s
-            shutil.copy(src, os.path.join(rdir, os.path.basename(s)))
+            stage_save(s, os.path.dirname(trace) if trace else "", rdir)
         run_win = f"{WROOT}\\runs\\{batch}\\{name}"
         trace_win = None
         if trace:
@@ -256,6 +256,17 @@ def parse_out(out):
 WINE_ROOT = os.environ.get("RHOST_WINE_ROOT", os.path.join(EPH, "rhost-wine", "root"))
 WINE_PREFIX = os.environ.get("RHOST_WINEPREFIX", os.path.join(EPH, "rhost-wine", "prefix"))
 WINE_GAME = os.environ.get("RHOST_WINE_GAME", os.path.join(EPH, "rhost-wine", "game"))
+
+
+def stage_save(s, base, dest_dir):
+    """one meta "saves" entry into a run dir: a path relative to the trace's dir (kept under its basename), or
+    "game:SRC=DEST" — the user's own pristine game file SRC (WINE_GAME) copied under the name DEST, so a scenario can
+    need a second copy of a game file (mp-skrpick: a second *.skr in the list) without carrying game data in git"""
+    if s.startswith("game:"):
+        src, _, dest = s[5:].partition("=")
+        shutil.copy(os.path.join(WINE_GAME, src), os.path.join(dest_dir, dest or src))
+    else:
+        shutil.copy(os.path.normpath(os.path.join(base, s)), os.path.join(dest_dir, os.path.basename(s)))
 
 
 def wine_stage():

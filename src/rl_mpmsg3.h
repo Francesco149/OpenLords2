@@ -29,6 +29,10 @@ int rl_4436bb(void);                             /* 62 B, mp-labor */
 int rl_4436f9(void);                             /* 79 B, mp-labor */
 int rl_444915(void);                             /* 51 B, mp-labor */
 int rl_444948(void);                             /* 88 B, mp-labor */
+int rl_4469bd(void);                             /* 47 B, mp-skrpick */
+int rl_4469ec(void);                             /* 204 B, mp-skrpick */
+int rl_446ab8(void);                             /* 87 B, mp-skrpick */
+int rl_446b0f(void);                             /* 145 B, mp-skrpick */
 int rl_443e51(void);                             /* 184 B, coverage 2 */
 int rl_443f09(void);                             /* 162 B, coverage 4 */
 int rl_443fab(void);                             /* 100 B, coverage 1 */

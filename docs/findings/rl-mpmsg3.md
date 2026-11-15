@@ -1,9 +1,9 @@
 # rl mpmsg3 — the MP message layer's remaining builders / receivers, 15 more delayed-action handlers (2026-11-14)
 
-Partition `mpmsg3` of family `rl` (`tools/bf/parts.py`; design: `battlefield-sim-port.md`): 87 functions — 35 payload
-builders and their 35 receivers (send table 0x4d57f0 / receive table 0x4d5980, ids below), 15 delayed-action
+Partition `mpmsg3` of family `rl` (`tools/bf/parts.py`; design: `battlefield-sim-port.md`): 91 functions — 37 payload
+builders and their 37 receivers (send table 0x4d57f0 / receive table 0x4d5980, ids below), 15 delayed-action
 handlers (table 0x4d5c98), the DirectPlay system-event logger 0x43e6a2 and its session fallback 0x43e8f4.
-`src/rl_mpmsg3.c`, rows `tools/rhost/rh_hooks_rl_mpmsg3.c`, globals `src/rl_mpmsg3_globals.{h,c}` (generated). All 87
+`src/rl_mpmsg3.c`, rows `tools/rhost/rh_hooks_rl_mpmsg3.c`, globals `src/rl_mpmsg3_globals.{h,c}` (generated). All 91
 ported; the pending file is empty. The protocol (0x43eda0 → builder, 0x43eac1 → receiver, 0x447136 → 0x4472ce →
 handler, the due tick 0x446e21): `rl-mpmsg2.md`. Transport / scenarios: `multiplayer-rhost.md`.
 
@@ -47,6 +47,8 @@ Both sides file the same action with the same due tick (builder for us, receiver
 | 85 | 0x44637e | 0x446389 | none | receiver: ours == 1 → messages 86, 82; DAT_005533e0[sender] = 1 |
 | 86 | 0x4463d9 | 0x4464e4 | the skirmish setup: 13 dwords, 2 aux bytes, 65-byte DAT_0053f5fc | receiver: 0x42d40b; DAT_0055cd34 → message 94, else the 65 bytes, 0x42d4aa; 0x498dcb, redraw |
 | 87 | 0x446683 | 0x44678d | aux bytes 0x553da4 / 0x553dd0, DAT_0053e8fc, DAT_0053ef5c | DAT_005533e0 states (host 0 / 2), chat lines cleared, DAT_005533d0 = 1 |
+| 93 | 0x4469bd | 0x4469ec | the .skr name DAT_0053f5fc 65, DAT_005440bc 4 (→ DAT_005691e4) | receiver: 0x42d40b lists *.skr; found → mode DAT_0053e91c 3, the name, 0x42d4aa, redraw; else the fallback (DAT_0055cd34 1 and mode 3 → mode 0, redraw); message 94 back (mp-skrpick) |
+| 94 | 0x446ab8 | 0x446b0f | DAT_0055cd34 4 | builder: the fallback; receiver: 0 → mode 3, 0x42d4aa, redraw, DAT_005530f0 = DAT_00553e5c; 1 and mode 3 → mode 0, redraw; DAT_0057d340 = 2 |
 | 95 | 0x446ba0 | 0x446bba | DAT_0056899c 4 | receiver: aux bytes = 2 |
 | 96 | 0x446bec | 0x446c1f | aux bytes 0x553da4 / 0x553dd0 | receiver: 0x42bf46 |
 
@@ -74,7 +76,7 @@ now calling rl_43e6a2 by name).
 
 **Ids with no port (2026-11-15):** builders / receivers of 16, 19, 26 (wndproc only), 70 (the type-10 "pay the price"
 popup), 81 (a refused join), 90 (a late action, 0x4470c4), 91 (three hash mismatches, 0x440666 → 0x43f5c5 sends 16),
-93 / 94 (a user-map pick in the MP skirmish setup, 0x434174 / its receiver 0x4469ec); **dead** (no reference in the
+**dead** (no reference in the
 exe: no call, no pointer): 52's / 53's senders 0x4a7948 / 0x4a7daf, 89's 0x43f939 / 0x43f9c3; no send site at all: 27,
 31, 32, 65, 68, 78, 79, 80, 88, 92, 97 (98 / 99 / 0 = the empty pair 0x441050 / 0x44105b).
 
