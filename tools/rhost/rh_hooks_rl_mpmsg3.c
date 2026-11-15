@@ -30,6 +30,7 @@ enum {
     X_rl_4454e7, X_rl_4455ad, X_rl_4482be,
     X_rl_441050, X_rl_44105b, X_rl_442b18, X_rl_442b80, X_rl_442f5f, X_rl_442ff0, X_rl_44300a, X_rl_443024, X_rl_443322, X_rl_44332d, X_rl_443338, X_rl_443343, X_rl_444479, X_rl_4444f0, X_rl_444554, X_rl_4445cb, X_rl_479558, X_rl_479738, X_rl_444db9, X_rl_444dfc, X_rl_4453a3, X_rl_445407, X_rl_44603e, X_rl_446049, X_rl_446054, X_rl_44605f, X_rl_4692a7, X_rl_469370, X_rl_44606a, X_rl_4460a1, X_rl_4460d8, X_rl_4460e3, X_rl_4468a6, X_rl_4468b6, X_rl_43fa1d, X_rl_43faa4, X_rl_4468c6, X_rl_4468f3, X_rl_44692a, X_rl_446935, X_rl_4469a7, X_rl_4469b2, X_rl_446c61, X_rl_446d4e,
     X_rl_447f44, X_rl_4483fb, X_rl_4470c4,
+    X_rl_447b31, X_rl_447b50, X_rl_447b6f, X_rl_447bce, X_rl_447be7, X_rl_447c00, X_rl_447c2b, X_rl_447cce, X_rl_447ced, X_rl_447d41, X_rl_447ddb, X_rl_447de6, X_rl_447f63, X_rl_447fa1, X_rl_447fca, X_rl_447fef, X_rl_448027, X_rl_448037, X_rl_448244, X_rl_4483f0, X_rl_448406, X_rl_448411,
 };
 
 HOOK_V(rl_43e6a2, 2, rl_43e6a2(I(0), I(1)))
@@ -180,6 +181,28 @@ HOOK_V(rl_446d4e, 0, rl_446d4e())
 HOOK_V(rl_447f44, 0, rl_447f44())
 HOOK_V(rl_4483fb, 0, rl_4483fb())
 HOOK_V(rl_4470c4, 2, rl_4470c4(I(0), I(1)))   /* E8 from 0x447136, which drops EAX */
+HOOK_V(rl_447b31, 0, rl_447b31())
+HOOK_V(rl_447b50, 0, rl_447b50())
+HOOK_V(rl_447b6f, 0, rl_447b6f())
+HOOK_V(rl_447bce, 0, rl_447bce())
+HOOK_V(rl_447be7, 0, rl_447be7())
+HOOK_V(rl_447c00, 0, rl_447c00())
+HOOK_V(rl_447c2b, 0, rl_447c2b())
+HOOK_V(rl_447cce, 0, rl_447cce())
+HOOK_V(rl_447ced, 0, rl_447ced())
+HOOK_V(rl_447d41, 0, rl_447d41())
+HOOK_V(rl_447ddb, 0, rl_447ddb())
+HOOK_V(rl_447de6, 0, rl_447de6())
+HOOK_V(rl_447f63, 0, rl_447f63())
+HOOK_V(rl_447fa1, 0, rl_447fa1())
+HOOK_V(rl_447fca, 0, rl_447fca())
+HOOK_V(rl_447fef, 0, rl_447fef())
+HOOK_V(rl_448027, 0, rl_448027())
+HOOK_V(rl_448037, 0, rl_448037())
+HOOK_V(rl_448244, 0, rl_448244())
+HOOK_V(rl_4483f0, 0, rl_4483f0())
+HOOK_V(rl_448406, 0, rl_448406())
+HOOK_V(rl_448411, 0, rl_448411())
 
 hook_t RH_HOOKS_RL_MPMSG3[] = {
     { "rl_43e6a2", 0x43e6a2u, (void *)w_rl_43e6a2, 0, 0, 0, 0, "" },
@@ -330,5 +353,27 @@ hook_t RH_HOOKS_RL_MPMSG3[] = {
     { "rl_447f44", 0x447f44u, (void *)w_rl_447f44, 0, 0, 0, 0, "" },
     { "rl_4483fb", 0x4483fbu, (void *)w_rl_4483fb, 0, 0, 0, 0, "" },
     { "rl_4470c4", 0x4470c4u, (void *)w_rl_4470c4, 0, 0, 0, 0, "" },
+    { "rl_447b31", 0x447b31u, (void *)w_rl_447b31, 0, 0, 0, 0, "" },
+    { "rl_447b50", 0x447b50u, (void *)w_rl_447b50, 0, 0, 0, 0, "" },
+    { "rl_447b6f", 0x447b6fu, (void *)w_rl_447b6f, 0, 0, 0, 0, "" },
+    { "rl_447bce", 0x447bceu, (void *)w_rl_447bce, 0, 0, 0, 0, "" },
+    { "rl_447be7", 0x447be7u, (void *)w_rl_447be7, 0, 0, 0, 0, "" },
+    { "rl_447c00", 0x447c00u, (void *)w_rl_447c00, 0, 0, 0, 0, "" },
+    { "rl_447c2b", 0x447c2bu, (void *)w_rl_447c2b, 0, 0, 0, 0, "" },
+    { "rl_447cce", 0x447cceu, (void *)w_rl_447cce, 0, 0, 0, 0, "" },
+    { "rl_447ced", 0x447cedu, (void *)w_rl_447ced, 0, 0, 0, 0, "" },
+    { "rl_447d41", 0x447d41u, (void *)w_rl_447d41, 0, 0, 0, 0, "" },
+    { "rl_447ddb", 0x447ddbu, (void *)w_rl_447ddb, 0, 0, 0, 0, "" },
+    { "rl_447de6", 0x447de6u, (void *)w_rl_447de6, 0, 0, 0, 0, "" },
+    { "rl_447f63", 0x447f63u, (void *)w_rl_447f63, 0, 0, 0, 0, "" },
+    { "rl_447fa1", 0x447fa1u, (void *)w_rl_447fa1, 0, 0, 0, 0, "" },
+    { "rl_447fca", 0x447fcau, (void *)w_rl_447fca, 0, 0, 0, 0, "" },
+    { "rl_447fef", 0x447fefu, (void *)w_rl_447fef, 0, 0, 0, 0, "" },
+    { "rl_448027", 0x448027u, (void *)w_rl_448027, 0, 0, 0, 0, "" },
+    { "rl_448037", 0x448037u, (void *)w_rl_448037, 0, 0, 0, 0, "" },
+    { "rl_448244", 0x448244u, (void *)w_rl_448244, 0, 0, 0, 0, "" },
+    { "rl_4483f0", 0x4483f0u, (void *)w_rl_4483f0, 0, 0, 0, 0, "" },
+    { "rl_448406", 0x448406u, (void *)w_rl_448406, 0, 0, 0, 0, "" },
+    { "rl_448411", 0x448411u, (void *)w_rl_448411, 0, 0, 0, 0, "" },
 };
 const int RH_HOOKS_RL_MPMSG3_N = sizeof RH_HOOKS_RL_MPMSG3 / sizeof *RH_HOOKS_RL_MPMSG3;

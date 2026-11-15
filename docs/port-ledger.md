@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **1924** (78.6%) — tested 788, ported 1136
-- code bytes touched: **85.0%** (712,484 / 838,629 B)
-- unported: **523**
+- touched: **1942** (79.4%) — tested 788, ported 1154
+- code bytes touched: **85.0%** (713,145 / 838,629 B)
+- unported: **505**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (788) — ported + host unit suite
@@ -303,11 +303,11 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x440231 | FUN_00440231 | 1077 | engine.h, engine_state_hash.c, rl_mpmsg.c |
 | 0x4472ce | FUN_004472ce | 1046 | engine.c, engine_delayed_action.c, engine_delayed_action.h (+1) |
 | 0x4479de | FUN_004479de | 11 | engine_handlers_da.h, rl_mpmsg2.c |
-| 0x447ddb | FUN_00447ddb | 11 | engine_handlers_da.h |
-| 0x4483f0 | FUN_004483f0 | 11 | engine_handlers_da.h |
+| 0x447ddb | FUN_00447ddb | 11 | engine_handlers_da.h, rl_mpmsg3.c |
+| 0x4483f0 | FUN_004483f0 | 11 | engine_handlers_da.h, rl_mpmsg3.c |
 | 0x4483fb | FUN_004483fb | 11 | engine_handlers_da.h, rl_mpmsg3.c |
-| 0x448406 | FUN_00448406 | 11 | engine_handlers_da.h |
-| 0x448411 | FUN_00448411 | 17 | engine_handlers_da.h |
+| 0x448406 | FUN_00448406 | 11 | engine_handlers_da.h, rl_mpmsg3.c |
+| 0x448411 | FUN_00448411 | 17 | engine_handlers_da.h, rl_mpmsg3.c |
 | 0x448440 | FUN_00448440 | 261 | engine.c, engine.h, engine_army_ai.c (+9) |
 | 0x448545 | FUN_00448545 | 96 | engine_combat.c, engine_realm.c, engine_realm.h (+1) |
 | 0x4485a5 | FUN_004485a5 | 163 | engine_army_ai.c, engine_army_economy.c, engine_army_economy.h (+5) |
@@ -810,7 +810,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (1136) — reimplemented, no host test yet
+## ported (1154) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -1397,19 +1397,37 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4479e9 | FUN_004479e9 | 112 | rl_mpmsg2.c |
 | 0x447a59 | FUN_00447a59 | 108 | rl_mpmsg3.c |
 | 0x447ac5 | FUN_00447ac5 | 108 | rl_mpmsg3.c |
+| 0x447b31 | FUN_00447b31 | 31 | rl_mpmsg3.c |
+| 0x447b50 | FUN_00447b50 | 31 | rl_mpmsg3.c |
+| 0x447b6f | FUN_00447b6f | 31 | rl_mpmsg3.c |
 | 0x447b8e | FUN_00447b8e | 64 | rl_mpmsg2.c |
+| 0x447bce | FUN_00447bce | 25 | rl_mpmsg3.c |
+| 0x447be7 | FUN_00447be7 | 25 | rl_mpmsg3.c |
+| 0x447c00 | FUN_00447c00 | 43 | rl_mpmsg3.c |
+| 0x447c2b | FUN_00447c2b | 61 | rl_mpmsg3.c |
 | 0x447c68 | FUN_00447c68 | 49 | rl_mpmsg2.c |
 | 0x447c99 | FUN_00447c99 | 53 | rl_mpmsg2.c |
+| 0x447cce | FUN_00447cce | 31 | rl_mpmsg3.c |
+| 0x447ced | FUN_00447ced | 53 | rl_mpmsg3.c |
 | 0x447d22 | FUN_00447d22 | 31 | rl_mpmsg2.c |
+| 0x447d41 | FUN_00447d41 | 49 | rl_mpmsg3.c |
 | 0x447d72 | FUN_00447d72 | 43 | rl_mpmsg3.c |
 | 0x447d9d | FUN_00447d9d | 25 | rl_mpmsg3.c |
 | 0x447db6 | FUN_00447db6 | 37 | rl_mpmsg2.c |
+| 0x447de6 | FUN_00447de6 | 37 | rl_mpmsg3.c |
 | 0x447e0b | FUN_00447e0b | 313 | rl_mpmsg3.c |
 | 0x447f44 | FUN_00447f44 | 31 | rl_mpmsg3.c |
+| 0x447f63 | FUN_00447f63 | 31 | rl_mpmsg3.c |
 | 0x447f82 | FUN_00447f82 | 31 | rl_mpmsg3.c |
+| 0x447fa1 | FUN_00447fa1 | 41 | rl_mpmsg3.c |
+| 0x447fca | FUN_00447fca | 37 | rl_mpmsg3.c |
+| 0x447fef | FUN_00447fef | 31 | rl_mpmsg3.c |
 | 0x44800e | FUN_0044800e | 25 | rl_mpmsg2.c |
+| 0x448027 | FUN_00448027 | 16 | rl_mpmsg3.c |
+| 0x448037 | FUN_00448037 | 63 | rl_mpmsg3.c |
 | 0x448076 | FUN_00448076 | 193 | rl_mpmsg3.c |
 | 0x448137 | FUN_00448137 | 269 | rl_mpmsg3.c |
+| 0x448244 | FUN_00448244 | 25 | rl_mpmsg3.c |
 | 0x44825d | FUN_0044825d | 25 | rl_mpmsg3.c |
 | 0x448276 | FUN_00448276 | 25 | rl_mpmsg3.c |
 | 0x44828f | FUN_0044828f | 16 | rl_mpmsg3.c |

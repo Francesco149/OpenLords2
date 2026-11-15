@@ -152,3 +152,25 @@ int rl_446d4e(void);                             /* 211 B, last ids */
 int rl_447f44(void);                             /* 31 B, mp-forge1 */
 int rl_4483fb(void);                             /* 11 B, mp-forge1 */
 int rl_4470c4(int type, int due);                /* 114 B, mp-forge1 */
+int rl_447b31(void);                       /* 31 B, handlers */
+int rl_447b50(void);                       /* 31 B, handlers */
+int rl_447b6f(void);                       /* 31 B, handlers */
+int rl_447bce(void);                       /* 25 B, handlers */
+int rl_447be7(void);                       /* 25 B, handlers */
+int rl_447c00(void);                       /* 43 B, handlers */
+int rl_447c2b(void);                       /* 61 B, handlers */
+int rl_447cce(void);                       /* 31 B, handlers */
+int rl_447ced(void);                       /* 53 B, handlers */
+int rl_447d41(void);                       /* 49 B, handlers */
+int rl_447ddb(void);                       /* 11 B, handlers */
+int rl_447de6(void);                       /* 37 B, handlers */
+int rl_447f63(void);                       /* 31 B, handlers */
+int rl_447fa1(void);                       /* 41 B, handlers */
+int rl_447fca(void);                       /* 37 B, handlers */
+int rl_447fef(void);                       /* 31 B, handlers */
+int rl_448027(void);                       /* 16 B, handlers */
+int rl_448037(void);                       /* 63 B, handlers */
+int rl_448244(void);                       /* 25 B, handlers */
+int rl_4483f0(void);                       /* 11 B, handlers */
+int rl_448406(void);                       /* 11 B, handlers */
+int rl_448411(void);                       /* 17 B, handlers */

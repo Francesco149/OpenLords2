@@ -72,6 +72,31 @@ Both sides file the same action with the same due tick (builder for us, receiver
 | 42 | 0x448308 | diplomacy action 0x4a2621(+4..+0x14) |
 | 44 | 0x4483d1 | treaty cleared 0x4a1a54(+4, +8) |
 
+**The last 24 handlers (2026-11-16, table-complete):** trampolines, record fields into one callee. No filer in the exe
+for 4..6, 8..11, 14, 15, 17, 21, 22, 27..29, 31, 32, 45, 47, 48; 25 / 35 are filed only by messages 53 / 68 (no sender:
+dead, above) — an id-forged carrier (mp-forge style: 68 → 35, 53 → 25) would reach them.
+
+| action type | handler | does |
+|---:|---|---|
+| 4 / 5 | 0x447b31 / 0x447b50 | wanted level ±1 of county +4 (0x43a23f / 0x43a307; +8 pushed too, unread; TODO(rl-link)) |
+| 6 | 0x447b6f | 0x43a997(+4, +8) |
+| 8 / 9 | 0x447bce / 0x447be7 | tax rate ±1 of county +4 (0x43aa83 / 0x43ab25; TODO(rl-link)) |
+| 10 | 0x447c00 | 0x439b52(+4, +8, +0xc, +0x10) |
+| 11 | 0x447c2b | trade 0x4284ce(+4 … +0x1c) |
+| 14 | 0x447cce | 0x439edb(+4, +8) |
+| 15 | 0x447ced | screen 46, 0x42c64f, DAT_0057c8fc = 0, DAT_0052af94 = 2, DAT_0057d340 = 2 |
+| 17 | 0x447d41 | 0x4a98fe(+0x10, +4, +8, +0xc, +0x10) — +0x10 twice (action 12 passes +0x14 last) |
+| 21 / 45 / 47 | 0x447ddb / 0x4483f0 / 0x448406 | nothing |
+| 22 | 0x447de6 | rations 0x43a5a9(+4, +8, +0xc) |
+| 25 | 0x447f63 | siege setup 0x4a7e0a(+4, +8) |
+| 27 | 0x447fa1 | DAT_0052afcc = 1, 0x43933b(+4, +8) |
+| 28 | 0x447fca | 0x43b7c4(+4, +8, +0xc) |
+| 29 | 0x447fef | task assignment 0x43d309(+4, +8) |
+| 31 | 0x448027 | the battlefield's end 0x43be65 |
+| 32 | 0x448037 | box reselect 0x43c247(+4, 1, +8 … +0x1c) |
+| 35 | 0x448244 | 0x43c55c(+4) |
+| 48 | 0x448411 | DAT_00554038 + 1 |
+
 0x43e6a2(kind, dpid): logs "OK :DP netsys - …" (strings 0x4d5d70..) for kinds 0..8; kind 2 (player deleted) and 4
 (host) act (the function comment in `src/rl_mpmsg3.c`). Callers: 0x4b8c3a's DirectPlay receive loop (rl_io's port,
 now calling rl_43e6a2 by name).

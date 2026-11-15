@@ -27,7 +27,7 @@
 extern uint8_t g_rl_50d7c0[0x5780];                                              /* rl_ui3: the action table */
 extern uint8_t g_rl_512f9c[4];                                                   /* rl_mpmsg: the packing scratch */
 extern int32_t g_rl_542cc0, g_rl_553e70;                                         /* rl_mpmsg: the due ticks */
-extern int32_t g_rl_5158a4, g_rl_5158a8, g_rl_5158ac, g_rl_5158b0, g_rl_5158bc, g_rl_5158e8;   /* rl_ctl: args */
+extern int32_t g_rl_5158a4, g_rl_5158a8, g_rl_5158ac, g_rl_5158b0, g_rl_5158b4, g_rl_5158bc, g_rl_5158e8;   /* rl_ctl: args */
 extern int32_t g_rl_51590c;                                                      /* rl_ctl: the running record */
 extern int32_t g_rl_53e904[2], g_rl_53f080, g_rl_544090, g_rl_567d08, g_rl_568d98, g_rl_56d678, g_rl_57c8b8; /* rl_glue */
 extern uint8_t g_rl_53f5fc[0x44];                                                /* rl_skirmish */
@@ -1894,4 +1894,151 @@ int rl_446d4e(void)
     GET(&w, 2);
     ACT(46, DUE, OTHER, w, 0, 0, 0, 0, 0, 0, 0, 0);
     return CPY(NAME10(OTHER), DANAME(g_rl_515b24), 10);
+}
+
+/* ================================================================ the last 24 delayed-action handlers (table 0x4d5c98)
+ * Trampolines: the record's fields (A4 … A1C, the dispatcher 0x4472ce's copies) into one callee. No action filer in the
+ * exe reaches 4..6, 8..11, 14, 15, 17, 21, 22, 27..29, 31, 32, 45, 47, 48; 25 / 35 are filed only by messages 53 / 68,
+ * whose builders have no sender (rl-mpmsg3.md census). */
+#define A1C  g_rl_5158b4   /* +0x1c */
+
+/* Port of FUN_00447b31 (31 B) — action 4: the wanted level +1 of county +4 (0x43a23f; +8 pushed too, unread). */
+int rl_447b31(void)
+{
+    return (int)engine_retail_call(0x43a23fu, 2, (uint32_t)A4, (uint32_t)A8);   /* TODO(rl-link): the panel struct */
+}
+
+/* Port of FUN_00447b50 (31 B) — action 5: the wanted level −1 (0x43a307; +8 pushed too, unread). */
+int rl_447b50(void)
+{
+    return (int)engine_retail_call(0x43a307u, 2, (uint32_t)A4, (uint32_t)A8);   /* TODO(rl-link): the panel struct */
+}
+
+/* Port of FUN_00447b6f (31 B) — action 6: 0x43a997(+4, +8). */
+int rl_447b6f(void)
+{
+    return rl_43a997(A4, A8);
+}
+
+/* Port of FUN_00447bce (25 B) — action 8: the tax rate +1 of county +4 (0x43aa83). */
+int rl_447bce(void)
+{
+    return (int)engine_retail_call(0x43aa83u, 1, (uint32_t)A4);   /* TODO(rl-link): the panel struct */
+}
+
+/* Port of FUN_00447be7 (25 B) — action 9: the tax rate −1 (0x43ab25). */
+int rl_447be7(void)
+{
+    return (int)engine_retail_call(0x43ab25u, 1, (uint32_t)A4);   /* TODO(rl-link): the panel struct */
+}
+
+/* Port of FUN_00447c00 (43 B) — action 10: 0x439b52(+4, +8, +0xc, +0x10). */
+int rl_447c00(void)
+{
+    return rl_439b52(A4, A8, AC, A10);
+}
+
+/* Port of FUN_00447c2b (61 B) — action 11: the trade 0x4284ce(+4 … +0x1c). */
+int rl_447c2b(void)
+{
+    engine_army_ai_execute_trade(A4, A8, AC, A10, A14, A18, A1C);
+    return 0;
+}
+
+/* Port of FUN_00447cce (31 B) — action 14: 0x439edb(+4, +8). */
+int rl_447cce(void)
+{
+    return rl_439edb(A4, A8);
+}
+
+/* Port of FUN_00447ced (53 B) — action 15: screen 46 (DAT_004eac50), 0x42c64f, DAT_0057c8fc = 0, DAT_0052af94 = 2,
+ * DAT_0057d340 = 2 (receiver 25's session arm without DAT_0053f238). */
+int rl_447ced(void)
+{
+    g_gfx_screen_byte = 46;
+    int r = rl_42c64f();
+    s_slot_0057c8fc = 0;
+    g_bfr_engine_state = 2;
+    g_bf_57d340 = 2;
+    return r;
+}
+
+/* Port of FUN_00447d41 (49 B) — action 17: 0x4a98fe(+0x10, +4, +8, +0xc, +0x10) (action 12 passes +0x14 last). */
+int rl_447d41(void)
+{
+    return rl_4a98fe(A10, A4, A8, AC, A10);
+}
+
+/* Port of FUN_00447ddb (11 B) — action 21: nothing. */
+int rl_447ddb(void)
+{
+    return 0;
+}
+
+/* Port of FUN_00447de6 (37 B) — action 22: rations 0x43a5a9(+4, +8, +0xc). */
+int rl_447de6(void)
+{
+    return rl_43a5a9(A4, A8, AC);
+}
+
+/* Port of FUN_00447f63 (31 B) — action 25: the siege setup 0x4a7e0a(+4, +8). */
+int rl_447f63(void)
+{
+    return rl_4a7e0a(A4, A8);
+}
+
+/* Port of FUN_00447fa1 (41 B) — action 27: DAT_0052afcc = 1, 0x43933b(+4, +8). */
+int rl_447fa1(void)
+{
+    g_combat_render_dirty = 1;
+    return rl_43933b(A4, A8);
+}
+
+/* Port of FUN_00447fca (37 B) — action 28: 0x43b7c4(+4, +8, +0xc). */
+int rl_447fca(void)
+{
+    return rl_43b7c4(A4, A8, AC);
+}
+
+/* Port of FUN_00447fef (31 B) — action 29: the task assignment 0x43d309(+4, +8). */
+int rl_447fef(void)
+{
+    return rl_43d309(A4, A8);
+}
+
+/* Port of FUN_00448027 (16 B) — action 31: leave the battlefield (0x43be65). */
+int rl_448027(void)
+{
+    battle_end();
+    return 0;
+}
+
+/* Port of FUN_00448037 (63 B) — action 32: the box reselect 0x43c247(+4, 1, +8, +0xc, +0x10, +0x14, +0x18, +0x1c). */
+int rl_448037(void)
+{
+    return bf_43c247(A4, 1, A8, AC, A10, A14, A18, A1C);
+}
+
+/* Port of FUN_00448244 (25 B) — action 35: 0x43c55c(+4). */
+int rl_448244(void)
+{
+    return bf_43c55c(A4);
+}
+
+/* Port of FUN_004483f0 (11 B) — action 45: nothing. */
+int rl_4483f0(void)
+{
+    return 0;
+}
+
+/* Port of FUN_00448406 (11 B) — action 47: nothing. */
+int rl_448406(void)
+{
+    return 0;
+}
+
+/* Port of FUN_00448411 (17 B) — action 48: DAT_00554038 + 1. */
+int rl_448411(void)
+{
+    return ++g_rl_554038;
 }
