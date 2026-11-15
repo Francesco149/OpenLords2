@@ -236,4 +236,6 @@ payload. The carrier is lost to the receiver (all its copies are forged). `mp-fo
 due tick from 76's bytes, already past → 0x4470c4 → message 90 (0x44692a / 0x446935) to p1; handlers 24 (0x447f44)
 and 46 (0x4483fb, from 97) run. The sides drift (lost 30 / 22 / 8) but run to f14300; det 0, Windows ≡ wine.
 Carriers that break the game: 4 (the start data: p2 crashed in receiver 10, 0x4423ad), 77 (both sides wait at the
-game start). No live carrier has 80's 64 B or 89's 204 B; 65's receiver acts only in the battle (DAT_0057c8fc == 2).
+game start). `mp-forge2` (mp-war re-fed to f13300): p2's 44 (24 B) → 27 (receiver 0x443024). Past one lost carrier a blind input
+replay drifts from the original game: on mp-war the battles' carriers (64, 48, 15, 54, 63, 61 → 68, 81, 79, 53, 88, 92)
+never came by f50000. No live carrier has 80's 64 B or 89's 204 B; 65's receiver acts only in the battle (DAT_0057c8fc == 2).
