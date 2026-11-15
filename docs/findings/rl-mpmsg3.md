@@ -74,9 +74,13 @@ Both sides file the same action with the same due tick (builder for us, receiver
 (host) act (the function comment in `src/rl_mpmsg3.c`). Callers: 0x4b8c3a's DirectPlay receive loop (rl_io's port,
 now calling rl_43e6a2 by name).
 
-**Ids with no port (2026-11-15):** builders / receivers of 16, 19, 26 (wndproc only), 70 (the type-10 "pay the price"
-popup), 81 (a refused join), 90 (a late action, 0x4470c4), 91 (three hash mismatches, 0x440666 → 0x43f5c5 sends 16),
-**dead** (no reference in the
+**Ids with no port (2026-11-15, after `mp-desync`):** builders / receivers of 19, 26 (wndproc only), 70 (the type-10
+"pay the price" popup: an AI ally's price for an attack, needs an MP alliance with an AI), 90 (a late action,
+0x4470c4: unreachable through lag — retail's tick pacing, multiplayer-rhost.md §Desync). **81 is dead in this exe**: the
+join's fourth dword (receiver 1 0x4410bd's "shield" test, 1 or 2 → DAT_005bb4a0) is DAT_005c9a74, which 0x4aef7e
+leaves 1 on every path (rl-host.md quirk 4: the GOG build's patched CD check) — every joiner unlocks the 3+ player
+session, the refusal never runs. 16 / 91 ported (mp-desync, §Resync below).
+**Dead** (no reference in the
 exe: no call, no pointer): 52's / 53's senders 0x4a7948 / 0x4a7daf, 89's 0x43f939 / 0x43f9c3; no send site at all: 27,
 31, 32, 65, 68, 78, 79, 80, 88, 92, 97 (98 / 99 / 0 = the empty pair 0x441050 / 0x44105b).
 
@@ -122,3 +126,20 @@ rows for 0x43b622 / 0x43be65 / 0x49cf20 / 0x437535 (through rl_evq_load / rl_evq
 - Unverified: none of the 83 (every function is reached). Arms likely unexercised (per-arm coverage not measured; 0x43e6a2 ran 3 times): 0x43e6a2 kinds 5..8 (logs only) and kind 2
   outside the battle with ≥ 2 players left; 0x4451cc's repeated-sequence drop; 0x447e0b's options other than those
   the corpus toggles; 0x4464e4's DAT_0055cd34 arm; 0x44622c's kinds the corpus does not send.
+
+## Resync (2026-11-15, `mp-desync`)
+
+| fn | role |
+|---|---|
+| 0x43f5c5 | the snapshot restore (0x440666: the battlefield hash sums differ): see the function comment; sends 16 |
+| 0x47ebe8 | the battlefield occupancy rebuilt after the restore (cell flags 0x80 cleared, units back on their cells, 0x49207e, 0x485bb1) |
+| 0x442a7f / 0x442aae | builder / receiver 16: the player (ours / the sender's), its flag DAT_00515850[p] = 1, 0x43f855 |
+| 0x43f855 | every live human player flagged → DAT_00553fa8 = 0, 0x43f8ff |
+| 0x44695f / 0x446983 | builder / receiver 91 (no payload): DAT_00512f88 = 0, 0x43ff63, 0x446f06, 0x43f304 |
+
+Quirk 9: 0x47ebe8's cell walk leaves DAT_00569578 /
+DAT_00569570 at 80 / 80 and DAT_005533cc at 51200 (the port must write engine_map_query's g_cell_cursor_row / _col —
+the one copy; a write to the g_bf_ alias is lost at the next mirror sync: the first verify's only divergence). The same for its DAT_0053e9ac = 1: the one copy is engine_territory_dirty_state()->below_status_redraw (rh_hooks_ai.c's s_dirty mirror) — through the alias the standalone lost the below-status redraw (state equal, every presented frame from f21273 different; the shadow passed); rl_444b17 / rl_448076 wrote it the same way, now the accessor.
+Unexercised arms: 0x43f5c5 with no snapshot (returns 0), its strategic mode (no copies), the 4th resync in a row
+(DAT_00553214 ≥ 4: last-turn reload / 0x4778a0, event 259).
+

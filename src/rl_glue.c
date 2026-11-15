@@ -1182,7 +1182,7 @@ int rl_440666(void)
     g_bf_553c6c = (int32_t)clock_ms();
     if (engine_current_screen() == 42)
         engine_set_current_screen(41);
-    engine_retail_call(0x43f5c5u, 0);   /* TODO(rl-extern): 0x43f5c5 */
+    rl_43f5c5();
     return 0;
 }
 

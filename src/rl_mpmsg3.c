@@ -19,7 +19,9 @@
 #include "engine_title_render.h"  /* 0x4ae539, 0x4ae5e2, g_tr_p4_flash_timer (DAT_00568984) */
 #include "engine_battlefield_render.h" /* g_bfr_engine_state (DAT_0052af94) */
 #include "engine_diplomacy_action.h" /* g_diplo_action_mode (DAT_005651cc) */
-#include "gfx_globals.h"          /* g_gfx_screen_byte (DAT_004eac50) */
+#include "gfx_globals.h"
+#include "engine_map_query.h"
+#include "engine_territory.h"      /* engine_territory_dirty_state (DAT_0053e9ac lives in its s_dirty mirror) */     /* g_cell_cursor_col / _row (DAT_00569570 / DAT_00569578) */          /* g_gfx_screen_byte (DAT_004eac50) */
 /* other partitions' generated globals (their headers clash when included together): the declarations, verbatim */
 extern uint8_t g_rl_50d7c0[0x5780];                                              /* rl_ui3: the action table */
 extern uint8_t g_rl_512f9c[4];                                                   /* rl_mpmsg: the packing scratch */
@@ -592,7 +594,7 @@ static void unpause(void)
 {
     if (g_bf_53f238 != 0) {
         g_bf_53f238 = ~g_bf_53f238;
-        g_bf_53e9ac = 2;
+        engine_territory_dirty_state()->below_status_redraw = 2;   /* DAT_0053e9ac (the s_dirty mirror) */
         rl_45240a();
         g_bf_553ed8 = 1;
     }
@@ -1034,6 +1036,146 @@ int rl_446b0f(void)
     return r;
 }
 
+/* the battlefield resync (mp-desync): 0x440666's sum mismatch → 0x43f5c5 (snapshot restore) → message 16; three
+ * turn-byte mismatches in a row → message 91 */
+extern int32_t g_rl_515850[10];   /* rl_mpmsg: the players' resync flags DAT_00515850[p] */
+extern int32_t g_rl_512f88;       /* rl_glue: the turn-byte mismatch count */
+#define RESYNC(p)     AT(int32_t, g_rl_515850, 0x515850u, 0x515850 + 4 * (p))   /* DAT_00515850[p] (no bound) */
+
+/* Port of FUN_0043f855 (170 B) — the resync is complete when every live human player (1..5: realm +5, +4, not out:
+ * aux +0x26) has its flag DAT_00515850[p]: then DAT_00553fa8 = 0 and the ready flags cleared (0x43f8ff). EAX: the
+ * first player still without it, else 0x43f8ff's. No caller reads EAX. */
+int rl_43f855(void)
+{
+    for (int p = 1; p < 6; p++)
+        if (PL8(p, 0x57bf05) != 0 && PL8(p, 0x57bf04) != 0 && PX8(p, 0x553d76) == 0 && RESYNC(p) == 0)
+            return p;
+    g_rl_553fa8 = 0;
+    return rl_43f8ff();
+}
+
+extern int32_t g_rl_553ec8;       /* rl_quit: the resync round count */
+#define SNAP_ON(m)    AT(int32_t, g_rl_512f40, 0x512f40u, 0x512f40 + 4 * (m))   /* DAT_00512f40[mode]: the snapshot pair's selector */
+#define SNAP_A(m)     AT(int32_t, g_rl_5158d0, 0x5158d0u, 0x5158d0 + 8 * (m))   /* DAT_005158d0[2 mode] */
+#define SNAP_B(m)     AT(int32_t, g_rl_5158d0, 0x5158d0u, 0x5158d4 + 8 * (m))   /* DAT_005158d4[2 mode] */
+
+/* Port of FUN_0047ebe8 (332 B) — rebuild the battlefield's occupancy after a snapshot restore: 0x46c7fc(5) / (6); every
+ * cell's flag 0x80 (+1 of the 80 × 80 cells at 0x5440e0, 8 B each) cleared with the walk counters DAT_00569578 /
+ * DAT_00569570 (engine_map_query's g_cell_cursor_row / _col: the one copy) / DAT_005533cc left at 80 / 80 / 51200; every live unit 1..80 (+0x2c) back on its cell (+0x1c → cell
+ * +5 = the unit), a unit with +0x194 re-placed at (+0x20, +0x22) by 0x49207e; the groups 0x485bb1; DAT_0053e9ac = 1.
+ * EAX: 0x485bb1's. */
+int rl_47ebe8(void)
+{
+    bf_46c7fc(5);
+    bf_46c7fc(6);
+    for (g_cell_cursor_row = 0, g_bf_5533cc = 0; g_cell_cursor_row < 80; g_cell_cursor_row++)
+        for (g_cell_cursor_col = 0; g_cell_cursor_col < 80; g_cell_cursor_col++, g_bf_5533cc += 8)
+            BCELL8(g_bf_5533cc, 0x5440e1) &= 0x7f;
+    for (int i = 1; i < 81; i++) {
+        if (BU8(i, 0x5544ac) == 0)
+            continue;
+        BCELL8(BS32(i, 0x55449c), 0x5440e5) = (uint8_t)i;
+        if (BU8(i, 0x554614) != 0)
+            bf_49207e(BS16(i, 0x5544a0), BS16(i, 0x5544a2));
+    }
+    int r = bf_485bb1();
+    engine_territory_dirty_state()->below_status_redraw = 1;   /* DAT_0053e9ac: the s_dirty mirror is the one copy */
+    return r;
+}
+
+/* Port of FUN_0043f5c5 (542 B) — the resync's snapshot restore (0x440666 when the hash sums differ): the snapshot
+ * DAT_005158d0 / d4[2 mode] (DAT_00512f40[mode] picks; none → 0). On the battlefield (mode 2) it holds the units
+ * (0x554630, 0x8700), the combat units (0x57a14c, 0x1db0), the hexes' aux (0x566554, 0x1040), DAT_0058fe28 and
+ * DAT_0058fe08 (4 each, the last two from the same offset + 0 / + 4); then the tick cadence 0x40489e, the occupancy
+ * 0x47ebe8, 0x480f8b; the 4th resync in a row (DAT_00553214 ≥ 4): DAT_00553ec8 counted, DAT_00553214 = 0, the clock
+ * DAT_005653f8 down (≤ 0 → 46), DAT_0053f018 counted, and with DAT_0057a0f0 clear past the first the last turn
+ * reloaded (save_load "lastturn.sva" host / ".svb"), else the field rebuilt 0x4778a0; event 259 to us; the 3rd:
+ * 0x479a71 for both battle sides. Any mode: DAT_00554038 counted, the hold-off DAT_0052afcc = 1, the replay /
+ * state-hash clears 0x43ff63 / 0x446f06 / 0x43ff08 / 0x43ffc3, the tick reset 0x43f304, message 16. EAX: 1. */
+int rl_43f5c5(void)
+{
+    int m = (int)s_slot_0057c8fc;
+    int src = SNAP_ON(m) == 1 ? SNAP_A(m) : SNAP_B(m);
+    if (src == 0)
+        return 0;
+    if (s_slot_0057c8fc == 2) {
+        rl_4b3d5d(src, P(&AT(uint8_t, g_per_battle_hex_432, 0x554480u, 0x554630)), 0x8700);
+        src += 0x8700;
+        rl_4b3d5d(src, P(&AT(uint8_t, g_per_combat_unit_76, 0x57a100u, 0x57a14c)), 0x1db0);
+        src += 0x1db0;
+        rl_4b3d5d(src, P(&AT(uint8_t, g_per_battle_hex_aux_52, 0x566520u, 0x566554)), 0x1040);
+        src += 0x1040;
+        rl_4b3d5d(src, P(&s_slot_0058fe28), 4);
+        rl_4b3d5d(src + 4, P(&s_slot_0058fe08), 4);
+        rl_40489e();
+        rl_47ebe8();
+        bf_480f8b();
+        if (g_rl_553214 >= 4) {
+            g_rl_553ec8++;
+            g_rl_553214 = 0;
+            if ((int32_t)s_slot_005653f8 > 0)
+                s_slot_005653f8--;
+            else
+                s_slot_005653f8 = 46;
+            g_rl_53f018++;
+            if (s_slot_0057a0f0 == 0 && g_rl_53f018 > 1)
+                rl_4adfe6(P(&AT(uint8_t, g_rl_4d5f28, 0x4d5f28u, g_rl_553248 != 0 ? 0x4d5f28 : 0x4d5f38)));
+            else
+                bf_4778a0();
+            rl_472bc5(0, LOCAL, 259, 0, 0, 0, 0, 0);
+        } else if (g_rl_553214 >= 3) {
+            bf_479a71((int)s_slot_005681ec);
+            bf_479a71((int)s_slot_005681d8);
+        }
+    }
+    g_rl_554038++;
+    g_combat_render_dirty = 1;
+    rl_43ff63();
+    rl_446f06();
+    rl_43ff08();
+    rl_43ffc3();
+    bf_43f304();
+    rl_43eda0(16, 0);
+    return 1;
+}
+
+/* Port of FUN_00442a7f (47 B) — builder 16 (sent by 0x43f5c5 after the snapshot restore): our player DAT_0057c8cc 4;
+ * our flag DAT_00515850[local] = 1; 0x43f855. */
+int rl_442a7f(void)
+{
+    PUT(&s_slot_0057c8cc, 4);
+    RESYNC(LOCAL) = 1;
+    return rl_43f855();
+}
+
+/* Port of FUN_00442aae (47 B) — receiver 16: the sender into DAT_0056d5cc 4; its flag DAT_00515850[sender] = 1;
+ * 0x43f855. */
+int rl_442aae(void)
+{
+    GET(&s_slot_0056d5cc, 4);
+    RESYNC(OTHER) = 1;
+    return rl_43f855();
+}
+
+/* Port of FUN_0044695f (36 B) — builder 91 (0x440666: the turn bytes differed a third time): no payload;
+ * DAT_00512f88 = 0, the replay / state-hash clears 0x43ff63 / 0x446f06, the tick reset 0x43f304. */
+int rl_44695f(void)
+{
+    g_rl_512f88 = 0;
+    rl_43ff63();
+    rl_446f06();
+    return bf_43f304();
+}
+
+/* Port of FUN_00446983 (36 B) — receiver 91: the same as its builder. */
+int rl_446983(void)
+{
+    g_rl_512f88 = 0;
+    rl_43ff63();
+    rl_446f06();
+    return bf_43f304();
+}
+
 /* Port of FUN_00446683 (266 B) — builder 87: the aux bytes 0x553da4 / 0x553dd0 (1), DAT_0053e8fc, DAT_0053ef5c (4);
  * DAT_005533e0[local] = [DAT_0056d5cc] = 0 (host, DAT_00553248) / 2 (client); the chat lines DAT_00553e80 /
  * DAT_00565440 (65 each) cleared; DAT_005533d0 = 1, DAT_0057d340 = 2. */
@@ -1227,7 +1369,7 @@ int rl_448076(void)
     int p = A4;
     row_in(p);
     bf_478987(p);
-    g_bf_53e9ac = 1;
+    engine_territory_dirty_state()->below_status_redraw = 1;   /* DAT_0053e9ac (the s_dirty mirror) */
     return row_out();
 }
 

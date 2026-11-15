@@ -182,3 +182,29 @@ rl_ port writes the back buffer DAT_004ea1a8 directly.
   new name into the run dir at run time — no game data in git; rd keeps the entry as is). Picking user2.skr → 93 →
   the peer loads it (0x42d4aa) and answers 94. While authoring over mpbot: copy the file into each side's
   `p1.s.rundir` before the setup page lists the files, and add the meta line to the saved traces.
+
+## Desync, lag and the resync (2026-11-15: `mp-desync`)
+
+Tools (live only — a replay takes the stamps from the trace, so neither needs a setting there):
+- **`pK lag MS`** (mpbot; rh_bot.c `netlag`, rh_net.c `rh_net_lag`): side K's arrivals become visible only once its
+  virtual clock is MS past the clock the sender sent them at, in order (a slow link).
+- **`pK forge ID OFF XOR [N] [crc]`** (rh_bot.c `netforge`, `rh_net_forge`): the next N distinct (by seq) messages of id
+  ID arriving at side K get byte OFF (0 id, 1 size, 2 checksum, 3 seq | copy flags, payload from 4) XORed; the checksum
+  follows unless `crc` (then 0x43eac1's "Bad packet CRC" branch). The trace stamps the forged bytes.
+- **`feed SCEN UNTIL`** (mpbot): every side's input events from an existing MP scenario re-posted at their frames, the
+  deliveries live through the broker — mp-duel re-fed to its battle prompt f15930 reproduced it exactly; branch off there.
+
+**Lag cannot make 90 or 91 happen.** Retail paces each side's ticks by its view of the peers' (DAT_0053e8d0, from the
+peers' messages 10 / 12): on the strategic map a side ahead is slowed by tiers (0x4bb978's caller), on the battlefield it
+stops dead ~40 ticks past its view (p1 lagged 400 s, p2 paused: p1 held at 520 with its view of p2 at 480 for 20k
+frames). A late action (due = lead 50 + the highest known tick, 0x446e21) needs the receiver 50+ ticks past the sender's
+view; the battlefield's turn-byte check (tick % 130 == 45, 0x440dd2 → 2) needs the peer's message 12 of that period
+still in flight 45 ticks on — under lag the receiver just waits. Lag 20–60 s on mp-start / mp-duel states: 0 late
+actions, DAT_00512f88 never above 0. 90 stays unreached (a real link that drops and re-orders would be needed).
+
+**`mp-desync`** (2 sides, 25054 frames): mp-duel fed to f15930, p2 takes the field at Perth, p1 unpauses; p1 `forge 12 10
+1 1` — p2's next message 12 carries hash sum [0] ^ 1 (a desynced peer). p1's 0x440666 (f16957): 0x440dd2 → 0 → the
+snapshot restore 0x43f5c5 → message 16; the restore makes the states really differ, so the resync ping-pongs: 16 both
+ways (4 / 5 times), p1's turn bytes differ three checks running → 91 to p2, DAT_00553214 reaches 3 on p2 (0x479a71 for
+both sides). Each restore leaves the other side paused (DAT_0053f238 = −1): p1 then p2 unpause, and from f22654 the
+battle runs in step with no further resync. Windows ≡ wine, det 0 dwords.

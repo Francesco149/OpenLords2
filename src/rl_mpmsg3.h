@@ -33,6 +33,13 @@ int rl_4469bd(void);                             /* 47 B, mp-skrpick */
 int rl_4469ec(void);                             /* 204 B, mp-skrpick */
 int rl_446ab8(void);                             /* 87 B, mp-skrpick */
 int rl_446b0f(void);                             /* 145 B, mp-skrpick */
+int rl_43f855(void);                             /* 170 B, mp-desync */
+int rl_442a7f(void);                             /* 47 B, mp-desync */
+int rl_442aae(void);                             /* 47 B, mp-desync */
+int rl_44695f(void);                             /* 36 B, mp-desync */
+int rl_446983(void);                             /* 36 B, mp-desync */
+int rl_43f5c5(void);                             /* 542 B, mp-desync */
+int rl_47ebe8(void);                             /* 332 B, mp-desync */
 int rl_443e51(void);                             /* 184 B, coverage 2 */
 int rl_443f09(void);                             /* 162 B, coverage 4 */
 int rl_443fab(void);                             /* 100 B, coverage 1 */

@@ -26,6 +26,7 @@ enum {
     X_rl_447e0b, X_rl_447f82, X_rl_448076, X_rl_448137, X_rl_44825d, X_rl_448276, X_rl_44828f, X_rl_44829f,
     X_rl_4482e9, X_rl_448308, X_rl_4483d1, X_rl_4436bb, X_rl_4436f9, X_rl_444915, X_rl_444948,
     X_rl_4469bd, X_rl_4469ec, X_rl_446ab8, X_rl_446b0f,
+    X_rl_43f855, X_rl_442a7f, X_rl_442aae, X_rl_44695f, X_rl_446983, X_rl_43f5c5, X_rl_47ebe8,
 };
 
 HOOK_V(rl_43e6a2, 2, rl_43e6a2(I(0), I(1)))
@@ -119,6 +120,13 @@ HOOK_V(rl_4469bd, 0, rl_4469bd())
 HOOK_V(rl_4469ec, 0, rl_4469ec())
 HOOK_V(rl_446ab8, 0, rl_446ab8())
 HOOK_V(rl_446b0f, 0, rl_446b0f())
+HOOK_V(rl_43f855, 0, rl_43f855())
+HOOK_V(rl_442a7f, 0, rl_442a7f())
+HOOK_V(rl_442aae, 0, rl_442aae())
+HOOK_V(rl_44695f, 0, rl_44695f())
+HOOK_V(rl_446983, 0, rl_446983())
+HOOK_V(rl_43f5c5, 0, rl_43f5c5())
+HOOK_V(rl_47ebe8, 0, rl_47ebe8())
 
 hook_t RH_HOOKS_RL_MPMSG3[] = {
     { "rl_43e6a2", 0x43e6a2u, (void *)w_rl_43e6a2, 0, 0, 0, 0, "" },
@@ -212,5 +220,12 @@ hook_t RH_HOOKS_RL_MPMSG3[] = {
     { "rl_4469ec", 0x4469ecu, (void *)w_rl_4469ec, 0, 0, 0, 0, "" },
     { "rl_446ab8", 0x446ab8u, (void *)w_rl_446ab8, 0, 0, 0, 0, "" },
     { "rl_446b0f", 0x446b0fu, (void *)w_rl_446b0f, 0, 0, 0, 0, "" },
+    { "rl_43f855", 0x43f855u, (void *)w_rl_43f855, 0, 0, 0, 0, "" },
+    { "rl_442a7f", 0x442a7fu, (void *)w_rl_442a7f, 0, 0, 0, 0, "" },
+    { "rl_442aae", 0x442aaeu, (void *)w_rl_442aae, 0, 0, 0, 0, "" },
+    { "rl_44695f", 0x44695fu, (void *)w_rl_44695f, 0, 0, 0, 0, "" },
+    { "rl_446983", 0x446983u, (void *)w_rl_446983, 0, 0, 0, 0, "" },
+    { "rl_43f5c5", 0x43f5c5u, (void *)w_rl_43f5c5, 0, 0, 0, 0, "" },
+    { "rl_47ebe8", 0x47ebe8u, (void *)w_rl_47ebe8, 0, 0, 0, 0, "" },
 };
 const int RH_HOOKS_RL_MPMSG3_N = sizeof RH_HOOKS_RL_MPMSG3 / sizeof *RH_HOOKS_RL_MPMSG3;
