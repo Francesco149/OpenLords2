@@ -12966,7 +12966,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/blit_table_452820.h"
    ]
   },
   {
@@ -12976,7 +12977,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/blit_table_45337b.h"
    ]
   },
   {
@@ -12986,7 +12988,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/blit_table_4538f6.h"
    ]
   },
   {
@@ -12996,7 +12999,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/drawb_table_453e71.h"
    ]
   },
   {
@@ -13006,7 +13010,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/drawb_stripb_455f04.h"
    ]
   },
   {
@@ -13016,7 +13021,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/drawb_stripb_456fd8.h"
    ]
   },
   {
@@ -13026,7 +13032,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/drawb_stripb_4580a9.h"
    ]
   },
   {
@@ -13036,7 +13043,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/drawb_stripb_459258.h"
    ]
   },
   {
@@ -13206,7 +13214,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/blit_table_463b42.h"
    ]
   },
   {
@@ -13216,7 +13225,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/blit_table_463c06.h"
    ]
   },
   {
@@ -13226,7 +13236,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/blit_table_463c62.h"
    ]
   },
   {
@@ -13236,7 +13247,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/drawb_table_463cbe.h"
    ]
   },
   {
@@ -13246,7 +13258,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/drawb_table_463e91.h"
    ]
   },
   {
@@ -13256,7 +13269,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/drawb_table_463fa5.h"
    ]
   },
   {
@@ -13266,7 +13280,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/drawb_stripb_4640b6.h"
    ]
   },
   {
@@ -13276,7 +13291,8 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c"
+    "src/engine_map_terrain.c",
+    "src/gen/drawb_stripb_464209.h"
    ]
   },
   {
@@ -18172,6 +18188,7 @@
     "src/engine_pl8.h",
     "src/game_init.c",
     "src/game_init.h",
+    "src/gen/pl8_table.h",
     "src/main.c",
     "src/rl_turn.c"
    ]

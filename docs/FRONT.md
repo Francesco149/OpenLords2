@@ -84,7 +84,10 @@
    **`mp-badpkt`** (2026-11-15; forge on mp-start: id → 98, size + 1, bad checksum): 0x43eac1's corrupt / wrong-size /
    bad-CRC arms (rl_43eac1 shadowed, standalone 2/2 = pure retail, det 0, Windows ≡ wine). **19 / 26 dead** (F6 / F7
    behind DAT_0053f684, only ever 0: rl-mpmsg3.md), forced resend dead (DAT_0055ce68 never set).
-   Next: MP left with 90 only (needs a link that drops / re-orders); back to ★4 / ★5 (standalone static gaps, rl-link seams).
+   **`mp-forge1` / `mp-forge2`** (id-forged carriers: the checksum covers the payload only): receivers 19 / 26 / 27 / 52 / 97,
+   actions 24 / 46, the late-action path 0x4470c4 → 90 reached in retail. **Every MP message id now has a port** (47
+   functions, fe9a756 / ec746c4: 10 rows reached, 0 divergences, hybrid PASS; 37 dead-code rows unverified — no carrier);
+   standalone 39/39 MP sides = pure retail; static gaps 107 → 66. Next: ★4 / ★5 (remaining static gaps, rl-link seams).
 0b. **rd campaigns** — **campaign 6 (2026-11-14, API drivers):** ai-recall filed (sub_48B7FC 0x48b7fc first time: an Equal
    field skirmish after a Play Now → New Game trip — a cold skirmish leaves byte_553080 zero, so the recall never fires;
    +12 blocks); ai-surrender blocked (probe: no skirmish attacker is knights-only; the battle ends when a side has 0 men

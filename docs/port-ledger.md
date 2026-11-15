@@ -548,7 +548,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x497ced | FUN_00497ced | 376 | engine_load_pump.c, engine_territory.c, engine_territory.h (+4) |
 | 0x497e65 | FUN_00497e65 | 1025 | engine.c, engine.h, game_init.c (+2) |
 | 0x498270 | FUN_00498270 | 327 | engine_map_init.c, engine_map_init.h, main.c (+1) |
-| 0x4984dc | FUN_004984dc | 731 | engine.c, engine_ingame_input.c, engine_pl8.c (+5) |
+| 0x4984dc | FUN_004984dc | 731 | engine.c, engine_ingame_input.c, engine_pl8.c (+6) |
 | 0x499034 | FUN_00499034 | 197 | engine_menu_input.c, gfx.c, gfx.h (+1) |
 | 0x4997bf | FUN_004997bf | 151 | engine_workforce_hud.c, engine_workforce_hud.h, rl_turn.c |
 | 0x499a1c | FUN_00499a1c | 174 | engine.c, gfx.c, gfx.h (+2) |
@@ -1429,14 +1429,14 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x451f8a | FUN_00451f8a | 66 | rl_glue.c |
 | 0x45242b | FUN_0045242b | 11 | rl_misc.c |
 | 0x45280b | FUN_0045280b | 11 | rl_io.c |
-| 0x452820 | FUN_00452820 | 2907 | engine_map_terrain.c |
-| 0x45337b | FUN_0045337b | 1403 | engine_map_terrain.c |
-| 0x4538f6 | FUN_004538f6 | 1403 | engine_map_terrain.c |
-| 0x453e71 | FUN_00453e71 | 8339 | engine_map_terrain.c |
-| 0x455f04 | FUN_00455f04 | 4308 | engine_map_terrain.c |
-| 0x456fd8 | FUN_00456fd8 | 4305 | engine_map_terrain.c |
-| 0x4580a9 | FUN_004580a9 | 4527 | engine_map_terrain.c |
-| 0x459258 | FUN_00459258 | 4377 | engine_map_terrain.c |
+| 0x452820 | FUN_00452820 | 2907 | engine_map_terrain.c, blit_table_452820.h |
+| 0x45337b | FUN_0045337b | 1403 | engine_map_terrain.c, blit_table_45337b.h |
+| 0x4538f6 | FUN_004538f6 | 1403 | engine_map_terrain.c, blit_table_4538f6.h |
+| 0x453e71 | FUN_00453e71 | 8339 | engine_map_terrain.c, drawb_table_453e71.h |
+| 0x455f04 | FUN_00455f04 | 4308 | engine_map_terrain.c, drawb_stripb_455f04.h |
+| 0x456fd8 | FUN_00456fd8 | 4305 | engine_map_terrain.c, drawb_stripb_456fd8.h |
+| 0x4580a9 | FUN_004580a9 | 4527 | engine_map_terrain.c, drawb_stripb_4580a9.h |
+| 0x459258 | FUN_00459258 | 4377 | engine_map_terrain.c, drawb_stripb_459258.h |
 | 0x460501 | FUN_00460501 | 668 | engine_map_terrain.c |
 | 0x46079d | FUN_0046079d | 321 | engine_map_terrain.c |
 | 0x4608de | FUN_004608de | 318 | engine_map_terrain.c |
@@ -1445,14 +1445,14 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x461623 | FUN_00461623 | 1073 | engine_map_terrain.c |
 | 0x461a54 | FUN_00461a54 | 1191 | engine_map_terrain.c |
 | 0x461efb | FUN_00461efb | 1145 | engine_map_terrain.c |
-| 0x463b42 | FUN_00463b42 | 196 | engine_map_terrain.c |
-| 0x463c06 | FUN_00463c06 | 92 | engine_map_terrain.c |
-| 0x463c62 | FUN_00463c62 | 92 | engine_map_terrain.c |
-| 0x463cbe | FUN_00463cbe | 467 | engine_map_terrain.c |
-| 0x463e91 | FUN_00463e91 | 276 | engine_map_terrain.c |
-| 0x463fa5 | FUN_00463fa5 | 273 | engine_map_terrain.c |
-| 0x4640b6 | FUN_004640b6 | 339 | engine_map_terrain.c |
-| 0x464209 | FUN_00464209 | 345 | engine_map_terrain.c |
+| 0x463b42 | FUN_00463b42 | 196 | engine_map_terrain.c, blit_table_463b42.h |
+| 0x463c06 | FUN_00463c06 | 92 | engine_map_terrain.c, blit_table_463c06.h |
+| 0x463c62 | FUN_00463c62 | 92 | engine_map_terrain.c, blit_table_463c62.h |
+| 0x463cbe | FUN_00463cbe | 467 | engine_map_terrain.c, drawb_table_463cbe.h |
+| 0x463e91 | FUN_00463e91 | 276 | engine_map_terrain.c, drawb_table_463e91.h |
+| 0x463fa5 | FUN_00463fa5 | 273 | engine_map_terrain.c, drawb_table_463fa5.h |
+| 0x4640b6 | FUN_004640b6 | 339 | engine_map_terrain.c, drawb_stripb_4640b6.h |
+| 0x464209 | FUN_00464209 | 345 | engine_map_terrain.c, drawb_stripb_464209.h |
 | 0x4692a7 | FUN_004692a7 | 201 | rl_mpmsg3.c |
 | 0x469370 | FUN_00469370 | 188 | rl_mpmsg3.c |
 | 0x46a101 | FUN_0046a101 | 165 | rl_io.c |
