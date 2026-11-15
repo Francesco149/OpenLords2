@@ -81,7 +81,10 @@
    **`mp-price`** (2026-11-15; setup County status strong → AI pops > 1000; p1 compliments the Baron, allies (179), asks
    him to attack until 188 → the type-10 popup's yes → 70): builder / receiver 0x4454e7 / 0x4455ad + action 40 0x4482be
    ported (shadow 0 divergences, hybrid PASS, standalone 2/2 = pure retail, det 0, Windows ≡ wine).
-   Next: 19 / 26 (wndproc); the forge's `crc` mode opens 0x43eac1's bad-CRC / wrong-size branches.
+   **`mp-badpkt`** (2026-11-15; forge on mp-start: id → 98, size + 1, bad checksum): 0x43eac1's corrupt / wrong-size /
+   bad-CRC arms (rl_43eac1 shadowed, standalone 2/2 = pure retail, det 0, Windows ≡ wine). **19 / 26 dead** (F6 / F7
+   behind DAT_0053f684, only ever 0: rl-mpmsg3.md), forced resend dead (DAT_0055ce68 never set).
+   Next: MP left with 90 only (needs a link that drops / re-orders); back to ★4 / ★5 (standalone static gaps, rl-link seams).
 0b. **rd campaigns** — **campaign 6 (2026-11-14, API drivers):** ai-recall filed (sub_48B7FC 0x48b7fc first time: an Equal
    field skirmish after a Play Now → New Game trip — a cold skirmish leaves byte_553080 zero, so the recall never fires;
    +12 blocks); ai-surrender blocked (probe: no skirmish attacker is knights-only; the battle ends when a side has 0 men

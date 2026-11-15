@@ -76,7 +76,10 @@ Both sides file the same action with the same due tick (builder for us, receiver
 (host) act (the function comment in `src/rl_mpmsg3.c`). Callers: 0x4b8c3a's DirectPlay receive loop (rl_io's port,
 now calling rl_43e6a2 by name).
 
-**Ids with no port (2026-11-15, after `mp-desync`):** builders / receivers of 19, 26 (wndproc only), 90 (a late action,
+**19 / 26 are dead in this exe** (2026-11-15): their only send sites are the window procedure's F6 (VK 0x75: 19 if DAT_0053f684 != 0) and F7 (0x76: 26 if == 1); DAT_0053f684 is BSS and written only 0 (WinMain 0x40eaf9, 0x4975fb), in no save block, no pointer to it — the debug gate is compiled shut. The pairs are debug toggles: 19 = builder 0x442b18 flips byte_56D690 (rl_render's per-record checksum overlay) and "unpauses" DAT_0053f238 with `not`, receiver 0x442b80 copies both; 26 = builder 0x442f5f steps byte_553F4C 0→1→2→3→4→0 (read nowhere), receiver 0x442ff0 copies it.
+**Resend forced is dead too**: 0x43eac1's DAT_0055ce68 arm — the dword is only decremented there, never set.
+
+**Ids with no port (2026-11-15, after `mp-desync`):** builders / receivers of 19, 26 (dead, above), 90 (a late action,
 0x4470c4: unreachable through lag — retail's tick pacing, multiplayer-rhost.md §Desync). **81 is dead in this exe**: the
 join's fourth dword (receiver 1 0x4410bd's "shield" test, 1 or 2 → DAT_005bb4a0) is DAT_005c9a74, which 0x4aef7e
 leaves 1 on every path (rl-host.md quirk 4: the GOG build's patched CD check) — every joiner unlocks the 3+ player

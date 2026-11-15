@@ -217,3 +217,12 @@ start, over every personality's ask-to-attack bar. Diplomacy (622,447), the Baro
 attitude +15 at the turn's end (reply 174); "Offer an alliance" (415,268 for a non-ally) → 179, the alliance mutual
 (+0x81); "Ask to attack" → 186 / 187 / 188 by `rng` vs 2 × attitude; 188 is the type-10 popup — tools/bot's UI answers
 it no by default (`uis[0].ask` overridden to yes). Message 70 → action 40: rl-mpmsg3.md §Message 70.
+
+## Bad packets (2026-11-15: `mp-badpkt`)
+
+The receive dispatcher 0x43eac1's reject arms, opened by rh_net's forge on mp-start re-fed to f7900 (the map, Winter
+1268): p1 `forge 10 0 104 1` (id 10 → 98, size 255: "ERR:Corrupt packet"), `forge 10 1 1 1` (size 4 → 5: "ERR:Wrong
+size packet"); p2 `forge 10 2 85 1 crc` ("ERR:Bad packet CRC" — the corpus already reached it). Each clears the slot's
+resend countdown and counts DAT_0055326c; the copies / resends deliver the message and the ticks stay in step to
+f10000. Not reachable: the forced-resend arm (DAT_0055ce68 is never set), an unknown sender (0x43e98b → 0: the
+broker only carries joined players' frames), slot 6.
