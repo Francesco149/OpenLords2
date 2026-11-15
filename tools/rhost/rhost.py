@@ -313,14 +313,23 @@ def run_batch_wine(a, runs, tag):
         # our stdio, and the wineserver (shared with every other wine job in the prefix) would hold a pipe's write
         # end open long after the run — communicate() then never sees EOF and the batch hangs (2026-11-04)
         wout = os.path.join(bdir, name, "wine.out")
+        tmo = getattr(a, "wine_timeout", None) or 3600
+        timed_out = False
         with open(wout, "w") as f:
-            subprocess.run(["wine", f"{WROOT}\\runs\\{batch}\\{WEXE}"] + argv, stdin=subprocess.DEVNULL, stdout=f,
-                           stderr=subprocess.STDOUT, env=env, timeout=getattr(a, "wine_timeout", 3600))
+            try:
+                subprocess.run(["wine", f"{WROOT}\\runs\\{batch}\\{WEXE}"] + argv, stdin=subprocess.DEVNULL, stdout=f,
+                               stderr=subprocess.STDOUT, env=env, timeout=tmo)
+            except subprocess.TimeoutExpired:   # one slow run (a long shadow pass) fails alone, not the whole batch
+                timed_out = True
         txt = open(wout, errors="replace").read()
         if len(txt) > 8000:
             open(wout, "w").write(txt[-8000:])
         log = os.path.join(bdir, name, "rhost.log")
-        return name, open(log, errors="replace").read() if os.path.exists(log) else ""
+        txt = open(log, errors="replace").read() if os.path.exists(log) else ""
+        if timed_out:
+            last = ([l for l in txt.splitlines() if l.startswith("frame ")] or ["frame ?"])[-1].split()[1]
+            txt += f"\nRESULT status=timeout reason=wine-timeout-{tmo}s frame={last}\n"
+        return name, txt
     t0 = time.time()
     out_lines = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, a.jobs)) as ex:
@@ -1052,6 +1061,8 @@ def main():
         sp.add_argument("--step-ms", dest="step_ms", type=int)
         sp.add_argument("--vbase", type=int)
         sp.add_argument("--fb-hash", dest="fb_hash", action="store_true")
+        sp.add_argument("--wine-timeout", dest="wine_timeout", type=int,
+                        help="wine target: seconds per run before it is killed and reported status=timeout (default 3600)")
         sp.add_argument("--show", action="store_true")
         sp.add_argument("-j", "--jobs", type=int, default=None,
                         help="parallel runs (default: $RHOST_JOBS, else 8 on wine, 3 on win — sibling projects share the Windows box)")

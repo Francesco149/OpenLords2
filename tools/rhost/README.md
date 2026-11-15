@@ -15,6 +15,8 @@ python3 tools/rhost/rhost.py det endturn-2 -n 3                           # dete
 python3 tools/rhost/rhost.py corpus --check                               # every scenario vs expected.json
 python3 tools/rhost/rhost.py corpus --check --target wine                 # … on this host (expected.wine.json)
 python3 tools/rhost/rhost.py verify                                       # every hook, shadow by nesting pass + hybrid pass
+python3 tools/rhost/rhost.py verify --only '^mp-' --target wine --wine-timeout 18000   # long shadow passes (mp-war, mp-skirmish): the per-run cap (default 3600 s; a timed-out run = status=timeout, the batch goes on)
+  # a single-flag --extra needs '=': --extra=--fb-hash
 python3 tools/rhost/rhost.py corpus --check --hook replace:rng_step       # hybrid: port REPLACES retail
 python3 tools/rhost/rhost.py shots endturn-2 --at 1800:3600:300           # PNG + exact .idx index planes
 python3 tools/rhost/rhost.py record my-play [--from endturn-2]            # HUMAN PLAY on the Windows desktop
