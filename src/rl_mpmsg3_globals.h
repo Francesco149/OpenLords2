@@ -23,3 +23,4 @@ extern int32_t g_rl_554404;                  /* .data 0x554404..0x554408: dword_
 extern int32_t g_rl_56759c;                  /* .data 0x56759c..0x5675a0: dword_56759C(rw) — message 89's pointer into the snapshot */
 extern int32_t g_rl_56845c;                  /* .data 0x56845c..0x568460: dword_56845C(w) — 0x43faa4's first differing offset */
 extern int32_t g_rl_57c8a8;                  /* .data 0x57c8a8..0x57c8ac: dword_57C8A8(w) — 0x43faa4's layout row */
+extern uint8_t g_rl_4d603c[0x2c];            /* .data 0x4d603c..0x4d6068: aErrPuttingTodo(o) */

@@ -150,7 +150,7 @@ int rl_447136(int type, int due, int a2, int a3, int a4, int a5, int a6, int a7,
     if (due > NOW)
         rl_447026(due);
     else
-        engine_retail_call(0x4470c4u, 2, (uint32_t)type, (uint32_t)due);   /* TODO(rl-link): 0x4470c4 (no partition) */
+        rl_4470c4(type, due);   /* rl_mpmsg3 */
     DA8(g_rl_51591c, 0x50d7f6) = 1;
     DA8(g_rl_51591c, 0x50d7f7) = (uint8_t)type;
     DA32(g_rl_51591c, 0x50d7c0) = due;

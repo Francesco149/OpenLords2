@@ -29,6 +29,7 @@ enum {
     X_rl_43f855, X_rl_442a7f, X_rl_442aae, X_rl_44695f, X_rl_446983, X_rl_43f5c5, X_rl_47ebe8,
     X_rl_4454e7, X_rl_4455ad, X_rl_4482be,
     X_rl_441050, X_rl_44105b, X_rl_442b18, X_rl_442b80, X_rl_442f5f, X_rl_442ff0, X_rl_44300a, X_rl_443024, X_rl_443322, X_rl_44332d, X_rl_443338, X_rl_443343, X_rl_444479, X_rl_4444f0, X_rl_444554, X_rl_4445cb, X_rl_479558, X_rl_479738, X_rl_444db9, X_rl_444dfc, X_rl_4453a3, X_rl_445407, X_rl_44603e, X_rl_446049, X_rl_446054, X_rl_44605f, X_rl_4692a7, X_rl_469370, X_rl_44606a, X_rl_4460a1, X_rl_4460d8, X_rl_4460e3, X_rl_4468a6, X_rl_4468b6, X_rl_43fa1d, X_rl_43faa4, X_rl_4468c6, X_rl_4468f3, X_rl_44692a, X_rl_446935, X_rl_4469a7, X_rl_4469b2, X_rl_446c61, X_rl_446d4e,
+    X_rl_447f44, X_rl_4483fb, X_rl_4470c4,
 };
 
 HOOK_V(rl_43e6a2, 2, rl_43e6a2(I(0), I(1)))
@@ -176,6 +177,9 @@ HOOK_V(rl_4469a7, 0, rl_4469a7())
 HOOK_V(rl_4469b2, 0, rl_4469b2())
 HOOK_V(rl_446c61, 0, rl_446c61())
 HOOK_V(rl_446d4e, 0, rl_446d4e())
+HOOK_V(rl_447f44, 0, rl_447f44())
+HOOK_V(rl_4483fb, 0, rl_4483fb())
+HOOK_V(rl_4470c4, 2, rl_4470c4(I(0), I(1)))   /* E8 from 0x447136, which drops EAX */
 
 hook_t RH_HOOKS_RL_MPMSG3[] = {
     { "rl_43e6a2", 0x43e6a2u, (void *)w_rl_43e6a2, 0, 0, 0, 0, "" },
@@ -323,5 +327,8 @@ hook_t RH_HOOKS_RL_MPMSG3[] = {
     { "rl_4469b2", 0x4469b2u, (void *)w_rl_4469b2, 0, 0, 0, 0, "" },
     { "rl_446c61", 0x446c61u, (void *)w_rl_446c61, 0, 0, 0, 0, "" },
     { "rl_446d4e", 0x446d4eu, (void *)w_rl_446d4e, 0, 0, 0, 0, "" },
+    { "rl_447f44", 0x447f44u, (void *)w_rl_447f44, 0, 0, 0, 0, "" },
+    { "rl_4483fb", 0x4483fbu, (void *)w_rl_4483fb, 0, 0, 0, 0, "" },
+    { "rl_4470c4", 0x4470c4u, (void *)w_rl_4470c4, 0, 0, 0, 0, "" },
 };
 const int RH_HOOKS_RL_MPMSG3_N = sizeof RH_HOOKS_RL_MPMSG3 / sizeof *RH_HOOKS_RL_MPMSG3;

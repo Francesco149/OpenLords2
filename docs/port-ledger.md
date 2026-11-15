@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **1922** (78.5%) — tested 788, ported 1134
-- code bytes touched: **84.9%** (712,339 / 838,629 B)
-- unported: **525**
+- touched: **1924** (78.6%) — tested 788, ported 1136
+- code bytes touched: **85.0%** (712,484 / 838,629 B)
+- unported: **523**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (788) — ported + host unit suite
@@ -305,7 +305,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4479de | FUN_004479de | 11 | engine_handlers_da.h, rl_mpmsg2.c |
 | 0x447ddb | FUN_00447ddb | 11 | engine_handlers_da.h |
 | 0x4483f0 | FUN_004483f0 | 11 | engine_handlers_da.h |
-| 0x4483fb | FUN_004483fb | 11 | engine_handlers_da.h |
+| 0x4483fb | FUN_004483fb | 11 | engine_handlers_da.h, rl_mpmsg3.c |
 | 0x448406 | FUN_00448406 | 11 | engine_handlers_da.h |
 | 0x448411 | FUN_00448411 | 17 | engine_handlers_da.h |
 | 0x448440 | FUN_00448440 | 261 | engine.c, engine.h, engine_army_ai.c (+9) |
@@ -810,7 +810,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (1134) — reimplemented, no host test yet
+## ported (1136) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -1389,6 +1389,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x446f06 | FUN_00446f06 | 126 | rl_host.c |
 | 0x446f84 | FUN_00446f84 | 162 | rl_mpmsg2.c |
 | 0x447026 | FUN_00447026 | 158 | rl_mpmsg2.c |
+| 0x4470c4 | FUN_004470c4 | 114 | rl_mpmsg3.c |
 | 0x447136 | FUN_00447136 | 408 | rl_mpmsg2.c |
 | 0x4476e4 | FUN_004476e4 | 92 | rl_mpmsg2.c |
 | 0x447740 | FUN_00447740 | 92 | rl_mpmsg2.c |
@@ -1404,6 +1405,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x447d9d | FUN_00447d9d | 25 | rl_mpmsg3.c |
 | 0x447db6 | FUN_00447db6 | 37 | rl_mpmsg2.c |
 | 0x447e0b | FUN_00447e0b | 313 | rl_mpmsg3.c |
+| 0x447f44 | FUN_00447f44 | 31 | rl_mpmsg3.c |
 | 0x447f82 | FUN_00447f82 | 31 | rl_mpmsg3.c |
 | 0x44800e | FUN_0044800e | 25 | rl_mpmsg2.c |
 | 0x448076 | FUN_00448076 | 193 | rl_mpmsg3.c |

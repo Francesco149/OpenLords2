@@ -149,3 +149,6 @@ int rl_4469a7(void);                             /* 11 B, last ids */
 int rl_4469b2(void);                             /* 11 B, last ids */
 int rl_446c61(void);                             /* 237 B, last ids */
 int rl_446d4e(void);                             /* 211 B, last ids */
+int rl_447f44(void);                             /* 31 B, mp-forge1 */
+int rl_4483fb(void);                             /* 11 B, mp-forge1 */
+int rl_4470c4(int type, int due);                /* 114 B, mp-forge1 */

@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 788,
-  "ported": 1134,
-  "unported": 525,
+  "ported": 1136,
+  "unported": 523,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 1922,
-  "pct_touched": 78.5,
+  "touched": 1924,
+  "pct_touched": 78.6,
   "pct_tested": 32.2,
   "bytes_total": 838629,
-  "bytes_touched": 712339,
-  "pct_bytes_touched": 84.9
+  "bytes_touched": 712484,
+  "pct_bytes_touched": 85.0
  },
  "orphan_refs": [
   "0x004148",
@@ -10890,8 +10890,10 @@
    "name": "FUN_004470c4",
    "size": 114,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg3.c"
+   ]
   },
   {
    "va": "0x447136",
@@ -11178,8 +11180,10 @@
    "name": "FUN_00447f44",
    "size": 31,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg3.c"
+   ]
   },
   {
    "va": "0x447f63",
@@ -11384,7 +11388,8 @@
    "is_thunk": false,
    "status": "tested",
    "src": [
-    "src/engine_handlers_da.h"
+    "src/engine_handlers_da.h",
+    "src/rl_mpmsg3.c"
    ]
   },
   {

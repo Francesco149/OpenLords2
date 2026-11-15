@@ -1467,6 +1467,37 @@ int rl_4483d1(void)
     return rl_4a1a54(A4, A8);
 }
 
+/* Port of FUN_00447f44 (31 B) — action 24 (filed by message 52): a garrison placed, 0x4a79a3(occupant +4, region +8)
+ * (through rl_evq_load / rl_evq_store). */
+int rl_447f44(void)
+{
+    engine_combat_place_garrison((unsigned)A4, A8, rl_evq_load());   /* 0x4a79a3 */
+    rl_evq_store();
+    return 0;
+}
+
+/* Port of FUN_004483fb (11 B) — action 46 (filed by message 97): empty. */
+int rl_4483fb(void) { return 0; }
+
+/* Port of FUN_004470c4 (114 B) — an action filed at a due tick already past (0x447136): logs "ERR: Putting todo
+ * packet too late : todo:- " (0x4afab9, type + 1); unless type 27: the late count DAT_0051587c, the lateness sum
+ * DAT_00512f54 += tick + 1 - due, the mean DAT_00512f50 = sum / count; off the battlefield message 90 (lead += 1 / 2
+ * on every peer) to DAT_00515b28. EAX unread (0x447136 drops it). */
+extern int32_t g_rl_51587c, g_rl_512f54, g_rl_512f50, g_rl_515b28;               /* rl_render / rl_mpmsg2 / rl_mpmsg */
+int rl_4470c4(int type, int due)
+{
+    int t = (uint8_t)type;
+    rl_4afab9(P(g_rl_4d603c), 0, t + 1);
+    if (t == 27)
+        return 0;
+    ++g_rl_51587c;
+    g_rl_512f54 += g_bf_57c998[0] + 1 - due;
+    g_rl_512f50 = g_rl_512f54 / g_rl_51587c;
+    if (s_slot_0057c8fc != 2)
+        return rl_43eda0(90, g_rl_515b28);
+    return 0;
+}
+
 /* ================================================================ the last ids (no live sender in this exe)
  * docs/findings/rl-mpmsg3.md "The last ids": 0 / 98 / 99, 31, 32, 78, 79, 81 (builder), 90 (builder), 92 are empty;
  * 19 / 26 only by the window procedure's debug keys (gated shut), the rest by nothing. Exact retail semantics anyway

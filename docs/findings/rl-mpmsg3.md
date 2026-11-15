@@ -199,3 +199,13 @@ g_rl_554404, g_rl_56759c, g_rl_56845c, g_rl_57c8a8 (rl_mpmsg3_globals); g_bf_544
 Rows: 44, all HOOK_V (E8 callers of the six callees drop EAX). Static gaps (`prove_no_retail_code.py --gaps-only`):
 107 → 69 (the 38 table entries closed).
 
+
+**Forged (2026-11-15, `mp-forge1` / `mp-forge2`):** rh_net forges arriving id bytes so receivers no send site reaches
+run on live payloads. Ported with them: action 24 0x447f44 (0x4a79a3 place garrison(+4, +8) via rl_evq_load / store),
+action 46 0x4483fb (empty), and 0x4470c4 (the late-action path of 0x447136: logs "ERR: Putting todo packet too late",
+unless type 27 the late statistics DAT_0051587c / DAT_00512f54 / DAT_00512f50 and, off the battlefield, message 90 →
+lead += 1 / 2 on every peer); rl_447136 calls it by name (was an engine_retail_call seam). New global g_rl_4d603c (the
+string). Static gaps 69 → 66.
+Evidence: `verify --target wine --only '^mp-'` (39 sides) with the 47 rows: 10 reached (0x442b80, 0x442ff0, 0x443024,
+0x4444f0, 0x44692a, 0x446935, 0x446d4e, 0x447f44, 0x4483fb, 0x4470c4), 13 calls, 0 divergences; hybrid PASS.
+Unverified (never called): the other 37, incl. every builder but 90's and the callees of 65 / 80 / 89.
