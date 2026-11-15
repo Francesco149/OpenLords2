@@ -133,7 +133,7 @@ int32_t g_bf_543ff0;
 int32_t g_bf_543ff4;
 int32_t g_bf_543ff8;
 int32_t g_bf_543ffc;
-uint8_t g_bf_544030;
+uint8_t g_bf_544030[7];
 int32_t g_bf_5440a0;
 int32_t g_bf_5440d0;
 uint8_t g_bf_5440d8[0x8];

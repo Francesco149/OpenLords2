@@ -139,7 +139,7 @@ extern int32_t g_bf_543ff0;                  /* .data 0x543ff0..0x543ff4: dword_
 extern int32_t g_bf_543ff4;                  /* .data 0x543ff4..0x543ff8: dword_543FF4(w) */
 extern int32_t g_bf_543ff8;                  /* .data 0x543ff8..0x543ffc: dword_543FF8(w) */
 extern int32_t g_bf_543ffc;                  /* .data 0x543ffc..0x544000: dword_543FFC(w) */
-extern uint8_t g_bf_544030;                  /* NEIGHBOUR of g_castles_state: access it through g_castles_state (AT / BCELL8), never this block — .data 0x544030..0x544031: byte_544030(w) */
+extern uint8_t g_bf_544030[7];               /* .data 0x544030..0x544037: byte_544030(w) byte_544031..36 — builder / receiver 65's payload (rl_mpmsg3 0x479558 / 0x479738); [0]: engine_bf_setup's flag */
 extern int32_t g_bf_5440a0;                  /* .data 0x5440a0..0x5440a4: dword_5440A0(w) */
 extern int32_t g_bf_5440d0;                  /* .data 0x5440d0..0x5440d4: dword_5440D0(rw) */
 extern uint8_t g_bf_5440d8[0x8];             /* NEIGHBOUR of g_castles_state: access it through g_castles_state (AT / BCELL8), never this block — .data 0x5440d8..0x5440e0: byte_5440D8(r) byte_5440D9(rw) byte_5440DB(w) byte_5440DC(w) byte_5440DD(r) byte_5440DF(r)  DUP 5440d9 5440dc */

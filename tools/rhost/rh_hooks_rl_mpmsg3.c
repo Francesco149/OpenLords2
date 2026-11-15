@@ -28,6 +28,7 @@ enum {
     X_rl_4469bd, X_rl_4469ec, X_rl_446ab8, X_rl_446b0f,
     X_rl_43f855, X_rl_442a7f, X_rl_442aae, X_rl_44695f, X_rl_446983, X_rl_43f5c5, X_rl_47ebe8,
     X_rl_4454e7, X_rl_4455ad, X_rl_4482be,
+    X_rl_441050, X_rl_44105b, X_rl_442b18, X_rl_442b80, X_rl_442f5f, X_rl_442ff0, X_rl_44300a, X_rl_443024, X_rl_443322, X_rl_44332d, X_rl_443338, X_rl_443343, X_rl_444479, X_rl_4444f0, X_rl_444554, X_rl_4445cb, X_rl_479558, X_rl_479738, X_rl_444db9, X_rl_444dfc, X_rl_4453a3, X_rl_445407, X_rl_44603e, X_rl_446049, X_rl_446054, X_rl_44605f, X_rl_4692a7, X_rl_469370, X_rl_44606a, X_rl_4460a1, X_rl_4460d8, X_rl_4460e3, X_rl_4468a6, X_rl_4468b6, X_rl_43fa1d, X_rl_43faa4, X_rl_4468c6, X_rl_4468f3, X_rl_44692a, X_rl_446935, X_rl_4469a7, X_rl_4469b2, X_rl_446c61, X_rl_446d4e,
 };
 
 HOOK_V(rl_43e6a2, 2, rl_43e6a2(I(0), I(1)))
@@ -131,6 +132,50 @@ HOOK_V(rl_47ebe8, 0, rl_47ebe8())
 HOOK_V(rl_4454e7, 0, rl_4454e7())
 HOOK_V(rl_4455ad, 0, rl_4455ad())
 HOOK_V(rl_4482be, 0, rl_4482be())
+HOOK_V(rl_441050, 0, rl_441050())
+HOOK_V(rl_44105b, 0, rl_44105b())
+HOOK_V(rl_442b18, 0, rl_442b18())
+HOOK_V(rl_442b80, 0, rl_442b80())
+HOOK_V(rl_442f5f, 0, rl_442f5f())
+HOOK_V(rl_442ff0, 0, rl_442ff0())
+HOOK_V(rl_44300a, 0, rl_44300a())
+HOOK_V(rl_443024, 0, rl_443024())
+HOOK_V(rl_443322, 0, rl_443322())
+HOOK_V(rl_44332d, 0, rl_44332d())
+HOOK_V(rl_443338, 0, rl_443338())
+HOOK_V(rl_443343, 0, rl_443343())
+HOOK_V(rl_444479, 0, rl_444479())
+HOOK_V(rl_4444f0, 0, rl_4444f0())
+HOOK_V(rl_444554, 0, rl_444554())
+HOOK_V(rl_4445cb, 0, rl_4445cb())
+HOOK_V(rl_479558, 0, rl_479558())
+HOOK_V(rl_479738, 0, rl_479738())
+HOOK_V(rl_444db9, 0, rl_444db9())
+HOOK_V(rl_444dfc, 0, rl_444dfc())
+HOOK_V(rl_4453a3, 0, rl_4453a3())
+HOOK_V(rl_445407, 0, rl_445407())
+HOOK_V(rl_44603e, 0, rl_44603e())
+HOOK_V(rl_446049, 0, rl_446049())
+HOOK_V(rl_446054, 0, rl_446054())
+HOOK_V(rl_44605f, 0, rl_44605f())
+HOOK_V(rl_4692a7, 1, rl_4692a7(I(0)))
+HOOK_V(rl_469370, 1, rl_469370(I(0)))
+HOOK_V(rl_44606a, 0, rl_44606a())
+HOOK_V(rl_4460a1, 0, rl_4460a1())
+HOOK_V(rl_4460d8, 0, rl_4460d8())
+HOOK_V(rl_4460e3, 0, rl_4460e3())
+HOOK_V(rl_4468a6, 0, rl_4468a6())
+HOOK_V(rl_4468b6, 0, rl_4468b6())
+HOOK_V(rl_43fa1d, 0, rl_43fa1d())
+HOOK_V(rl_43faa4, 0, rl_43faa4())
+HOOK_V(rl_4468c6, 0, rl_4468c6())
+HOOK_V(rl_4468f3, 0, rl_4468f3())
+HOOK_V(rl_44692a, 0, rl_44692a())
+HOOK_V(rl_446935, 0, rl_446935())
+HOOK_V(rl_4469a7, 0, rl_4469a7())
+HOOK_V(rl_4469b2, 0, rl_4469b2())
+HOOK_V(rl_446c61, 0, rl_446c61())
+HOOK_V(rl_446d4e, 0, rl_446d4e())
 
 hook_t RH_HOOKS_RL_MPMSG3[] = {
     { "rl_43e6a2", 0x43e6a2u, (void *)w_rl_43e6a2, 0, 0, 0, 0, "" },
@@ -234,5 +279,49 @@ hook_t RH_HOOKS_RL_MPMSG3[] = {
     { "rl_4454e7", 0x4454e7u, (void *)w_rl_4454e7, 0, 0, 0, 0, "" },
     { "rl_4455ad", 0x4455adu, (void *)w_rl_4455ad, 0, 0, 0, 0, "" },
     { "rl_4482be", 0x4482beu, (void *)w_rl_4482be, 0, 0, 0, 0, "" },
+    { "rl_441050", 0x441050u, (void *)w_rl_441050, 0, 0, 0, 0, "" },
+    { "rl_44105b", 0x44105bu, (void *)w_rl_44105b, 0, 0, 0, 0, "" },
+    { "rl_442b18", 0x442b18u, (void *)w_rl_442b18, 0, 0, 0, 0, "" },
+    { "rl_442b80", 0x442b80u, (void *)w_rl_442b80, 0, 0, 0, 0, "" },
+    { "rl_442f5f", 0x442f5fu, (void *)w_rl_442f5f, 0, 0, 0, 0, "" },
+    { "rl_442ff0", 0x442ff0u, (void *)w_rl_442ff0, 0, 0, 0, 0, "" },
+    { "rl_44300a", 0x44300au, (void *)w_rl_44300a, 0, 0, 0, 0, "" },
+    { "rl_443024", 0x443024u, (void *)w_rl_443024, 0, 0, 0, 0, "" },
+    { "rl_443322", 0x443322u, (void *)w_rl_443322, 0, 0, 0, 0, "" },
+    { "rl_44332d", 0x44332du, (void *)w_rl_44332d, 0, 0, 0, 0, "" },
+    { "rl_443338", 0x443338u, (void *)w_rl_443338, 0, 0, 0, 0, "" },
+    { "rl_443343", 0x443343u, (void *)w_rl_443343, 0, 0, 0, 0, "" },
+    { "rl_444479", 0x444479u, (void *)w_rl_444479, 0, 0, 0, 0, "" },
+    { "rl_4444f0", 0x4444f0u, (void *)w_rl_4444f0, 0, 0, 0, 0, "" },
+    { "rl_444554", 0x444554u, (void *)w_rl_444554, 0, 0, 0, 0, "" },
+    { "rl_4445cb", 0x4445cbu, (void *)w_rl_4445cb, 0, 0, 0, 0, "" },
+    { "rl_479558", 0x479558u, (void *)w_rl_479558, 0, 0, 0, 0, "" },
+    { "rl_479738", 0x479738u, (void *)w_rl_479738, 0, 0, 0, 0, "" },
+    { "rl_444db9", 0x444db9u, (void *)w_rl_444db9, 0, 0, 0, 0, "" },
+    { "rl_444dfc", 0x444dfcu, (void *)w_rl_444dfc, 0, 0, 0, 0, "" },
+    { "rl_4453a3", 0x4453a3u, (void *)w_rl_4453a3, 0, 0, 0, 0, "" },
+    { "rl_445407", 0x445407u, (void *)w_rl_445407, 0, 0, 0, 0, "" },
+    { "rl_44603e", 0x44603eu, (void *)w_rl_44603e, 0, 0, 0, 0, "" },
+    { "rl_446049", 0x446049u, (void *)w_rl_446049, 0, 0, 0, 0, "" },
+    { "rl_446054", 0x446054u, (void *)w_rl_446054, 0, 0, 0, 0, "" },
+    { "rl_44605f", 0x44605fu, (void *)w_rl_44605f, 0, 0, 0, 0, "" },
+    { "rl_4692a7", 0x4692a7u, (void *)w_rl_4692a7, 0, 0, 0, 0, "" },
+    { "rl_469370", 0x469370u, (void *)w_rl_469370, 0, 0, 0, 0, "" },
+    { "rl_44606a", 0x44606au, (void *)w_rl_44606a, 0, 0, 0, 0, "" },
+    { "rl_4460a1", 0x4460a1u, (void *)w_rl_4460a1, 0, 0, 0, 0, "" },
+    { "rl_4460d8", 0x4460d8u, (void *)w_rl_4460d8, 0, 0, 0, 0, "" },
+    { "rl_4460e3", 0x4460e3u, (void *)w_rl_4460e3, 0, 0, 0, 0, "" },
+    { "rl_4468a6", 0x4468a6u, (void *)w_rl_4468a6, 0, 0, 0, 0, "" },
+    { "rl_4468b6", 0x4468b6u, (void *)w_rl_4468b6, 0, 0, 0, 0, "" },
+    { "rl_43fa1d", 0x43fa1du, (void *)w_rl_43fa1d, 0, 0, 0, 0, "" },
+    { "rl_43faa4", 0x43faa4u, (void *)w_rl_43faa4, 0, 0, 0, 0, "" },
+    { "rl_4468c6", 0x4468c6u, (void *)w_rl_4468c6, 0, 0, 0, 0, "" },
+    { "rl_4468f3", 0x4468f3u, (void *)w_rl_4468f3, 0, 0, 0, 0, "" },
+    { "rl_44692a", 0x44692au, (void *)w_rl_44692a, 0, 0, 0, 0, "" },
+    { "rl_446935", 0x446935u, (void *)w_rl_446935, 0, 0, 0, 0, "" },
+    { "rl_4469a7", 0x4469a7u, (void *)w_rl_4469a7, 0, 0, 0, 0, "" },
+    { "rl_4469b2", 0x4469b2u, (void *)w_rl_4469b2, 0, 0, 0, 0, "" },
+    { "rl_446c61", 0x446c61u, (void *)w_rl_446c61, 0, 0, 0, 0, "" },
+    { "rl_446d4e", 0x446d4eu, (void *)w_rl_446d4e, 0, 0, 0, 0, "" },
 };
 const int RH_HOOKS_RL_MPMSG3_N = sizeof RH_HOOKS_RL_MPMSG3 / sizeof *RH_HOOKS_RL_MPMSG3;

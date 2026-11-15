@@ -1466,3 +1466,401 @@ int rl_4483d1(void)
 {
     return rl_4a1a54(A4, A8);
 }
+
+/* ================================================================ the last ids (no live sender in this exe)
+ * docs/findings/rl-mpmsg3.md "The last ids": 0 / 98 / 99, 31, 32, 78, 79, 81 (builder), 90 (builder), 92 are empty;
+ * 19 / 26 only by the window procedure's debug keys (gated shut), the rest by nothing. Exact retail semantics anyway
+ * (forge scenarios feed the receivers). */
+extern uint8_t g_rl_553510[0x18];                                                /* rl_terr: the event staging record */
+extern uint8_t g_rl_4d5b10[0x30];                                                /* rl_mpmsg: the layout rows */
+extern uint8_t g_rl_553f4c[4];                                                   /* rl_mpmsg */
+#define SNAPSEL(m)    AT(int32_t, g_rl_512f60, 0x512f60u, 0x512f60 + 4 * (m))   /* DAT_00512f60[mode]: 1 / 2 */
+#define LAYOUT(r, k)  AT(int32_t, g_rl_4d5b10, 0x4d5b10u, 0x4d5b10 + 12 * (r) + 4 * (k))   /* {count, end, start} */
+#define PAIR          g_bf_544030                                                /* DAT_00544030[7]: builder 65's payload */
+#define ROSTER(p, j)  AT(int32_t, g_misc_1360, 0x53ea00u, 0x53ea00 + 80 * (p) + 4 * (j))   /* DAT_0053ea00[20 p + j] */
+#define MAPB(c, va)   AT(uint8_t, g_overworld_map, 0x522f90u, (int32_t)(va) + (int32_t)(c))  /* DAT_00522f9x[c] */
+#define FL(i, k)      g_rl_554050[3 * (i) + (k)]                                 /* DAT_00554050[3 i + k] */
+
+/* Port of FUN_00441050 (11 B) — builder 0 / 98 / 99: empty (EAX: the dispatcher's, unread). */
+int rl_441050(void) { return 0; }
+/* Port of FUN_0044105b (11 B) — receiver 0 / 98 / 99: empty. */
+int rl_44105b(void) { return 0; }
+/* Port of FUN_00443322 (11 B) — builder 31: empty. */
+int rl_443322(void) { return 0; }
+/* Port of FUN_0044332d (11 B) — receiver 31: empty. */
+int rl_44332d(void) { return 0; }
+/* Port of FUN_00443338 (11 B) — builder 32: empty. */
+int rl_443338(void) { return 0; }
+/* Port of FUN_00443343 (11 B) — receiver 32: empty. */
+int rl_443343(void) { return 0; }
+/* Port of FUN_0044603e (11 B) — builder 78: empty. */
+int rl_44603e(void) { return 0; }
+/* Port of FUN_00446049 (11 B) — receiver 78: empty. */
+int rl_446049(void) { return 0; }
+/* Port of FUN_00446054 (11 B) — builder 79: empty. */
+int rl_446054(void) { return 0; }
+/* Port of FUN_0044605f (11 B) — receiver 79: empty. */
+int rl_44605f(void) { return 0; }
+/* Port of FUN_004460d8 (11 B) — builder 81: empty. */
+int rl_4460d8(void) { return 0; }
+/* Port of FUN_0044692a (11 B) — builder 90: empty. */
+int rl_44692a(void) { return 0; }
+/* Port of FUN_004469a7 (11 B) — builder 92: empty. */
+int rl_4469a7(void) { return 0; }
+/* Port of FUN_004469b2 (11 B) — receiver 92: empty. */
+int rl_4469b2(void) { return 0; }
+
+/* Port of FUN_00442b18 (104 B) — builder 19 (a debug key): DAT_0056d690 flips 0 ↔ 1 (byte), the pause DAT_0053f238
+ * inverted (all bits) when set; both sent (1, 4). */
+int rl_442b18(void)
+{
+    g_rl_56d690[0] = g_rl_56d690[0] == 0 ? 1 : 0;
+    if (g_bf_53f238 != 0)
+        g_bf_53f238 = ~g_bf_53f238;
+    PUT(g_rl_56d690, 1);
+    return PUT(&g_bf_53f238, 4);
+}
+
+/* Port of FUN_00442b80 (45 B) — receiver 19: DAT_0056d690 (1), DAT_0053f238 (4). */
+int rl_442b80(void)
+{
+    GET(g_rl_56d690, 1);
+    return GET(&g_bf_53f238, 4);
+}
+
+/* Port of FUN_00442f5f (145 B) — builder 26 (a debug key): DAT_00553f4c steps 1 → 2 → 3 → 4 → 0, anything else → 1;
+ * sent (1). */
+int rl_442f5f(void)
+{
+    uint8_t *b = &g_rl_553f4c[0];
+    *b = *b == 1 ? 2 : *b == 2 ? 3 : *b == 3 ? 4 : *b == 4 ? 0 : 1;
+    return PUT(b, 1);
+}
+
+/* Port of FUN_00442ff0 (26 B) — receiver 26: DAT_00553f4c (1). */
+int rl_442ff0(void)
+{
+    return GET(&g_rl_553f4c[0], 1);
+}
+
+/* Port of FUN_0044300a (26 B) — builder 27: the event staging record DAT_00553510 (24). */
+int rl_44300a(void)
+{
+    return PUT(g_rl_553510, 24);
+}
+
+/* Port of FUN_00443024 (31 B) — receiver 27: the staging record (24), published into the ring (0x472df5). */
+int rl_443024(void)
+{
+    GET(g_rl_553510, 24);
+    engine_event_queue_publish_scratch(rl_evq_load());   /* 0x472df5 */
+    rl_evq_store();
+    return 0;
+}
+
+/* Port of FUN_00444479 (119 B) — builder 52: due, the siege pick's attacker DAT_0055cd58 and region DAT_0052f0a8
+ * (4 each); action 24 for us with them. */
+int rl_444479(void)
+{
+    DUE = rl_446e21(LEAD);
+    PUT(&DUE, 4);
+    PUT(&g_siege_sel_attacker, 4);
+    PUT(&g_siege_sel_region, 4);
+    return ACT(24, DUE, g_siege_sel_attacker, g_siege_sel_region, 0, 0, 0, 0, 0, 0, 0, 0);
+}
+
+/* Port of FUN_004444f0 (100 B) — receiver 52: due, the two into DAT_00569520 / DAT_00553234; action 24. */
+int rl_4444f0(void)
+{
+    GET(&RDUE, 4);
+    GET(&g_rl_569520[0], 4);
+    GET(&g_rl_553234, 4);
+    return ACT(24, RDUE, g_rl_569520[0], g_rl_553234, 0, 0, 0, 0, 0, 0, 0, 0);
+}
+
+/* Port of FUN_00444554 (119 B) — builder 53: due, the besieger DAT_00568ed0 and the siege region DAT_00554000;
+ * action 25 for us. */
+int rl_444554(void)
+{
+    DUE = rl_446e21(LEAD);
+    PUT(&DUE, 4);
+    PUT(&g_siege_besieger, 4);
+    PUT(&g_siege_region, 4);
+    return ACT(25, DUE, g_siege_besieger, g_siege_region, 0, 0, 0, 0, 0, 0, 0, 0);
+}
+
+/* Port of FUN_004445cb (100 B) — receiver 53: as receiver 52, action 25. */
+int rl_4445cb(void)
+{
+    GET(&RDUE, 4);
+    GET(&g_rl_569520[0], 4);
+    GET(&g_rl_553234, 4);
+    return ACT(25, RDUE, g_rl_569520[0], g_rl_553234, 0, 0, 0, 0, 0, 0, 0, 0);
+}
+
+/* Port of FUN_00479558 (480 B) — builder 65's payload: two battlefield groups packed from the cursor DAT_00522f80
+ * (its low byte → DAT_00544030). A live group (+0): it and the next each 3 bytes (→ DAT_00544031 / 34) of
+ * ((((+0x13 << 7) + +0x22) << 7) + +0x24) << 9) + +0x14 (a byte, signed words), the cursor += 2. A dead one: up to
+ * 80 steps on (wrapping 81 → 1) to the next live group (→ the cursor); each dead one passed is cleared (0x46ebae)
+ * and its index left in DAT_00544031; DAT_00544032..36 = 0xff. EAX unread. */
+int rl_479558(void)
+{
+    int g = g_rl_522f80;
+    PAIR[0] = (uint8_t)g;
+    if (BG8(g, 0x566520) != 0) {
+        for (int n = 0; n < 2; n++, g++) {
+            uint32_t v = BG8(g, 0x566533);
+            v = (v << 7) + (uint32_t)(int32_t)BG16(g, 0x566542);
+            v = (v << 7) + (uint32_t)(int32_t)BG16(g, 0x566544);
+            v = (v << 9) + (uint32_t)(int32_t)BG16(g, 0x566534);
+            CPY(&v, &PAIR[1 + 3 * n], 3);
+        }
+        g_rl_522f80 += 2;
+        return 0;
+    }
+    for (int i = 0; i < 80; i++) {
+        if (++g >= 81)
+            g = 1;
+        if (BG8(g, 0x566520) != 0) {
+            g_rl_522f80 = g;
+            break;
+        }
+        bf_46ebae(P(&BG8(g, 0x566520)));
+        PAIR[1] = (uint8_t)g;
+    }
+    for (int k = 2; k < 7; k++)
+        PAIR[k] = 0xff;
+    return 0;
+}
+
+/* Port of FUN_00479738 (522 B) — receiver 65's unpacking: group DAT_00544030; DAT_00544032 / 33 both 0xff → that
+ * group cleared (0x46ebae); else it and the next from DAT_00544031 / 34: bits 9..15 → +0x24, 16..22 → +0x22, 23 →
+ * +0x13 (bits 0..8, the sender's +0x14, are masked and dropped: a quirk). EAX unread. */
+int rl_479738(void)
+{
+    int g = PAIR[0];
+    if (PAIR[2] == 0xff && PAIR[3] == 0xff) {
+        bf_46ebae(P(&BG8(g, 0x566520)));
+        return 0;
+    }
+    for (int n = 0; n < 2; n++, g++) {
+        uint32_t v = 0;
+        CPY(&PAIR[1 + 3 * n], &v, 3);
+        BG16(g, 0x566544) = (int16_t)((v & 0xfe00u) >> 9);
+        BG16(g, 0x566542) = (int16_t)((v & 0x7f0000u) >> 16);
+        BG8(g, 0x566533) = (uint8_t)((v & 0x800000u) >> 23);
+    }
+    return 0;
+}
+
+/* Port of FUN_00444db9 (67 B) — builder 65: only the host (DAT_00553248) on the battlefield (DAT_0057c8fc == 2):
+ * 0x479558, the 7 bytes DAT_00544030. */
+int rl_444db9(void)
+{
+    if (g_rl_553248 == 0 || s_slot_0057c8fc != 2)
+        return 0;
+    rl_479558();
+    return PUT(PAIR, 7);
+}
+
+/* Port of FUN_00444dfc (67 B) — receiver 65: only a guest on the battlefield: the 7 bytes, 0x479738. */
+int rl_444dfc(void)
+{
+    if (g_rl_553248 != 0 || s_slot_0057c8fc != 2)
+        return 0;
+    GET(PAIR, 7);
+    return rl_479738();
+}
+
+/* Port of FUN_004453a3 (100 B) — builder 68: the local player, due (4 each); action 35 for us. */
+int rl_4453a3(void)
+{
+    DUE = rl_446e21(LEAD);
+    PUT(&s_slot_0057c8cc, 4);
+    PUT(&DUE, 4);
+    return ACT(35, DUE, LOCAL, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+}
+
+/* Port of FUN_00445407 (81 B) — receiver 68: the sender, due; action 35 for the sender. */
+int rl_445407(void)
+{
+    GET(&s_slot_0056d5cc, 4);
+    GET(&RDUE, 4);
+    return ACT(35, RDUE, OTHER, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+}
+
+/* Port of FUN_004692a7 (201 B; IDA's __usercall EAX is scratch: one stack arg) — gather realm `p`'s 20 roster cells
+ * (DAT_0053ea00[20 p + j]; 0 = none → zeros): the map descriptor bytes +0 / +3 / +2 of each into DAT_00554050[3 j]
+ * +0 / +1 / +2. EAX unread. */
+int rl_4692a7(int p)
+{
+    for (int i = 0; i < 20; i++)
+        FL(i, 0) = FL(i, 1) = FL(i, 2) = 0;
+    for (int j = 0; j < 20; j++) {
+        int c = ROSTER(p, j);
+        if (c == 0)
+            continue;
+        FL(j, 0) = MAPB(c, 0x522f90);
+        FL(j, 1) = MAPB(c, 0x522f93);
+        FL(j, 2) = MAPB(c, 0x522f92);
+    }
+    return 0;
+}
+
+/* Port of FUN_00469370 (188 B; one stack arg as 0x4692a7) — scatter them back for realm `p`; a cell whose realm's
+ * army record byte DAT_0053f9b5[768 p] is the local player gets +2 |= 0x20. EAX unread. */
+int rl_469370(int p)
+{
+    for (int i = 0; i < 20; i++) {
+        int c = ROSTER(p, i);
+        if (c == 0)
+            continue;
+        MAPB(c, 0x522f90) = FL(i, 0);
+        MAPB(c, 0x522f93) = FL(i, 1);
+        MAPB(c, 0x522f92) = FL(i, 2);
+        if ((int)AT(uint8_t, g_per_army_768, 0x53f9b0u, 0x53f9b5 + 768 * p) == LOCAL)
+            MAPB(c, 0x522f92) |= 0x20;
+    }
+    return 0;
+}
+
+/* Port of FUN_0044606a (55 B) — builder 80: 0x4692a7(DAT_0059154c); DAT_0059154c (4), DAT_00554050 (60). */
+int rl_44606a(void)
+{
+    rl_4692a7(D59154C);
+    PUT(&D59154C, 4);
+    return PUT(g_rl_554050, 60);
+}
+
+/* Port of FUN_004460a1 (55 B) — receiver 80: the realm (4, a local), DAT_00554050 (60); 0x469370(realm). */
+int rl_4460a1(void)
+{
+    int p;
+    GET(&p, 4);
+    GET(g_rl_554050, 60);
+    return rl_469370(p);
+}
+
+/* Port of FUN_004460e3 (21 B) — receiver 81: DAT_0058fe10 = 1. */
+int rl_4460e3(void)
+{
+    g_rl_58fe10 = 1;
+    return 0;
+}
+
+/* Port of FUN_004468a6 (16 B) — builder 88: 0x43fd2a (IDA's EAX arg is bogus: a plain call). */
+int rl_4468a6(void)
+{
+    return rl_43fd2a();
+}
+
+/* Port of FUN_004468b6 (16 B) — receiver 88: 0x43fd2a. */
+int rl_4468b6(void)
+{
+    return rl_43fd2a();
+}
+
+/* Port of FUN_0043fa1d (89 B) — DAT_0056759c = the selected snapshot (DAT_005158d0[2 mode] when DAT_00512f60[mode]
+ * is 1, else d4) + 200 × DAT_0053e978. EAX: 200 × DAT_0053e978. */
+int rl_43fa1d(void)
+{
+    int m = (int)s_slot_0057c8fc;
+    g_rl_56759c = SNAPSEL(m) == 1 ? SNAP_A(m) : SNAP_B(m);
+    g_rl_56759c += 200 * g_rl_53e978;
+    return 200 * g_rl_53e978;
+}
+
+/* Port of FUN_0043faa4 (436 B) — compare the snapshot pair: DAT_0056845c = 0; only with DAT_0053e978 == 399: the
+ * selected one copied over the units (0x554630, 0x8700), the other over 0x522f50 (0x8700: rl-mpmsg3.md quirk 12),
+ * then the layout rows (1..3, battle 4..6, in DAT_0057c8a8) walked as 0x43fd2a does; the first differing byte →
+ * DAT_00554404 = record, DAT_0056845c = offset. EAX unread. */
+int rl_43faa4(void)
+{
+    int m = (int)s_slot_0057c8fc;
+    const uint8_t *a, *b;
+    if (SNAPSEL(m) == 1) {
+        a = (const uint8_t *)(uintptr_t)SNAP_A(m);
+        b = (const uint8_t *)(uintptr_t)SNAP_B(m);
+    } else {
+        a = (const uint8_t *)(uintptr_t)SNAP_B(m);
+        b = (const uint8_t *)(uintptr_t)SNAP_A(m);
+    }
+    g_rl_56845c = 0;
+    if (g_rl_53e978 != 399)
+        return 0;
+    rl_4b3d5d(P(a), P(&AT(uint8_t, g_per_battle_hex_432, 0x554480u, 0x554630)), 0x8700);
+    rl_4b3d5d(P(b), P(g_overworld_map) + (0x522f50 - 0x522f90), 0x8700);   /* 0x40 below the map: a quirk */
+    for (int i = 1; i < 4; i++) {
+        g_rl_57c8a8 = s_slot_0057c8fc != 0 ? i + 3 : i;
+        int r = g_rl_57c8a8;
+        for (int j = 1; LAYOUT(r, 0) > j; j++) {
+            a += LAYOUT(r, 2);
+            b += LAYOUT(r, 2);
+            for (int k = LAYOUT(r, 2); LAYOUT(r, 1) > k; k++, a++, b++)
+                if (*b != *a) {
+                    g_rl_554404 = j;
+                    g_rl_56845c = k;
+                    return k;
+                }
+        }
+    }
+    return 0;
+}
+
+/* Port of FUN_004468c6 (45 B) — builder 89: the record index DAT_0053e978 (4), 200 bytes at DAT_0056759c. */
+int rl_4468c6(void)
+{
+    PUT(&g_rl_53e978, 4);
+    return PUT(g_rl_56759c, 200);
+}
+
+/* Port of FUN_004468f3 (55 B) — receiver 89: the index (4), 0x43fa1d (the pointer into our snapshot), the 200 bytes
+ * there, 0x43faa4. */
+int rl_4468f3(void)
+{
+    GET(&g_rl_53e978, 4);
+    rl_43fa1d();
+    GET(g_rl_56759c, 200);
+    return rl_43faa4();
+}
+
+/* Port of FUN_00446935 (42 B) — receiver 90: the builders' lead DAT_00544094 += 2 on a slow link (DAT_00553264),
+ * else += 1. */
+int rl_446935(void)
+{
+    if (g_rl_553264 != 0)
+        LEAD += 2;
+    else
+        ++LEAD;
+    return 0;
+}
+
+/* Port of FUN_00446c61 (237 B) — builder 97: 0x479276(local); the packed due tick / local player 4, our
+ * DAT_0053e930 row 10, DAT_0059154c 2; action 46 for us (local, DAT_0059154c), the row into the record. */
+int rl_446c61(void)
+{
+    rl_479276(LOCAL);
+    DUE = rl_446e21(LEAD);
+    CPY(&DUE, g_rl_512f9c, 3);
+    CPY(&s_slot_0057c8cc, &g_rl_512f9c[3], 1);
+    PUT(g_rl_512f9c, 4);
+    PUT(NAME10(LOCAL), 10);
+    PUT(&D59154C, 2);
+    ACT(46, DUE, LOCAL, D59154C, 0, 0, 0, 0, 0, 0, 0, 0);
+    return CPY(NAME10(LOCAL), DANAME(g_rl_515b24), 10);
+}
+
+/* Port of FUN_00446d4e (211 B) — receiver 97: the packed due tick / sender (3 + 1 bytes into DAT_00542cc0 /
+ * DAT_0056d5cc, their high bytes kept: not zeroed first), the sender's row 10, a word (2, zero-extended); action 46
+ * filed at the BUILDER's due DAT_00553e70 (a quirk), the row into the record. */
+int rl_446d4e(void)
+{
+    int w = 0;
+    GET(g_rl_512f9c, 4);
+    CPY(g_rl_512f9c, &RDUE, 3);
+    CPY(&g_rl_512f9c[3], &s_slot_0056d5cc, 1);
+    GET(NAME10(OTHER), 10);
+    GET(&w, 2);
+    ACT(46, DUE, OTHER, w, 0, 0, 0, 0, 0, 0, 0, 0);
+    return CPY(NAME10(OTHER), DANAME(g_rl_515b24), 10);
+}

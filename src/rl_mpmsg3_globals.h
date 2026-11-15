@@ -16,3 +16,10 @@ extern uint8_t g_rl_4d6004[0x10];            /* .data 0x4d6004..0x4d6014: aSva_3
 extern uint8_t g_rl_4d60f8[0x10];            /* .data 0x4d60f8..0x4d6108: aSva_5(o) aSvb_5(o) aSva_6(o) aSvb_6(o)  DUP 4d60f8 */
 extern uint8_t g_rl_53f0b0[12];              /* .data 0x53f0b0..0x53f0bc: unk_53F0B0(o) */
 extern int32_t g_rl_5691e4[3];               /* .data 0x5691e4..0x5691f0: dword_5691E4(o)  DUP 5691e4 */
+extern int32_t g_rl_522f80;                  /* .data 0x522f80..0x522f84: dword_522F80(rw) — builder 65's group cursor (0x479558) */
+extern int32_t g_rl_53e978;                  /* .data 0x53e978..0x53e97c: dword_53E978(rw) — message 89's snapshot record index */
+extern uint8_t g_rl_554050[60];              /* .data 0x554050..0x55408c: byte_554050(rw) byte_554051(rw) byte_554052(rw) — message 80's 20 × 3 map bytes */
+extern int32_t g_rl_554404;                  /* .data 0x554404..0x554408: dword_554404(w) — 0x43faa4's first differing record */
+extern int32_t g_rl_56759c;                  /* .data 0x56759c..0x5675a0: dword_56759C(rw) — message 89's pointer into the snapshot */
+extern int32_t g_rl_56845c;                  /* .data 0x56845c..0x568460: dword_56845C(w) — 0x43faa4's first differing offset */
+extern int32_t g_rl_57c8a8;                  /* .data 0x57c8a8..0x57c8ac: dword_57C8A8(w) — 0x43faa4's layout row */

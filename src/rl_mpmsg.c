@@ -155,6 +155,11 @@ static const mp_fn k_mp_build[100] = {
     [93] = MPF(4469bd), [94] = MPF(446ab8),   /* mp-skrpick */
     [16] = MPF(442a7f), [91] = MPF(44695f),   /* mp-desync */
     [70] = MPF(4454e7),                       /* mp-price */
+    /* the ids with no live sender in this exe (docs/findings/rl-mpmsg3.md "The last ids") */
+    [0] = MPF(441050), [98] = MPF(441050), [99] = MPF(441050), [19] = MPF(442b18), [26] = MPF(442f5f), [27] = MPF(44300a),
+    [31] = MPF(443322), [32] = MPF(443338), [52] = MPF(444479), [53] = MPF(444554), [65] = MPF(444db9), [68] = MPF(4453a3),
+    [78] = MPF(44603e), [79] = MPF(446054), [80] = MPF(44606a), [81] = MPF(4460d8), [88] = MPF(4468a6), [89] = MPF(4468c6),
+    [90] = MPF(44692a), [92] = MPF(4469a7), [97] = MPF(446c61),
 };
 static const mp_fn k_mp_recv[100] = {
     [1] = MPF(4410bd), [2] = MPF(4412cc), [3] = MPF(44164d), [4] = MPF(4419f9), [5] = MPF(441b86), [6] = MPF(441e1f),
@@ -175,6 +180,10 @@ static const mp_fn k_mp_recv[100] = {
     [93] = MPF(4469ec), [94] = MPF(446b0f),   /* mp-skrpick */
     [16] = MPF(442aae), [91] = MPF(446983),   /* mp-desync */
     [70] = MPF(4455ad),                       /* mp-price */
+    [0] = MPF(44105b), [98] = MPF(44105b), [99] = MPF(44105b), [19] = MPF(442b80), [26] = MPF(442ff0), [27] = MPF(443024),
+    [31] = MPF(44332d), [32] = MPF(443343), [52] = MPF(4444f0), [53] = MPF(4445cb), [65] = MPF(444dfc), [68] = MPF(445407),
+    [78] = MPF(446049), [79] = MPF(44605f), [80] = MPF(4460a1), [81] = MPF(4460e3), [88] = MPF(4468b6), [89] = MPF(4468f3),
+    [90] = MPF(446935), [92] = MPF(4469b2), [97] = MPF(446d4e),
 };
 extern int32_t g_rl_4d57f0[100];   /* rl_glue: retail's builder table */
 

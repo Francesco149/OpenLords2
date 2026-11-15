@@ -1788,7 +1788,7 @@ int bf_4778a0(void)
         engine_retail_call(0x43fd2au, 0);
     }
     int r = bf_43f304();
-    g_bf_544030 = 1;
+    g_bf_544030[0] = 1;
     return r;
 }
 

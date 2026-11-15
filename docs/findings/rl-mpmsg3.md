@@ -79,7 +79,7 @@ now calling rl_43e6a2 by name).
 **19 / 26 are dead in this exe** (2026-11-15): their only send sites are the window procedure's F6 (VK 0x75: 19 if DAT_0053f684 != 0) and F7 (0x76: 26 if == 1); DAT_0053f684 is BSS and written only 0 (WinMain 0x40eaf9, 0x4975fb), in no save block, no pointer to it — the debug gate is compiled shut. The pairs are debug toggles: 19 = builder 0x442b18 flips byte_56D690 (rl_render's per-record checksum overlay) and "unpauses" DAT_0053f238 with `not`, receiver 0x442b80 copies both; 26 = builder 0x442f5f steps byte_553F4C 0→1→2→3→4→0 (read nowhere), receiver 0x442ff0 copies it.
 **Resend forced is dead too**: 0x43eac1's DAT_0055ce68 arm — the dword is only decremented there, never set.
 
-**Ids with no port (2026-11-15, after `mp-desync`):** builders / receivers of 19, 26 (dead, above), 90 (a late action,
+**Ids with no port (2026-11-15, after `mp-desync`; all ported since: §The last ids):** builders / receivers of 19, 26 (dead, above), 90 (a late action,
 0x4470c4: unreachable through lag — retail's tick pacing, multiplayer-rhost.md §Desync). **81 is dead in this exe**: the
 join's fourth dword (receiver 1 0x4410bd's "shield" test, 1 or 2 → DAT_005bb4a0) is DAT_005c9a74, which 0x4aef7e
 leaves 1 on every path (rl-host.md quirk 4: the GOG build's patched CD check) — every joiner unlocks the 3+ player
@@ -117,6 +117,17 @@ rows for 0x43b622 / 0x43be65 / 0x49cf20 / 0x437535 (through rl_evq_load / rl_evq
    quirk 3): player 2 writes DAT_005533e8.
 7. Action 23 toggles 1..3 with "== 1 ? 0 : 1" (any other value → 1) but 4 (DAT_0053f284) with "== 0 ? 1 : 0".
 8. Message 25's builder sets DAT_0057c90c = 46, its receiver does not.
+10. Receiver 97 (0x446d4e) files action 46 at DAT_00553e70 (the builder's last due tick), not at the due tick it
+   just read into DAT_00542cc0; it copies the 3 + 1 packed bytes over DAT_00542cc0 / DAT_0056d5cc without zeroing
+   them first (receiver 66 zeroes), so their high bytes survive.
+11. Receiver 65's unpacking 0x479738 masks bits 0..8 (builder 0x479558's group +0x14) and drops them: +0x14 is never
+    restored. The builder's 3-byte field keeps only bit 0 of +0x13 (bit 23); signed words can carry into the next field.
+12. 0x43faa4 (receiver 89, DAT_0053e978 == 399) copies 0x8700 bytes of the other snapshot to 0x522da0 + 0x1b0 =
+    0x522f50: 0x40 below the map table DAT_00522f90 and 0x6c0 past its end (over DAT_0052af94 …). rhost: identical
+    (retail layout); the standalone writes outside g_overworld_map. 0x43faa4 / 0x43fd2a also read layout rows 4..6
+    past the 0x30-byte DAT_004d5b10 block.
+13. 0x469370 (receiver 80) indexes the army records DAT_0053f9b5[768 p] and the roster DAT_0053ea00[20 p] with the
+    received realm unbounded; the map bytes by the roster's raw cell value.
 
 ## Evidence
 
@@ -159,3 +170,32 @@ realm +0x81 (the ally byte and the three after it); the receiver passes the whol
 builder's own action takes the byte — equal while +0x82..+0x84 are 0.
 Evidence: rhost shadow 5 rows (0x4454e7 / 0x4455ad / 0x4482be + 0x4367ff / 0x4a1b29), mp-price 2/2: 9 calls, 0
 divergences; replace: hybrid PASS; standalone 2/2 = pure retail; det 0 dwords; Windows ≡ wine.
+
+## The last ids (2026-11-15)
+
+Every id of the tables now has a port; k_mp_build / k_mp_recv cover 0..99 (the engine_retail_call fallback is dead).
+
+| id | builder / receiver | payload, effect |
+|---|---|---|
+| 0, 98, 99 | 0x441050 / 0x44105b | empty |
+| 31, 32, 78, 79, 92 | 0x443322 / 0x44332d, 0x443338 / 0x443343, 0x44603e / 0x446049, 0x446054 / 0x44605f, 0x4469a7 / 0x4469b2 | empty |
+| 19 | 0x442b18 / 0x442b80 | DAT_0056d690 flipped 0 ↔ 1 (1), the pause DAT_0053f238 `not`-ed when set (4) |
+| 26 | 0x442f5f / 0x442ff0 | DAT_00553f4c 1 → 2 → 3 → 4 → 0, else → 1 (1) |
+| 27 | 0x44300a / 0x443024 | the event staging record DAT_00553510 (24); receiver publishes it (0x472df5, via rl_evq_load / store) |
+| 52 | 0x444479 / 0x4444f0 | due, DAT_0055cd58, DAT_0052f0a8 → DAT_00569520 / DAT_00553234; action 24 |
+| 53 | 0x444554 / 0x4445cb | due, DAT_00568ed0, DAT_00554000 → the same; action 25 |
+| 65 | 0x444db9 / 0x444dfc | host only / guest only, battlefield: 2 groups packed (0x479558) into DAT_00544030 (7) → unpacked (0x479738) |
+| 68 | 0x4453a3 / 0x445407 | player, due; action 35 |
+| 80 | 0x44606a / 0x4460a1 | realm DAT_0059154c (4), its 20 roster cells' map bytes DAT_00554050 (60): gather 0x4692a7 / scatter 0x469370 |
+| 81 | 0x4460d8 / 0x4460e3 | empty / DAT_0058fe10 = 1 |
+| 88 | 0x4468a6 / 0x4468b6 | 0x43fd2a (no payload; IDA's EAX arg is bogus) |
+| 89 | 0x4468c6 / 0x4468f3 | record DAT_0053e978 (4), 200 B at DAT_0056759c; receiver points it into our snapshot (0x43fa1d), compares (0x43faa4) |
+| 90 | 0x44692a / 0x446935 | empty / the lead DAT_00544094 += 2 (slow link DAT_00553264) or 1 |
+| 97 | 0x446c61 / 0x446d4e | packed due / player, the DAT_0053e930 row, DAT_0059154c (2); action 46 (quirk 10) |
+
+Callees ported with them (no other caller): 0x479558, 0x479738, 0x4692a7, 0x469370 (one stack arg each of the last
+two; IDA's __usercall EAX is scratch), 0x43fa1d, 0x43faa4. New globals: g_rl_522f80, g_rl_53e978, g_rl_554050[60],
+g_rl_554404, g_rl_56759c, g_rl_56845c, g_rl_57c8a8 (rl_mpmsg3_globals); g_bf_544030 widened to [7]. Quirks 10–13.
+Rows: 44, all HOOK_V (E8 callers of the six callees drop EAX). Static gaps (`prove_no_retail_code.py --gaps-only`):
+107 → 69 (the 38 table entries closed).
+
