@@ -5,14 +5,14 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 788,
-  "ported": 1072,
-  "unported": 587,
+  "ported": 1076,
+  "unported": 583,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 1860,
-  "pct_touched": 76.0,
+  "touched": 1864,
+  "pct_touched": 76.2,
   "pct_tested": 32.2,
   "bytes_total": 838629,
-  "bytes_touched": 706043,
+  "bytes_touched": 706323,
   "pct_bytes_touched": 84.2
  },
  "orphan_refs": [
@@ -9614,16 +9614,20 @@
    "name": "FUN_004436bb",
    "size": 62,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg3.c"
+   ]
   },
   {
    "va": "0x4436f9",
    "name": "FUN_004436f9",
    "size": 79,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg3.c"
+   ]
   },
   {
    "va": "0x443748",
@@ -10002,16 +10006,20 @@
    "name": "FUN_00444915",
    "size": 51,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg3.c"
+   ]
   },
   {
    "va": "0x444948",
    "name": "FUN_00444948",
    "size": 88,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_mpmsg3.c"
+   ]
   },
   {
    "va": "0x4449a0",

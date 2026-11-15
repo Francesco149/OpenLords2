@@ -1,9 +1,9 @@
 # rl mpmsg3 — the MP message layer's remaining builders / receivers, 15 more delayed-action handlers (2026-11-14)
 
-Partition `mpmsg3` of family `rl` (`tools/bf/parts.py`; design: `battlefield-sim-port.md`): 83 functions — 33 payload
-builders and their 33 receivers (send table 0x4d57f0 / receive table 0x4d5980, ids below), 15 delayed-action
+Partition `mpmsg3` of family `rl` (`tools/bf/parts.py`; design: `battlefield-sim-port.md`): 87 functions — 35 payload
+builders and their 35 receivers (send table 0x4d57f0 / receive table 0x4d5980, ids below), 15 delayed-action
 handlers (table 0x4d5c98), the DirectPlay system-event logger 0x43e6a2 and its session fallback 0x43e8f4.
-`src/rl_mpmsg3.c`, rows `tools/rhost/rh_hooks_rl_mpmsg3.c`, globals `src/rl_mpmsg3_globals.{h,c}` (generated). All 83
+`src/rl_mpmsg3.c`, rows `tools/rhost/rh_hooks_rl_mpmsg3.c`, globals `src/rl_mpmsg3_globals.{h,c}` (generated). All 87
 ported; the pending file is empty. The protocol (0x43eda0 → builder, 0x43eac1 → receiver, 0x447136 → 0x4472ce →
 handler, the due tick 0x446e21): `rl-mpmsg2.md`. Transport / scenarios: `multiplayer-rhost.md`.
 
@@ -24,6 +24,7 @@ Both sides file the same action with the same due tick (builder for us, receiver
 | 33 | 0x44334e | 0x44338b | DAT_0057c93c 1, DAT_005530b8 1 | both: 0x43a997 |
 | 36 | 0x44356d | 0x443587 | local player 4 | receiver: the sender leaves (realm +4 = 0, aux +0x26 = 1) |
 | 37 | 0x4435ce | 0x44363b | DAT_0057c93c 1, DAT_0053e9a0 1, DAT_0053e9ec 1, DAT_0057c988 2 | both: 0x439b52(…, b − 1, b − 1, w) |
+| 38 | 0x4436bb | 0x4436f9 | county DAT_0057c93c 1, category DAT_0053f0d8 1 | both: 0x439edb(county, category − 1) at once (the workforce grid's double-click; mp-labor, 2026-11-15) |
 | 45 | 0x443e51 | 0x443f09 | due, player, DAT_00553074, DAT_0053f080, DAT_00568d98 (4 each), troop row 128 | action 18 |
 | 46 | 0x443fab | 0x44400f | due, DAT_0053e904 | action 19 |
 | 50 | 0x444346 | 0x4443aa | due, DAT_0059154c | action 23 |
@@ -31,6 +32,7 @@ Both sides file the same action with the same due tick (builder for us, receiver
 | 55 | 0x44470a | 0x44475c | besieger DAT_00568ed0, DAT_00544090, DAT_00567d08 | both: 0x43b7c4 at once |
 | 56 | 0x4447ab | 0x44480f | due, besieger | action 36 |
 | 57 | 0x444860 | 0x4448c4 | due, besieger | action 37 |
+| 58 | 0x444915 | 0x444948 | county DAT_0057c93c 1, task DAT_0055416c 1 | sender: 0x43d309 already ran (0x43ce1a); receiver: 0x43d309(them); both DAT_0052afcc = 1 (mp-labor) |
 | 61 | 0x444b07 | 0x444b17 | none | both: AUTO_RESOLVE 0x43b622 |
 | 62 | 0x444b27 | 0x444bd0 | due, player, DAT_005653f4 | both: unpause; action 39 |
 | 63 | 0x444c66 | 0x444cb5 | none | both: unpause; battle (DAT_0057c8fc == 2) → its end 0x43be65 |
@@ -69,6 +71,12 @@ Both sides file the same action with the same due tick (builder for us, receiver
 0x43e6a2(kind, dpid): logs "OK :DP netsys - …" (strings 0x4d5d70..) for kinds 0..8; kind 2 (player deleted) and 4
 (host) act (the function comment in `src/rl_mpmsg3.c`). Callers: 0x4b8c3a's DirectPlay receive loop (rl_io's port,
 now calling rl_43e6a2 by name).
+
+**Ids with no port (2026-11-15):** builders / receivers of 16, 19, 26 (wndproc only), 70 (the type-10 "pay the price"
+popup), 81 (a refused join), 90 (a late action, 0x4470c4), 91 (three hash mismatches, 0x440666 → 0x43f5c5 sends 16),
+93 / 94 (a user-map pick in the MP skirmish setup, 0x434174 / its receiver 0x4469ec); **dead** (no reference in the
+exe: no call, no pointer): 52's / 53's senders 0x4a7948 / 0x4a7daf, 89's 0x43f939 / 0x43f9c3; no send site at all: 27,
+31, 32, 65, 68, 78, 79, 80, 88, 92, 97 (98 / 99 / 0 = the empty pair 0x441050 / 0x44105b).
 
 ## Rows
 

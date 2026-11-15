@@ -30,6 +30,7 @@ extern int32_t g_rl_53e904[2], g_rl_53f080, g_rl_544090, g_rl_567d08, g_rl_568d9
 extern uint8_t g_rl_53f5fc[0x44];                                                /* rl_skirmish */
 extern int32_t g_rl_5440bc, g_rl_5533e0[2], g_rl_55cd34, g_rl_56899c, g_rl_55ce94;   /* rl_skirmish */
 extern int32_t g_rl_553234, g_rl_569520[4];                                      /* rl_mpmsg2 */
+extern int32_t g_rl_53f0d8, g_rl_55416c;                                         /* rl_ctl: grid category, task */
 
 #define P(x)          ((int)(uintptr_t)(x))
 #define PUT(x, n)     rl_4401ba(P(x), (n))     /* append n bytes at DAT_00512f8c */
@@ -377,6 +378,48 @@ int rl_44363b(void)
     GET(&b, 1);
     GET(&c, 2);
     return rl_439b52(g_rl_553234, a - 1, b - 1, c);
+}
+
+/* Port of FUN_004436bb (62 B) — builder 38 (the workforce grid's double-click, 0x439df0 in MP): the selected county
+ * DAT_0057c93c 1, the category DAT_0053f0d8 1; both: 0x439edb(county, category − 1) at once. */
+int rl_4436bb(void)
+{
+    PUT(&s_slot_0057c93c, 1);
+    PUT(&g_rl_53f0d8, 1);
+    return rl_439edb((int)s_slot_0057c93c, g_rl_53f0d8 - 1);
+}
+
+/* Port of FUN_004436f9 (79 B) — receiver 38: DAT_00553234 (zeroed) 1, a zeroed local 1; 0x439edb(them, b − 1). */
+int rl_4436f9(void)
+{
+    int v = 0;
+    g_rl_553234 = 0;
+    GET(&g_rl_553234, 1);
+    GET(&v, 1);
+    return rl_439edb(g_rl_553234, v - 1);
+}
+
+/* Port of FUN_00444915 (51 B) — builder 58 (a map click on an own county's task site, 0x43ce1a in MP, after its own
+ * 0x43d309): DAT_0057c93c 1, the task DAT_0055416c 1; DAT_0052afcc = 1. EAX: the last append's. */
+int rl_444915(void)
+{
+    PUT(&s_slot_0057c93c, 1);
+    int r = PUT(&g_rl_55416c, 1);
+    g_combat_render_dirty = 1;
+    return r;
+}
+
+/* Port of FUN_00444948 (88 B) — receiver 58: DAT_00553234 (zeroed) 1, a zeroed local 1; 0x43d309(them, task);
+ * DAT_0052afcc = 1. */
+int rl_444948(void)
+{
+    int v = 0;
+    g_rl_553234 = 0;
+    GET(&g_rl_553234, 1);
+    GET(&v, 1);
+    int r = rl_43d309(g_rl_553234, v);
+    g_combat_render_dirty = 1;
+    return r;
 }
 
 /* Port of FUN_00443e51 (184 B) — builder 45: due, the local player, DAT_00553074, DAT_0053f080, DAT_00568d98 (4
