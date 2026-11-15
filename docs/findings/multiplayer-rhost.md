@@ -226,3 +226,14 @@ size packet"); p2 `forge 10 2 85 1 crc` ("ERR:Bad packet CRC" — the corpus alr
 resend countdown and counts DAT_0055326c; the copies / resends deliver the message and the ticks stay in step to
 f10000. Not reachable: the forced-resend arm (DAT_0055ce68 is never set), an unknown sender (0x43e98b → 0: the
 broker only carries joined players' frames), slot 6.
+
+## Forged ids: the receivers no send site reaches (2026-11-15: `mp-forge1`)
+
+0x440038's checksum covers the payload only, so `forge ID 0 (ID ^ NEW) 1` turns an arriving message into id NEW with
+the carrier's payload intact; when the sizes (0x4d5b90) match, 0x43eac1 accepts it and NEW's receiver runs on a live
+payload. The carrier is lost to the receiver (all its copies are forged). `mp-forge1` (mp-play re-fed): p2's lobby
+76 (seq 1, 12 B) → 52, p2's 30 (5 B) → 19, p2's 22 (1 B) → 26, p1's 8 (16 B) → 97. Receiver 52 files action 24 with a
+due tick from 76's bytes, already past → 0x4470c4 → message 90 (0x44692a / 0x446935) to p1; handlers 24 (0x447f44)
+and 46 (0x4483fb, from 97) run. The sides drift (lost 30 / 22 / 8) but run to f14300; det 0, Windows ≡ wine.
+Carriers that break the game: 4 (the start data: p2 crashed in receiver 10, 0x4423ad), 77 (both sides wait at the
+game start). No live carrier has 80's 64 B or 89's 204 B; 65's receiver acts only in the battle (DAT_0057c8fc == 2).
