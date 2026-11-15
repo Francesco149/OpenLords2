@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **1875** (76.6%) — tested 788, ported 1087
-- code bytes touched: **84.4%** (708,016 / 838,629 B)
-- unported: **572**
+- touched: **1878** (76.7%) — tested 788, ported 1090
+- code bytes touched: **84.5%** (708,386 / 838,629 B)
+- unported: **569**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (788) — ported + host unit suite
@@ -810,7 +810,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (1087) — reimplemented, no host test yet
+## ported (1090) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -1307,6 +1307,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4451cc | FUN_004451cc | 471 | rl_mpmsg3.c |
 | 0x445458 | FUN_00445458 | 81 | rl_mpmsg3.c |
 | 0x4454a9 | FUN_004454a9 | 62 | rl_mpmsg3.c |
+| 0x4454e7 | FUN_004454e7 | 198 | rl_mpmsg3.c |
+| 0x4455ad | FUN_004455ad | 129 | rl_mpmsg3.c |
 | 0x44562e | FUN_0044562e | 147 | rl_mpmsg3.c |
 | 0x4456c1 | FUN_004456c1 | 224 | rl_mpmsg3.c |
 | 0x4457a1 | FUN_004457a1 | 176 | rl_mpmsg3.c |
@@ -1370,6 +1372,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x448276 | FUN_00448276 | 25 | rl_mpmsg3.c |
 | 0x44828f | FUN_0044828f | 16 | rl_mpmsg3.c |
 | 0x44829f | FUN_0044829f | 31 | rl_mpmsg3.c |
+| 0x4482be | FUN_004482be | 43 | rl_mpmsg3.c |
 | 0x4482e9 | FUN_004482e9 | 31 | rl_mpmsg3.c |
 | 0x448308 | FUN_00448308 | 49 | rl_mpmsg3.c |
 | 0x448339 | FUN_00448339 | 152 | rl_mpmsg2.c |

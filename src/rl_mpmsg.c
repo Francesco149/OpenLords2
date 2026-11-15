@@ -154,6 +154,7 @@ static const mp_fn k_mp_build[100] = {
     [38] = MPF(4436bb), [58] = MPF(444915),   /* mp-labor */
     [93] = MPF(4469bd), [94] = MPF(446ab8),   /* mp-skrpick */
     [16] = MPF(442a7f), [91] = MPF(44695f),   /* mp-desync */
+    [70] = MPF(4454e7),                       /* mp-price */
 };
 static const mp_fn k_mp_recv[100] = {
     [1] = MPF(4410bd), [2] = MPF(4412cc), [3] = MPF(44164d), [4] = MPF(4419f9), [5] = MPF(441b86), [6] = MPF(441e1f),
@@ -173,6 +174,7 @@ static const mp_fn k_mp_recv[100] = {
     [38] = MPF(4436f9), [58] = MPF(444948),   /* mp-labor */
     [93] = MPF(4469ec), [94] = MPF(446b0f),   /* mp-skrpick */
     [16] = MPF(442aae), [91] = MPF(446983),   /* mp-desync */
+    [70] = MPF(4455ad),                       /* mp-price */
 };
 extern int32_t g_rl_4d57f0[100];   /* rl_glue: retail's builder table */
 

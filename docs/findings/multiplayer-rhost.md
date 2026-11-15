@@ -208,3 +208,12 @@ snapshot restore 0x43f5c5 → message 16; the restore makes the states really di
 ways (4 / 5 times), p1's turn bytes differ three checks running → 91 to p2, DAT_00553214 reaches 3 on p2 (0x479a71 for
 both sides). Each restore leaves the other side paused (DAT_0053f238 = −1): p1 then p2 unpause, and from f22654 the
 battle runs in step with no further resync. Windows ≡ wine, det 0 dwords.
+
+## An AI ally's price (2026-11-15: `mp-price`)
+
+The setup page's options are the host's (p1 clicks; the client's page follows): County status (577,303) → the list
+weak / medium / strong (577,335 = strong). With strong every AI realm's average county population is > 1000 at the
+start, over every personality's ask-to-attack bar. Diplomacy (622,447), the Baron's portrait (90,190): compliment →
+attitude +15 at the turn's end (reply 174); "Offer an alliance" (415,268 for a non-ally) → 179, the alliance mutual
+(+0x81); "Ask to attack" → 186 / 187 / 188 by `rng` vs 2 × attitude; 188 is the type-10 popup — tools/bot's UI answers
+it no by default (`uis[0].ask` overridden to yes). Message 70 → action 40: rl-mpmsg3.md §Message 70.

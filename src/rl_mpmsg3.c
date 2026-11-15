@@ -16,6 +16,7 @@
 #include "engine_army_ai.h"       /* 0x438681 */
 #include "engine_army_economy.h"  /* 0x44df5f, 0x4485a5 */
 #include "engine_diplomacy.h"     /* 0x4a2621 */
+#include "rl_cov3.h"              /* 0x4a1b29 ai_diplomacy_gift */
 #include "engine_title_render.h"  /* 0x4ae539, 0x4ae5e2, g_tr_p4_flash_timer (DAT_00568984) */
 #include "engine_battlefield_render.h" /* g_bfr_engine_state (DAT_0052af94) */
 #include "engine_diplomacy_action.h" /* g_diplo_action_mode (DAT_005651cc) */
@@ -748,6 +749,33 @@ int rl_4454a9(void)
     return ACT(38, RDUE, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 }
 
+/* Port of FUN_004454e7 (198 B) — builder 70 (the type-10 popup's yes in MP, 0x4367ff: pay an ally its price for an
+ * attack): due, the local player's ally (realm +0x81, 4 bytes from there), the local player, the target county
+ * DAT_0055ce50, the price DAT_00567958 (4 each); action 40 for us with the ally as the +0x81 BYTE. */
+int rl_4454e7(void)
+{
+    DUE = rl_446e21(LEAD);
+    PUT(&DUE, 4);
+    PUT(&PL8(LOCAL, 0x57bf81), 4);
+    PUT(&s_slot_0057c8cc, 4);
+    PUT(&s_slot_0055ce50, 4);
+    PUT(&s_slot_00567958, 4);
+    return ACT(40, DUE, PL8(LOCAL, 0x57bf81), LOCAL, (int)s_slot_0055ce50, (int)s_slot_00567958, 0, 0, 0, 0, 0, 0);
+}
+
+/* Port of FUN_004455ad (129 B) — receiver 70: due, the ally (as the sender wrote it: 4 bytes from realm +0x81), the
+ * payer, the county, the price; action 40 with them. */
+int rl_4455ad(void)
+{
+    int ally, payer, county, price;
+    GET(&RDUE, 4);
+    GET(&ally, 4);
+    GET(&payer, 4);
+    GET(&county, 4);
+    GET(&price, 4);
+    return ACT(40, RDUE, ally, payer, county, price, 0, 0, 0, 0, 0, 0);
+}
+
 /* Port of FUN_0044562e (147 B) — builder 71 (an alliance answer): due, the partner DAT_0057c8b8, the local player,
  * the answer DAT_0056d678 (4 each); yes (1) → action 41(partner, local). */
 int rl_44562e(void)
@@ -1411,6 +1439,13 @@ int rl_44828f(void)
 int rl_44829f(void)
 {
     return bf_43bbd7(A4, A8);
+}
+
+/* Port of FUN_004482be (43 B) — action 40: the payer +8 gives the ally +4 the price +0x10 for county +0xc
+ * (ai_diplomacy_gift 0x4a1b29: the ally's campaign target). */
+int rl_4482be(void)
+{
+    return rl_4a1b29(A4, A8, AC, A10);
 }
 
 /* Port of FUN_004482e9 (31 B) — action 41: an alliance 0x4a1774(+4, +8). */

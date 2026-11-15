@@ -78,8 +78,10 @@
    to an alias whose VA a mirror owns should be flagged); rl_444b17 / rl_448076 had the same write, fixed.
    **81 is dead** (the join's "shield" = DAT_005c9a74, always 1 in the GOG exe). **90 is unreachable by lag**: retail's
    tick pacing never lets a side run 50 ticks past its view of a peer (multiplayer-rhost.md §Desync; mpbot `pK lag MS`).
-   Next: (c) 70 (an MP alliance with an AI, then ask it to attack until it names a price: 188 → popup type 10),
-   19 / 26 (wndproc); the forge's `crc` mode opens 0x43eac1's bad-CRC / wrong-size branches.
+   **`mp-price`** (2026-11-15; setup County status strong → AI pops > 1000; p1 compliments the Baron, allies (179), asks
+   him to attack until 188 → the type-10 popup's yes → 70): builder / receiver 0x4454e7 / 0x4455ad + action 40 0x4482be
+   ported (shadow 0 divergences, hybrid PASS, standalone 2/2 = pure retail, det 0, Windows ≡ wine).
+   Next: 19 / 26 (wndproc); the forge's `crc` mode opens 0x43eac1's bad-CRC / wrong-size branches.
 0b. **rd campaigns** — **campaign 6 (2026-11-14, API drivers):** ai-recall filed (sub_48B7FC 0x48b7fc first time: an Equal
    field skirmish after a Play Now → New Game trip — a cold skirmish leaves byte_553080 zero, so the recall never fires;
    +12 blocks); ai-surrender blocked (probe: no skirmish attacker is knights-only; the battle ends when a side has 0 men

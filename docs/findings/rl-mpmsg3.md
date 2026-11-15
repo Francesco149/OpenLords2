@@ -39,6 +39,7 @@ Both sides file the same action with the same due tick (builder for us, receiver
 | 66 | 0x444e3f | 0x444f96 | due + player packed 4, 10-byte row DAT_0053e930[p] | builder first clears battle hex DAT_0056d5d0's bits; action 33 + the row into record +0x2c |
 | 67 | 0x445063 | 0x4451cc | packed 4, row 10, 2, 2, 2, 1, 1, 2, 1 | action 34 (+ row); receiver drops a repeated sequence (quirk 3) |
 | 69 | 0x445458 | 0x4454a9 | due | action 38 |
+| 70 | 0x4454e7 | 0x4455ad | due, the ally (4 bytes from realm +0x81), player, county DAT_0055ce50, price DAT_00567958 | action 40 (the type-10 popup's yes, 0x4367ff; mp-price) |
 | 71 | 0x44562e | 0x4456c1 | due, partner DAT_0057c8b8, player, answer DAT_0056d678 | yes → action 41; receiver: partner us → event 256 / 257 |
 | 72 | 0x4457a1 | 0x445851 | due, player, DAT_00553fbc, DAT_005651cc, DAT_0057a0f8, DAT_005530b0 | action 42 |
 | 75 | 0x445d97 | 0x445e0e | due, DAT_0059154c, DAT_0056d5cc | action 44 |
@@ -66,6 +67,7 @@ Both sides file the same action with the same due tick (builder for us, receiver
 | 37 | 0x448276 | 0x43b98a(+4) |
 | 38 | 0x44828f | 0x496b9f |
 | 39 | 0x44829f | 0x43bbd7(+4, +8) → the battlefield's end 0x43be65 |
+| 40 | 0x4482be | ai_diplomacy_gift 0x4a1b29(+4 ally, +8 payer, +0xc county, +0x10 price) |
 | 41 | 0x4482e9 | alliance 0x4a1774(+4, +8) |
 | 42 | 0x448308 | diplomacy action 0x4a2621(+4..+0x14) |
 | 44 | 0x4483d1 | treaty cleared 0x4a1a54(+4, +8) |
@@ -74,12 +76,11 @@ Both sides file the same action with the same due tick (builder for us, receiver
 (host) act (the function comment in `src/rl_mpmsg3.c`). Callers: 0x4b8c3a's DirectPlay receive loop (rl_io's port,
 now calling rl_43e6a2 by name).
 
-**Ids with no port (2026-11-15, after `mp-desync`):** builders / receivers of 19, 26 (wndproc only), 70 (the type-10
-"pay the price" popup: an AI ally's price for an attack, needs an MP alliance with an AI), 90 (a late action,
+**Ids with no port (2026-11-15, after `mp-desync`):** builders / receivers of 19, 26 (wndproc only), 90 (a late action,
 0x4470c4: unreachable through lag — retail's tick pacing, multiplayer-rhost.md §Desync). **81 is dead in this exe**: the
 join's fourth dword (receiver 1 0x4410bd's "shield" test, 1 or 2 → DAT_005bb4a0) is DAT_005c9a74, which 0x4aef7e
 leaves 1 on every path (rl-host.md quirk 4: the GOG build's patched CD check) — every joiner unlocks the 3+ player
-session, the refusal never runs. 16 / 91 ported (mp-desync, §Resync below).
+session, the refusal never runs. 16 / 91 ported (mp-desync, §Resync below); 70 ported (mp-price, §Message 70 below).
 **Dead** (no reference in the
 exe: no call, no pointer): 52's / 53's senders 0x4a7948 / 0x4a7daf, 89's 0x43f939 / 0x43f9c3; no send site at all: 27,
 31, 32, 65, 68, 78, 79, 80, 88, 92, 97 (98 / 99 / 0 = the empty pair 0x441050 / 0x44105b).
@@ -143,3 +144,15 @@ the one copy; a write to the g_bf_ alias is lost at the next mirror sync: the fi
 Unexercised arms: 0x43f5c5 with no snapshot (returns 0), its strategic mode (no copies), the 4th resync in a row
 (DAT_00553214 ≥ 4: last-turn reload / 0x4778a0, event 259).
 
+
+## Message 70 (2026-11-15, `mp-price`)
+
+0x4367ff (the type-10 popup's yes) sends 70 in MP instead of paying at once: builder 0x4454e7 / receiver 0x4455ad
+file action 40 (0x4482be → ai_diplomacy_gift 0x4a1b29) on both sides with the same due tick. Reaching it takes an AI
+ally whose average county population (realm +0x14) clears the personality bar (750 / 800 / 900 / 1000) and whose
+attitude is ≥ 10, then a roll ≥ 2 × attitude (0x4a38db → 188). In MP the setup's County status *strong* gives every
+AI > 1000 from the start; one compliment (+15) and an alliance offer (179) do the rest. Builder 70 sends 4 bytes from
+realm +0x81 (the ally byte and the three after it); the receiver passes the whole dword to action 40 as the ally, the
+builder's own action takes the byte — equal while +0x82..+0x84 are 0.
+Evidence: rhost shadow 5 rows (0x4454e7 / 0x4455ad / 0x4482be + 0x4367ff / 0x4a1b29), mp-price 2/2: 9 calls, 0
+divergences; replace: hybrid PASS; standalone 2/2 = pure retail; det 0 dwords; Windows ≡ wine.

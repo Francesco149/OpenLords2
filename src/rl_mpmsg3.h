@@ -66,6 +66,8 @@ int rl_445063(void);                             /* 361 B, coverage 3 */
 int rl_4451cc(void);                             /* 471 B, coverage 4 */
 int rl_445458(void);                             /* 81 B, coverage 1 */
 int rl_4454a9(void);                             /* 62 B, coverage 1 */
+int rl_4454e7(void);                             /* 198 B, mp-price */
+int rl_4455ad(void);                             /* 129 B, mp-price */
 int rl_44562e(void);                             /* 147 B, coverage 2 */
 int rl_4456c1(void);                             /* 224 B, coverage 3 */
 int rl_4457a1(void);                             /* 176 B, coverage 2 */
@@ -98,6 +100,7 @@ int rl_44825d(void);                             /* 25 B, coverage 3 */
 int rl_448276(void);                             /* 25 B, coverage 6 */
 int rl_44828f(void);                             /* 16 B, coverage 2 */
 int rl_44829f(void);                             /* 31 B, coverage 4 */
+int rl_4482be(void);                             /* 43 B, mp-price */
 int rl_4482e9(void);                             /* 31 B, coverage 5 */
 int rl_448308(void);                             /* 49 B, coverage 3 */
 int rl_4483d1(void);                             /* 31 B, coverage 2 */
