@@ -87,7 +87,8 @@ PARTS = {
           "40f5fd 410a5d 412b33 412e6b 413155 413590 413b30 4140f3 414220 41593b 415bdc 415e42 415fb7 41789b "
           "417960 4180f6 4184c6 418e2d 419c78 41ad5d 41aea2 41e61d 41fdd6 425b10 425ded 426d11 427d19 427ed0 "
           "428471 42847c 4290d0 429153 4291b3 42925e 4298c1 429b1d 429ba4 42a15f 42e5c0 42eb7c 42ec91 "
-          "42f1df 42f306"),
+          "42f1df 42f306 "
+               "40902b 41e5d0 420428 4247f5 42563c 425a6a 427d72 42f60e 428078 42e3ba 42e45e 42e50d 42f449 43b101 43baf9 43e668 49bb9d 4b2234 4b26b8 4b2730 4b74ce"),
     # round 3 — the 0x42ff10..0x465485 band: the in-game input dispatch 0x42ff10, edge scroll, the title menu actions, the armoury zones, the army select, the county rations, end turn, the scenario hint, delayed actions, coalitions, realm development, the army baseline seed, the dirty-rect marks
     "ctl": _h("42ff10 431f59 432221 432640 432746 43278b 432967 4329ec 432b05 432cc8 432ee6 432fab 433155 433461 "
           "4335f0 4337b4 433905 433998 433a23 433ba2 433ce4 43400b 4342f3 434346 434e1f 4351c4 435211 43524e "

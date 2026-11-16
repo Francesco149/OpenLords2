@@ -88,8 +88,7 @@
    actions 24 / 46, the late-action path 0x4470c4 → 90 reached in retail. **Every MP message id now has a port** (47
    functions, fe9a756 / ec746c4: 10 rows reached, 0 divergences, hybrid PASS; 37 dead-code rows unverified — no carrier);
    standalone 39/39 MP sides = pure retail; static gaps 107 → 66. **2026-11-16: the last 24 delayed-action handlers ported** (table 0x4d5c98 complete,
-   rl-mpmsg3.md; dead but for 25 / 35, reachable by forging 53 / 68): static gaps 66 → 44. Next: ★4 / ★5 (remaining
-   static gaps, rl-link seams).
+   rl-mpmsg3.md; dead but for 25 / 35, reachable by forging 53 / 68): static gaps 66 → 44. Next: ★5 (rl-link seams); ★4 is CRT only.
 0b. **rd campaigns** — **campaign 6 (2026-11-14, API drivers):** ai-recall filed (sub_48B7FC 0x48b7fc first time: an Equal
    field skirmish after a Play Now → New Game trip — a cold skirmish leaves byte_553080 zero, so the recall never fires;
    +12 blocks); ai-surrender blocked (probe: no skirmish attacker is knights-only; the battle ends when a side has 0 men
@@ -146,12 +145,11 @@
    Next: the standalone joins `corpus --check` (the pre-commit gate); 21 unreached CRT seams (`_CrtDbgReport`,
    `_amsg_exit`, locale / TZ paths …) are standalone gaps (★4); then **`--live`**: a product exe on the real platform
    (real window / DirectDraw / DirectSound behind the same IAT slots).
-4. **The standalone's static gaps** (`tools/standalone/prove_no_retail_code.py --gaps-only`): retail entries the port
-   calls with no thunk — 44 left (2026-11-16, from 213): 22 CRT entries (rl_crt.c's table: __CrtDbgReport, __amsg_exit,
-   locale / heap internals) and 22 seams: the DirectDraw restore / error path (gfx_restore 0x4b2730, 0x4b26b8,
-   0x4b2234, 0x42e3ba / 0x42e45e / 0x42e50d, 0x42f449, 0x42f60e's HRESULT table), 0x40902b, 0x41e5d0, 0x420428,
-   0x4247f5, 0x42563c, 0x425a6a, 0x427d72, 0x428078, 0x43b101, 0x43baf9, 0x43e668, 0x49bb9d, 0x4b74ce. Each = a port + a
-   row (most are TODO(rl-link) seams, ★5).
+4. **The standalone's static gaps** (`tools/standalone/prove_no_retail_code.py --gaps-only`): 23 left (2026-11-16, from
+   213), all CRT entries (rl_crt.c's table: __CrtDbgReport, __amsg_exit, __realloc_dbg, locale / heap internals). The
+   last 21 non-CRT seams were ported 2026-11-16 (rl_ui4.c, rl-ui4.md §Gap ports); standalone 119/119 = pure retail.
+   2 of the 21 reached by new scenarios (siege-surrender → 0x43baf9, supplies-self → 0x43b101: 0 divergences); the
+   rest unreached (DD restore / paint, debug overlays, screens 0x44 / 0x45, title page 10, the MP error / leave paths).
 5. **The TODO(rl-link) seams** (rl_ functions calling engine_retail_call where a linked old port takes a port struct /
    context: the event-queue posters 0x49b2a3 / 0x448819 / 0x449889 / 0x4acbd4 / 0x44aa41 / 0x44ae3c / 0x4508de, combat
    0x4ac3c6 / 0x4abb36 / 0x43b622, county panels 0x4110b1 / 0x41152f / 0x4116fb / 0x411b72, the screens' binders …;

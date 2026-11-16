@@ -112,12 +112,12 @@ static int trade_render(void) { return (int)engine_retail_call(0x416308u, 0); } 
 static int county_panel(uint32_t va) { return (int)engine_retail_call(va, 0); }         /* TODO(rl-link): the county panels 0x4110b1 / 0x41152f / 0x4116fb / 0x411b72 */
 static int workforce_render(int a) { return (int)engine_retail_call(0x412143u, 1, (uint32_t)a); }   /* TODO(rl-link): engine_workforce_hud_render 0x412143 */
 static int terrain_panel(void) { return (int)engine_retail_call(0x41b032u, 0); }        /* TODO(rl-link): 0x41b032 (engine_terrain_info) */
-/* unported — TODO(rl-extern) */
-static int screen_41e5d0(void) { return (int)engine_retail_call(0x41e5d0u, 0); }   /* TODO(rl-extern): 0x41e5d0 (screen 0x45) */
-static int screen_425a6a(void) { return (int)engine_retail_call(0x425a6au, 0); }   /* TODO(rl-extern): 0x425a6a (screen 0x44) */
-static int quit_4b2234(void) { return (int)engine_retail_call(0x4b2234u, 0); }     /* TODO(rl-extern): 0x4b2234 (the fatal-load exit) */
-__attribute__((used)) static int gfx_restore(void) { return (int)engine_retail_call(0x4b2730u, 0); }     /* TODO(rl-extern): gfx_restore 0x4b2730 */
-__attribute__((used)) static int lost_4b26b8(void) { return (int)engine_retail_call(0x4b26b8u, 0); }     /* TODO(rl-extern): 0x4b26b8 (the surfaces cannot be restored) */
+/* ported at the end of this file (the standalone's last seams) */
+static int screen_41e5d0(void) { return rl_41e5d0(); }   /* screen 0x45 */
+static int screen_425a6a(void) { return rl_425a6a(); }   /* screen 0x44 */
+static int quit_4b2234(void) { return rl_4b2234(); }     /* the fatal-load exit */
+__attribute__((used)) static int gfx_restore(void) { return rl_4b2730(); }   /* gfx_restore (called from asm below) */
+__attribute__((used)) static int lost_4b26b8(void) { return rl_4b26b8(); }  /* the surfaces cannot be restored (asm below) */
 __attribute__((used)) static int save_49792e(void) { return (int)engine_retail_call(0x49792eu, 0); }     /* TODO(rl-extern): 0x49792e (the MP save pump) */
 
 /* ================================================================ strutil (0x401000..0x401666) */
@@ -1163,7 +1163,7 @@ int rl_427ed0(void)
         int k = s_slot_00569518[i];
         if (k == 0) break;
         if (engine_retail_call(0x428007u, 1, (uint32_t)k) == 0 &&   /* TODO(rl-link): game_init's army_near (bit0) */
-            engine_retail_call(0x428078u, 1, (uint32_t)k) == 0)     /* TODO(rl-link): … (flag 0 / 2) */
+            rl_428078(k) == 0)                                      /* … (flag 0 / 2) */
             continue;
         rl_46e1b0(3, g_cell_cursor_col, g_cell_cursor_row, 6);
         int t = engine_territory_current_slot();
@@ -1229,7 +1229,7 @@ typedef HRESULT (WINAPI *rl_com5_t)(uint32_t self, uint32_t a, uint32_t b, uint3
 #define WFX(off)  (&AT(uint8_t, g_rl_522b90, 0x522b90u, 0x522b90u + (off)))     /* the primary's WAVEFORMATEX */
 #define HWNDMAIN  AT(uint32_t, g_rl_4e5a00, 0x4e5a00u, 0x4e5a00u)               /* hWndMain */
 #define S4D47(va) STRV(g_rl_4d4768, 0x4d4768u, va)
-static int ds_err(int hr) { return (int)engine_retail_call(0x427d72u, 1, (uint32_t)hr); }   /* TODO(rl-extern): 0x427d72 (the DS error's index) */
+static int ds_err(int hr) { return rl_427d72(hr); }   /* the DS error's index */
 static int ds_close(void) { return (int)engine_retail_call(0x425d35u, 0); }                 /* TODO(rl-extern): 0x425d35 (DirectSound off) */
 
 /* Port of FUN_00425ded (94 B) — the primary buffer's format DAT_00522b90: PCM, 2 channels, 11025 Hz, block 2, 22050
@@ -1320,8 +1320,8 @@ int rl_427d19(void)
 #define DD_FULL    g_rl_53f228                                  /* DAT_0053f228: full screen (0: a window) */
 #define S4D51(va)  STRV(g_rl_4d5130, 0x4d5130u, va)
 #define S4D52(va)  STRV(g_rl_4d51f0, 0x4d51f0u, va)
-static int dd_err(int hr) { return (int)engine_retail_call(0x42f60eu, 1, (uint32_t)hr); }   /* TODO(rl-extern): 0x42f60e (the DD error's index) */
-static int pal_window(void) { return (int)engine_retail_call(0x42f449u, 0); }               /* TODO(rl-extern): 0x42f449 (the windowed palette) */
+static int dd_err(int hr) { return rl_42f60e(hr); }   /* the DD error's index */
+static int pal_window(void) { return rl_42f449(); }   /* the windowed palette */
 
 /* Port of FUN_0042f306 (323 B) — the full-screen palette's PALETTEENTRYs DAT_005165b0: entry 0 from DAT_004d50f0,
  * 1..254 from the screen palette DAT_004ea1b0 (flags 4: PC_NOCOLLAPSE), 255 from DAT_004d512b (IDA's byte_4D4E2E
@@ -2342,4 +2342,314 @@ int rl_41fdd6(void)
     }
     g_gfx_no_shadow = 0;
     return rl_4527a6(x, y, 6, rows, 1);
+}
+
+/* ================================================================ the standalone's last seams (2026-11-16)
+ * Retail entries the port reached only through engine_retail_call / an address (prove_no_retail_code --gaps-only):
+ * the DirectDraw restore / paint / error paths, the debug overlays, two screens, the demo sheet, two confirm
+ * callbacks, the MP error / leave paths. None is reached by the corpus (docs/findings/rl-ui4.md §Gap ports). */
+
+/* other partitions' globals (declared here as in their headers) */
+extern int32_t g_rl_4e65d0;          /* DAT_004e65d0 (rl_misc_globals.h): the app is active */
+extern int32_t g_rl_52effc;          /* DAT_0052effc (rl_turn_globals.h): the year index */
+extern int32_t g_rl_553008;          /* DAT_00553008 (rl_ctl_globals.h): the "dumb view" banner's countdown */
+extern int32_t g_rl_55324c;          /* DAT_0055324c (rl_skirmish_globals.h): a record pointer */
+extern int32_t g_rl_5681e8;          /* DAT_005681e8 (rl_skirmish_globals.h): a loop bound */
+
+#define GAP_PAL   g_rl_4ea8a0                                   /* DAT_004ea8a0: the screen's palette (0x300 B) */
+#define GAP_SMALL ((const uint8_t *)g_rl_5cbfb0)                /* &DAT_005cbfb0: the small (debug) font */
+#define GAP_SMK   ((uint32_t)g_rl_4d4d58)                       /* DAT_004d4d58: the open Smack* */
+#define GAP_SMKF(o) (*(volatile uint32_t *)(uintptr_t)(GAP_SMK + (o)))
+typedef HRESULT (WINAPI *gap_restore_t)(uint32_t s);
+typedef HRESULT (WINAPI *gap_bltfast_t)(uint32_t s, int x, int y, uint32_t src, void *rect, uint32_t fl);
+typedef HRESULT (WINAPI *gap_blt_t)(uint32_t s, void *dst, uint32_t src, void *rect, uint32_t fl, void *fx);
+
+/* Port of FUN_0040902b (148 B) — the demo screen's sheet: FileName (a .pl8) into the back buffer Buf at offset 24
+ * (0x4b000 B), the palette file into DAT_004ea8a0 (0x300 B); then the screen dirty, 0x452160(1), the palette
+ * applied (0x4b0ab5). 0 when Buf is null or a read fails; else 1. */
+int rl_40902b(int name, int pal)
+{
+    if (g_gfx_canvas_pixels == NULL)
+        return 0;
+    if (rl_4af8d9(name, PTRV(g_gfx_canvas_pixels), 0x4b000, 24) == 0)
+        return 0;
+    if (rl_4af8d9(pal, PTRV(GAP_PAL), 0x300, 0) == 0)
+        return 0;
+    rl_45240a();
+    rl_452160(1);
+    rl_4b0ab5(PTRV(GAP_PAL));
+    return 1;
+}
+
+/* Port of FUN_0041e5d0 (77 B) — screen 0x45's backdrop: chdir to the base, lom.256 → DAT_004ea8a0, lom.pl8 as the
+ * 480-row background (0x408fcb), the palette applied, the screen dirty (its EAX). */
+int rl_41e5d0(void)
+{
+    rl_4af502();
+    rl_4af8d9(STRV(g_rl_4d42d4, 0x4d42d4u, 0x4d42d4u), PTRV(GAP_PAL), 0x300, 0);
+    rl_408fcb(STRV(g_rl_4d42d4, 0x4d42d4u, 0x4d42dcu), 480);
+    rl_4b0ab5(PTRV(GAP_PAL));
+    return rl_45240a();
+}
+
+/* Port of FUN_00420428 (244 B) — title page 10: the stone panel (sheet DAT_004eabec, 80, 10, 30 x 19), string
+ * (11, 16) centred in the tall font (capitals highlighted: DAT_0058fe2c), then without shadows (DAT_005aea40) the
+ * wrapped strings (11, 17) / (11, 18), the line (11, 48) in colour 1 and the wrapped (11, 49). */
+int rl_420428(void)
+{
+    g_gfx_uppercase_highlight = 1;
+    gfx_panel_draw(g_gfx_current_blob, 80, 10, 30, 19);
+    p5_wrap_c(11, 16, 80, 36, 480, FONT_TALL, 63);
+    g_gfx_uppercase_highlight = 0;
+    g_gfx_no_shadow = 1;
+    p5_wrap_loc(11, 17, 128, 0x48, 0x180, 100, 0, 0, FONT, 63);
+    p5_wrap_loc(11, 18, 128, 0x78, 0x180, 100, 0, 0, FONT, 63);
+    wrap_line(11, 48, 128, 220, FONT, 1);
+    p5_wrap_loc(11, 49, 128, 0xf0, 0x180, 100, 0, 0, FONT, 63);
+    g_gfx_no_shadow = 0;
+    return 0;
+}
+
+/* Port of FUN_004247f5 (174 B) — the "DUMB VIEW ON." banner (the frame driver, DAT_0056d650 set): DAT_00553008
+ * counts down; at <= 0 (reset to 100 below 0) a 10 x 22 block of colour 24 at (176, 220), its 249 frame, the text. */
+int rl_4247f5(void)
+{
+    if (--g_rl_553008 > 0)
+        return 0;
+    if (g_rl_553008 < 0)
+        g_rl_553008 = 100;
+    g_gfx_glyph_w = 10;
+    g_gfx_glyph_height_short = 22;
+    gfx_sprite_fill_block(176, 220, 24);
+    gfx_line_rect(175, 219, 16 * g_gfx_glyph_w + 2, g_gfx_glyph_height_short + 2, 249);
+    p5_text((const uint8_t *)STR(g_rl_4d4544, 0x4d4544u, 0x4d4544u), 192, 226, FONT, 63);
+    return 0;
+}
+
+/* Port of FUN_0042563c (349 B) — the territory hex dump (debug): a 10 x 384 block of colour 34 at (480, 24) marked
+ * dirty, "piece" + territory DAT_00553e68 in decimal after it (the line's x advance DAT_005cd404), then its 420-byte
+ * record as 2-digit hex, 10 per row (DAT_0055324c the record, DAT_005681e8 = 420 the bound, both retail globals),
+ * small font, no shadows. */
+int rl_42563c(void)
+{
+    g_gfx_glyph_w = 10;
+    g_gfx_glyph_height_short = 384;
+    gfx_sprite_fill_block(480, 24, 34);
+    rl_4527a6(480, 24, 10, 24, 1);
+    g_gfx_no_shadow = 1;
+    g_gfx_line_x_acc = 0;
+    p5_text((const uint8_t *)STR(g_rl_4d4710, 0x4d4710u, 0x4d4710u), 484, 26, GAP_SMALL, 63);
+    p5_label(g_bf_553e68, 32, STR(g_rl_4d4710, 0x4d4710u, 0x4d4718u), g_gfx_line_x_acc + 484, 26, GAP_SMALL, 63);
+    g_rl_55324c = PTRV(&AT(uint8_t, g_per_territory_420, 0x52f0b0u, 0x52f0b0 + 420 * g_bf_553e68));
+    g_rl_5681e8 = 420;
+    for (int i = 0; i < g_rl_5681e8; i++)
+        gfx_text_label_render_hex(*(const uint8_t *)(uintptr_t)(uint32_t)(i + g_rl_55324c), 32,
+                                  STR(g_rl_4d4710, 0x4d4710u, 0x4d471cu), 16 * (i % 10) + 480, 8 * (i / 10) + 36,
+                                  GAP_SMALL, GLYPHS, 63);
+    g_gfx_no_shadow = 0;
+    return 0;
+}
+
+/* Port of FUN_00425a6a (158 B) — screen 0x44: the bevel panel (80, 176, 20 x 10), the screen dirty, strings
+ * (89, 0) in the tall font, (89, 1) + the year DAT_0052effc + 1, (89, 2). */
+int rl_425a6a(void)
+{
+    gfx_panel_draw_bevel(CHROME, 80, 176, 20, 10);
+    rl_45240a();
+    wrap_line(89, 0, 112, 200, FONT_TALL, 63);
+    wrap_line(89, 1, 128, 244, FONT, 63);
+    p5_label(g_rl_52effc + 1, 32, STR(g_rl_4d4750, 0x4d4750u, 0x4d4750u), 288, 242, FONT, 63);
+    wrap_line(89, 2, 144, 292, FONT, 63);
+    return 0;
+}
+
+static const uint32_t k_dd_err[99] = {   /* [i] = the HRESULT whose index is i + 1 */
+    0x88760005u, 0x8876000au, 0x88760014u, 0x88760028u, 0x88760037u, 0x80004005u, 0x8876005au, 0x8876005fu,
+    0x88760064u, 0x8876006eu, 0x88760078u, 0x88760082u, 0x80070057u, 0x88760091u, 0x88760096u, 0x887600a0u,
+    0x887600aau, 0x887600b4u, 0x887600cdu, 0x887600d2u, 0x887600d4u, 0x887600d7u, 0x887600dcu, 0x887600deu,
+    0x887600e1u, 0x887600e6u, 0x887600f0u, 0x887600fau, 0x887600ffu, 0x88760104u, 0x88760118u, 0x88760122u,
+    0x88760136u, 0x8876013cu, 0x8876013du, 0x88760140u, 0x8876014au, 0x8876014fu, 0x88760154u, 0x8876015eu,
+    0x88760168u, 0x8007000eu, 0x8876017cu, 0x8876017eu, 0x88760180u, 0x88760183u, 0x88760190u, 0x8876019au,
+    0x887601a4u, 0x887601aeu, 0x887601b3u, 0x887601b8u, 0x887601c2u, 0x887601ccu, 0x887601d6u, 0x887601e0u,
+    0x887601eau, 0x80004001u, 0x887601feu, 0x88760208u, 0x88760219u, 0x8876021cu, 0x88760230u, 0x88760231u,
+    0x88760232u, 0x88760233u, 0x88760234u, 0x88760235u, 0x88760236u, 0x88760237u, 0x88760238u, 0x88760239u,
+    0x8876023au, 0x8876023bu, 0x8876023cu, 0x8876023du, 0x8876023eu, 0x8876023fu, 0x88760240u, 0x88760241u,
+    0x88760242u, 0x88760243u, 0x88760244u, 0x88760245u, 0x88760246u, 0x88760247u, 0x88760248u, 0x88760249u,
+    0x8876024au, 0x8876024bu, 0x8876024cu, 0x8876024du, 0x8876024eu, 0x8876024fu, 0x88760250u, 0x8876026cu,
+    0x88760280u, 0x88760294u, 0x887602a8u,
+};
+static const uint32_t k_ds_err[14] = {   /* [i] = the HRESULT whose index is i + 1 */
+    0x8878000au, 0x8878001eu, 0x80070057u, 0x88780032u, 0x80004005u, 0x88780046u, 0x8007000eu, 0x88780064u,
+    0x80004001u, 0x88780078u, 0x88780082u, 0x80040110u, 0x88780096u, 0x887800a0u,
+};
+
+/* Port of FUN_00427d72 (340 B) — a DirectSound HRESULT's index into the error names (1..14; 0 unknown). */
+int rl_427d72(int hr)
+{
+    for (int i = 0; i < (int)(sizeof k_ds_err / sizeof *k_ds_err); i++)
+        if ((uint32_t)hr == k_ds_err[i]) return i + 1;
+    return 0;
+}
+
+/* Port of FUN_0042f60e (2298 B) — a DirectDraw HRESULT's index into the error names (1..99; 0 unknown). */
+int rl_42f60e(int hr)
+{
+    for (int i = 0; i < (int)(sizeof k_dd_err / sizeof *k_dd_err); i++)
+        if ((uint32_t)hr == k_dd_err[i]) return i + 1;
+    return 0;
+}
+
+/* Port of FUN_00428078 (113 B) — county k has a cell flagged only bit 1 within radius 1..3 of its (col, row)
+ * (+0x6c / +0x6d: 0x46d130). 1 / 0. */
+int rl_428078(int k)
+{
+    for (int i = 1; i < 4; i++)
+        if (rl_46d130(P5_CO8(k, 0x53fa1cu), P5_CO8(k, 0x53fa1du), i) != 0)
+            return 1;
+    return 0;
+}
+
+/* Port of FUN_0042e3ba (164 B) — the movie's WM_PAINT: BeginPaint, a BLACKNESS PatBlt of the movie's size (Smack +4
+ * / +8) while one plays (DAT_004df28c), EndPaint; with a frame shown (DAT_005169b8) Smack #17(0), #27(that frame),
+ * #17(1) (its EAX), else EndPaint's. */
+int rl_42e3ba(int hwnd)
+{
+    PAINTSTRUCT ps;
+    HDC dc = rl_plat_BeginPaint((HWND)(uintptr_t)hwnd, &ps);
+    if (g_rl_4df28c != 0)
+        rl_plat_PatBlt(dc, 0, 0, (int)GAP_SMKF(4), (int)GAP_SMKF(8), 0x42);
+    int r = rl_plat_EndPaint((HWND)(uintptr_t)hwnd, &ps);
+    if (g_rl_4df28c != 0 && g_rl_5169b8 != 0) {
+        rl_plat_Smack17(GAP_SMK, 0);
+        rl_plat_Smack27(GAP_SMK, (uint32_t)g_rl_5169b8);
+        return (int)rl_plat_Smack17(GAP_SMK, 1);
+    }
+    return r;
+}
+
+/* the movie text box / the whole frame onto the primary: BltFast (DDBLTFAST_WAIT) at the client origin
+ * (DAT_004ea180) full screen, else Blt (0x1000200) to the client rect; the HRESULT */
+static int gap_present(int x, int y, int w, int h)
+{
+    int32_t src[4] = { x, y, w + x, h + y };
+    int32_t ox = AT(int32_t, g_rl_4ea180, 0x4ea180u, 0x4ea180u), oy = AT(int32_t, g_rl_4ea180, 0x4ea180u, 0x4ea184u);
+    int32_t dst[4] = { x + ox, y + oy, w + x + ox, h + y + oy };
+    if (DD_FULL != 0)
+        return (int)((gap_bltfast_t)VT(DD_PRIMARY, 0x1c))(DD_PRIMARY, dst[0], dst[1], (uint32_t)DD_BACK, src, 16);
+    return (int)((gap_blt_t)VT(DD_PRIMARY, 0x14))(DD_PRIMARY, dst, (uint32_t)DD_BACK, src, 0x1000200u, NULL);
+}
+/* Port of FUN_0042e45e (175 B) — present the rect (x, y, w, h) of the composition surface (gap_present). */
+int rl_42e45e(int x, int y, int w, int h) { return gap_present(x, y, w, h); }
+/* Port of FUN_0042e50d (179 B) — present the whole 640 x 480 frame (gap_present). */
+int rl_42e50d(void) { return gap_present(0, 0, 640, 480); }
+
+/* Port of FUN_0042f449 (323 B) — the windowed palette pPalEntries DAT_00515d90: the 10 static colours at each end
+ * (0..9, 246..255) copied back into the screen palette DAT_004ea1b0 (flags 0), 10..245 from it (flags 4:
+ * PC_NOCOLLAPSE). EAX 255. */
+int rl_42f449(void)
+{
+    uint8_t *e = g_rl_515d90;
+    for (int i = 0; i < 10; i++) {
+        g_rl_4ea1b0[3 * i] = e[4 * i]; g_rl_4ea1b0[3 * i + 1] = e[4 * i + 1]; g_rl_4ea1b0[3 * i + 2] = e[4 * i + 2];
+        e[4 * i + 3] = 0;
+    }
+    for (int j = 10; j < 246; j++) {
+        e[4 * j] = g_rl_4ea1b0[3 * j]; e[4 * j + 1] = g_rl_4ea1b0[3 * j + 1]; e[4 * j + 2] = g_rl_4ea1b0[3 * j + 2];
+        e[4 * j + 3] = 4;
+    }
+    for (int k = 246; k < 256; k++) {
+        g_rl_4ea1b0[3 * k] = e[4 * k]; g_rl_4ea1b0[3 * k + 1] = e[4 * k + 1]; g_rl_4ea1b0[3 * k + 2] = e[4 * k + 2];
+        e[4 * k + 3] = 0;
+    }
+    return 255;
+}
+
+/* Port of FUN_0043b101 (68 B) — a confirm popup's yes (0x43b06d → 0x40e6f2): the screen dirty, redraw 2; the map
+ * (screen 0) + the below-status gate DAT_0053e9ac when the router's param DAT_0059154c is 1, else screen 24. */
+int rl_43b101(void)
+{
+    int r = rl_45240a();
+    g_bf_57d340 = 2;
+    if (PARAM(0) == 1) {
+        engine_set_current_screen(0);
+        DIRTY->below_status_redraw = 1;
+    } else {
+        engine_set_current_screen(24);
+    }
+    return r;
+}
+
+/* Port of FUN_0043baf9 (111 B) — the battle confirm's yes (0x43ba8f, confirm 11): back to screen DAT_0057c90c,
+ * DAT_00553ed8 = 1; with a battle pending (DAT_0059151c) DAT_005653f4 = 2 and message 62 to the peers (MP) or
+ * 0x43bbd7(local player, 2). */
+int rl_43baf9(void)
+{
+    engine_set_current_screen((uint8_t)g_bf_57c90c);
+    g_bf_553ed8 = 1;
+    uint8_t b = AT(uint8_t, g_bf_59151c, 0x59151cu, 0x59151cu);
+    if (b == 0)
+        return b;
+    s_slot_005653f4 = 2;
+    if (g_sim_mp_active != 0)
+        return rl_43eda0(62, 0);
+    return bf_43bbd7((int)s_slot_0057c8cc, (int)s_slot_005653f4);
+}
+
+/* Port of FUN_0043e668 (58 B) — a network error: log "ERR:Network:" + a1, 0x4b7180(1), WM_CLOSE to the window. */
+int rl_43e668(int a1)
+{
+    rl_4afab9(STRV(g_rl_4d5d60, 0x4d5d60u, 0x4d5d60u), a1, 0);
+    rl_4b7180(1);
+    return rl_plat_PostMessageA((HWND)(uintptr_t)HWNDMAIN, 0x10, 0, 0);
+}
+
+/* Port of FUN_0049bb9d (75 B) — a seat left: realm p's +5 byte (DAT_0057bf05), its aux +0x27 byte and +0 dword
+ * cleared. EAX 44 p. */
+int rl_49bb9d(int p)
+{
+    AT(uint8_t, g_player_strategic_352, 0x57bf00u, 0x57bf05 + 352 * p) = 0;
+    AT(uint8_t, g_player_aux_44, 0x553d50u, 0x553d77 + 44 * p) = 0;
+    AT(int32_t, g_player_aux_44, 0x553d50u, 0x553d50 + 44 * p) = 0;
+    return 44 * p;
+}
+
+/* Port of FUN_004b2234 (36 B) — five calls of the empty 0x4b21cf / 0x4b21da / 0x4b21e5 (retail's leftovers): nothing. */
+int rl_4b2234(void) { return 0; }
+
+/* Port of FUN_004b26b8 (64 B) — minimized: log "OK :Paused.", DAT_004e65d0 = 1 then 0 (retail's two stores), the
+ * window invalidated. */
+int rl_4b26b8(void)
+{
+    rl_4afab9(STRV(g_rl_4df648, 0x4df648u, 0x4df648u), 0, 0);
+    *(volatile int32_t *)&g_rl_4e65d0 = 1;
+    *(volatile int32_t *)&g_rl_4e65d0 = 0;
+    return rl_plat_InvalidateRect((HWND)(uintptr_t)HWNDMAIN, NULL, TRUE);
+}
+
+/* Port of gfx_restore FUN_004b2730 (143 B) — Restore the primary DAT_004eabd0, then the composition surface
+ * DAT_004eafac: 1 when both succeed; else the failure logged (front / back), 0. A null surface counts as a failure. */
+int rl_4b2730(void)
+{
+    if (DD_PRIMARY == 0 || ((gap_restore_t)VT(DD_PRIMARY, 0x6c))(DD_PRIMARY) != 0) {
+        rl_4afab9(STRV(g_rl_4df668, 0x4df668u, 0x4df668u), 0, 0);
+        return 0;
+    }
+    if (DD_BACK == 0 || ((gap_restore_t)VT(DD_BACK, 0x6c))((uint32_t)DD_BACK) != 0) {
+        rl_4afab9(STRV(g_rl_4df668, 0x4df668u, 0x4df68cu), 0, 0);
+        return 0;
+    }
+    return 1;
+}
+
+/* Port of FUN_004b74ce (70 B) — leave the MP session: DebugBreak when DAT_00568464 is clear (retail's assert), then
+ * the transport's leave 0x4b6ab6 (this = DAT_004e2a30), or DebugBreak when there is none. */
+int rl_4b74ce(void)
+{
+    if (g_rl_568464 == 0)
+        rl_plat_DebugBreak();
+    if (g_rl_4e2a30 != 0)
+        rl_4b6ab6((uint32_t)g_rl_4e2a30);
+    else
+        rl_plat_DebugBreak();
+    return 0;
 }

@@ -157,3 +157,34 @@ mercgrid.pl8 into it; g_rl_4ea180 is 4 B but 0x42eb7c passes it to Blt as a RECT
   replace:rl_42f1df`: PASS 59/59 (temporary rows, removed).
 - Least reached (1–2 scenarios: strat-tour / realm-tour / menus-tour / custom-tour): the labour panels, the rankings,
   the armoury, send supplies, 0x41fdd6, the editor keys (0x401c93, 0x401ca3, 0x401cbc, 0x401cda), 0x401333, 0x4011b0.
+
+## Gap ports (2026-11-16)
+
+The standalone's last non-CRT static gaps (`prove_no_retail_code.py --gaps-only`: 44 → 23, all CRT) — retail entries
+the port reached through `engine_retail_call` or by address, ported here whatever their address band (ui4 already sees
+the DirectDraw / palette / font / walker state). Rows at the end of `rh_hooks_rl_ui4.c`; no corpus scenario reaches
+any of them (`corpus_coverage.tsv`).
+
+| VA | what | caller |
+|---|---|---|
+| 0x40902b | demo sheet: a .pl8 into Buf at +24, its .256 palette | rl_ctl screen 60 → 61 |
+| 0x41e5d0 / 0x425a6a | screens 0x45 (lom.pl8 backdrop) / 0x44 (the year panel) | 0x40f1a0 |
+| 0x420428 | title page 10 (stone panel, strings 11/16..49) | the title page table (rh_hooks_screens.c seam) |
+| 0x4247f5 / 0x42563c | debug: "DUMB VIEW ON." banner (DAT_0056d650) / the territory record hex dump | frame driver / 0x44098f |
+| 0x427d72 / 0x42f60e | DirectSound (14) / DirectDraw (99) HRESULT → error-name index; tables generated from IDA | ds / dd error logs |
+| 0x428078 | county k: a bit-1-only cell within radius 1..3 (0x46d130) | 0x427ed0 |
+| 0x42e3ba | the movie's WM_PAINT (PatBlt BLACKNESS, smackw32 #17 / #27 / #17 repaint) | window proc |
+| 0x42e45e / 0x42e50d | present a rect / the whole frame: BltFast (full screen) or Blt to the client rect | movie text box / WM_MOVE on screen 0x22 |
+| 0x42f449 | the windowed palette: statics 0..9 / 246..255 copied back, 10..245 PC_NOCOLLAPSE | 0x42f58c, 0x42f1df |
+| 0x43b101 | Send supplies to the county itself → dialog 14's callback | rl_43b04c |
+| 0x43baf9 | "Surrender castle?" yes (confirm 11) | bf_43ba29 |
+| 0x43e668 | MP error: log, 0x4b7180(1), WM_CLOSE | rl_glue message sender |
+| 0x49bb9d | a seat left: realm +5, aux +0x27, aux +0 cleared | rl_mpmsg3 |
+| 0x4b2234 | five calls of empty functions (0x4b21cf / da / e5): nothing | rl_ui4 fatal-load exit |
+| 0x4b26b8 | minimized: "OK :Paused.", DAT_004e65d0 = 1 then 0, InvalidateRect | window proc, 0x40e8bb |
+| 0x4b2730 | gfx_restore: Restore primary then back; logs which failed | window proc, 0x40e8bb |
+| 0x4b74ce | leave the MP session (DebugBreak asserts, 0x4b6ab6) | rl_ui2 |
+
+RH_SH_HOST (host side effects, proven by the hybrid pass only): 0x42e3ba, 0x43e668, 0x4b26b8, 0x4b2730, 0x4b74ce.
+New io-plat imports: PatBlt 0x5cf384, InvalidateRect 0x5cf560, smackw32 #17 0x5cf5e0 / #27 0x5cf5dc (names
+unconfirmed: `rl_plat_Smack17` / `rl_plat_Smack27`).

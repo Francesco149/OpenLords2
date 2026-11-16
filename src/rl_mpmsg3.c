@@ -122,7 +122,7 @@ int rl_43e6a2(int kind, int dpid)
         if (p == 0)
             return r;
         SHIELD(p) = 0;
-        engine_retail_call(0x49bb9du, 1, (uint32_t)p);   /* TODO(rl-link): 0x49bb9d (in no partition) */
+        rl_49bb9d(p);   /* the seat's records cleared (rl ui4) */
         NPLAYERS--;
         rl_49caaa();
         g_bf_57d340 = 1;

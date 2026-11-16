@@ -152,7 +152,7 @@ static void text_copy_out(uint8_t *dst, int n) { rl_40210c((int)(uintptr_t)dst, 
 static int  state_hash(const void *p, int n, int salt)   /* TODO(rl-link): engine_state_hash 0x44015a */
 { return (int)engine_retail_call(0x44015au, 3, (uint32_t)(uintptr_t)p, (uint32_t)n, (uint32_t)salt); }
 /* unported — TODO(rl-extern) */
-static void mp_debug_tail(void) { engine_retail_call(0x42563cu, 0); }   /* TODO(rl-extern): 0x42563c */
+static void mp_debug_tail(void) { rl_42563c(); }   /* the territory hex dump (rl ui4) */
 
 /* ================================================================ the frame driver's HUD draws */
 
@@ -955,8 +955,7 @@ static void caspics_load(const void *name, const void *dst, int idx)   /* rl_40a
 static void popup_scroll_dismiss(void) { rl_476768(); }   /* engine_popup_scroll_dismiss (rl turn) */
 static void labor_render(void) { rl_412b33(); }   /* engine_labor_render (rl ui4) */
 static void fill4(int x, int y, int c) { engine_retail_call(0x4b4056u, 3, (uint32_t)x, (uint32_t)y, (uint32_t)c); }   /* TODO(rl-link): engine_overlay_render's 4-byte fill 0x4b4056 */
-static void movie_text_box(int x, int y, int w, int h)   /* TODO(rl-extern): 0x42e45e */
-{ engine_retail_call(0x42e45eu, 4, (uint32_t)x, (uint32_t)y, (uint32_t)w, (uint32_t)h); }
+static void movie_text_box(int x, int y, int w, int h) { rl_42e45e(x, y, w, h); }   /* 0x42e45e (rl ui4) */
 static void mp_session_end(void) { rl_4b743b(); }   /* leave the MP session (rl mpnet2) */
 static void map_build_cells(int a) { rl_4298c1(a); }   /* engine_map_init_build_cells (rl ui4) */
 static void map_set_camera(int a) { rl_451fcc(a); }   /* 0x451fcc (rl_ctl) */

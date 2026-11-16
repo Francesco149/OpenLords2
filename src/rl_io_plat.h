@@ -40,7 +40,8 @@
     X(GetWindowRect, 0x5cf500u) X(PeekMessageA, 0x5cf4f0u) X(GetMessageA, 0x5cf58cu)                           \
     X(TranslateMessage, 0x5cf590u) X(DispatchMessageA, 0x5cf510u) \
     /* host */ X(GetCursorPos, 0x5cf57cu) X(DefWindowProcA, 0x5cf558u) X(IsIconic, 0x5cf54cu) X(BeginPaint, 0x5cf4e8u)   \
-    X(EndPaint, 0x5cf4f4u) X(PostQuitMessage, 0x5cf554u) X(GetClientRect, 0x5cf544u) X(ClientToScreen, 0x5cf548u)
+    X(EndPaint, 0x5cf4f4u) X(PostQuitMessage, 0x5cf554u) X(GetClientRect, 0x5cf544u) X(ClientToScreen, 0x5cf548u) \
+    /* gaps */ X(PatBlt, 0x5cf384u) X(InvalidateRect, 0x5cf560u) X(Smack17, 0x5cf5e0u) X(Smack27, 0x5cf5dcu)
 
 void rl_plat_bind_retail(void);   /* rhost: imports through retail's IAT slots */
 void rl_plat_bind_imports(void);  /* rhost --standalone: the same (the slots hold rhost's layers) */
@@ -109,6 +110,8 @@ void     rl_plat_SmackToBuffer(uint32_t smk, uint32_t l, uint32_t t, uint32_t pi
 uint32_t rl_plat_SmackToBufferRect(uint32_t smk, uint32_t surface);                   /* #28 */
 uint32_t rl_plat_SmackWait(uint32_t smk);                                             /* #32 */
 uint32_t rl_plat_SmackSoundUseDirectSound(uint32_t lpds);                             /* #37 */
+uint32_t rl_plat_Smack17(uint32_t smk, uint32_t on);                          /* #17 (name unconfirmed: (smk, 0 / 1) around a #27) */
+void     rl_plat_Smack27(uint32_t smk, uint32_t frame);                             /* #27 (name unconfirmed: (smk, frame)) */
 
 /* the music streamer's timeSetEvent callback (0x426dd5): bound = retail's entry (rhost hooks it); the
  * standalone = a CALLBACK thunk into rl_426dd5 */
@@ -150,3 +153,6 @@ BOOL     rl_plat_EndPaint(HWND w, const PAINTSTRUCT *ps);
 void     rl_plat_PostQuitMessage(int code);
 BOOL     rl_plat_GetClientRect(HWND w, RECT *r);
 BOOL     rl_plat_ClientToScreen(HWND w, POINT *p);
+/* gaps (the movie's WM_PAINT 0x42e3ba, the pause 0x4b26b8) */
+BOOL     rl_plat_PatBlt(HDC dc, int x, int y, int w, int h, DWORD rop);
+BOOL     rl_plat_InvalidateRect(HWND w, const RECT *r, BOOL erase);

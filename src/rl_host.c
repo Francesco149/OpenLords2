@@ -1853,7 +1853,7 @@ int rl_4b99c0(void)
         engine_set_demand_redraw(0);
     }
     if (g_rl_56d650 != 0) {
-        engine_retail_call(0x4247f5u, 0);   /* TODO(rl-extern): 0x4247f5 */
+        rl_4247f5();   /* the dumb-view banner (rl ui4) */
     } else if ((int)s_slot_0057c8fc == 0) {
         if (engine_current_screen() == 0 || engine_current_screen() == 16) {
             engine_retail_call(0x4050c0u, 0);   /* TODO(rl-link): engine_map_scene_tick (engine_map_scene.c, its binder) */
@@ -2104,7 +2104,7 @@ int rl_4b29be(int hwnd, int msg, int wparam, int lparam)
     case 5:   /* WM_SIZE */
         if (rl_plat_IsIconic((HWND)(uintptr_t)hwnd)) {
             rl_4afab9(WMSG(0x4df73cu), 0, 0);
-            engine_retail_call(0x4b26b8u, 0);   /* TODO(rl-extern): 0x4b26b8 (pause) */
+            rl_4b26b8();   /* pause (rl ui4) */
         } else {
             rl_4b26f8();
             g_rl_4e65a8 = 1;
@@ -2124,12 +2124,12 @@ int rl_4b29be(int hwnd, int msg, int wparam, int lparam)
             if (g_bfr_engine_state != 0)
                 rl_451f70();
             else if (engine_current_screen() == 0x22)
-                engine_retail_call(0x42e50du, 0);   /* TODO(rl-extern): 0x42e50d */
+                rl_42e50d();   /* the whole frame presented (rl ui4) */
         }
         break;
     case 15: {   /* WM_PAINT */
         if (rl_42e26f() != 0) {
-            engine_retail_call(0x42e3bau, 1, (uint32_t)hwnd);   /* TODO(rl-extern): 0x42e3ba (the movie's paint) */
+            rl_42e3ba((int)hwnd);   /* the movie's paint (rl ui4) */
         } else {
             PAINTSTRUCT ps;
             rl_plat_BeginPaint((HWND)(uintptr_t)hwnd, &ps);
@@ -2153,7 +2153,7 @@ int rl_4b29be(int hwnd, int msg, int wparam, int lparam)
         else
             rl_4afab9(WMSG(0x4df774u), 0, 0);
         if (g_rl_4e65d0 != 0 && g_rl_4e65a8 != 0) {
-            if (engine_retail_call(0x4b2730u, 0) != 0) {   /* TODO(rl-extern): 0x4b2730 (gfx_restore) */
+            if (rl_4b2730() != 0) {   /* gfx_restore (rl ui4) */
                 rl_4b26f8();
             } else if ((int)(uintptr_t)rl_plat_GetForegroundWindow() == hwnd) {
                 rl_4afab9(WMSG(0x4df788u), 0, 0);

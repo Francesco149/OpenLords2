@@ -129,8 +129,7 @@ static void text_input_open(const void *init, int n, int x, int y)   /* text_inp
 static int  text_recompute_length(void) { return rl_401f49(); }   /* text_input_recompute_length 0x401f49 (rl ui4) */
 static int  smithy_panel(void) { return rl_413155(); }   /* labor_panel_smithy 0x413155 (rl ui4) */
 static int  title_filelist(int page) { return (int)engine_retail_call(0x4148e4u, 1, (uint32_t)page); }   /* TODO(rl-link): engine_title_render_filelist 0x4148e4 */
-/* unported — TODO(rl-extern) */
-static int  mp_quit_session(void) { return (int)engine_retail_call(0x4b74ceu, 0); }   /* TODO(rl-extern): 0x4b74ce */
+static int  mp_quit_session(void) { return rl_4b74ce(); }   /* 0x4b74ce (rl ui4) */
 
 /* 0x46d5fe on retail's globals: the pure engine_map_query_terrain_info over the cell grid (DAT_00522f90), the county
  * records and the cursor's cell offset DAT_0056795c; its outputs stored where retail stores them */

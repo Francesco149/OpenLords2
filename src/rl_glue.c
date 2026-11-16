@@ -1402,8 +1402,8 @@ int rl_43eda0(int id, int dest)
     if (!MP_ON)
         return 0;
     uint8_t k = (uint8_t)id;
-    if (g_rl_4d5b90[k] == 255) {   /* TODO(rl-extern): 0x43e668 (the MP error log) */
-        engine_retail_call(0x43e668u, 1, (uint32_t)(uintptr_t)g_rl_4d5f10);
+    if (g_rl_4d5b90[k] == 255) {   /* 0x43e668: the MP error log (rl ui4) */
+        rl_43e668((int)(uintptr_t)g_rl_4d5f10);
         return 0;
     }
     if ((int)(ticks_ms() - (uint32_t)g_rl_4e59d4) < 3)

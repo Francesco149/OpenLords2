@@ -84,3 +84,10 @@ extern int32_t g_rl_5c9a78;                  /* .data 0x5c9a78..0x5c9a7c: dword_
 extern int32_t g_rl_5cd408;                  /* .data 0x5cd408..0x5cd40c: dword_5CD408(rw)  DUP 5cd408 */
 extern int32_t g_rl_5cd418;                  /* .data 0x5cd418..0x5cd41c: dword_5CD418(rw)  DUP 5cd418 */
 extern uint8_t g_rl_5cd4f4[4];               /* .data 0x5cd4f4..0x5cd4f8: MaxCharCount(rw)  DUP 5cd4f4 */
+extern uint8_t g_rl_4d42d4[0x10];            /* .data 0x4d42d4..0x4d42e4: aLom256(o) aLomPl8(o) — hand: screen 0x45 (0x41e5d0) */
+extern uint8_t g_rl_4d4544[0xe];             /* .data 0x4d4544..0x4d4552: aDumbViewOn(o) — hand: 0x4247f5 */
+extern uint8_t g_rl_4d4710[0x10];            /* .data 0x4d4710..0x4d4720: aPiece(o) asc_4D4718(o) asc_4D471C(o) — hand: 0x42563c */
+extern uint8_t g_rl_4d4750[0x4];             /* .data 0x4d4750..0x4d4754: asc_4D4750(o) — hand: 0x425a6a */
+extern uint8_t g_rl_4df648[0xe];             /* .data 0x4df648..0x4df656: aOkPaused(o) — hand: 0x4b26b8 */
+extern uint8_t g_rl_4df668[0x45];            /* .data 0x4df668..0x4df6ad: aErrCanTRestore(o) aErrCanTRestore_0(o) — hand: gfx_restore 0x4b2730 */
+extern uint8_t g_rl_4d5d60[0xd];             /* .data 0x4d5d60..0x4d5d6d: aErrNetwork(o) — hand: 0x43e668 */

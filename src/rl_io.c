@@ -1672,7 +1672,7 @@ int rl_42f58c(int first, int last)
     if (g_rl_53f228 != 0)
         rl_42f306();   /* (rl ui4) */
     else
-        engine_retail_call(0x42f449u, 0);   /* TODO(rl-extern) */
+        rl_42f449();   /* (rl ui4) */
     void *e = g_rl_53f228 != 0 ? (void *)&g_rl_5165b0 : (void *)&g_rl_515d90;
     return (int)((dd_setentries_t)VT(g_rl_4df288, 0x18))((uint32_t)g_rl_4df288, 0, 0, 256, e);
 }
@@ -1735,7 +1735,7 @@ int rl_42dbc7(int first)
                     SMKF(4) == SMKF(0x380) && SMKF(0x384) == SMKF(8))
                     g_rl_5169b8 = (int32_t)(SMKF(0x374) + 1);
             } else {
-                int e = (int)engine_retail_call(0x42f60eu, 1, (uint32_t)hr);   /* TODO(rl-extern): the DD error's name */
+                int e = rl_42f60e((int)hr);   /* the DD error's name (rl ui4) */
                 rl_4afab9((int)(uintptr_t)RS(g_rl_4d4fe0, 0x4d4fe0u, 0x4d5034u), 0, e + 1);   /* "ERR:DD surface lock error:" */
                 g_rl_4df28c = 0;
             }

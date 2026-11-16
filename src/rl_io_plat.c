@@ -187,6 +187,16 @@ uint32_t rl_plat_SmackWait(uint32_t smk)
     uint32_t (WINAPI *f)(uint32_t) = SMK(SmackWait, 32, uint32_t (WINAPI *)(uint32_t));
     return f ? f(smk) : 0;
 }
+uint32_t rl_plat_Smack17(uint32_t smk, uint32_t on)
+{
+    uint32_t (WINAPI *f)(uint32_t, uint32_t) = SMK(Smack17, 17, uint32_t (WINAPI *)(uint32_t, uint32_t));
+    return f ? f(smk, on) : 0;
+}
+void rl_plat_Smack27(uint32_t smk, uint32_t frame)
+{
+    void (WINAPI *f)(uint32_t, uint32_t) = SMK(Smack27, 27, void (WINAPI *)(uint32_t, uint32_t));
+    if (f) f(smk, frame);
+}
 uint32_t rl_plat_SmackSoundUseDirectSound(uint32_t lpds)
 {
     uint32_t (WINAPI *f)(uint32_t) = SMK(SmackSoundUseDirectSound, 37, uint32_t (WINAPI *)(uint32_t));
@@ -252,3 +262,7 @@ BOOL rl_plat_EndPaint(HWND w, const PAINTSTRUCT *ps)
 void rl_plat_PostQuitMessage(int code) { IMP(PostQuitMessage, void (WINAPI *)(int), PostQuitMessage)(code); }
 BOOL rl_plat_GetClientRect(HWND w, RECT *r) { return IMP(GetClientRect, BOOL (WINAPI *)(HWND, RECT *), GetClientRect)(w, r); }
 BOOL rl_plat_ClientToScreen(HWND w, POINT *p) { return IMP(ClientToScreen, BOOL (WINAPI *)(HWND, POINT *), ClientToScreen)(w, p); }
+BOOL rl_plat_PatBlt(HDC dc, int x, int y, int w, int h, DWORD rop)
+{ return IMP(PatBlt, BOOL (WINAPI *)(HDC, int, int, int, int, DWORD), PatBlt)(dc, x, y, w, h, rop); }
+BOOL rl_plat_InvalidateRect(HWND w, const RECT *r, BOOL erase)
+{ return IMP(InvalidateRect, BOOL (WINAPI *)(HWND, const RECT *, BOOL), InvalidateRect)(w, r, erase); }

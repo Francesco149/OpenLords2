@@ -62,4 +62,11 @@
     BFA(g_rl_5cd408,0x5cd408) \
     BFA(g_rl_5cd418,0x5cd418) \
     BFA(g_rl_5cd4f4,0x5cd4f4) \
+    BFA(g_rl_4d42d4,0x4d42d4) \
+    BFA(g_rl_4d4544,0x4d4544) \
+    BFA(g_rl_4d4710,0x4d4710) \
+    BFA(g_rl_4d4750,0x4d4750) \
+    BFA(g_rl_4df648,0x4df648) \
+    BFA(g_rl_4df668,0x4df668) \
+    BFA(g_rl_4d5d60,0x4d5d60) \
 

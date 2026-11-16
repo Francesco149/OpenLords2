@@ -102,3 +102,25 @@ int rl_42eb7c(void);                             /* 277 B, coverage 59 */
 int rl_42ec91(void);                             /* 1207 B, coverage 59 */
 int rl_42f1df(int a0);                           /* 295 B, coverage 59 */
 int rl_42f306(void);                             /* 323 B, coverage 59 */
+/* the standalone's last seams (2026-11-16) */
+int rl_40902b(int name, int pal);
+int rl_41e5d0(void);
+int rl_420428(void);
+int rl_4247f5(void);
+int rl_42563c(void);
+int rl_425a6a(void);
+int rl_427d72(int hr);
+int rl_42f60e(int hr);
+int rl_428078(int k);
+int rl_42e3ba(int hwnd);
+int rl_42e45e(int x, int y, int w, int h);
+int rl_42e50d(void);
+int rl_42f449(void);
+int rl_43b101(void);
+int rl_43baf9(void);
+int rl_43e668(int a1);
+int rl_49bb9d(int p);
+int rl_4b2234(void);
+int rl_4b26b8(void);
+int rl_4b2730(void);
+int rl_4b74ce(void);

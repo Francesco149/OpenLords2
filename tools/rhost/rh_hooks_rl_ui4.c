@@ -36,6 +36,7 @@ enum {
     X_rl_419c78, X_rl_412b33, X_rl_412e6b, X_rl_413155, X_rl_413590, X_rl_413b30, X_rl_4140f3, X_rl_414220,
     X_rl_41593b, X_rl_415bdc, X_rl_415e42, X_rl_415fb7, X_rl_41789b, X_rl_417960, X_rl_4180f6, X_rl_4184c6,
     X_rl_418e2d, X_rl_410a5d, X_rl_41ad5d, X_rl_41aea2, X_rl_41e61d, X_rl_41fdd6,
+    X_rl_40902b, X_rl_41e5d0, X_rl_420428, X_rl_4247f5, X_rl_42563c, X_rl_425a6a, X_rl_427d72, X_rl_42f60e, X_rl_428078, X_rl_42e3ba, X_rl_42e45e, X_rl_42e50d, X_rl_42f449, X_rl_43b101, X_rl_43baf9, X_rl_43e668, X_rl_49bb9d, X_rl_4b2234, X_rl_4b26b8, X_rl_4b2730, X_rl_4b74ce,
 };
 
 HOOK_R(rl_401000, 3, rl_401000(I(0), I(1), I(2)))
@@ -133,6 +134,30 @@ HOOK_V(rl_41aea2, 0, rl_41aea2())   /* the shipment's goods */
 HOOK_V(rl_41e61d, 0, rl_41e61d())   /* the title backdrop */
 HOOK_V(rl_41fdd6, 0, rl_41fdd6())   /* an option page's drop-down list */
 
+/* the standalone's last seams (2026-11-16): none reached by the corpus; RH_SH_HOST = host side effects (paint,
+ * PostMessage, InvalidateRect, Restore on rhost's surfaces, DebugBreak / the MP transport) */
+HOOK_R(rl_40902b, 2, rl_40902b(I(0), I(1)))
+HOOK_V(rl_41e5d0, 0, rl_41e5d0())
+HOOK_V(rl_420428, 0, rl_420428())
+HOOK_V(rl_4247f5, 0, rl_4247f5())
+HOOK_V(rl_42563c, 0, rl_42563c())
+HOOK_V(rl_425a6a, 0, rl_425a6a())
+HOOK_R(rl_427d72, 1, rl_427d72(I(0)))
+HOOK_R(rl_42f60e, 1, rl_42f60e(I(0)))
+HOOK_R(rl_428078, 1, rl_428078(I(0)))
+HOOK_V(rl_42e3ba, 1, rl_42e3ba(I(0)))
+HOOK_V(rl_42e45e, 4, rl_42e45e(I(0), I(1), I(2), I(3)))
+HOOK_V(rl_42e50d, 0, rl_42e50d())
+HOOK_V(rl_42f449, 0, rl_42f449())
+HOOK_V(rl_43b101, 0, rl_43b101())
+HOOK_V(rl_43baf9, 0, rl_43baf9())
+HOOK_V(rl_43e668, 1, rl_43e668(I(0)))
+HOOK_V(rl_49bb9d, 1, rl_49bb9d(I(0)))
+HOOK_V(rl_4b2234, 0, rl_4b2234())
+HOOK_V(rl_4b26b8, 0, rl_4b26b8())
+HOOK_R(rl_4b2730, 0, rl_4b2730())
+HOOK_V(rl_4b74ce, 0, rl_4b74ce())
+
 hook_t RH_HOOKS_RL_UI4[] = {
     { "rl_401000", 0x401000u, (void *)w_rl_401000, 0, 0, 0, 0, "" },
     { "rl_401085", 0x401085u, (void *)w_rl_401085, 0, 0, 0, 0, "" },
@@ -228,5 +253,26 @@ hook_t RH_HOOKS_RL_UI4[] = {
     { "rl_41aea2", 0x41aea2u, (void *)w_rl_41aea2, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
     { "rl_41e61d", 0x41e61du, (void *)w_rl_41e61d, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
     { "rl_41fdd6", 0x41fdd6u, (void *)w_rl_41fdd6, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_40902b", 0x40902bu, (void *)w_rl_40902b, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_41e5d0", 0x41e5d0u, (void *)w_rl_41e5d0, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_420428", 0x420428u, (void *)w_rl_420428, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_4247f5", 0x4247f5u, (void *)w_rl_4247f5, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_42563c", 0x42563cu, (void *)w_rl_42563c, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_425a6a", 0x425a6au, (void *)w_rl_425a6a, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_427d72", 0x427d72u, (void *)w_rl_427d72, 0, 0, 0, 0, "" },
+    { "rl_42f60e", 0x42f60eu, (void *)w_rl_42f60e, 0, 0, 0, 0, "" },
+    { "rl_428078", 0x428078u, (void *)w_rl_428078, 0, 0, 0, 0, "" },
+    { "rl_42e3ba", 0x42e3bau, (void *)w_rl_42e3ba, 0, 0, 0, 0, "", 0, RH_SH_HOST },
+    { "rl_42e45e", 0x42e45eu, (void *)w_rl_42e45e, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_42e50d", 0x42e50du, (void *)w_rl_42e50d, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
+    { "rl_42f449", 0x42f449u, (void *)w_rl_42f449, 0, 0, 0, 0, "" },
+    { "rl_43b101", 0x43b101u, (void *)w_rl_43b101, 0, 0, 0, 0, "" },
+    { "rl_43baf9", 0x43baf9u, (void *)w_rl_43baf9, 0, 0, 0, 0, "" },
+    { "rl_43e668", 0x43e668u, (void *)w_rl_43e668, 0, 0, 0, 0, "", 0, RH_SH_HOST },
+    { "rl_49bb9d", 0x49bb9du, (void *)w_rl_49bb9d, 0, 0, 0, 0, "" },
+    { "rl_4b2234", 0x4b2234u, (void *)w_rl_4b2234, 0, 0, 0, 0, "" },
+    { "rl_4b26b8", 0x4b26b8u, (void *)w_rl_4b26b8, 0, 0, 0, 0, "", 0, RH_SH_HOST },
+    { "rl_4b2730", 0x4b2730u, (void *)w_rl_4b2730, 0, 0, 0, 0, "", 0, RH_SH_HOST },
+    { "rl_4b74ce", 0x4b74ceu, (void *)w_rl_4b74ce, 0, 0, 0, 0, "", 0, RH_SH_HOST },
 };
 const int RH_HOOKS_RL_UI4_N = sizeof RH_HOOKS_RL_UI4 / sizeof *RH_HOOKS_RL_UI4;

@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 788,
-  "ported": 1154,
-  "unported": 505,
+  "ported": 1172,
+  "unported": 487,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 1942,
-  "pct_touched": 79.4,
+  "touched": 1960,
+  "pct_touched": 80.1,
   "pct_tested": 32.2,
   "bytes_total": 838629,
-  "bytes_touched": 713145,
-  "pct_bytes_touched": 85.0
+  "bytes_touched": 717933,
+  "pct_bytes_touched": 85.6
  },
  "orphan_refs": [
   "0x004148",
@@ -1468,8 +1468,10 @@
    "name": "FUN_0040902b",
    "size": 148,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui4.c"
+   ]
   },
   {
    "va": "0x4090bf",
@@ -3676,8 +3678,10 @@
    "name": "FUN_0041e5d0",
    "size": 77,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui4.c"
+   ]
   },
   {
    "va": "0x41e61d",
@@ -3974,8 +3978,10 @@
    "name": "FUN_00420428",
    "size": 244,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui4.c"
+   ]
   },
   {
    "va": "0x42051c",
@@ -4244,8 +4250,10 @@
    "name": "FUN_004247f5",
    "size": 174,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui4.c"
+   ]
   },
   {
    "va": "0x4248a3",
@@ -4292,8 +4300,10 @@
    "name": "FUN_0042563c",
    "size": 349,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui4.c"
+   ]
   },
   {
    "va": "0x425799",
@@ -4316,8 +4326,10 @@
    "name": "FUN_00425a6a",
    "size": 158,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui4.c"
+   ]
   },
   {
    "va": "0x425b10",
@@ -4525,8 +4537,10 @@
    "name": "FUN_00427d72",
    "size": 340,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui4.c"
+   ]
   },
   {
    "va": "0x427ed0",
@@ -4566,7 +4580,8 @@
     "src/engine_army_ai.c",
     "src/engine_combat.c",
     "src/game_init.c",
-    "src/game_init.h"
+    "src/game_init.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -5249,24 +5264,30 @@
    "name": "FUN_0042e3ba",
    "size": 164,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui4.c"
+   ]
   },
   {
    "va": "0x42e45e",
    "name": "FUN_0042e45e",
    "size": 175,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui4.c"
+   ]
   },
   {
    "va": "0x42e50d",
    "name": "FUN_0042e50d",
    "size": 179,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui4.c"
+   ]
   },
   {
    "va": "0x42e5c0",
@@ -5360,7 +5381,8 @@
    "status": "ported",
    "src": [
     "src/gfx.c",
-    "src/gfx.h"
+    "src/gfx.h",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -5378,8 +5400,10 @@
    "name": "FUN_0042f60e",
    "size": 2298,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui4.c"
+   ]
   },
   {
    "va": "0x42ff10",
@@ -7726,8 +7750,10 @@
    "name": "FUN_0043b101",
    "size": 68,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui4.c"
+   ]
   },
   {
    "va": "0x43b145",
@@ -7907,8 +7933,10 @@
    "name": "FUN_0043baf9",
    "size": 111,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui4.c"
+   ]
   },
   {
    "va": "0x43bb68",
@@ -8480,8 +8508,10 @@
    "name": "FUN_0043e668",
    "size": 58,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui4.c"
+   ]
   },
   {
    "va": "0x43e6a2",
@@ -18634,8 +18664,10 @@
    "name": "FUN_0049bb9d",
    "size": 75,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui4.c"
+   ]
   },
   {
    "va": "0x49bbe8",
@@ -21493,8 +21525,10 @@
    "name": "FUN_004b2234",
    "size": 36,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui4.c"
+   ]
   },
   {
    "va": "0x4b2258",
@@ -21558,8 +21592,10 @@
    "name": "FUN_004b26b8",
    "size": 64,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui4.c"
+   ]
   },
   {
    "va": "0x4b26f8",
@@ -21580,7 +21616,8 @@
    "src": [
     "src/gfx.c",
     "src/gfx.h",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_ui4.c"
    ]
   },
   {
@@ -22427,8 +22464,10 @@
    "name": "FUN_004b74ce",
    "size": 70,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_ui4.c"
+   ]
   },
   {
    "va": "0x4b7514",

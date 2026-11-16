@@ -2330,7 +2330,7 @@ int rl_42ff10(void)
     case 60:
         if (g_bf_4e65d8 != 0 || LMB_UP != 0) {
             engine_set_current_screen(61);
-            engine_retail_call(0x40902bu, 2, (uint32_t)S4D5620(0x4d5674), (uint32_t)S4D5620(0x4d5668));   /* TODO(rl-extern): the demo screen's sheet + palette */
+            rl_40902b((int)(uintptr_t)S4D5620(0x4d5674), (int)(uintptr_t)S4D5620(0x4d5668));   /* the demo screen's sheet + palette (rl ui4) */
         }
         break;
     case 61:
