@@ -29,6 +29,8 @@ void rl_link_retail_enter(void);
 void rl_link_retail_leave(void);
 engine_event_queue_state_t *rl_link_evq_load(void);
 void rl_link_evq_store(void);
+int  rl_link_evq_callout_enter(void);   /* an old port's callback into rl_ code: the open queue stored … */
+void rl_link_evq_callout_leave(int open);   /* … and reloaded */
 
 /* the dirty rectangle's mirror (retail: six scattered globals DAT_0050d09c / 0050a4c4 / 0050a4c8 / 0050a4bc /
  * 0050a4c0 / 0053e9ac); engine_territory_set_dirty_state() binds it */
@@ -46,6 +48,34 @@ void rl_link_panel_env(void);
 /* retail-layout entries of old ports (rows: tools/rhost/rh_hooks_mapview.c) */
 int rl_40f7d3(int a1);   /* strat_draw_territory_panel: engine_hud_panel_draw */
 int rl_41a734(int a1);   /* the End-turn strip: engine_hud_panel_endturn */
+
+/* the logic family (src/rl_link_logic.c; rows: tools/rhost/rh_hooks_ai / _combat / _battle / _events / _economy / _state.c) */
+void rl_link_bind_once(void);
+void rl_link_bind_all(void);   /* rl_link_bind_once + the mapview / screens binds: the port's start */
+int rl_448819(void); int rl_449889(void); int rl_44aa41(void); int rl_44ae3c(void); int rl_4508de(void); int rl_4acbd4(void);
+int rl_46eddf(int rec); int rl_49a581(void); int rl_4ac3c6(int realm); int rl_437535(int occ, int region); int rl_49b2a3(void);
+int rl_4abb36(int army, int region); int rl_4a8aab(int rec); int rl_43b622(void); int rl_477dfc(void);
+int rl_428007(int realm); int rl_43b412(int ox, int oy); int rl_4357a6(void);
+
+/* the mapview family (src/rl_link_mapview.c; rows: tools/rhost/rh_hooks_mapview.c) */
+void rl_link_mapview_bind(void);
+void rl_link_mapview_ti_env(void);
+int rl_4050c0(void); int rl_40526e(void); int rl_405ae9(void); int rl_405c2f(void); int rl_4063c1(int a0);
+int rl_406673(int a0); int rl_42a7f1(int a0);
+int rl_452820(int a0, int a1); int rl_45337b(int a0, int a1); int rl_4538f6(int a0, int a1); int rl_460501(int a0, int a1);
+int rl_46079d(int a0, int a1); int rl_4608de(int a0, int a1); int rl_463b42(int a0, int a1); int rl_463c06(int a0, int a1);
+int rl_463c62(int a0, int a1); int rl_453e71(int a0, int a1); int rl_455f04(int a0, int a1); int rl_456fd8(int a0, int a1);
+int rl_4580a9(int a0, int a1, int a2); int rl_459258(int a0, int a1, int a2); int rl_460a1c(int a0, int a1);
+int rl_4611ef(int a0, int a1); int rl_461623(int a0, int a1); int rl_461a54(int a0, int a1, int a2);
+int rl_461efb(int a0, int a1, int a2); int rl_463cbe(int a0, int a1); int rl_463e91(int a0, int a1);
+int rl_463fa5(int a0, int a1); int rl_4640b6(int a0, int a1, int a2); int rl_464209(int a0, int a1, int a2);
+int rl_405487(void); int rl_405862(void); int rl_4059af(void); int rl_408438(int a0); int rl_405602(void);
+int rl_405eb5(void); int rl_405fac(void); int rl_4071a0(int a0); int rl_4081a6(int a0); int rl_408c50(void);
+int rl_407f82(int a0, int a1, int a2); int rl_4b4056(int x, int y, int c); int rl_410aa9(int x, int y);
+int rl_410cbd(int county, int x, int y, int mode); int rl_451bba(void);
+int rl_40fec1(int a0); int rl_4100af(void); int rl_41023a(void); int rl_4103c5(void); int rl_410502(void);
+int rl_410598(void); int rl_41062e(void); int rl_4106c4(void); int rl_4107d1(void);
+int rl_41b032(void); int rl_41befe(void); int rl_41c208(void);
 
 /* the screens family (src/rl_link_screens.c; rows: tools/rhost/rh_hooks_screens.c) */
 void rl_link_screens_bind(void);

@@ -11,6 +11,7 @@
  * The corpus has no interactive battlefield and no siege yet: these rows are reached by human traces (docs/
  * human-traces.md §A) or a bot that besieges. */
 #include "rh_port.h"
+#include "rl_link.h"
 #include "save_schema_globals.h"
 #include "engine.h"
 #include "engine_combat.h"
@@ -25,30 +26,8 @@ A(g_engine_state,0x52af94)
 );
 #undef A
 
-/* ---------------------------------------------------------------- seams → retail (unported callees) */
-#define RETAIL(call) do { rh_port_retail_enter(); call; rh_port_retail_leave(); } while (0)
-typedef int (__cdecl *r_v_t)(void);
-typedef int (__cdecl *r_i_t)(int);
-typedef int (__cdecl *r_ii_t)(int, int);
-typedef int (__cdecl *r_smk_t)(uint32_t, int, int, int, int);
-static void seam_siege_result(void)  { RETAIL(((r_v_t)0x42c64fu)()); }    /* FUN_0042c64f */
-static void seam_return_to_map(void) { RETAIL(((r_v_t)0x4788c6u)()); }    /* FUN_004788c6 */
-static void seam_writeback(void)     { RETAIL(((r_v_t)0x47f474u)()); }    /* FUN_0047f474 */
-static void seam_result_panel(void)  { RETAIL(((r_v_t)0x423241u)()); }    /* FUN_00423241 */
-static void seam_stop_stream(int s)  { RETAIL(((r_i_t)0x426d11u)(s)); }   /* FUN_00426d11 */
-static void seam_message(int id, int a) { RETAIL(((r_ii_t)0x43eda0u)(id, a)); }   /* FUN_0043eda0 */
-static void seam_result_movie(int siege, int index, int x, int y, int z, int screen)   /* FUN_0042d91b */
-{
-    uint32_t name = (siege ? 0x4d93f8u : 0x4d9278u) + (uint32_t)index * 16;   /* retail's own string */
-    RETAIL(((r_smk_t)0x42d91bu)(name, x, y, z, screen));
-}
-
-/* called once from rh_port_bind_once (rh_hooks_ai.c) */
-void rh_battle_bind_seams(void)
-{
-    engine_combat_bind_battlefield_fns(seam_siege_result, seam_return_to_map, seam_writeback, seam_result_panel,
-                                       seam_stop_stream, seam_result_movie, seam_message);
-}
+/* the battlefield's way out (siege result, return to map, writeback, result panel / movie, message): bound by
+ * rl_link_bind_once (src/rl_link_logic.c) to retail-layout ports */
 
 #define RH_TABLE RH_HOOKS_BATTLE
 extern hook_t RH_HOOKS_BATTLE[];
@@ -58,11 +37,11 @@ enum {
     X_battle_stage_siege_side,
 };
 
-HOOK_V(battle_auto_resolve,      0, EVQ(engine_combat_auto_resolve_button(q, MP_ACTIVE)))
+HOOK_V(battle_auto_resolve,      0, rl_43b622())
 HOOK_V(battle_end,               0, EVQ(engine_combat_battlefield_end(q, MP_ACTIVE)))
-HOOK_V(battle_end_tick,          0, EVQ(engine_combat_battlefield_end_tick(q, MP_ACTIVE)))
+HOOK_V(battle_end_tick,          0, rl_477dfc())
 HOOK_V(battle_pick_result_row,   0, engine_combat_pick_result_row())
-HOOK_V(battle_siege_assault,     1, EVQ(engine_combat_siege_assault(I(0), q, MP_ACTIVE)))
+HOOK_V(battle_siege_assault,     1, rl_4a8aab(I(0)))
 HOOK_V(battle_stage_siege_side,  2, engine_combat_stage_siege_side(I(0), I(1)))
 
 hook_t RH_HOOKS_BATTLE[] = {

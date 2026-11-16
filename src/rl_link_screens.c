@@ -306,7 +306,7 @@ int rl_4149ec(int a0, int a1) { TR(engine_title_render_filelist_content(a0, a1))
 /* ---------------------------------------------------------------- engine_county_panels: the context over retail's */
 /* FUN_004050c0: the map recomposite the panels open with — it may re-pick DAT_0057c93c */
 static int seam_map_scene(void)
-{ SCR_OUT(engine_retail_call(0x4050c0u, 0)); return (int)s_slot_0057c93c; }   /* TODO(rl-link): the mapview family (engine_map_scene) */
+{ SCR_OUT(rl_4050c0()); return (int)s_slot_0057c93c; }   /* rl_link: the mapview family (engine_map_scene) */
 static engine_county_panels_ctx_t s_cp;
 static engine_county_panels_ctx_t *cp_ctx(void)
 {

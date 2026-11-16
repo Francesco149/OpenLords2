@@ -50,6 +50,7 @@ A(g_sim_mp_active,0x553030)
 A(g_rl_55cd6c,0x55cd6c) A(g_rl_5656f0,0x5656f0) A(g_rl_57c904,0x57c904) A(g_rl_56d628,0x56d628) A(g_rl_50a49e,0x50a49e)
 A(g_rl_553f08,0x553f08) A(g_rl_4e59dc,0x4e59dc)
 A(g_rl_4e3bf0,0x4e3bf0) A(g_rl_4e4030,0x4e4030) A(g_rl_4e4470,0x4e4470) A(g_rl_4e4520,0x4e4520) A(g_rl_4d2c88,0x4d2c88)
+A(g_rl_4d8108,0x4d8108) A(g_rl_4d28f8,0x4d28f8) A(g_rl_4d2ec8,0x4d2ec8) A(g_rl_4d4230,0x4d4230) A(g_rl_4d9278,0x4d9278)
 /* engine_territory_globals.c: the cell sweeps' counter (quirk #237) */
 A(g_cell_sweep_counter,0x53e974)
 /* save_schema_globals.c: every s_slot_<VA> is retail VA <VA> */
@@ -100,9 +101,6 @@ A(s_slot_0058fe28,0x58fe28)
 
 /* ---------------------------------------------------------------- binding: runtime pointer seams */
 /* engine_dirty_rect: retail keeps the dirty rectangle in six scattered globals (engine_dirty_rect.h) */
-void rh_combat_bind_seams(void);   /* rh_hooks_combat.c */
-void rh_battle_bind_seams(void);   /* rh_hooks_battle.c */
-void rh_economy_bind_seams(void);  /* rh_hooks_economy.c */
 void rh_bf_bind_seams(void);       /* rh_hooks_bf.c */
 static void (*s_binds[32])(void);
 static int s_nbinds;
@@ -117,31 +115,8 @@ void rh_port_bind_once(void)
         if (rs[2 * i] != (uint32_t)(uintptr_t)g_save_schema[i].ptr || rs[2 * i + 1] != g_save_schema[i].size)
             rh_fatal("rh_port: save-schema entry %d: retail %08x+%u, port alias %08x+%u", i, rs[2 * i], rs[2 * i + 1],
                      (uint32_t)(uintptr_t)g_save_schema[i].ptr, g_save_schema[i].size);
-    /* engine_game_init_bind_runtime_tables, minus what the port derives itself (strat cost) */
-    engine_army_economy_bind_army_records(g_per_army_768);
-    engine_army_economy_bind_cell_roster((const int32_t *)g_misc_1360);
-    engine_army_economy_bind_cells(g_overworld_map);
-    engine_army_economy_bind_resource_pool(g_player_strategic_352 + 0x120);
-    engine_territory_bind_records(g_per_territory_420);
-    engine_territory_bind_cells(g_overworld_map);
-    engine_territory_bind_cell_roster((int32_t *)g_misc_1360);
-    /* the AI score table DAT_0053fa40 lives INSIDE the county records (+0x90, 0x180 i16 a row): unbound, the
-     * score clear of FUN_0046d9da was a silent no-op under rhost (move_decay_cell diverged in bot3cen-s207/209) */
-    engine_territory_bind_cell_score_table((int16_t *)(g_per_army_768 + 0x90));
-    engine_territory_bind_terrain_tiles((int32_t *)(uintptr_t)0x55cea0u);   /* DAT_0055cea0: 129×65 tile grid */
-    engine_territory_bind_army_records(g_per_army_768);
-    engine_map_query_bind_cell_descriptors(g_overworld_map);
-    engine_army_state_bind_cells(g_overworld_map);
-    engine_territory_bind_cursor_cache_flag((int *)(uintptr_t)0x57cac4u);   /* DAT_0057cac4 */
-    engine_territory_set_dirty_state(&rl_link_dirty);                           /* synced: six scattered globals */
-    engine_path_field_bind_terrain((const int16_t *)(uintptr_t)0x4f3ffeu);  /* the strategic move-cost grid */
-    engine_path_field_bind_storage((int16_t *)(uintptr_t)0x500c30u, (int16_t *)(uintptr_t)0x4f0380u,
-                                   (int32_t *)(uintptr_t)0x4f9820u, (int32_t *)(uintptr_t)0x503020u,
-                                   (uint8_t *)(uintptr_t)0x53f070u, (uint8_t *)(uintptr_t)0x553550u);
-    engine_army_move_bind_cells(g_overworld_map);
-    rh_combat_bind_seams();
-    rh_battle_bind_seams();
-    rh_economy_bind_seams();
+    /* the runtime table / storage binds and the logic ports' callbacks: src/rl_link_logic.c (the port's own) */
+    rl_link_bind_once();
     rh_bf_bind_seams();
     for (int i = 0; i < s_nbinds; i++) s_binds[i]();   /* the tables' own binds (mapview, gfx, screens …) */
     rh_log("rh_port: %d save-schema aliases match retail's table; seams bound (%d table binds)\n", SAVE_SCHEMA_COUNT, s_nbinds);
@@ -347,10 +322,10 @@ HOOK_V(ai_run_garrison,         1, engine_army_ai_run_garrison(I(0)))
 /* engine_realm.c — the turn's realm passes (retail reads the RNG bytes / queue from globals) */
 HOOK_V(realm_replan_economies,  0, engine_realm_replan_economies())
 HOOK_V(realm_clear_turn_scratch, 0, engine_realm_clear_turn_scratch())
-HOOK_V(realm_update_mood,       0, EVQ(engine_realm_update_mood(G32(0x58fd60u), G32(0x58fd7cu), q)))
+HOOK_V(realm_update_mood,       0, rl_449889())
 HOOK_V(realm_advance_population, 0, engine_realm_advance_population())
 HOOK_V(realm_migrate_population, 0, engine_realm_migrate_population())
-HOOK_V(realm_escalate_unrest,   0, EVQ(engine_realm_escalate_unrest(q, MP_ACTIVE)))
+HOOK_V(realm_escalate_unrest,   0, rl_44aa41())
 HOOK_V(realm_accrue_income,     0, engine_realm_accrue_income())
 HOOK_V(realm_recompute_income,  1, engine_realm_recompute_realm_income(I(0)))
 HOOK_V(realm_owner_tally,       1, engine_realm_recompute_owner_tally(I(0)))
@@ -358,13 +333,13 @@ HOOK_V(realm_advance_rating,    0, engine_realm_advance_rating())
 HOOK_V(realm_tax_approval,      0, engine_realm_apply_tax_approval())
 HOOK_V(realm_settle_provisions, 0, engine_realm_settle_provisions())
 HOOK_V(realm_spread_development, 0, engine_realm_spread_development())
-HOOK_V(realm_complete_settlements, 0, EVQ(engine_realm_complete_settlements(q)))
+HOOK_V(realm_complete_settlements, 0, rl_4508de())
 HOOK_V(realm_recount_armies,    0, engine_realm_recount_armies())
 HOOK_R(realm_owns_neighbor,     2, engine_realm_player_owns_neighbor((unsigned)a[0], I(1)))
 HOOK_V(realm_territory_income,  0, engine_realm_collect_territory_income())
 HOOK_V(realm_record_history,    0, engine_realm_record_history())
 /* engine_army_ai.c — the per-tick brain FSM and its queue-posting steps (the brain's RNG byte is the global's value) */
-HOOK_V(ai_run_per_tick,         0, EVQ(engine_army_ai_run_per_tick(q, MP_ACTIVE, G32(0x58fd60u))))
+HOOK_V(ai_run_per_tick,         0, rl_49a581())
 HOOK_V(ai_run_movement,         1, EVQ(engine_army_ai_run_movement(I(0), q, MP_ACTIVE)))
 HOOK_V(ai_run_diplomacy,        1, EVQ(engine_army_ai_run_diplomacy(I(0), q)))
 HOOK_V(ai_propose_diplomacy,    1, EVQ(engine_army_ai_propose_diplomacy(I(0), q)))

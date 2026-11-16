@@ -95,14 +95,14 @@ static void wrap_line(int idx, int skip, int x, int y, const uint8_t *font, int 
 }
 
 /* ---------------------------------------------------------------- seams (callees outside the partition) */
-/* ported, not on retail's layout / not linked in rhost (a context struct, a file-static) — TODO(rl-link) */
+/* old ports through their retail-layout entries (src/rl_link*.c); 0x49792e: rl-extern */
 static int panel_box(int x, int y, int cols, int rows)   /* 0x409397: the chrome panel + fill (rl_link) */
 { return rl_409397((int)x, (int)y, (int)cols, (int)rows); }
 static int year_number(int v, int x, int y, int mode)   /* rl_link: county_year_number 0x41a900 */
 { return rl_41a900((int)v, (int)x, (int)y, (int)mode); }
 static int territory_panel(int a) { return rl_40f7d3(a); }   /* strat_draw_territory_panel 0x40f7d3 (rl_link: engine_hud_panel) */
 static int endturn_panel(int a) { return rl_41a734(a); }     /* engine_hud_panel_render_endturn 0x41a734 (rl_link) */
-static int minimap_render(int x, int y) { return (int)engine_retail_call(0x410aa9u, 2, (uint32_t)x, (uint32_t)y); }   /* rl_link: engine_minimap_render 0x410aa9 */
+static int minimap_render(int x, int y) { return (int)rl_410aa9(x, y); }   /* rl_link: engine_minimap_render 0x410aa9 */
 static int title_scene(void) { return rl_41e7e1(); }          /* rl_link: engine_title_render_scene 0x41e7e1 */
 static int treasury_render(void) { return rl_416925(); }      /* rl_link: engine_treasury_render 0x416925 */
 static int noble_faces_render(void) { return rl_416cf3(); }   /* rl_link: engine_noble_faces_render 0x416cf3 */
@@ -111,7 +111,7 @@ static int armory_overlay(void) { return rl_418653(); }       /* rl_link: engine
 static int trade_render(void) { return rl_416308(); }         /* rl_link: engine_trade_render 0x416308 */
 static int county_panel(int (*panel)(void)) { return panel(); }   /* the county panels 0x4110b1 / 0x41152f / 0x4116fb / 0x411b72 (rl_link) */
 static int workforce_render(int a) { return rl_412143((int)a); }   /* rl_link: engine_workforce_hud_render 0x412143 */
-static int terrain_panel(void) { return (int)engine_retail_call(0x41b032u, 0); }        /* rl_link: 0x41b032 (engine_terrain_info) */
+static int terrain_panel(void) { return (int)rl_41b032(); }        /* rl_link: 0x41b032 (engine_terrain_info) */
 /* ported at the end of this file (the standalone's last seams) */
 static int screen_41e5d0(void) { return rl_41e5d0(); }   /* screen 0x45 */
 static int screen_425a6a(void) { return rl_425a6a(); }   /* screen 0x44 */
@@ -1162,7 +1162,7 @@ int rl_427ed0(void)
     for (int i = 0; i < 6; i++) {
         int k = s_slot_00569518[i];
         if (k == 0) break;
-        if (engine_retail_call(0x428007u, 1, (uint32_t)k) == 0 &&   /* rl_link: game_init's army_near (bit0) */
+        if (rl_428007(k) == 0 &&   /* rl_link: game_init's army_near (bit0) */
             rl_428078(k) == 0)                                      /* … (flag 0 / 2) */
             continue;
         rl_46e1b0(3, g_cell_cursor_col, g_cell_cursor_row, 6);
@@ -1627,7 +1627,7 @@ static int p5_castle_block(int county, int x, int y, int row)   /* rl_link: labo
 static int p5_armory_racks(void) { return rl_418426(); }    /* rl_link: armory_racks 0x418426 (engine_armory: a ctx) */
 static int p5_armory_counts(void) { return rl_4181eb(); }   /* rl_link: engine_armory_counts_render 0x4181eb */
 static int p5_minimap_plot(int county, int x, int y, int mode)   /* rl_link: engine_minimap_plot 0x410cbd */
-{ return (int)engine_retail_call(0x410cbdu, 4, (uint32_t)county, (uint32_t)x, (uint32_t)y, (uint32_t)mode); }
+{ return (int)rl_410cbd(county, x, y, mode); }
 static int p5_title_setup(int tab) { return rl_41f6c7((int)tab); }   /* rl_link: engine_title_render_setup_screen 0x41f6c7 */
 static int p5_title_41f77a(int tab) { return rl_41f77a(tab); }  /* 0x41f77a (rl mpnet) */
 static int p5_title_420630(int tab) { return rl_420630(tab); }  /* the MP skirmish setup page (rl mpnet2) */

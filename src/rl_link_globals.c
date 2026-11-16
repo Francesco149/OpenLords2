@@ -13,3 +13,8 @@ uint8_t g_rl_4e4030[0x440];
 uint8_t g_rl_4e4470[0x80];
 uint8_t g_rl_4e4520[0x60];
 uint8_t g_rl_4d2c88[0x100];
+uint8_t g_rl_4d8108[0x300];
+uint8_t g_rl_4d28f8[0x38];
+uint8_t g_rl_4d2ec8[0x1d0];
+uint8_t g_rl_4d4230[0x10];
+uint8_t g_rl_4d9278[0x300];

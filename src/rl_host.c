@@ -140,12 +140,12 @@ int rl_4a60b9(int occ)
     if (CTY8(region, 0x53f9b5u) == owner)
         return 0;
     if (CTY8(region, 0x53fb70u) == 0 || CTY8(region, 0x53fb73u) == 1 || CTY8(region, 0x53fb72u) != 0) {
-        engine_retail_call(0x437535u, 2, (uint32_t)occ, (uint32_t)region);   /* TODO(rl-link): engine_combat_transfer_army (an event-queue argument) */
+        rl_437535(occ, region);   /* rl_link: engine_combat_transfer_army (an event-queue argument) */
         ARM8(occ, 0x52f0cau) = 2;
         return 0;
     }
     ARM8(occ, 0x52f0cau) = 2;
-    engine_retail_call(0x437535u, 2, (uint32_t)occ, (uint32_t)region);       /* TODO(rl-link): as above */
+    rl_437535(occ, region);       /* rl_link: as above */
     ARM8(occ, 0x52f200u) = 0;
     rl_4a6735(occ, region);
     ARM8(occ, 0x52f0c6u) = (uint8_t)g_cell_cursor_col;
@@ -1553,7 +1553,7 @@ int rl_4ba9c8(void)
     case 25: if (bclick(0, 0, BTNI(g_rl_4dd7c0, 0x4dd7c0u), 2) != 0) return 1; break;
     case 32: if (click(0, 0, HOT(0x4dc890u), 7) != 0) return 1; break;
     case 8:
-        if (engine_retail_call(0x4357a6u, 0) != 0)   /* rl_link: engine_merchant_zone_at (engine_merchant.c, its screen binder) */
+        if (rl_4357a6() != 0)   /* rl_link: engine_merchant_zone_at (engine_merchant.c, its screen binder) */
             return 1;
         if (bclick(0, 0, BTNI(g_rl_4dd808, 0x4dd808u), g_rl_569500) != 0)
             return 1;
@@ -1842,7 +1842,7 @@ int rl_4b99c0(void)
                 bf_489401();
                 bf_4859e5();
             }
-            engine_retail_call(0x477dfcu, 0);   /* rl_link: engine_combat_battlefield_end_tick (an event-queue argument) */
+            rl_477dfc();   /* rl_link: engine_combat_battlefield_end_tick (an event-queue argument) */
         }
     }
     rl_49a3e6();
@@ -1856,7 +1856,7 @@ int rl_4b99c0(void)
         rl_4247f5();   /* the dumb-view banner (rl ui4) */
     } else if ((int)s_slot_0057c8fc == 0) {
         if (engine_current_screen() == 0 || engine_current_screen() == 16) {
-            engine_retail_call(0x4050c0u, 0);   /* rl_link: engine_map_scene_tick (engine_map_scene.c, its binder) */
+            rl_4050c0();   /* rl_link: engine_map_scene_tick (engine_map_scene.c, its binder) */
             rl_475e07_res_in = 0x405ac5;        /* the scene's imprint on 0x475e07's [ebp-8] (quirk #240) */
         }
     } else if ((int)s_slot_0057c8fc == 2 && engine_current_screen() >= 0x28 && engine_current_screen() < 0x2b) {

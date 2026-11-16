@@ -50,12 +50,48 @@ Verify (wine, `--hooks '^scr_'`, 12 scenarios: the tours, title-setup, tooltips,
 mp-start-p1, skirmish-tour, grain-and-save): 99/104 rows reached, 0 divergences, hybrid PASS (5 never called in these 12:
 bf_terrain16 / bf_overlay16 — the zoom-16 path —, bf_marker, bf_col_delta / bf_row_delta).
 
-## Left (2026-11-16, after screens: 36 sites over 24 VAs) — by env family
-- **mapview** (mv_bind / TI): 0x4050c0 0x410aa9 0x410cbd 0x41b032 0x4b4056.
-- **logic, EVQ / combat seams** (rh_hooks_ai / combat / battle / events / economy / state): 0x428007 0x4357a6
-  0x437535 0x43b412 0x43b622 0x448819 0x449889 0x44aa41 0x44ae3c 0x4508de 0x465d28 0x46eddf 0x477dfc 0x49a581
-  0x49b2a3 0x4a8aab 0x4abb36 0x4ac3c6 0x4acbd4 — `rl_link_evq_load` + the combat / battle seam binds
-  (`rh_combat_bind_seams` …) to move.
+## Mapview (2026-11-16) — `src/rl_link_mapview.c`
+rhost's `mv_bind` / `ti_env` moved to src: `rl_link_mapview_bind` (the tile grid `g_rl_55cea0`, the path field
+`g_rl_500c30`, the palette / minimap colour tables, the army label's font + char maps, the log 0x4afab9, the clock =
+`rl_plat_GetTickCount`, the dirty rectangle) and `rl_link_mapview_ti_env` (the terrain-info panel: its callbacks
+0x41b19d / 0x41cb3a / 0x41d299 / 0x41da2f / 0x426216 / 0x4af8d9 / 0x452160 are rl_ ports, handed the walker only),
+plus an `rl_<va>` entry for 58 of `rh_hooks_mapview.c`'s 64 rows (the rows call them). No entry: the empty-cell edges
+0x42a8d1 / 0x42a9ab and the special stamp 0x41c996 (own rl_ ports), the parchment 0x409397 (the screens family's), the
+panel pilots 0x40f7d3 / 0x41a734 (rl_link.c). The blit / strip kernels and the 4-byte fill are pure leaves (no
+port_enter). Four fixed tables got port symbols: `g_rl_4d8108 / 4d28f8 / 4d2ec8 / 4d4230`. All seam sites of the five
+VAs (0x4050c0 0x410aa9 0x410cbd 0x41b032 0x4b4056) call the entries.
+Verify (wine, `--hooks '^mv_'`, 14 scenarios, before the logic family): 52/64 rows reached, 0 divergences, hybrid PASS (12 never called in these 14: blits 0x460501 / 0x46079d / 0x4608de, strips 0x460a1c / 0x4611ef / 0x461623 / 0x461a54 / 0x461efb / 0x463fa5, the army label, panel q1 type 2 / q2 type 5). Standalone (wine): 121/121 = pure retail.
 
-Product gap beyond the seams: `rh_port_bind_once` (the modules' runtime pointer binds) and the table binds still run
-only under rhost; `rl_link` needs a `rl_link_bind_once` called from the port's start for a build without rhost.
+## Logic (2026-11-16) — `src/rl_link_logic.c`
+`rl_link_bind_once` = rhost's `rh_port_bind_once` body (the table / storage binds: army records, cell roster /
+descriptors, territory records, the AI score table inside the county records, tile grid, path-field storage, the
+dirty rectangle) + the combat / battle / economy seam binders, whose callbacks were retail VAs behind
+`rh_port_retail_enter / _leave` and are now rl_ ports (0x426360 0x426216 0x427990 0x499aca 0x43eda0 0x42c64f 0x4788c6
+0x47f474 0x423241 0x426d11 0x42d91b 0x416308 0x4b3714 0x435ebc / 0x4aa90a, bf_426120). An old port's callback into rl_
+code hands over an OPEN EVENT QUEUE (`rl_link_evq_callout_enter / _leave`: stored before, reloaded after — the callee
+may post into retail's ring; the mirrors stay live as for every rl_ callee). rhost's `rh_port_bind_once` keeps the
+save-schema check, `rh_bf_bind_seams` (engine_retail_call's binder) and the tables' binds; `rh_combat / _battle /
+_economy_bind_seams` are gone. 18 entries `rl_<va>` (EVQ where the old port takes a queue): 0x448819 0x449889 0x44aa41
+0x44ae3c 0x4508de 0x4acbd4 0x46eddf 0x49a581 0x4ac3c6 0x437535 0x49b2a3 0x4abb36 0x4a8aab 0x43b622 0x477dfc 0x428007
+0x43b412 0x4357a6; their rows and all seam sites call them. `g_rl_4d9278` (the result-movie names) is new.
+**0x465d28 stays a seam**: engine_army_move_run's waypoint / direction locals are its caller's stack residue (quirks
+#229 / #232) — only rhost's residue model (`move_run_res`) supplies them.
+`rl_link_bind_all` (logic + mapview + screens binds) runs from `rl_crt_start`: the port's start for a build without
+rhost (under rhost: no-ops, rh_port_bind_once ran them).
+**`rl_link_port_leave` now reloads for a live caller** (as `rl_link_retail_leave` does). The first standalone after the
+switch had 47 / 121 scenarios off pure retail in state_sem only (frame / tick / RNG / every frame equal): one dword,
+`g_gfx_char_counter` 0x58fd78 (bot-s1-t8: 39 extra characters dispatched at the f5627 click). Bisected (call sites
+back to `engine_retail_call` by group) to rl_turn.c's direct `rl_49a581()` (the AI's per-tick pass). The seam path ended
+in the binder's `rl_link_retail_leave` = a mirror reload for the rl_ caller; the direct entry ended in `port_leave` =
+store-if-changed only, so a mirrored global the callee wrote through its retail symbol left the caller's mirror stale.
+The hybrid did not see it: the function holding that call site has no row, so it runs retail there.
+Verify (wine, every row of the mapview + ai / combat / battle / events / economy / state tables, 34 scenarios, after
+the fix): 270/281 rows reached, 0 divergences, hybrid PASS, 0 failed runs. Standalone (wine): 121/121 = pure retail.
+
+## Left (2026-11-16)
+- 0x465d28 (above). The other `TODO(rl-link)` notes name seams outside this list: engine_button_render_list 0x40cfd2
+  and the frame-refresh retail calls (rl_host.c), game_init's config apply 0x499e5d (rl_misc.c), engine_menu_input's
+  action VAs (rl_glue.c), engine_npc_schedule / engine_map_init (rl_io.c), gfx.c's palette 0x4b2922 (rl_ui3.c).
+
+Product gap: rhost-only binds left are engine_retail_call's binder and bf's sleep (`rh_bf_bind_seams`) — a build
+without rhost has no retail to call.

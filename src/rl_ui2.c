@@ -108,7 +108,7 @@ static void mark_full(void) { engine_territory_mark_full_screen_dirty(); }   /* 
 static int32_t add32(int32_t a, int32_t b) { return (int32_t)((uint32_t)a + (uint32_t)b); }
 
 /* ---------------------------------------------------------------- seams (callees outside the partition) */
-/* ported, not on retail's layout / not linked in rhost — TODO(rl-link) */
+/* other partitions' rl_ ports and old ports through their retail-layout entries (src/rl_link*.c) */
 static int row_sprite(int c, int cat)   /* engine_workforce_row_sprite_index 0x4517ca (rl_link) */
 { return rl_4517ca((int)c, (int)cat); }
 static int cell_hit(int x, int y)   /* 0x4398f5 (rl_ctl) */

@@ -69,75 +69,15 @@ A(g_mv_ti_52afb4,0x52afb4)
 /* (io_read_file_at — the minimap's map file reader engine_minimap_load_grids, never run under rhost — is bridged to
  * retail's loader 0x4af8d9 in rh_hooks_screens.c) */
 
-/* ---------------------------------------------------------------- the port's own bindings */
-static void seam_log(uint32_t fmt, int n)   /* FUN_004afab9(fmt, 0, n) (unported: status.txt) */
-{ rh_port_retail_enter(); ((void (__cdecl *)(uint32_t, int, int))(uintptr_t)0x4afab9u)(fmt, 0, n); rh_port_retail_leave(); }
-static uint32_t seam_clock(void) { return ((DWORD (WINAPI *)(void))iat_lookup("GetTickCount"))(); }
-static void mv_bind(void)
-{
-    static int done;
-    if (done) return;
-    done = 1;
-    const int32_t *cells = (const int32_t *)(uintptr_t)0x55cea0u;   /* DAT_0055cea0: 129 × 65 tile grid */
-    engine_map_terrain_bind_tile_array(cells, 0x104);
-    engine_map_render_bind_tile_array(cells, 0x104);
-    engine_overlay_render_bind_tile_array(cells, 0x104);
-    engine_overlay_render_bind_per_cell_size_table((const int16_t *)(uintptr_t)0x500c30u);
-    engine_map_render_bind_palette((const int8_t *)(uintptr_t)0x4d8108u);
-    engine_minimap_bind_color_tables((const uint8_t *)(uintptr_t)0x4d28f8u);
-    engine_overlay_render_bind_text_tables((const uint8_t *)(uintptr_t)0x5af8f0u, (const uint8_t *)(uintptr_t)0x4d71f0u,
-                                           (const unsigned char *)(uintptr_t)0x4d71d0u);
-    engine_overlay_render_set_log(seam_log);
-    engine_map_scene_bind_clock(seam_clock);
-    engine_dirty_rect_state_t *d = engine_territory_dirty_state();   /* rl_link_dirty (src/rl_link.c), synced */
-    engine_map_terrain_set_dirty_state(d);
-    engine_map_render_set_dirty_state(d);
-    engine_overlay_render_set_dirty_state(d);
-    engine_map_terrain_bind_empty_gate(&d->below_status_redraw);   /* DAT_0053e9ac */
-    /* the gfx layer's own bindings (rh_hooks_gfx.c gfx_bind does the same; whichever row runs first) */
-    gfx_dispatch_set_default_font((const uint8_t *)(uintptr_t)0x5af8f0u);   /* &DAT_005af8f0 */
-    gfx_sprite_render_set_log(seam_log);
-    gfx_wrap_set_tall_font_marker((const uint8_t *)(uintptr_t)0x5b2fa0u);   /* &DAT_005b2fa0 */
-}
-__attribute__((constructor)) static void mv_bind_register(void) { rh_port_register_bind(mv_bind); }
-
-/* the county panel's environment and the localization walker: src/rl_link.c (rl_link_panel_env: retail's sheet
- * pointer / fonts / char maps, the walker over retail's blob &DAT_00591580 + DAT_005c9270, the synced dirty state, the
- * workforce seams port to port) — one definition for these rows and the retail-layout entries rl_40f7d3 / rl_41a734 */
-static localization_state_t *loc_load(void) { return rl_link_loc_load(); }
-static void loc_store(void) { rl_link_loc_store(); }
-static void panel_env(void) { mv_bind(); rl_link_panel_env(); }
-#define PANEL(call) do { panel_env(); call; loc_store(); } while (0)
-
-/* the terrain-info panel's environment: the chrome sheet the panel twins bake in (&DAT_0057d3d0), the seal's system
- * sheet (&DAT_005bb540), fntl2_22 / fntl2_14, the char maps, the walker, retail's special-feature table
- * (DAT_004d2ec8), the synced dirty state, and retail for what is unported */
-#define RCALL(call) do { loc_store(); rh_port_retail_enter(); call; rh_port_retail_leave(); loc_load(); } while (0)
-static void seam_ti_county(void)   { RCALL(((void (__cdecl *)(void))(uintptr_t)0x41b19du)()); }   /* the county / army panel */
-static void seam_ti_roster_a(void) { RCALL(((void (__cdecl *)(void))(uintptr_t)0x41cb3au)()); }
-static void seam_ti_roster_b(void) { RCALL(((void (__cdecl *)(void))(uintptr_t)0x41d299u)()); }
-static void seam_ti_roster_c(void) { RCALL(((void (__cdecl *)(void))(uintptr_t)0x41da2fu)()); }
-static void seam_ti_alert(int cue) { RCALL(((int (__cdecl *)(int))(uintptr_t)0x426216u)(cue)); }  /* FUN_00426216 */
-static void seam_ti_icons(void)    /* FUN_004af8d9("icon_tmp.pl8" @0x4d4230, DAT_004eabec, 0x27100, 0) */
-{ RCALL(((int (__cdecl *)(uint32_t, uint32_t, uint32_t, int))(uintptr_t)0x4af8d9u)(0x4d4230u, G32(0x4eabecu), 0x27100u, 0)); }
-static void seam_ti_present(void)  { RCALL(((int (__cdecl *)(int))(uintptr_t)0x452160u)(1)); }    /* the present */
-static void ti_env(void)
-{
-    mv_bind();
-    loc_load();
-    engine_terrain_info_env_t env = {
-        .chrome = (const uint8_t *)(uintptr_t)0x57d3d0u, .system_sheet = (const uint8_t *)(uintptr_t)0x5bb540u,
-        .title_font = (const uint8_t *)(uintptr_t)0x5b2fa0u, .menu_font = (const uint8_t *)(uintptr_t)0x5af8f0u,
-        .glyph = (const uint8_t *)(uintptr_t)0x4d71f0u, .metrics = (const unsigned char *)(uintptr_t)0x4d71d0u,
-        .loc = loc_load(), .special_table = (const int32_t *)(uintptr_t)0x4d2ec8u, .dirty = engine_territory_dirty_state(),
-        .county_panel = seam_ti_county, .roster_a = seam_ti_roster_a, .roster_b = seam_ti_roster_b,
-        .roster_c = seam_ti_roster_c, .alert = seam_ti_alert, .load_icons = seam_ti_icons, .present = seam_ti_present,
-    };
-    engine_terrain_info_bind_env(&env);
-}
-#define TI(call) do { ti_env(); call; loc_store(); } while (0)
-#define M(call) do { mv_bind(); call; } while (0)
-#define P(k) ((const uint8_t *)(uintptr_t)a[k])
+/* ---------------------------------------------------------------- the environment: src/rl_link_mapview.c */
+/* rl_link_mapview_bind (the tile grid, the path field, palette / minimap colour tables, the army label's font, the
+ * log, the clock, the dirty rectangle) and rl_link_mapview_ti_env (the terrain-info panel's: its retail callbacks are
+ * rl_ ports); every row with a retail-layout entry calls it (rl_<va>: the row verifies the src entry, env included).
+ * The four without one: the empty-cell edges 0x42a8d1 / 0x42a9ab and the special stamp 0x41c996 (their own rl_ ports
+ * in rl_glue.c / rl_render.c), the parchment 0x409397 (the screens family's rl_409397) — their rows keep the old port. */
+__attribute__((constructor)) static void mv_bind_register(void) { rh_port_register_bind(rl_link_mapview_bind); }
+#define M(call) do { rl_link_mapview_bind(); call; } while (0)
+#define TI(call) do { rl_link_mapview_ti_env(); call; rl_link_loc_store(); } while (0)
 
 #define RH_TABLE RH_HOOKS_MAPVIEW
 extern hook_t RH_HOOKS_MAPVIEW[];
@@ -163,74 +103,74 @@ enum {
 };
 
 /* engine_map_scene.c */
-HOOK_V(mv_scene_tick,            0, M(engine_map_scene_tick_frame()))
+HOOK_V(mv_scene_tick,            0, rl_4050c0())
 /* engine_map_terrain.c */
-HOOK_V(mv_terrain_frame,         0, M(engine_map_terrain_frame()))
-HOOK_V(mv_terrain_row_aligned,   0, M(engine_map_terrain_row_aligned()))
-HOOK_V(mv_terrain_row_shifted,   0, M(engine_map_terrain_row_shifted()))
-HOOK_V(mv_terrain_drawer_a,      1, M(engine_map_terrain_drawer_a(I(0))))
-HOOK_V(mv_terrain_drawer_b,      1, M(engine_map_terrain_drawer_b(I(0))))
-HOOK_V(mv_terrain_empty,         1, M(engine_map_terrain_empty_cell(I(0))))
+HOOK_V(mv_terrain_frame,         0, rl_40526e())
+HOOK_V(mv_terrain_row_aligned,   0, rl_405ae9())
+HOOK_V(mv_terrain_row_shifted,   0, rl_405c2f())
+HOOK_V(mv_terrain_drawer_a,      1, rl_4063c1(I(0)))
+HOOK_V(mv_terrain_drawer_b,      1, rl_406673(I(0)))
+HOOK_V(mv_terrain_empty,         1, rl_42a7f1(I(0)))
 HOOK_V(mv_terrain_empty_left,    0, M(engine_map_terrain_empty_left()))
 HOOK_V(mv_terrain_empty_right,   0, M(engine_map_terrain_empty_right()))
-HOOK_V(mv_blit_452820,           2, engine_map_terrain_blit_452820(P(0), I(1)))
-HOOK_V(mv_blit_45337b,           2, engine_map_terrain_blit_45337b(P(0), I(1)))
-HOOK_V(mv_blit_4538f6,           2, engine_map_terrain_blit_4538f6(P(0), I(1)))
-HOOK_V(mv_blit_460501,           2, engine_map_terrain_blit_460501(P(0), I(1)))
-HOOK_V(mv_blit_46079d,           2, engine_map_terrain_blit_46079d(P(0), I(1)))
-HOOK_V(mv_blit_4608de,           2, engine_map_terrain_blit_4608de(P(0), I(1)))
-HOOK_V(mv_blit_463b42,           2, engine_map_terrain_blit_463b42(P(0), I(1)))
-HOOK_V(mv_blit_463c06,           2, engine_map_terrain_blit_463c06(P(0), I(1)))
-HOOK_V(mv_blit_463c62,           2, engine_map_terrain_blit_463c62(P(0), I(1)))
-HOOK_V(mv_strip_453e71,          2, engine_map_terrain_strip_453e71(P(0), I(1)))
-HOOK_V(mv_strip_455f04,          2, engine_map_terrain_strip_455f04(P(0), I(1)))
-HOOK_V(mv_strip_456fd8,          2, engine_map_terrain_strip_456fd8(P(0), I(1)))
-HOOK_V(mv_strip_4580a9,          3, engine_map_terrain_strip_4580a9(P(0), I(1), I(2)))
-HOOK_V(mv_strip_459258,          3, engine_map_terrain_strip_459258(P(0), I(1), I(2)))
-HOOK_V(mv_strip_460a1c,          2, engine_map_terrain_strip_460a1c(P(0), I(1)))
-HOOK_V(mv_strip_4611ef,          2, engine_map_terrain_strip_4611ef(P(0), I(1)))
-HOOK_V(mv_strip_461623,          2, engine_map_terrain_strip_461623(P(0), I(1)))
-HOOK_V(mv_strip_461a54,          3, engine_map_terrain_strip_461a54(P(0), I(1), I(2)))
-HOOK_V(mv_strip_461efb,          3, engine_map_terrain_strip_461efb(P(0), I(1), I(2)))
-HOOK_V(mv_strip_463cbe,          2, engine_map_terrain_strip_463cbe(P(0), I(1)))
-HOOK_V(mv_strip_463e91,          2, engine_map_terrain_strip_463e91(P(0), I(1)))
-HOOK_V(mv_strip_463fa5,          2, engine_map_terrain_strip_463fa5(P(0), I(1)))
-HOOK_V(mv_strip_4640b6,          3, engine_map_terrain_strip_4640b6(P(0), I(1), I(2)))
-HOOK_V(mv_strip_464209,          3, engine_map_terrain_strip_464209(P(0), I(1), I(2)))
+HOOK_V(mv_blit_452820,           2, rl_452820(I(0), I(1)))
+HOOK_V(mv_blit_45337b,           2, rl_45337b(I(0), I(1)))
+HOOK_V(mv_blit_4538f6,           2, rl_4538f6(I(0), I(1)))
+HOOK_V(mv_blit_460501,           2, rl_460501(I(0), I(1)))
+HOOK_V(mv_blit_46079d,           2, rl_46079d(I(0), I(1)))
+HOOK_V(mv_blit_4608de,           2, rl_4608de(I(0), I(1)))
+HOOK_V(mv_blit_463b42,           2, rl_463b42(I(0), I(1)))
+HOOK_V(mv_blit_463c06,           2, rl_463c06(I(0), I(1)))
+HOOK_V(mv_blit_463c62,           2, rl_463c62(I(0), I(1)))
+HOOK_V(mv_strip_453e71,          2, rl_453e71(I(0), I(1)))
+HOOK_V(mv_strip_455f04,          2, rl_455f04(I(0), I(1)))
+HOOK_V(mv_strip_456fd8,          2, rl_456fd8(I(0), I(1)))
+HOOK_V(mv_strip_4580a9,          3, rl_4580a9(I(0), I(1), I(2)))
+HOOK_V(mv_strip_459258,          3, rl_459258(I(0), I(1), I(2)))
+HOOK_V(mv_strip_460a1c,          2, rl_460a1c(I(0), I(1)))
+HOOK_V(mv_strip_4611ef,          2, rl_4611ef(I(0), I(1)))
+HOOK_V(mv_strip_461623,          2, rl_461623(I(0), I(1)))
+HOOK_V(mv_strip_461a54,          3, rl_461a54(I(0), I(1), I(2)))
+HOOK_V(mv_strip_461efb,          3, rl_461efb(I(0), I(1), I(2)))
+HOOK_V(mv_strip_463cbe,          2, rl_463cbe(I(0), I(1)))
+HOOK_V(mv_strip_463e91,          2, rl_463e91(I(0), I(1)))
+HOOK_V(mv_strip_463fa5,          2, rl_463fa5(I(0), I(1)))
+HOOK_V(mv_strip_4640b6,          3, rl_4640b6(I(0), I(1), I(2)))
+HOOK_V(mv_strip_464209,          3, rl_464209(I(0), I(1), I(2)))
 /* engine_map_render.c */
-HOOK_V(mv_feature_frame,         0, M(engine_map_render_frame()))
-HOOK_V(mv_feature_row0,          0, M(engine_map_render_row_phase0()))
-HOOK_V(mv_feature_row1,          0, M(engine_map_render_row_phase1()))
-HOOK_V(mv_feature_tile,          1, M(engine_map_render_tile(I(0))))
+HOOK_V(mv_feature_frame,         0, rl_405487())
+HOOK_V(mv_feature_row0,          0, rl_405862())
+HOOK_V(mv_feature_row1,          0, rl_4059af())
+HOOK_V(mv_feature_tile,          1, rl_408438(I(0)))
 /* engine_overlay_render.c */
-HOOK_V(mv_overlay_frame,         0, M(engine_overlay_render_frame()))
-HOOK_V(mv_overlay_row0,          0, M(engine_overlay_render_row_phase0()))
-HOOK_V(mv_overlay_row1,          0, M(engine_overlay_render_row_phase1()))
-HOOK_V(mv_overlay_army,          1, M(engine_overlay_render_tile_army(I(0))))
-HOOK_V(mv_overlay_city,          1, M(engine_overlay_render_tile_city(I(0))))
-HOOK_V(mv_overlay_debug,         0, M(engine_overlay_render_debug_text()))
-HOOK_V(mv_army_label,            3, M(engine_overlay_render_army_label(I(0), I(1), I(2))))
-HOOK_V(mv_fill4,                 3, engine_overlay_render_fill4(I(0), I(1), I(2)))
+HOOK_V(mv_overlay_frame,         0, rl_405602())
+HOOK_V(mv_overlay_row0,          0, rl_405eb5())
+HOOK_V(mv_overlay_row1,          0, rl_405fac())
+HOOK_V(mv_overlay_army,          1, rl_4071a0(I(0)))
+HOOK_V(mv_overlay_city,          1, rl_4081a6(I(0)))
+HOOK_V(mv_overlay_debug,         0, rl_408c50())
+HOOK_V(mv_army_label,            3, rl_407f82(I(0), I(1), I(2)))
+HOOK_V(mv_fill4,                 3, rl_4b4056(I(0), I(1), I(2)))
 /* engine_minimap.c — the misc sheet is the pointer DAT_005530c8 */
-HOOK_V(mv_minimap_render,        2, M(engine_minimap_render((const uint8_t *)(uintptr_t)G32(0x5530c8u), I(0), I(1))))
-HOOK_V(mv_minimap_plot,          4, M(engine_minimap_plot((unsigned)a[0], I(1), I(2), I(3))))
-HOOK_V(mv_minimap_bands,         0, M(engine_minimap_compute_bands()))
+HOOK_V(mv_minimap_render,        2, rl_410aa9(I(0), I(1)))
+HOOK_V(mv_minimap_plot,          4, rl_410cbd(I(0), I(1), I(2), I(3)))
+HOOK_V(mv_minimap_bands,         0, rl_451bba())
 /* engine_hud_panel.c */
 HOOK_V(mv_panel_draw,            1, M(rl_40f7d3(I(0))))
-HOOK_V(mv_panel_queues,          1, PANEL(engine_hud_panel_build_queues(I(0))))
-HOOK_V(mv_panel_q1_type1,        0, PANEL(engine_hud_panel_draw_q1_type1()))
-HOOK_V(mv_panel_q1_type0,        0, PANEL(engine_hud_panel_draw_q1_type0()))
-HOOK_V(mv_panel_q1_type2,        0, PANEL(engine_hud_panel_draw_q1_type2()))
-HOOK_V(mv_panel_q2_type4,        0, PANEL(engine_hud_panel_draw_q2_type4()))
-HOOK_V(mv_panel_q2_type5,        0, PANEL(engine_hud_panel_draw_q2_type5()))
-HOOK_V(mv_panel_q2_type6,        0, PANEL(engine_hud_panel_draw_q2_type6()))
-HOOK_V(mv_panel_q2_type7,        0, PANEL(engine_hud_panel_draw_q2_type7()))
-HOOK_V(mv_panel_q2_type3,        0, PANEL(engine_hud_panel_draw_q2_type3()))
+HOOK_V(mv_panel_queues,          1, rl_40fec1(I(0)))
+HOOK_V(mv_panel_q1_type1,        0, rl_4100af())
+HOOK_V(mv_panel_q1_type0,        0, rl_41023a())
+HOOK_V(mv_panel_q1_type2,        0, rl_4103c5())
+HOOK_V(mv_panel_q2_type4,        0, rl_410502())
+HOOK_V(mv_panel_q2_type5,        0, rl_410598())
+HOOK_V(mv_panel_q2_type6,        0, rl_41062e())
+HOOK_V(mv_panel_q2_type7,        0, rl_4106c4())
+HOOK_V(mv_panel_q2_type3,        0, rl_4107d1())
 HOOK_V(mv_panel_endturn,         1, M(rl_41a734(I(0))))
 /* engine_terrain_info.c (the screen-4 panel) */
-HOOK_V(mv_ti_panel,              0, TI(engine_terrain_info_panel()))
-HOOK_V(mv_ti_simple,             0, TI(engine_terrain_info_simple()))
-HOOK_V(mv_ti_text,               0, TI(engine_terrain_info_text()))
+HOOK_V(mv_ti_panel,              0, rl_41b032())
+HOOK_V(mv_ti_simple,             0, rl_41befe())
+HOOK_V(mv_ti_text,               0, rl_41c208())
 HOOK_V(mv_ti_stamp,              0, TI(engine_terrain_info_stamp()))
 HOOK_V(mv_ti_parchment,          4, TI(engine_terrain_info_parchment(I(0), I(1), I(2), I(3))))
 

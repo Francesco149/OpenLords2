@@ -137,10 +137,10 @@ static void mark_box(int x, int y, int w, int h, int force)   /* 0x4527a6 */
 static void mark_full(void) { engine_territory_mark_full_screen_dirty(); }   /* 0x45240a */
 
 /* ---------------------------------------------------------------- seams (callees outside the partition) */
-/* ported, not on retail's layout / not linked in rhost — TODO(rl-link) */
-static void minimap_render(int x, int y) { engine_retail_call(0x410aa9u, 2, (uint32_t)x, (uint32_t)y); }   /* TODO(rl-link): engine_minimap_render */
-static void minimap_plot(int a, int x, int y, int b)   /* TODO(rl-link): engine_minimap_plot */
-{ engine_retail_call(0x410cbdu, 4, (uint32_t)a, (uint32_t)x, (uint32_t)y, (uint32_t)b); }
+/* old ports, reached through their retail-layout entries (src/rl_link*.c) */
+static void minimap_render(int x, int y) { rl_410aa9(x, y); }   /* rl_link: engine_minimap_render */
+static void minimap_plot(int a, int x, int y, int b)   /* rl_link: engine_minimap_plot */
+{ rl_410cbd(a, x, y, b); }
 static void workforce_restore(const uint8_t *blob, int w) { rl_4b3ec0((int)(uintptr_t)blob, (int)w); }   /* rl_link: engine_workforce_hud_restore_backdrop */
 static void workforce_capture(const uint8_t *blob, int w) { rl_4b3f0a((int)(uintptr_t)blob, (int)w); }   /* rl_link: engine_workforce_hud_capture_backdrop */
 static void workforce_rows(void) { rl_412666(); }   /* rl_link: engine_workforce_draw_all_rows */
@@ -954,7 +954,7 @@ static void caspics_load(const void *name, const void *dst, int idx)   /* rl_40a
 { rl_40ae12((int)(uintptr_t)name, (int)(uintptr_t)dst, idx); }
 static void popup_scroll_dismiss(void) { rl_476768(); }   /* engine_popup_scroll_dismiss (rl turn) */
 static void labor_render(void) { rl_412b33(); }   /* engine_labor_render (rl ui4) */
-static void fill4(int x, int y, int c) { engine_retail_call(0x4b4056u, 3, (uint32_t)x, (uint32_t)y, (uint32_t)c); }   /* rl_link: engine_overlay_render's 4-byte fill 0x4b4056 */
+static void fill4(int x, int y, int c) { rl_4b4056(x, y, c); }   /* rl_link: engine_overlay_render's 4-byte fill 0x4b4056 */
 static void movie_text_box(int x, int y, int w, int h) { rl_42e45e(x, y, w, h); }   /* 0x42e45e (rl ui4) */
 static void mp_session_end(void) { rl_4b743b(); }   /* leave the MP session (rl mpnet2) */
 static void map_build_cells(int a) { rl_4298c1(a); }   /* engine_map_init_build_cells (rl ui4) */

@@ -257,7 +257,7 @@ int rl_44ae51(void)
             for (int m = 0; m < 20; m++) {
                 int c = COAL8(g, 0x568245 + m);
                 if (c != 0) {
-                    engine_retail_call(0x4ac3c6u, 1, (uint32_t)c);   /* TODO(rl-link): engine_combat_demolish_realm (a port queue) */
+                    rl_4ac3c6(c);   /* rl_link: engine_combat_demolish_realm (a port queue) */
                     last = c;
                     fell++;
                 }
@@ -556,7 +556,7 @@ int rl_43ad25(void)
     }
     engine_set_current_screen(0);
     rl_40f1a0(mode);
-    engine_retail_call(0x4050c0u, 0);       /* TODO(rl-link): engine_map_scene_tick */
+    rl_4050c0();       /* rl_link: engine_map_scene_tick */
     rl_45240a();
     rl_452160(0);
     return 0;
@@ -594,7 +594,7 @@ int rl_43ac23(void)
 /* Port of FUN_00448440 (261 B) — the turn advance: the AI turn, an RNG step, the turn count, the season
  * (DAT_0057c934 ← DAT_0057c92c, which cycles 1..4; DAT_00554470 the previous), each winter the year
  * (DAT_0055cd5c, DAT_00553edc / DAT_00553e74 / DAT_0057c900) and the CD probe, then the 27 realm / economy
- * passes in retail's order. Callees whose linked port takes a port queue run retail (TODO(rl-link)). */
+ * passes in retail's order. Callees whose old port takes a port queue: their retail-layout entries (src/rl_link_logic.c). */
 int rl_448440(void)
 {
     engine_army_ai_run_turn();                         /* 0x49a990 */
@@ -610,23 +610,23 @@ int rl_448440(void)
         s_slot_00553edc = s_slot_00553e74++;
         rl_4aef7e();
     }
-    engine_retail_call(0x49b2a3u, 0);                  /* TODO(rl-link): engine_combat_mp_resign_sweep (a port queue) */
+    rl_49b2a3();                  /* rl_link: engine_combat_mp_resign_sweep (a port queue) */
     engine_ranking_snapshot_player_metrics();          /* 0x4486a9 */
-    engine_retail_call(0x448819u, 0);                  /* TODO(rl-link): engine_realm_roll_events (its seed argument) */
-    engine_retail_call(0x449889u, 0);                  /* TODO(rl-link): engine_realm_update_mood (a port queue) */
+    rl_448819();                  /* rl_link: engine_realm_roll_events (its seed argument) */
+    rl_449889();                  /* rl_link: engine_realm_update_mood (a port queue) */
     engine_realm_accrue_income();                      /* 0x44b59b */
-    engine_retail_call(0x4acbd4u, 0);                  /* TODO(rl-link): engine_realm_pay_upkeep (a port queue) */
+    rl_4acbd4();                  /* rl_link: engine_realm_pay_upkeep (a port queue) */
     engine_realm_settle_provisions();                  /* 0x44bf04 */
     engine_realm_apply_tax_approval();                 /* 0x44bd9f */
     engine_realm_advance_rating();                     /* 0x44baea */
-    engine_retail_call(0x44aa41u, 0);                  /* TODO(rl-link): engine_realm_escalate_unrest (a port queue) */
-    engine_retail_call(0x44ae3cu, 0);                  /* TODO(rl-link): engine_realm_coalition_pass (a port queue) */
+    rl_44aa41();                  /* rl_link: engine_realm_escalate_unrest (a port queue) */
+    rl_44ae3c();                  /* rl_link: engine_realm_coalition_pass (a port queue) */
     engine_territory_census_all_realms();              /* 0x469b51 */
     engine_realm_spread_development();                 /* 0x44bf7a */
     engine_army_economy_apply_season_pass();           /* 0x44c8ae */
     engine_army_economy_settle_stock_a();              /* 0x44d60d */
     engine_army_economy_resource_pass();               /* 0x44e852 */
-    engine_retail_call(0x4508deu, 0);                  /* TODO(rl-link): engine_realm_complete_settlements (a port queue) */
+    rl_4508de();                  /* rl_link: engine_realm_complete_settlements (a port queue) */
     engine_territory_allocate_all_workforce();         /* 0x44f699 */
     engine_realm_migrate_population();                 /* 0x44a6ba */
     engine_realm_advance_population();                 /* 0x449ef3 */
@@ -784,7 +784,7 @@ int rl_43caf4(void)
         g_gfx_menu_redraw_a = 1;
         engine_map_scene_tick_frame();               /* 0x4050c0 */
     }
-    engine_retail_call(0x41b032u, 0);                /* TODO(rl-link): engine_terrain_info_panel (its env) */
+    rl_41b032();                /* rl_link: engine_terrain_info_panel (its env) */
     rl_4b37bc();
     return 0;
 }
@@ -973,7 +973,7 @@ int rl_43ce1a(void)
             return 0;
         g_rl_5681cc = 3;
         engine_set_current_screen(4);
-        engine_retail_call(0x41b032u, 0);            /* rl_link: engine_terrain_info_panel (its env) */
+        rl_41b032();            /* rl_link: engine_terrain_info_panel (its env) */
     }
     return 0;
 }
@@ -2066,7 +2066,7 @@ int rl_42ff10(void)
         if (!TURN_IDLE()) {
             engine_set_current_screen(0);
             engine_set_demand_redraw(2);
-        } else if (engine_retail_call(0x43b412u, 2, 96u, 104u) != 0) {   /* rl_link: engine_sendsupplies_target_select */
+        } else if (rl_43b412(96, 104) != 0) {   /* rl_link: engine_sendsupplies_target_select */
             engine_set_demand_redraw(2);
         } else if (LMB_UP != 0) {
             engine_set_current_screen(0);
@@ -2135,7 +2135,7 @@ int rl_42ff10(void)
         break;
     case 18:
         if (g_sim_turn_progress != 0 || rl_4bbea7() != 0) {
-            engine_retail_call(0x43b622u, 0);        /* rl_link: engine_combat_auto_resolve_button (a port queue) */
+            rl_43b622();        /* rl_link: engine_combat_auto_resolve_button (a port queue) */
             engine_set_demand_redraw(2);
             break;
         }
@@ -2583,7 +2583,7 @@ int rl_46521f(void)
     AR8(a, 0x52f0b7) = (uint8_t)(AT(int32_t, g_rl_4d6a78, 0x4d6a78u, 0x4d6a78 + 4 * (int8_t)AR8(a, 0x52f0cb)) + AR8(a, 0x52f0b7));
     int region = AT(uint8_t, g_overworld_map, 0x522f90u, 0x522f97 + AR32(a, 0x52f0bc));
     if (AR8(a, 0x52f0c0) != region) {
-        engine_retail_call(0x4abb36u, 2, (uint32_t)a, (uint32_t)region);   /* rl_link: engine_combat_army_enter_region (a port queue) */
+        rl_4abb36(a, region);   /* rl_link: engine_combat_army_enter_region (a port queue) */
         engine_realm_collect_territory_income();                          /* 0x4ad6c0 */
         rl_46521f_res[0] = 151;                                           /* 0x4ad6c0's locals, left below this frame */
         rl_46521f_res[1] = (uint32_t)(int32_t)(int8_t)AR8(150, 0x52f0b0);

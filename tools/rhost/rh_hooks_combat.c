@@ -12,6 +12,7 @@
  * footstep / alert / present DirectSound calls, the territory-captured click, the game-over screen): the
  * hybrid falls back to retail for what is not ported, bracketed by rh_port_retail_enter/leave. */
 #include "rh_port.h"
+#include "rl_link.h"
 #include "save_schema_globals.h"
 #include "engine.h"
 #include "engine_turn.h"
@@ -58,33 +59,8 @@ typedef int (__cdecl *r_i_t)(int);
 typedef int (__cdecl *r_wav_t)(const char *, int, int);
 typedef int (__cdecl *r_v_t)(void);
 typedef int (__cdecl *r_ii_t)(int, int);
-static void seam_present(int mode) { RETAIL(((r_i_t)0x426360u)(mode)); }        /* FUN_00426360: Stop buffer */
-static void seam_footstep(int id)  { RETAIL(((r_i_t)0x426120u)(id)); }          /* FUN_00426120 */
-static void seam_alert(int id)     { RETAIL(((r_i_t)0x426216u)(id)); }          /* FUN_00426216 */
-static void seam_wav(const char *n, int loop, int z) { RETAIL(((r_wav_t)0x427990u)(n, loop, z)); }  /* FUN_00427990 */
-static void seam_batl(void)        { seam_wav("ff_batl.wav", 0, 0); }
-static void seam_click(void)       { RETAIL(((r_v_t)0x499acau)()); }            /* FUN_00499aca */
-static void seam_game_over(void)   { RETAIL(((r_ii_t)0x43eda0u)(0x24, 0)); }    /* FUN_0043eda0(0x24, 0) */
-static uint32_t seam_clock(void)   { return ((DWORD (WINAPI *)(void))iat_lookup("timeGetTime"))(); }
-
-/* called once from rh_port_bind_once (rh_hooks_ai.c) */
-void rh_combat_bind_seams(void)
-{
-    engine_army_state_bind_move_fn(engine_army_move_run);
-    engine_army_move_bind_present_fn(seam_present);
-    engine_army_move_bind_arrive_fn(engine_army_move_arrival);
-    engine_army_move_bind_combat_fns(engine_army_move_combat_engage, engine_combat_contest_region);
-    engine_army_move_bind_region_fns(engine_army_move_region_event_lo, engine_army_move_region_event_hi);
-    engine_army_move_bind_special_fn(engine_army_move_special_tile);
-    engine_army_move_bind_redraw_fn(engine_set_demand_redraw);
-    engine_army_move_bind_sfx_fn(seam_footstep);
-    engine_army_move_bind_alert_sfx_fn(seam_alert);
-    engine_combat_bind_wav_fn(seam_wav);
-    engine_combat_bind_battle_sfx(seam_batl);
-    engine_combat_bind_click_fn(seam_click);
-    engine_combat_bind_clock_fn(seam_clock);
-    engine_ranking_bind_game_over_fn(seam_game_over);
-}
+/* the old ports' callbacks (present, footstep, alert, wav, click, game over, clock) and the movement chain: bound by
+ * rl_link_bind_once (src/rl_link_logic.c) to retail-layout ports */
 
 /* ---------------------------------------------------------------- adapters with a result inside EVQ */
 static int dispatch_q(int a, int d)       { int r; EVQ(r = engine_combat_dispatch(a, d, q, MP_ACTIVE)); return r; }
@@ -135,8 +111,8 @@ HOOK_R(combat_dispatch,           2, dispatch_q(I(0), I(1)))
 HOOK_V(combat_aftermath,          1, EVQ(engine_combat_aftermath(I(0), q, MP_ACTIVE)))
 HOOK_V(combat_contest_region,     2, EVQ(engine_combat_contest_region(I(0), a[1], q, MP_ACTIVE)))
 HOOK_V(combat_transfer_ownership, 2, EVQ(engine_combat_transfer_ownership(a[0], a[1], q, MP_ACTIVE)))
-HOOK_V(combat_demolish_realm,     1, EVQ(engine_combat_demolish_realm(I(0), q, MP_ACTIVE)))
-HOOK_V(combat_transfer_army,      2, EVQ(engine_combat_transfer_army(a[0], I(1), q, MP_ACTIVE)))
+HOOK_V(combat_demolish_realm,     1, rl_4ac3c6(I(0)))
+HOOK_V(combat_transfer_army,      2, rl_437535(I(0), I(1)))
 HOOK_V(combat_recompute_condition, 1, engine_combat_recompute_condition(I(0)))
 HOOK_V(combat_halve_garrison,     1, engine_combat_halve_garrison(I(0)))
 HOOK_V(combat_merge_stack,        2, EVQ(engine_combat_merge_stack(I(0), I(1), q)))
@@ -152,12 +128,12 @@ HOOK_V(combat_break_siege_link,   1, engine_combat_break_siege_link(I(0)))
 HOOK_V(combat_reinforce_keep,     2, EVQ(engine_combat_reinforce_keep(a[0], I(1), q)))
 HOOK_V(combat_begin_siege,        2, EVQ(engine_combat_begin_siege(a[0], I(1), q)))
 HOOK_V(combat_region_event_hi,    2, EVQ(engine_army_move_region_event_hi(I(0), I(1), q, MP_ACTIVE)))   /* (self, cell_off) */
-HOOK_V(combat_enter_region,       2, EVQ(engine_combat_army_enter_region(I(0), a[1], q)))
+HOOK_V(combat_enter_region,       2, rl_4abb36(I(0), I(1)))
 HOOK_V(combat_notify_occupation,  2, EVQ(engine_combat_notify_occupation(I(0), I(1), q)))
 HOOK_V(combat_settle_region,      2, EVQ(engine_combat_army_settle_region(I(0), a[1], q, MP_ACTIVE)))
 HOOK_R(combat_spawn_rebellion,    1, rebellion_q(I(0)))
 HOOK_V(combat_resign_player,      1, EVQ(engine_combat_resign_player(I(0), q, MP_ACTIVE)))
-HOOK_V(combat_mp_resign_sweep,    0, EVQ(engine_combat_mp_resign_sweep(q, MP_ACTIVE)))
+HOOK_V(combat_mp_resign_sweep,    0, rl_49b2a3())
 HOOK_V(combat_rotate_merc_offers, 0, engine_combat_rotate_merc_offers())
 /* engine_realm_upkeep.c / engine_ranking.c / engine_diplomacy.c — the battle's unit, elimination and relation callees */
 HOOK_V(unit_clear_contract,       1, engine_unit_clear_contract(I(0)))
@@ -165,7 +141,7 @@ HOOK_V(unit_disband,              1, engine_unit_disband(I(0)))
 HOOK_V(unit_remove,               1, engine_unit_remove(I(0)))
 HOOK_V(unit_absorb,               1, engine_unit_absorb(I(0)))
 HOOK_V(unit_map_unlink,           1, engine_unit_map_unlink(I(0)))
-HOOK_V(unit_map_link,             1, engine_unit_map_link(I(0)))
+HOOK_V(unit_map_link,             1, rl_46eddf(I(0)))
 HOOK_R(unit_recompute_wage,       1, engine_unit_recompute_wage(I(0)))
 HOOK_V(realm_refresh_wages,       0, engine_realm_refresh_wage_bills())
 HOOK_V(rank_check_elimination,    1, EVQ(engine_ranking_check_elimination(a[0], q, MP_ACTIVE)))

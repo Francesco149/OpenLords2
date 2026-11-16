@@ -4573,7 +4573,8 @@
     "src/engine_army_state.h",
     "src/engine_combat.c",
     "src/game_init.c",
-    "src/game_init.h"
+    "src/game_init.h",
+    "src/rl_link_logic.c"
    ]
   },
   {
@@ -20966,7 +20967,8 @@
     "src/io.c",
     "src/io.h",
     "src/localization.h",
-    "src/rl_host.c"
+    "src/rl_host.c",
+    "src/rl_link_mapview.c"
    ]
   },
   {
@@ -20988,7 +20990,8 @@
     "src/engine_hud_menubar.c",
     "src/gfx_panel.c",
     "src/gfx_sprite_render.h",
-    "src/rl_io.c"
+    "src/rl_io.c",
+    "src/rl_link_mapview.c"
    ]
   },
   {
@@ -22767,7 +22770,8 @@
     "src/engine_title_render.h",
     "src/engine_trade.h",
     "src/main.c",
-    "src/rl_host.c"
+    "src/rl_host.c",
+    "src/rl_link_logic.c"
    ]
   },
   {

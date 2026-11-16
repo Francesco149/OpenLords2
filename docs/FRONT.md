@@ -88,7 +88,7 @@
    actions 24 / 46, the late-action path 0x4470c4 → 90 reached in retail. **Every MP message id now has a port** (47
    functions, fe9a756 / ec746c4: 10 rows reached, 0 divergences, hybrid PASS; 37 dead-code rows unverified — no carrier);
    standalone 39/39 MP sides = pure retail; static gaps 107 → 66. **2026-11-16: the last 24 delayed-action handlers ported** (table 0x4d5c98 complete,
-   rl-mpmsg3.md; dead but for 25 / 35, reachable by forging 53 / 68): static gaps 66 → 44. Next: ★5 (rl-link: the link layer + the screens family landed 2026-11-16; mapview / logic next); ★4 is CRT only.
+   rl-mpmsg3.md; dead but for 25 / 35, reachable by forging 53 / 68): static gaps 66 → 44. Next: ★5's remainder (0x465d28 + the other TODO(rl-link) notes); ★4 is CRT only.
 0b. **rd campaigns** — **campaign 6 (2026-11-14, API drivers):** ai-recall filed (sub_48B7FC 0x48b7fc first time: an Equal
    field skirmish after a Play Now → New Game trip — a cold skirmish leaves byte_553080 zero, so the recall never fires;
    +12 blocks); ai-surrender blocked (probe: no skirmish attacker is knights-only; the battle ends when a side has 0 men
@@ -150,15 +150,16 @@
    last 21 non-CRT seams were ported 2026-11-16 (rl_ui4.c, rl-ui4.md §Gap ports); standalone 119/119 = pure retail.
    2 of the 21 reached by new scenarios (siege-surrender → 0x43baf9, supplies-self → 0x43b101: 0 divergences); the
    rest unreached (DD restore / paint, debug overlays, screens 0x44 / 0x45, title page 10, the MP error / leave paths).
-5. **The TODO(rl-link) seams** (rl_ functions reaching an old port through engine_retail_call; the old port's mirrors /
-   event queue / environment came only from rhost's row wrappers): **the link layer `src/rl_link.c`** (2026-11-16,
-   `docs/findings/rl-link.md`) — mirror sync, liveness, event queue, the walker and the hud-panel env moved out of
-   rhost (rh_port_* forward to it); 7 seams to existing rl_ ports + the pilot `rl_40f7d3` / `rl_41a734` (verify: 0
-   divergences, hybrid PASS; standalone 121/121 = pure retail). **Screens family done** (2026-11-16, rl-link.md §Screens):
-   `src/rl_link_screens.c` = scr_bind + the context builders + 104 `rl_<va>` entries (every rh_hooks_screens.c row calls
-   one), all 56 screens VAs' seam sites switched; verify `--hooks '^scr_'` 99/104 reached, 0 divergences, hybrid PASS;
-   standalone 121/121 = pure retail. **Left: 36 sites / 24 VAs**: mapview (5: mv_bind / TI), logic / EVQ (19). Then
-   `rl_link_bind_once` from the port's start (the product build's binds).
+5. **The TODO(rl-link) seams** (rl_ functions reaching an OLD port through engine_retail_call; the old port's mirrors /
+   event queue / environment came only from rhost's row wrappers) — `docs/findings/rl-link.md`. 2026-11-16: the link
+   layer `src/rl_link.c`, the pilot, the **screens** (`rl_link_screens.c`, 104 entries), **mapview**
+   (`rl_link_mapview.c`: mv_bind / ti_env moved, 58 entries) and **logic** families (`rl_link_logic.c`:
+   `rl_link_bind_once` = rh_port_bind_once's binds + the combat / battle / economy callbacks as rl_ ports, 18 EVQ
+   entries) — every listed seam site calls its `rl_<va>` but 0x465d28 (engine_army_move_run: caller-stack residue, only
+   rhost models it). `rl_link_bind_all` runs from `rl_crt_start`. Fixed on the way: `rl_link_port_leave` reloads the
+   mirrors for a live caller (47 standalone scenarios were off in g_gfx_char_counter). Verify (wine, mapview + logic tables, 34 scenarios): 270/281 reached, 0 divergences, hybrid PASS; standalone
+   121/121 = pure retail. Left: 0x465d28; the other TODO(rl-link) notes (0x40cfd2 button lists, game_init 0x499e5d,
+   engine_menu_input, npc_schedule / map_init, gfx 0x4b2922) — rl-link.md §Left.
 6. **Unreached code**: 939 functions / 172 KB no scenario reaches (`docs/findings/coverage-round3.md`): multiplayer
    (DirectPlay / serial — a fake transport in rhost would open it), dead code (zoom-1 / zoom-16 drawers, unwritten
    orders 0 / 7 / 13 / 15 / 16), AI knight garrisons, DirectDraw errors (a fault-injection switch for 0x42f60e's

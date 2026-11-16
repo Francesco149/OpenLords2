@@ -211,7 +211,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x426d11 | FUN_00426d11 | 196 | audio.c, engine_combat.c, engine_combat.h (+1) |
 | 0x427d19 | FUN_00427d19 | 89 | audio.c, audio.h, engine.c (+4) |
 | 0x427ed0 | FUN_00427ed0 | 311 | engine_territory.c, game_init.c, game_init.h (+1) |
-| 0x428007 | FUN_00428007 | 113 | engine_army_ai.c, engine_army_state.c, engine_army_state.h (+3) |
+| 0x428007 | FUN_00428007 | 113 | engine_army_ai.c, engine_army_state.c, engine_army_state.h (+4) |
 | 0x428078 | FUN_00428078 | 113 | engine_army_ai.c, engine_combat.c, game_init.c (+2) |
 | 0x4280e9 | FUN_004280e9 | 904 | engine.c, engine_army_state.c, engine_army_state.h (+1) |
 | 0x428471 | FUN_00428471 | 11 | engine_turn.c, engine_turn.h, rl_ui4.c |
@@ -731,8 +731,8 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4af62c | FUN_004af62c | 73 | rl_host.c, strutil.h |
 | 0x4af675 | FUN_004af675 | 84 | engine_load_pump.c, rl_host.c, strutil.h |
 | 0x4af6c9 | FUN_004af6c9 | 67 | strutil.h |
-| 0x4af8d9 | FUN_004af8d9 | 381 | config.c, engine_armory.c, engine_county_panels.c (+12) |
-| 0x4afab9 | FUN_004afab9 | 897 | engine_battlefield_render.h, engine_hud_menubar.c, gfx_panel.c (+2) |
+| 0x4af8d9 | FUN_004af8d9 | 381 | config.c, engine_armory.c, engine_county_panels.c (+13) |
+| 0x4afab9 | FUN_004afab9 | 897 | engine_battlefield_render.h, engine_hud_menubar.c, gfx_panel.c (+3) |
 | 0x4b13ed | FUN_004b13ed | 274 | gfx_globals.c, gfx_globals.h, gfx_paint.c (+1) |
 | 0x4b191e | FUN_004b191e | 981 | engine.c, engine.h, engine_input.c (+3) |
 | 0x4b1de0 | FUN_004b1de0 | 11 | engine.c, engine_armory.c, engine_confirm_dialog.c (+7) |
@@ -769,7 +769,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4b5333 | FUN_004b5333 | 2997 | gfx_sprite.c, gfx_sprite.h |
 | 0x4b99c0 | FUN_004b99c0 | 2222 | call_trace.h, engine.c, engine.h (+12) |
 | 0x4ba26e | FUN_004ba26e | 1882 | engine.c, engine_armory.c, engine_armory.h (+20) |
-| 0x4ba9c8 | FUN_004ba9c8 | 3832 | engine.c, engine_confirm_dialog.h, engine_county_panels.h (+11) |
+| 0x4ba9c8 | FUN_004ba9c8 | 3832 | engine.c, engine_confirm_dialog.h, engine_county_panels.h (+12) |
 | 0x4bb8c0 | FUN_004bb8c0 | 84 | engine.c, engine_rate.c, rl_host.c |
 | 0x4bb978 | FUN_004bb978 | 614 | engine.c, engine.h, engine_rate.c (+1) |
 | 0x4bbbe3 | FUN_004bbbe3 | 157 | engine_camera.h, rl_host.c |

@@ -5,6 +5,7 @@
  * THROUGH RETAIL'S IAT SLOT (the slot VAs below): under rhost the slots hold rhost's virtual layers, in the standalone
  * the data-image loader fills them with the real APIs — one code path. Globals are retail's, by VA (the data image is
  * mapped at retail's addresses in both). docs/findings/standalone-path.md. */
+#include "rl_link.h"
 #include "rl.h"
 #include "rl_main.h"
 #include "rl_io_plat.h"
@@ -167,6 +168,7 @@ __attribute__((naked)) int __stdcall rl_40e9ab(HINSTANCE inst, HINSTANCE prev, L
  * mbctable, argv / envp, _cinit, then WinMain, then exit → ExitProcess through retail's slot). Never returns. */
 int rl_crt_start(void)
 {
+    rl_link_bind_all();   /* the old ports' runtime binds (rl_link*.c; under rhost rh_port_bind_once made them: no-ops) */
     rl_crt_4c3370();
     return 0;
 }

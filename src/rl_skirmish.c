@@ -156,7 +156,7 @@ static void mark_box(int x, int y, int w, int h, int force)   /* 0x4527a6 */
 static void mark_full(void) { engine_territory_mark_full_screen_dirty(); }   /* 0x45240a */
 
 /* ---------------------------------------------------------------- seams (callees outside the partition) */
-/* ported, not on retail's layout / not linked in rhost — TODO(rl-link) */
+/* other partitions' rl_ ports and old ports through their retail-layout entries (src/rl_link*.c) */
 static void chdir_base(void) { rl_4af502(); }   /* io_path_chdir_base (rl_host) */
 static void read_file_at(const void *name, const void *dst, uint32_t n, uint32_t off)   /* io_read_file_at 0x4af8d9 (rl_host) */
 { rl_4af8d9((int)(uintptr_t)name, (int)(uintptr_t)dst, (int)n, (int)off); }

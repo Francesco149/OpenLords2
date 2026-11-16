@@ -16,6 +16,7 @@
  * cut: bridged) and its editor clear goes through a port text_input_state_t loaded from / stored to retail's globals.
  */
 #include "rh_port.h"
+#include "rl_link.h"
 #include "save_schema_globals.h"
 #include "engine_trade.h"
 #include "engine_diplomacy.h"
@@ -66,37 +67,8 @@ static void ed_store(void)
 static void diplo_seal(void) { text_input_state_t *ed = ed_load(); EVQ(engine_diplomacy_action_seal(PARAM0, ed, q)); ed_store(); }
 static void county_action(void) { EVQ(engine_county_action_open(PARAM0, q)); }
 
-/* ---------------------------------------------------------------- seams → retail (unported callees) */
-typedef int (__cdecl *r_wav_t)(const char *, int, int);
-static void seam_wav(const char *n, int loop, int z)
-{ rh_port_retail_enter(); ((r_wav_t)0x427990u)(n, loop, z); rh_port_retail_leave(); }   /* FUN_00427990 */
-
-typedef int (__cdecl *r_i_t)(int);
-typedef int (__cdecl *r_ii_t)(int, int);
-typedef int (__cdecl *r_v_t)(void);
-static void seam_trade_render(void) { rh_port_retail_enter(); ((r_v_t)0x416308u)(); rh_port_retail_leave(); }   /* FUN_00416308 */
-static void seam_voice(int n) { rh_port_retail_enter(); ((r_i_t)0x4b3714u)(n); rh_port_retail_leave(); }   /* FUN_004b3714 */
-/* the county-action strip's armory entry: engine_armory is not linked (no model yet) — retail's conscripts at the
- * slider % (FUN_00435ebc(county, DAT_0056d65c)), its muster pool (FUN_004aa90a(county, DAT_00543fd8)), march /
- * merc off (DAT_005679d0 / DAT_0055446c) */
-static void seam_armory(int county)
-{
-    rh_port_retail_enter();
-    ((r_ii_t)0x435ebcu)(county, (int)G32(0x56d65cu));
-    ((r_ii_t)0x4aa90au)(county, (int)G32(0x543fd8u));
-    PUT(0x5679d0u, 0); PUT(0x55446cu, 0);
-    rh_port_retail_leave();
-}
-
-/* called once from rh_port_bind_once (rh_hooks_ai.c) */
-void rh_economy_bind_seams(void)
-{
-    engine_trade_bind_wav_fn(seam_wav);
-    engine_trade_bind_open_render_fn(seam_trade_render);
-    engine_county_action_bind_wav_fn(seam_wav);
-    engine_county_action_bind_voice_fn(seam_voice);
-    engine_county_action_bind_armory_fn(seam_armory);
-}
+/* the trade / county-action callbacks (wav, the trade render, voice, the armory entry): bound by rl_link_bind_once
+ * (src/rl_link_logic.c) to retail-layout ports */
 
 #define RH_TABLE RH_HOOKS_ECONOMY
 extern hook_t RH_HOOKS_ECONOMY[];
@@ -139,13 +111,11 @@ HOOK_V(ss_arrow_down,          0, engine_sendsupplies_arrow_down(PARAM0))
 HOOK_V(ss_toggle_all,          0, engine_sendsupplies_toggle_all(PARAM0))
 /* (E8 call sites) the thumbnail retarget (origin args; the cursor DAT_004e65fc / DAT_004e65f4, the press edge
  * DAT_004eafb4) and the commit (FUN_0043b04c, MP 0x447db6) */
-HOOK_R(ss_target_select,       2, engine_sendsupplies_target_select(I(0), I(1), (int)G32(0x4e65fcu), (int)G32(0x4e65f4u),
-                                                                     G8(0x4eafb4u)))
+HOOK_R(ss_target_select,       2, rl_43b412(I(0), I(1)))
 HOOK_V(ss_commit,              3, engine_sendsupplies_commit(I(0), I(1), (uint8_t)a[2]))
 /* the merchant scene's rug (FUN_004ba9c8 → FUN_004357a6: the mercgrid payload DAT_00542cf8, the cursor, the press
  * edge) and the trade grid's open FUN_0043530e (its open render FUN_00416308 is retail's: the seam) */
-HOOK_R(merchant_zone_click,    0, engine_merchant_zone_click((const uint8_t *)(uintptr_t)0x542cf8u, (int)G32(0x4e65fcu),
-                                                             (int)G32(0x4e65f4u), G8(0x4eafb4u)))
+HOOK_R(merchant_zone_click,    0, rl_4357a6())
 HOOK_V(trade_open,             0, engine_trade_open())
 
 hook_t RH_HOOKS_ECONOMY[] = {

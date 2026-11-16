@@ -150,8 +150,18 @@ int rl_link_port_enter(void)
 void rl_link_port_leave(int saved)
 {
     rl_link_sync_out();
+    /* back to a live caller (port code, no retail in between): reload, as rl_link_retail_leave does — the callee's
+     * callbacks into rl_ code may write a mirrored global through its retail symbol, which sync_out (store-if-changed
+     * against the sync_in baseline) leaves in retail memory while the caller's mirror stays stale.  Seen: rl_49a581
+     * (the AI's per-tick pass) called directly from rl_turn.c — 39 extra characters dispatched (g_gfx_char_counter)
+     * in bot-s1-t8 f5627, 47 standalone scenarios off pure retail in state_sem only. */
+    if (saved) rl_link_sync_in();
     s_live = saved;
 }
+/* a call out of an old port into retail-layout code while a queue is open: the callee may post into retail's ring, so
+ * the queue is stored before and reloaded after (an EVQ entry nested in the callee loads / stores its own) */
+int rl_link_evq_callout_enter(void) { int o = s_evq_open; if (o) rl_link_evq_store(); return o; }
+void rl_link_evq_callout_leave(int open) { if (open) rl_link_evq_load(); }
 void rl_link_retail_enter(void)
 {
     rl_link_sync_out();
@@ -213,3 +223,12 @@ void rl_link_panel_env(void)
 #define OLD_PORT(env, call) do { int live_ = rl_link_port_enter(); env; call; rl_link_loc_store(); rl_link_port_leave(live_); } while (0)
 int rl_40f7d3(int a1) { OLD_PORT(rl_link_panel_env(), engine_hud_panel_draw(a1)); return 0; }
 int rl_41a734(int a1) { OLD_PORT(rl_link_panel_env(), engine_hud_panel_endturn(a1)); return 0; }
+
+/* the product's binds, once, from the port's start (rl_crt_start): the logic family's tables / callbacks, the mapview
+ * and screens environments.  Each is idempotent (rhost's rh_port_bind_once runs the same three first). */
+void rl_link_bind_all(void)
+{
+    rl_link_bind_once();
+    rl_link_mapview_bind();
+    rl_link_screens_bind();
+}

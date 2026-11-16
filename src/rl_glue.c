@@ -610,7 +610,7 @@ static void editor_open(const void *buf, int max, int w, int flag)
 { rl_402009((int)(uintptr_t)buf, max, w, flag); }
 static void editor_length(void) { rl_401f49(); }
 /* unported or unlinked retail helpers */
-static int map_scene_tick(void) { return (int)engine_retail_call(0x4050c0u, 0); }   /* rl_link: engine_map_scene_tick */
+static int map_scene_tick(void) { return (int)rl_4050c0(); }   /* rl_link: engine_map_scene_tick */
 static int popup_dismiss(void) { return rl_476768(); }    /* engine_popup_scroll_dismiss (rl turn) */
 static int cursor_in(int x, int y, int w, int h)   /* engine_popup_cursor_in_rect 0x4b1deb (rl_host) */
 { return rl_4b1deb(x, y, w, h); }
@@ -867,7 +867,7 @@ int rl_4374c4(void)
     if (MP_ON)
         rl_43eda0(54, 0);
     else   /* rl_link: engine_combat_transfer_army (takes a port event queue) */
-        engine_retail_call(0x437535u, 2, (uint32_t)g_siege_sel_attacker, (uint32_t)g_siege_sel_region);
+        rl_437535((int)g_siege_sel_attacker, (int)g_siege_sel_region);
     engine_territory_mark_full_screen_dirty();
     engine_set_demand_redraw(2);
     BELOW_STATUS() = 1;
@@ -917,7 +917,7 @@ int rl_438acc(void)
     if (s_slot_0057cb18 == 2)
         return 0;
     g_rl_52afbc = ARMY32(g_rl_5681e0[0], 0x53fb6c);
-    return (int)engine_retail_call(0x41b032u, 0);   /* rl_link: engine.c's 0x41b032 */
+    return (int)rl_41b032();   /* rl_link: engine.c's 0x41b032 */
 }
 
 /* ---------------------------------------------------------------- the battle prompt / siege preparation */
@@ -938,7 +938,7 @@ int rl_43b593(void)
             bf_sleep(10);
             return rl_43eda0(61, 0);
         }   /* rl_link: engine_combat_auto_resolve_button (takes a port event queue) */
-        return (int)engine_retail_call(0x43b622u, 0);
+        return rl_43b622();
     }
     return 0;
 }
@@ -1003,7 +1003,7 @@ int rl_43b848(void)
 /* Port of FUN_0043b98a (23 B) — the siege assault by besieger `occ` (0x4a8aab). */
 int rl_43b98a(int occ)
 {   /* rl_link: engine_combat_siege_assault (takes a port event queue) */
-    return (int)engine_retail_call(0x4a8aabu, 1, (uint32_t)occ);
+    return rl_4a8aab(occ);
 }
 
 /* ---------------------------------------------------------------- the frame driver's pre-tick steps */

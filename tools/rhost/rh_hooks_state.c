@@ -4,7 +4,7 @@
  *
  * BINDING.  engine_army_state's file-scope mirrors (record cursor DAT_005533e8, abort flag DAT_0050a49e, live count
  * DAT_00553f08, raider cursor DAT_004e59dc) are synced in rh_port_sync_in/out; the driver's movement seam is the port
- * executor (rh_combat_bind_seams).
+ * executor (rl_link_bind_once, src/rl_link_logic.c).
  *
  * HANDLERS.  FUN_004650b0 reaches its four state handlers (FUN_0046521f / 00465486 / 00465622 / 00465761) only
  * through the pointer table PTR_FUN_004d6a50: no E8 call site, so they are verified as part of the driver's row.
@@ -15,6 +15,7 @@
  * and puts it back with rh_res_set (not compared: the other callees' frames — enter / settle region, income — also
  * write there, and the port does not model them; the state dwords are compared as always). */
 #include "rh_port.h"
+#include "rl_link.h"
 #include "save_schema_globals.h"
 #include "engine_army_state.h"
 #include "engine_army_move.h"
@@ -47,7 +48,7 @@ HOOK_R(state_raid_assign_target,   1, engine_army_state_raid_assign_target(I(0))
 HOOK_V(state_plan_raids,           0, engine_army_state_plan_raids())
 HOOK_V(state_plan_capital_marches, 0, engine_army_state_plan_capital_marches())
 HOOK_V(state_plan_settle_marches,  0, engine_army_state_plan_settle_marches())
-HOOK_R(state_find_settle_spot,     1, find_settle_spot(I(0)))
+HOOK_R(state_find_settle_spot,     1, rl_428007(I(0)))
 
 hook_t RH_HOOKS_STATE[] = {
     { "state_run", 0x4650b0u, (void *)w_state_run, 0, 0, 0, 0, "" },

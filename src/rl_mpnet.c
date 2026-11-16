@@ -673,7 +673,7 @@ int rl_46f2f1(void)
         TR16(j, 0x52f0b4) = 0;
     for (int k = 1; k < 151; k++)
         if ((int8_t)TR8(k, 0x52f0b0) != 0)
-            engine_retail_call(0x46eddfu, 1, (uint32_t)k);   /* TODO(rl-link): engine_unit_map_link */
+            rl_46eddf(k);   /* rl_link: engine_unit_map_link */
     return 0;
 }
 

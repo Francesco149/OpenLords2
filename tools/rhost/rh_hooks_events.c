@@ -7,6 +7,7 @@
  * cancel an event on g_per_army_768 / g_player_strategic_352 (aliased save blocks) and flip map cells through the
  * linked engine_territory.  engine_realm.c's coalition scratch (engine_realm_globals.c) is aliased below. */
 #include "rh_port.h"
+#include "rl_link.h"
 #include "save_schema_globals.h"
 #include "engine_realm_events.h"
 #include "engine_realm.h"
@@ -33,7 +34,7 @@ enum {
 };
 
 /* engine_realm_events.c — the roll (retail reads the RNG byte from DAT_0058fd60) and its handlers (argument: realm) */
-HOOK_V(events_roll,       0, engine_realm_roll_events(G32(0x58fd60u)))
+HOOK_V(events_roll,       0, rl_448819())
 #define EV(id) HOOK_V(ev_##id, 1, engine_realm_event_apply(I(0), 0x##id))
 EV(87) EV(88) EV(89) EV(8a) EV(8b) EV(8c) EV(8d) EV(8e)
 EV(12e) EV(12f) EV(130) EV(131) EV(132) EV(133) EV(134) EV(135)
@@ -43,8 +44,8 @@ HOOK_R(events_claim_empty,  1, engine_realm_events_claim_empty(I(0)))
 HOOK_R(events_vacate_owned, 1, engine_realm_events_vacate_owned(I(0)))
 /* the season pass's other realm passes (FUN_00448440's callees no earlier table hooked) */
 HOOK_V(rank_snapshot_metrics, 0, engine_ranking_snapshot_player_metrics())
-HOOK_V(realm_pay_upkeep,      0, EVQ(engine_realm_pay_upkeep(q)))
-HOOK_V(realm_coalition_pass,  0, EVQ(engine_realm_coalition_pass(q, MP_ACTIVE)))
+HOOK_V(realm_pay_upkeep,      0, rl_4acbd4())
+HOOK_V(realm_coalition_pass,  0, rl_44ae3c())
 HOOK_V(terr_census_all,       0, engine_territory_census_all_realms())
 HOOK_V(terr_allocate_all,     0, engine_territory_allocate_all_workforce())
 

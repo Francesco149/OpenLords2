@@ -1306,7 +1306,7 @@ int rl_49a010(void)
                 rl_49ce51();
             } else {
                 g_bf_55403c = 0;
-                engine_retail_call(0x4a8aabu, 1, s_slot_0057cad4);   /* TODO(rl-link): the siege assault (engine_combat.c: an evq) */
+                rl_4a8aab((int)s_slot_0057cad4);   /* rl_link: the siege assault (engine_combat.c: an evq) */
             }
         }
         return 0;
@@ -1362,7 +1362,7 @@ int rl_49a010(void)
             g_combat_anim_deadline = rl_plat_timeGetTime();
         }
     }
-    engine_retail_call(0x49a581u, 0);   /* TODO(rl-link): the AI's per-tick pass (engine_army_ai_run_per_tick: an evq) */
+    rl_49a581();   /* rl_link: the AI's per-tick pass (engine_army_ai_run_per_tick: an evq) */
     if (rl_49b762() != 0)
         rl_49ce51();
     return 0;
