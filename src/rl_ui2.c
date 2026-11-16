@@ -973,17 +973,8 @@ static int  chdir_base(void) { return rl_4af502(); }   /* io_path_chdir_base 0x4
 static int  load_panel_sheet(int n) { return rl_4b25b0(n); }   /* gfx_load_panel_sheet 0x4b25b0 (rl_host) */
 static int  read_file_at(const void *name, void *dst, uint32_t n, uint32_t off)   /* io_read_file_at 0x4af8d9 (rl_host) */
 { return rl_4af8d9((int)(uintptr_t)name, (int)(uintptr_t)dst, (int)n, (int)off); }
-/* engine_retail_call takes up to 8 arguments: an 11-argument retail call goes through this cdecl adapter (bracketed
- * like any retail call; the standalone stops) */
-typedef uint32_t (__cdecl *r11_t)(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t,
-                                  uint32_t, uint32_t, uint32_t);
-static uint32_t __cdecl call11_adapter(uint32_t fn, uint32_t argv)
-{
-    const uint32_t *a = (const uint32_t *)(uintptr_t)argv;
-    return ((r11_t)(uintptr_t)fn)(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10]);
-}
-static int bind_hex_grid(const uint32_t a[11])   /* TODO(rl-link): engine_battlefield_render_bind_hex_grid_context 0x4bc020 */
-{ return (int)engine_retail_call((uint32_t)(uintptr_t)call11_adapter, 2, 0x4bc020u, (uint32_t)(uintptr_t)a); }
+static int bind_hex_grid(const uint32_t a[11])   /* engine_battlefield_render_bind_hex_grid_context 0x4bc020 (rl host) */
+{ const int *v = (const int *)a; return rl_4bc020(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], v[10]); }
 static int bind_minimap(int a, int b, int c, int d, int e, int f)   /* TODO(rl-link): engine_battlefield_render_bind_minimap_context 0x4bc107 */
 { return (int)engine_retail_call(0x4bc107u, 6, (uint32_t)a, (uint32_t)b, (uint32_t)c, (uint32_t)d, (uint32_t)e, (uint32_t)f); }
 static void mp_leave_session(void) { rl_4b743b(); }   /* leave the MP session (rl mpnet2) */

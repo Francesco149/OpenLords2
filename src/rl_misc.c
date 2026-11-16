@@ -106,7 +106,7 @@ int rl_4b28cd(int a)
         g_rl_4df288 = 0;
     }
     if (g_rl_4e65ec != 0) {
-        r = (int)engine_retail_call(0x42eaa6u, 1, (uint32_t)a);   /* TODO(rl-link): gfx_release_surfaces */
+        r = rl_42eaa6(a);   /* gfx_release_surfaces (rl quit) */
         g_rl_4e65ec = 0;
     }
     return r;
@@ -228,7 +228,7 @@ int rl_4b0e03(void)
 
 /* Port of FUN_0049a3e6 (109 B) — screen 36 (never set by retail): the end-of-year save — the sheet reload (0x4984dc),
  * the strategic render (0x40f5fd), 0x4b14ff, the present 0x452160(1), the ranking cookie, the redraw, a fade to the
- * palette at 0x5691f0, the save rotation (0x49a453) — all through retail (TODO(rl-link)). */
+ * palette at 0x5691f0, the save rotation (0x49a453). */
 int rl_49a3e6(void)
 {
     int r = engine_current_screen();

@@ -149,8 +149,8 @@ static int  bf_px_row(int py) { return engine_battlefield_render_pixel_to_row(py
 static int  bf_zoom(void) { return engine_battlefield_render_get_zoom(); }   /* 0x4bc505 */
 static void text_recompute_length(void) { rl_401f49(); }   /* text_input_recompute_length (rl ui4) */
 static void text_copy_out(uint8_t *dst, int n) { rl_40210c((int)(uintptr_t)dst, n); }   /* text_input_copy_out (rl ui4) */
-static int  state_hash(const void *p, int n, int salt)   /* TODO(rl-link): engine_state_hash 0x44015a */
-{ return (int)engine_retail_call(0x44015au, 3, (uint32_t)(uintptr_t)p, (uint32_t)n, (uint32_t)salt); }
+static int  state_hash(const void *p, int n, int salt)   /* engine_state_hash 0x44015a (rl mpmsg) */
+{ return rl_44015a((int)(uintptr_t)p, n, salt); }
 /* unported — TODO(rl-extern) */
 static void mp_debug_tail(void) { rl_42563c(); }   /* the territory hex dump (rl ui4) */
 
@@ -1715,7 +1715,7 @@ int rl_41da2f(void)
 
 /* ================================================================ the debug HUDs (MP network panel, unit inspector) */
 
-static int min_tick_filtered(int a) { return (int)engine_retail_call(0x43e330u, 1, (uint32_t)a); }   /* TODO(rl-link): min_tick_filtered (engine_rate / engine_turn) */
+static int min_tick_filtered(int a) { return rl_43e330(a); }   /* min_tick_filtered 0x43e330 (rl mpmsg) */
 #define D4458(va) STR(g_rl_4d4458, 0x4d4458u, va)   /* the MP panel's labels (DAT_004d4458..) */
 
 /* Port of FUN_00423ba4 (3015 B) — the MP network debug panel at (x, y) (MP + DAT_0052eff8): a 258x130 frame on a
