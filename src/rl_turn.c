@@ -1340,7 +1340,7 @@ int rl_49a010(void)
         if ((int32_t)s_slot_005440c8 < 0) {
             s_slot_005440c8 = (uint32_t)-1;
             rl_43ac23();
-            engine_retail_call(0x41a734u, 1, 1u);   /* TODO(rl-link): the End-turn strip (engine_hud_panel_endturn: a panel environment) */
+            rl_41a734(1);   /* the End-turn strip (rl_link: engine_hud_panel_endturn) */
         }
     }
     if (PL32(LOCAL, 0x57bf00) == 999) {
@@ -1358,7 +1358,7 @@ int rl_49a010(void)
             g_rl_553018 = g_rl_55ce88;
             g_rl_553018 = 1;
             g_bf_55403c = 0;
-            engine_retail_call(0x41a734u, 1, 1u);   /* TODO(rl-link): the End-turn strip */
+            rl_41a734(1);   /* the End-turn strip */
             s_slot_005440c8 = s_slot_0053f26c;
             g_combat_anim_deadline = rl_plat_timeGetTime();
         }

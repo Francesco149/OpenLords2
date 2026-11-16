@@ -6,7 +6,7 @@
  * BINDING.  Module globals the ports keep in src/<module>_globals.c (not linked) are aliased below at their retail
  * VAs.  Pure in/out ports (the tooltip's state struct, the classifier's inputs) get a retail-layout adapter: the
  * struct is loaded from retail's globals before the call and stored back (store-if-changed) after it.  The dirty
- * rectangle is engine_territory's bound state (engine_territory_dirty_state(): rh_hooks_ai.c's s_dirty, synced
+ * rectangle is engine_territory's bound state (engine_territory_dirty_state(): src/rl_link.c's rl_link_dirty, synced
  * around every row and every seam into retail), so a mark made by the port and one made by retail code it calls
  * land in the same place.  The localized-text walker is the port's localization_state_t over retail's blob
  * &DAT_00591580 + walker pointer DAT_005c9270 (as in rh_hooks_gfx.c), loaded / stored around the call.

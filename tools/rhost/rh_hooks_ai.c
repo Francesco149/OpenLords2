@@ -34,6 +34,7 @@
 #include "engine_realm_upkeep.h"
 #include "engine_diplomacy.h"
 #include "game_init.h"
+#include "rl_link.h"
 
 /* ---------------------------------------------------------------- binding: save globals = retail memory */
 #define A(n, v) ".globl _" #n "\n\t.set _" #n ", " #v "\n\t"
@@ -45,6 +46,9 @@ A(g_misc_1360,0x53ea00) A(g_footprint_storage_160,0x553c80) A(g_player_roster,0x
 A(g_path_scratch,0x507250) A(g_stage_scratch,0x4f7d80)
 /* engine.c */
 A(g_sim_mp_active,0x553030)
+/* rl_link_globals.c (the link layer's mirrored globals no partition declared) */
+A(g_rl_55cd6c,0x55cd6c) A(g_rl_5656f0,0x5656f0) A(g_rl_57c904,0x57c904) A(g_rl_56d628,0x56d628) A(g_rl_50a49e,0x50a49e)
+A(g_rl_553f08,0x553f08) A(g_rl_4e59dc,0x4e59dc)
 /* engine_territory_globals.c: the cell sweeps' counter (quirk #237) */
 A(g_cell_sweep_counter,0x53e974)
 /* save_schema_globals.c: every s_slot_<VA> is retail VA <VA> */
@@ -95,7 +99,6 @@ A(s_slot_0058fe28,0x58fe28)
 
 /* ---------------------------------------------------------------- binding: runtime pointer seams */
 /* engine_dirty_rect: retail keeps the dirty rectangle in six scattered globals (engine_dirty_rect.h) */
-static engine_dirty_rect_state_t s_dirty;
 void rh_combat_bind_seams(void);   /* rh_hooks_combat.c */
 void rh_battle_bind_seams(void);   /* rh_hooks_battle.c */
 void rh_economy_bind_seams(void);  /* rh_hooks_economy.c */
@@ -129,7 +132,7 @@ void rh_port_bind_once(void)
     engine_map_query_bind_cell_descriptors(g_overworld_map);
     engine_army_state_bind_cells(g_overworld_map);
     engine_territory_bind_cursor_cache_flag((int *)(uintptr_t)0x57cac4u);   /* DAT_0057cac4 */
-    engine_territory_set_dirty_state(&s_dirty);                           /* synced: six scattered globals */
+    engine_territory_set_dirty_state(&rl_link_dirty);                           /* synced: six scattered globals */
     engine_path_field_bind_terrain((const int16_t *)(uintptr_t)0x4f3ffeu);  /* the strategic move-cost grid */
     engine_path_field_bind_storage((int16_t *)(uintptr_t)0x500c30u, (int16_t *)(uintptr_t)0x4f0380u,
                                    (int32_t *)(uintptr_t)0x4f9820u, (int32_t *)(uintptr_t)0x503020u,
@@ -143,106 +146,14 @@ void rh_port_bind_once(void)
     rh_log("rh_port: %d save-schema aliases match retail's table; seams bound (%d table binds)\n", SAVE_SCHEMA_COUNT, s_nbinds);
 }
 
-/* ---------------------------------------------------------------- syncing: file-static mirrors */
-/* file-static mirrors: engine_army_economy config scalars + eval / supply scratch (setters), engine_path's distance
- * globals, engine_map_query's cell cursor, engine_territory's current slot + dirty rect, engine_army_ai's ranking cookie, engine_path_field's bookkeeping,
- * engine_army_state's record cursor + abort flag + live count + raider cursor (engine_combat's runtime globals are aliased:
- * rh_hooks_combat.c) */
-/* the mirrored VAs, and their values when sync_in loaded the mirrors: sync_out stores a mirror only when the PORT
- * changed it (PUTM), so a port module that writes the same retail global directly (an alias: the battlefield port's
- * g_bf_<va>, src/engine_bf_globals.h) is not overwritten by a stale mirror */
-static const uint32_t k_mirror_va[] = {
-    0x55cd6cu, 0x5656f0u, 0x57c904u, 0x56d628u, 0x591560u, 0x58fea0u, 0x569570u, 0x569578u, 0x52afe0u, 0x56d6a0u,
-    0x50d09cu, 0x50a4c4u, 0x50a4c8u, 0x50a4bcu, 0x50a4c0u, 0x53e9acu, 0x504020u, 0x504024u, 0x4f4070u, 0x500c20u,
-    0x4f2768u, 0x507230u, 0x507234u, 0x5533e8u, 0x50a49eu, 0x553f08u, 0x4e59dcu,
-};
-static uint32_t s_mirror_in[sizeof k_mirror_va / sizeof *k_mirror_va];
-static int mirror_changed(uint32_t va, uint32_t v, uint32_t mask)
-{
-    for (int k = 0; k < (int)(sizeof k_mirror_va / sizeof *k_mirror_va); k++)
-        if (k_mirror_va[k] == va) return (v & mask) != (s_mirror_in[k] & mask);
-    return 1;
-}
-#define PUTM(va, v)  do { uint32_t m_ = (uint32_t)(v); if (mirror_changed(va, m_, 0xffffffffu)) PUT(va, m_); } while (0)
-#define PUTM8(va, v) do { uint8_t m_ = (uint8_t)(v); if (mirror_changed(va, m_, 0xffu)) PUT8(va, m_); } while (0)
-void rh_port_sync_in(void)
-{
-    engine_army_economy_set_prices((int)G32(0x553f60u), (int)G32(0x567594u), (int)G32(0x57cb30u));
-    engine_army_economy_set_production_tuning((int)G32(0x57c8e0u), (int)G32(0x552ffcu), (int)G32(0x57d34cu), (int)G32(0x5533bcu));
-    engine_army_economy_set_yield_divisors((int)G32(0x553538u), (int)G32(0x553218u));
-    engine_army_economy_set_eval_scratch((int)G32(0x55cd6cu), (int)G32(0x5656f0u));
-    engine_army_economy_set_supply_pools((int)G32(0x57c904u), (int)G32(0x56d628u));
-    g_path_dist_dx = (int32_t)G32(0x591560u); g_path_dist_dy = (int32_t)G32(0x58fea0u);   /* engine_path globals */
-    g_cell_cursor_col = (int32_t)G32(0x569570u); g_cell_cursor_row = (int32_t)G32(0x569578u); /* engine_map_query */
-    engine_territory_set_current_slot((int)G32(0x52afe0u));
-    engine_army_ai_set_ranking_dirty((int)G32(0x56d6a0u));
-    s_dirty.dirty_mark = (int)G32(0x50d09cu); s_dirty.dirty_xmin = (int)G32(0x50a4c4u); s_dirty.dirty_xmax = (int)G32(0x50a4c8u);
-    s_dirty.dirty_ymin = (int)G32(0x50a4bcu); s_dirty.dirty_ymax = (int)G32(0x50a4c0u); s_dirty.below_status_redraw = (int)G32(0x53e9acu);
-    g_pf_src_col = (int32_t)G32(0x504020u); g_pf_src_row = (int32_t)G32(0x504024u); g_pf_src_cell = (int32_t)G32(0x4f4070u);
-    g_pf_head = (int32_t)G32(0x500c20u); g_pf_tail = (int32_t)G32(0x4f2768u);
-    g_pf_cur_col = (int32_t)G32(0x507230u); g_pf_cur_row = (int32_t)G32(0x507234u);
-    g_army_state_index = (int)G32(0x5533e8u); g_army_state_abort = G8(0x50a49eu);
-    g_army_state_live_count = (int)G32(0x553f08u); g_raider_target_cursor = (int)G32(0x4e59dcu);
-    for (int k = 0; k < (int)(sizeof k_mirror_va / sizeof *k_mirror_va); k++) s_mirror_in[k] = G32(k_mirror_va[k]);
-}
-/* store only what changed (PUT): under the page-tracked shadow every first write to a page is a fault (~30 us
- * under wine) — sync_out alone touched ~15 pages a call */
-void rh_port_sync_out(void)
-{
-    PUTM(0x55cd6cu, (uint32_t)engine_army_economy_eval_cost());
-    PUTM(0x5656f0u, (uint32_t)engine_army_economy_eval_revenue());
-    PUTM(0x57c904u, (uint32_t)engine_army_economy_supply_pool_a());
-    PUTM(0x56d628u, (uint32_t)engine_army_economy_supply_pool_b());
-    PUTM(0x591560u, (uint32_t)g_path_dist_dx); PUTM(0x58fea0u, (uint32_t)g_path_dist_dy);
-    PUTM(0x569570u, (uint32_t)g_cell_cursor_col); PUTM(0x569578u, (uint32_t)g_cell_cursor_row);
-    PUTM(0x52afe0u, (uint32_t)engine_territory_current_slot());
-    PUTM(0x56d6a0u, (uint32_t)engine_army_ai_ranking_dirty());
-    PUTM(0x50d09cu, (uint32_t)s_dirty.dirty_mark); PUTM(0x50a4c4u, (uint32_t)s_dirty.dirty_xmin); PUTM(0x50a4c8u, (uint32_t)s_dirty.dirty_xmax);
-    PUTM(0x50a4bcu, (uint32_t)s_dirty.dirty_ymin); PUTM(0x50a4c0u, (uint32_t)s_dirty.dirty_ymax); PUTM(0x53e9acu, (uint32_t)s_dirty.below_status_redraw);
-    PUTM(0x504020u, (uint32_t)g_pf_src_col); PUTM(0x504024u, (uint32_t)g_pf_src_row); PUTM(0x4f4070u, (uint32_t)g_pf_src_cell);
-    PUTM(0x500c20u, (uint32_t)g_pf_head); PUTM(0x4f2768u, (uint32_t)g_pf_tail);
-    PUTM(0x507230u, (uint32_t)g_pf_cur_col); PUTM(0x507234u, (uint32_t)g_pf_cur_row);
-    PUTM(0x5533e8u, (uint32_t)g_army_state_index); PUTM8(0x50a49eu, g_army_state_abort);
-    PUTM(0x553f08u, (uint32_t)g_army_state_live_count); PUTM(0x4e59dcu, (uint32_t)g_raider_target_cursor);
-}
-
-/* engine_event_queue: the port's queue is one struct; retail's is six globals (FUN_00472bc5 / FUN_00472ae0).
- * Functions that post take a queue: the adapter loads it from retail, calls, and stores it back. */
-static engine_event_queue_state_t s_evq;
-static int s_evq_open;   /* an EVQ row is running: a call back into retail stores / reloads the queue too */
-engine_event_queue_state_t *rh_evq_load(void)
-{
-    s_evq_open = 1;
-    memcpy(&s_evq.scratch, (const void *)(uintptr_t)0x553510u, sizeof s_evq.scratch);   /* DAT_00553510: 24 B staging */
-    memcpy(s_evq.ring, (const void *)(uintptr_t)0x568480u, sizeof s_evq.ring);           /* DAT_00568480: 50 × 24 B */
-    s_evq.write_idx = (int)G32(0x543fd0u); s_evq.read_idx = (int)G32(0x553ec4u);
-    s_evq.notify_flag = (int)G32(0x565484u); s_evq.consumer_cooldown = (int)G32(0x57c954u);
-    return &s_evq;
-}
-void rh_evq_store(void)
-{
-    s_evq_open = 0;
-    if (memcmp((void *)(uintptr_t)0x553510u, &s_evq.scratch, sizeof s_evq.scratch))
-        memcpy((void *)(uintptr_t)0x553510u, &s_evq.scratch, sizeof s_evq.scratch);
-    if (memcmp((void *)(uintptr_t)0x568480u, s_evq.ring, sizeof s_evq.ring))
-        memcpy((void *)(uintptr_t)0x568480u, s_evq.ring, sizeof s_evq.ring);
-    PUT(0x543fd0u, (uint32_t)s_evq.write_idx); PUT(0x553ec4u, (uint32_t)s_evq.read_idx);
-    PUT(0x565484u, (uint32_t)s_evq.notify_flag); PUT(0x57c954u, (uint32_t)s_evq.consumer_cooldown);
-}
-/* 1 while port code runs with the file-static mirrors authoritative (no retail code since the last sync_in) */
-static int s_port_live;
-void rh_port_retail_enter(void)
-{
-    rh_port_sync_out();
-    if (s_evq_open) { rh_evq_store(); s_evq_open = 1; }
-    s_port_live = 0;
-}
-void rh_port_retail_leave(void)
-{
-    if (s_evq_open) rh_evq_load();
-    rh_port_sync_in();
-    s_port_live = 1;
-}
+/* ---------------------------------------------------------------- syncing: file-static mirrors, the event queue */
+/* src/rl_link.c (the link layer: one implementation for rhost and the retail-layout ports that call old ports) */
+void rh_port_sync_in(void)  { rl_link_sync_in(); }
+void rh_port_sync_out(void) { rl_link_sync_out(); }
+engine_event_queue_state_t *rh_evq_load(void) { return rl_link_evq_load(); }
+void rh_evq_store(void) { rl_link_evq_store(); }
+void rh_port_retail_enter(void) { rl_link_retail_enter(); }
+void rh_port_retail_leave(void) { rl_link_retail_leave(); }
 
 /* ---------------------------------------------------------------- the generic wrapper body */
 /* the retail side, at the caller's own stack position: esp = e0 + 4 (its pushed arguments), `call` puts the
@@ -306,15 +217,11 @@ static void ctx_port(void *c)
      * caller's mirrors are live — store them first, or the reload drops what the caller computed (mp-leave-p1 f3352:
      * resign 0x49cf20 → plan_realm's eval scratch 0x55cd6c / 0x5656f0 lost to a nested row's sync_in; cf. rl_crt.c's
      * alloc hook) */
-    int live = s_port_live;
-    if (live) rh_port_sync_out();
-    rh_port_sync_in();
-    s_port_live = 1;
+    int live = rl_link_port_enter();
     x->nput = 0; x->outer = g_cur; g_cur = x;
     x->ret_p = x->port(x->a);
     g_cur = x->outer;
-    rh_port_sync_out();
-    s_port_live = live;
+    rl_link_port_leave(live);
 }
 uint32_t rh_port_run(hook_t *h, void *self, rh_port_fn port, int has_ret, uint32_t e0)
 {

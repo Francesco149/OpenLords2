@@ -24,3 +24,4 @@
 #include "rl_mpnet.h"
 #include "rl_mpmsg3.h"
 #include "rl_mpnet2.h"
+#include "rl_link.h"

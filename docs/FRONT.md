@@ -88,7 +88,7 @@
    actions 24 / 46, the late-action path 0x4470c4 → 90 reached in retail. **Every MP message id now has a port** (47
    functions, fe9a756 / ec746c4: 10 rows reached, 0 divergences, hybrid PASS; 37 dead-code rows unverified — no carrier);
    standalone 39/39 MP sides = pure retail; static gaps 107 → 66. **2026-11-16: the last 24 delayed-action handlers ported** (table 0x4d5c98 complete,
-   rl-mpmsg3.md; dead but for 25 / 35, reachable by forging 53 / 68): static gaps 66 → 44. Next: ★5 (rl-link seams); ★4 is CRT only.
+   rl-mpmsg3.md; dead but for 25 / 35, reachable by forging 53 / 68): static gaps 66 → 44. Next: ★5 (rl-link: the link layer landed 2026-11-16, the screens family next); ★4 is CRT only.
 0b. **rd campaigns** — **campaign 6 (2026-11-14, API drivers):** ai-recall filed (sub_48B7FC 0x48b7fc first time: an Equal
    field skirmish after a Play Now → New Game trip — a cold skirmish leaves byte_553080 zero, so the recall never fires;
    +12 blocks); ai-surrender blocked (probe: no skirmish attacker is knights-only; the battle ends when a side has 0 men
@@ -150,10 +150,13 @@
    last 21 non-CRT seams were ported 2026-11-16 (rl_ui4.c, rl-ui4.md §Gap ports); standalone 119/119 = pure retail.
    2 of the 21 reached by new scenarios (siege-surrender → 0x43baf9, supplies-self → 0x43b101: 0 divergences); the
    rest unreached (DD restore / paint, debug overlays, screens 0x44 / 0x45, title page 10, the MP error / leave paths).
-5. **The TODO(rl-link) seams** (rl_ functions calling engine_retail_call where a linked old port takes a port struct /
-   context: the event-queue posters 0x49b2a3 / 0x448819 / 0x449889 / 0x4acbd4 / 0x44aa41 / 0x44ae3c / 0x4508de, combat
-   0x4ac3c6 / 0x4abb36 / 0x43b622, county panels 0x4110b1 / 0x41152f / 0x4116fb / 0x411b72, the screens' binders …;
-   per-partition lists in docs/findings/rl-*.md): port them on retail's layout (they run retail under rhost today).
+5. **The TODO(rl-link) seams** (rl_ functions reaching an old port through engine_retail_call; the old port's mirrors /
+   event queue / environment came only from rhost's row wrappers): **the link layer `src/rl_link.c`** (2026-11-16,
+   `docs/findings/rl-link.md`) — mirror sync, liveness, event queue, the walker and the hud-panel env moved out of
+   rhost (rh_port_* forward to it); 7 seams to existing rl_ ports + the pilot `rl_40f7d3` / `rl_41a734` (verify: 0
+   divergences, hybrid PASS; standalone 121/121 = pure retail). **Left: 144 sites / 81 VAs** in three env families
+   (rl-link.md §Left): screens (`scr_bind` → `rl_link_screens_bind`, 56 VAs), mapview (5), logic / EVQ (19). Then
+   `rl_link_bind_once` from the port's start (the product build's binds).
 6. **Unreached code**: 939 functions / 172 KB no scenario reaches (`docs/findings/coverage-round3.md`): multiplayer
    (DirectPlay / serial — a fake transport in rhost would open it), dead code (zoom-1 / zoom-16 drawers, unwritten
    orders 0 / 7 / 13 / 15 / 16), AI knight garrisons, DirectDraw errors (a fault-injection switch for 0x42f60e's

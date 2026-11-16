@@ -1890,11 +1890,11 @@ int rl_4b99c0(void)
     rl_420316();
     if (g_rl_57cac4 != 0)
         rl_45270a();
-    engine_retail_call(0x40f7d3u, 1, 0u);   /* TODO(rl-link): strat_draw_territory_panel (engine_hud_panel.c, its binder) */
+    rl_40f7d3(0);   /* strat_draw_territory_panel (rl_link: engine_hud_panel) */
     rl_423530();
     rl_410f4b();
     if (AT(uint8_t, g_rl_4e31b0, 0x4e31b0u, 0x4e31f8u + engine_current_screen()) != 0)
-        engine_retail_call(0x41a734u, 1, 0u);   /* TODO(rl-link): engine_hud_panel_render_endturn */
+        rl_41a734(0);   /* engine_hud_panel_render_endturn (rl_link) */
     if (g_bf_53f238 != 0) {
         if ((int)s_slot_0057c8fc == 2)
             engine_retail_call(0x423b4fu, 0);   /* TODO(rl-link): engine_mp_render_status_line (engine_mp_render.c) */

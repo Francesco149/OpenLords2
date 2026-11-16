@@ -12645,7 +12645,8 @@
    "src": [
     "src/engine_hud_panel.c",
     "src/engine_hud_panel.h",
-    "src/engine_workforce_hud.h"
+    "src/engine_workforce_hud.h",
+    "src/rl_link.c"
    ]
   },
   {
@@ -15250,6 +15251,7 @@
    "src": [
     "src/engine_event_queue.c",
     "src/engine_event_queue.h",
+    "src/rl_link.c",
     "src/rl_terr.c"
    ]
   },
@@ -15285,6 +15287,7 @@
     "src/engine_realm_upkeep.c",
     "src/engine_realm_upkeep.h",
     "src/engine_sendsupplies_model.c",
+    "src/rl_link.c",
     "src/rl_terr.c"
    ]
   },

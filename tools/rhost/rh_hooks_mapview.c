@@ -27,6 +27,7 @@
 #include "gfx_sprite_render.h"
 #include "gfx_wrap.h"
 #include "engine_terrain_info.h"
+#include "rl_link.h"
 
 /* ---------------------------------------------------------------- binding: mapview globals = retail memory */
 #define A(n, v) ".globl _" #n "\n\t.set _" #n ", " #v "\n\t"
@@ -88,7 +89,7 @@ static void mv_bind(void)
                                            (const unsigned char *)(uintptr_t)0x4d71d0u);
     engine_overlay_render_set_log(seam_log);
     engine_map_scene_bind_clock(seam_clock);
-    engine_dirty_rect_state_t *d = engine_territory_dirty_state();   /* rh_hooks_ai.c's synced s_dirty */
+    engine_dirty_rect_state_t *d = engine_territory_dirty_state();   /* rl_link_dirty (src/rl_link.c), synced */
     engine_map_terrain_set_dirty_state(d);
     engine_map_render_set_dirty_state(d);
     engine_overlay_render_set_dirty_state(d);
@@ -100,31 +101,12 @@ static void mv_bind(void)
 }
 __attribute__((constructor)) static void mv_bind_register(void) { rh_port_register_bind(mv_bind); }
 
-/* the county panel's environment: retail's sheet pointer / fonts / char maps, the localization walker (the port's
- * localization_state_t over retail's blob &DAT_00591580 and walker DAT_005c9270, loaded / stored around the call
- * and around the screen-2 workforce seams), the synced dirty state */
-static localization_state_t s_loc;
-static void loc_load(void) { s_loc.blob = (unsigned char *)(uintptr_t)0x591580u; s_loc.walker_offset = (size_t)(G32(0x5c9270u) - 0x591580u); }
-static void loc_store(void) { PUT(0x5c9270u, 0x591580u + (uint32_t)s_loc.walker_offset); }
-static void seam_wf_rows(int county)   /* FUN_0045161e (ported in engine_workforce_hud.c, not linked here) */
-{ loc_store(); rh_port_retail_enter(); ((int (__cdecl *)(int))(uintptr_t)0x45161eu)(county); rh_port_retail_leave(); loc_load(); }
-static void seam_wf_redraw(void)       /* 0x4120e0 (unported): the workforce backdrop + rows + seal */
-{ loc_store(); rh_port_retail_enter(); ((int (__cdecl *)(void))(uintptr_t)0x4120e0u)(); rh_port_retail_leave(); loc_load(); }
-static void panel_env(void)
-{
-    mv_bind();
-    loc_load();
-    engine_hud_panel_env_t env = {
-        .chrome = (const uint8_t *)(uintptr_t)G32(0x5530c8u),        /* DAT_005530c8 misc sheet */
-        .font_name = (const uint8_t *)(uintptr_t)0x5c9a90u,           /* fntl2_9 */
-        .font_res = (const uint8_t *)(uintptr_t)0x5aeba0u,            /* font_10 */
-        .font_menu = (const uint8_t *)(uintptr_t)0x5af8f0u,           /* fntl2_14 */
-        .glyph = (const uint8_t *)(uintptr_t)0x4d71f0u, .metrics = (const unsigned char *)(uintptr_t)0x4d71d0u,
-        .loc = &s_loc, .dirty = engine_territory_dirty_state(),
-        .workforce_rows = seam_wf_rows, .workforce_redraw = seam_wf_redraw,
-    };
-    engine_hud_panel_bind_env(&env);
-}
+/* the county panel's environment and the localization walker: src/rl_link.c (rl_link_panel_env: retail's sheet
+ * pointer / fonts / char maps, the walker over retail's blob &DAT_00591580 + DAT_005c9270, the synced dirty state, the
+ * workforce seams port to port) — one definition for these rows and the retail-layout entries rl_40f7d3 / rl_41a734 */
+static localization_state_t *loc_load(void) { return rl_link_loc_load(); }
+static void loc_store(void) { rl_link_loc_store(); }
+static void panel_env(void) { mv_bind(); rl_link_panel_env(); }
 #define PANEL(call) do { panel_env(); call; loc_store(); } while (0)
 
 /* the terrain-info panel's environment: the chrome sheet the panel twins bake in (&DAT_0057d3d0), the seal's system
@@ -147,7 +129,7 @@ static void ti_env(void)
         .chrome = (const uint8_t *)(uintptr_t)0x57d3d0u, .system_sheet = (const uint8_t *)(uintptr_t)0x5bb540u,
         .title_font = (const uint8_t *)(uintptr_t)0x5b2fa0u, .menu_font = (const uint8_t *)(uintptr_t)0x5af8f0u,
         .glyph = (const uint8_t *)(uintptr_t)0x4d71f0u, .metrics = (const unsigned char *)(uintptr_t)0x4d71d0u,
-        .loc = &s_loc, .special_table = (const int32_t *)(uintptr_t)0x4d2ec8u, .dirty = engine_territory_dirty_state(),
+        .loc = loc_load(), .special_table = (const int32_t *)(uintptr_t)0x4d2ec8u, .dirty = engine_territory_dirty_state(),
         .county_panel = seam_ti_county, .roster_a = seam_ti_roster_a, .roster_b = seam_ti_roster_b,
         .roster_c = seam_ti_roster_c, .alert = seam_ti_alert, .load_icons = seam_ti_icons, .present = seam_ti_present,
     };
@@ -234,7 +216,7 @@ HOOK_V(mv_minimap_render,        2, M(engine_minimap_render((const uint8_t *)(ui
 HOOK_V(mv_minimap_plot,          4, M(engine_minimap_plot((unsigned)a[0], I(1), I(2), I(3))))
 HOOK_V(mv_minimap_bands,         0, M(engine_minimap_compute_bands()))
 /* engine_hud_panel.c */
-HOOK_V(mv_panel_draw,            1, PANEL(engine_hud_panel_draw(I(0))))
+HOOK_V(mv_panel_draw,            1, M(rl_40f7d3(I(0))))
 HOOK_V(mv_panel_queues,          1, PANEL(engine_hud_panel_build_queues(I(0))))
 HOOK_V(mv_panel_q1_type1,        0, PANEL(engine_hud_panel_draw_q1_type1()))
 HOOK_V(mv_panel_q1_type0,        0, PANEL(engine_hud_panel_draw_q1_type0()))
@@ -244,7 +226,7 @@ HOOK_V(mv_panel_q2_type5,        0, PANEL(engine_hud_panel_draw_q2_type5()))
 HOOK_V(mv_panel_q2_type6,        0, PANEL(engine_hud_panel_draw_q2_type6()))
 HOOK_V(mv_panel_q2_type7,        0, PANEL(engine_hud_panel_draw_q2_type7()))
 HOOK_V(mv_panel_q2_type3,        0, PANEL(engine_hud_panel_draw_q2_type3()))
-HOOK_V(mv_panel_endturn,         1, PANEL(engine_hud_panel_endturn(I(0))))
+HOOK_V(mv_panel_endturn,         1, M(rl_41a734(I(0))))
 /* engine_terrain_info.c (the screen-4 panel) */
 HOOK_V(mv_ti_panel,              0, TI(engine_terrain_info_panel()))
 HOOK_V(mv_ti_simple,             0, TI(engine_terrain_info_simple()))

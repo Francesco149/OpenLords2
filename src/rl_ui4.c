@@ -100,8 +100,8 @@ static int panel_box(int x, int y, int cols, int rows)   /* TODO(rl-link): 0x409
 { return (int)engine_retail_call(0x409397u, 4, (uint32_t)x, (uint32_t)y, (uint32_t)cols, (uint32_t)rows); }
 static int year_number(int v, int x, int y, int mode)   /* TODO(rl-link): county_year_number 0x41a900 */
 { return (int)engine_retail_call(0x41a900u, 4, (uint32_t)v, (uint32_t)x, (uint32_t)y, (uint32_t)mode); }
-static int territory_panel(int a) { return (int)engine_retail_call(0x40f7d3u, 1, (uint32_t)a); }   /* TODO(rl-link): strat_draw_territory_panel 0x40f7d3 (engine_hud_panel: an env) */
-static int endturn_panel(int a) { return (int)engine_retail_call(0x41a734u, 1, (uint32_t)a); }     /* TODO(rl-link): engine_hud_panel_render_endturn 0x41a734 */
+static int territory_panel(int a) { return rl_40f7d3(a); }   /* strat_draw_territory_panel 0x40f7d3 (rl_link: engine_hud_panel) */
+static int endturn_panel(int a) { return rl_41a734(a); }     /* engine_hud_panel_render_endturn 0x41a734 (rl_link) */
 static int minimap_render(int x, int y) { return (int)engine_retail_call(0x410aa9u, 2, (uint32_t)x, (uint32_t)y); }   /* TODO(rl-link): engine_minimap_render 0x410aa9 */
 static int title_scene(void) { return (int)engine_retail_call(0x41e7e1u, 0); }          /* TODO(rl-link): engine_title_render_scene 0x41e7e1 */
 static int treasury_render(void) { return (int)engine_retail_call(0x416925u, 0); }      /* TODO(rl-link): engine_treasury_render 0x416925 */

@@ -403,7 +403,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x451150 | FUN_00451150 | 936 | game_init.c, game_init.h, rl_ctl.c |
 | 0x4514f8 | FUN_004514f8 | 147 | game_init.c, game_init.h, rl_ctl.c |
 | 0x45158b | FUN_0045158b | 147 | engine_army_ai.c, engine_army_ai.h |
-| 0x45161e | FUN_0045161e | 428 | engine_hud_panel.c, engine_hud_panel.h, engine_workforce_hud.h |
+| 0x45161e | FUN_0045161e | 428 | engine_hud_panel.c, engine_hud_panel.h, engine_workforce_hud.h (+1) |
 | 0x4517ca | FUN_004517ca | 107 | engine_labor.c, engine_workforce_hud.h |
 | 0x4518a5 | FUN_004518a5 | 293 | engine_workforce_hud.h |
 | 0x4519ca | FUN_004519ca | 147 | engine_workforce_hud.h |
@@ -523,9 +523,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x47265d | FUN_0047265d | 536 | engine_path.h, rl_terr.c |
 | 0x472875 | FUN_00472875 | 151 | engine_path.h, rl_terr.c |
 | 0x472ad0 | FUN_00472ad0 | 16 | engine_event_queue.c, engine_event_queue.h, game_init.c (+1) |
-| 0x472ae0 | FUN_00472ae0 | 96 | engine_event_queue.c, engine_event_queue.h, rl_terr.c |
+| 0x472ae0 | FUN_00472ae0 | 96 | engine_event_queue.c, engine_event_queue.h, rl_link.c (+1) |
 | 0x472b40 | FUN_00472b40 | 133 | engine.c, engine_event_queue.c, engine_event_queue.h (+1) |
-| 0x472bc5 | FUN_00472bc5 | 560 | engine.c, engine_army_ai.c, engine_army_move.c (+10) |
+| 0x472bc5 | FUN_00472bc5 | 560 | engine.c, engine_army_ai.c, engine_army_move.c (+11) |
 | 0x472df5 | FUN_00472df5 | 81 | engine_event_queue.c, engine_event_queue.h |
 | 0x476710 | FUN_00476710 | 88 | engine_army_select.c, engine_army_select.h, rl_turn.c |
 | 0x476768 | FUN_00476768 | 245 | engine.c, engine_army_select.h, engine_ingame_input.h (+3) |
