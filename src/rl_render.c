@@ -141,9 +141,9 @@ static void mark_full(void) { engine_territory_mark_full_screen_dirty(); }   /* 
 static void minimap_render(int x, int y) { engine_retail_call(0x410aa9u, 2, (uint32_t)x, (uint32_t)y); }   /* TODO(rl-link): engine_minimap_render */
 static void minimap_plot(int a, int x, int y, int b)   /* TODO(rl-link): engine_minimap_plot */
 { engine_retail_call(0x410cbdu, 4, (uint32_t)a, (uint32_t)x, (uint32_t)y, (uint32_t)b); }
-static void workforce_restore(const uint8_t *blob, int w) { engine_retail_call(0x4b3ec0u, 2, (uint32_t)(uintptr_t)blob, (uint32_t)w); }   /* TODO(rl-link): engine_workforce_hud_restore_backdrop */
-static void workforce_capture(const uint8_t *blob, int w) { engine_retail_call(0x4b3f0au, 2, (uint32_t)(uintptr_t)blob, (uint32_t)w); }   /* TODO(rl-link): engine_workforce_hud_capture_backdrop */
-static void workforce_rows(void) { engine_retail_call(0x412666u, 0); }   /* TODO(rl-link): engine_workforce_draw_all_rows */
+static void workforce_restore(const uint8_t *blob, int w) { rl_4b3ec0((int)(uintptr_t)blob, (int)w); }   /* rl_link: engine_workforce_hud_restore_backdrop */
+static void workforce_capture(const uint8_t *blob, int w) { rl_4b3f0a((int)(uintptr_t)blob, (int)w); }   /* rl_link: engine_workforce_hud_capture_backdrop */
+static void workforce_rows(void) { rl_412666(); }   /* rl_link: engine_workforce_draw_all_rows */
 static int  bf_px_col(int px) { return engine_battlefield_render_pixel_to_col(px); }   /* 0x4bc2a5 */
 static int  bf_px_row(int py) { return engine_battlefield_render_pixel_to_row(py); }   /* 0x4bc2c5 */
 static int  bf_zoom(void) { return engine_battlefield_render_get_zoom(); }   /* 0x4bc505 */
@@ -471,15 +471,15 @@ int rl_410c71(int a, int x, int y)
 /* ================================================================ the screen dispatcher's arms (0x40f1a0) */
 
 /* seams of the screen arms */
-static void panel_box(int x, int y, int cols, int rows)   /* TODO(rl-link): 0x409397 = gfx_panel_draw_border_chrome(mode 0) + gfx_panel_fill_interior_chrome(x + 16, y + 16, cols - 2, rows - 2); a static in engine_armory / county_panels / labor / terrain_info */
-{ engine_retail_call(0x409397u, 4, (uint32_t)x, (uint32_t)y, (uint32_t)cols, (uint32_t)rows); }
+static void panel_box(int x, int y, int cols, int rows)   /* rl_link: 0x409397 = gfx_panel_draw_border_chrome(mode 0) + gfx_panel_fill_interior_chrome(x + 16, y + 16, cols - 2, rows - 2); a static in engine_armory / county_panels / labor / terrain_info */
+{ rl_409397((int)x, (int)y, (int)cols, (int)rows); }
 static void chdir_base(void) { rl_4af502(); }   /* io_path_chdir_base (rl_host) */
 static void read_file_at(const void *name, const void *dst, uint32_t n, uint32_t off)   /* io_read_file_at 0x4af8d9 (rl_host) */
 { rl_4af8d9((int)(uintptr_t)name, (int)(uintptr_t)dst, (int)n, (int)off); }
-static void unit_noun(int n, int str, int x, int y, const uint8_t *font, int color)   /* TODO(rl-link): armory_unit_noun 0x41ac3e */
-{ engine_retail_call(0x41ac3eu, 6, (uint32_t)n, (uint32_t)str, (uint32_t)x, (uint32_t)y, (uint32_t)(uintptr_t)font, (uint32_t)color); }
-static int  num_units(int n, int str, int x, int y, const uint8_t *font, int color)   /* TODO(rl-link): labor_num_units 0x41ab67 */
-{ return (int)engine_retail_call(0x41ab67u, 6, (uint32_t)n, (uint32_t)str, (uint32_t)x, (uint32_t)y, (uint32_t)(uintptr_t)font, (uint32_t)color); }
+static void unit_noun(int n, int str, int x, int y, const uint8_t *font, int color)   /* rl_link: armory_unit_noun 0x41ac3e */
+{ rl_41ac3e((int)n, (int)str, (int)x, (int)y, (int)(uintptr_t)font, (int)color); }
+static int  num_units(int n, int str, int x, int y, const uint8_t *font, int color)   /* rl_link: labor_num_units 0x41ab67 */
+{ return rl_41ab67((int)n, (int)str, (int)x, (int)y, (int)(uintptr_t)font, (int)color); }
 static void load_background(const void *name, int h)   /* gfx_load_background_image 0x408fcb (rl ui4) */
 { rl_408fcb((int)(uintptr_t)name, h); }
 static void load_panel_sheet(int n) { rl_4b25b0(n); }   /* gfx_load_panel_sheet (rl_host) */
@@ -487,8 +487,8 @@ static int  set_palette(const void *pal) { return rl_4b0ab5((int)(uintptr_t)pal)
 static void clear_back_buffer(void) { rl_4b1867(); }   /* the back-buffer clear 0x4b1867 (rl_host) */
 static void load_season(void) { rl_4984dc(); }   /* the season loader 0x4984dc (rl turn) */
 static int  strat_render(int full) { return rl_40f5fd(full); }   /* engine_screen_strat_render (rl ui4) */
-static void filelist_content(int a, int b) { engine_retail_call(0x4149ecu, 2, (uint32_t)a, (uint32_t)b); }   /* TODO(rl-link): engine_title_render_filelist_content */
-static void bf_minimap_scroll(int a) { engine_retail_call(0x4bc1d1u, 1, (uint32_t)a); }   /* TODO(rl-link): engine_battlefield_render_minimap_scroll */
+static void filelist_content(int a, int b) { rl_4149ec((int)a, (int)b); }   /* rl_link: engine_title_render_filelist_content */
+static void bf_minimap_scroll(int a) { rl_4bc1d1((int)a); }   /* rl_link: engine_battlefield_render_minimap_scroll */
 static void menubar_chrome(void) { rl_419c78(); }   /* engine_hud_menubar_render_chrome (rl ui4) */
 static void present(int full) { rl_452160(full); }   /* 0x452160 (rl_ctl) */
 /* 0x4b1de0 is an empty function (11 B: no state, EAX passes through): its calls are elided */
@@ -954,7 +954,7 @@ static void caspics_load(const void *name, const void *dst, int idx)   /* rl_40a
 { rl_40ae12((int)(uintptr_t)name, (int)(uintptr_t)dst, idx); }
 static void popup_scroll_dismiss(void) { rl_476768(); }   /* engine_popup_scroll_dismiss (rl turn) */
 static void labor_render(void) { rl_412b33(); }   /* engine_labor_render (rl ui4) */
-static void fill4(int x, int y, int c) { engine_retail_call(0x4b4056u, 3, (uint32_t)x, (uint32_t)y, (uint32_t)c); }   /* TODO(rl-link): engine_overlay_render's 4-byte fill 0x4b4056 */
+static void fill4(int x, int y, int c) { engine_retail_call(0x4b4056u, 3, (uint32_t)x, (uint32_t)y, (uint32_t)c); }   /* rl_link: engine_overlay_render's 4-byte fill 0x4b4056 */
 static void movie_text_box(int x, int y, int w, int h) { rl_42e45e(x, y, w, h); }   /* 0x42e45e (rl ui4) */
 static void mp_session_end(void) { rl_4b743b(); }   /* leave the MP session (rl mpnet2) */
 static void map_build_cells(int a) { rl_4298c1(a); }   /* engine_map_init_build_cells (rl ui4) */
@@ -1428,10 +1428,10 @@ int rl_41438c(void)
 
 /* ================================================================ terrain info (the territory / county panel) */
 
-static void year_number(int v, int x, int y, int mode)   /* TODO(rl-link): county_year_number 0x41a900 */
-{ engine_retail_call(0x41a900u, 4, (uint32_t)v, (uint32_t)x, (uint32_t)y, (uint32_t)mode); }
-static void castle_block(int c, int x, int y, int row)   /* TODO(rl-link): labor_castle_block 0x41dedb (engine_labor.c) */
-{ engine_retail_call(0x41dedbu, 4, (uint32_t)c, (uint32_t)x, (uint32_t)y, (uint32_t)row); }
+static void year_number(int v, int x, int y, int mode)   /* rl_link: county_year_number 0x41a900 */
+{ rl_41a900((int)v, (int)x, (int)y, (int)mode); }
+static void castle_block(int c, int x, int y, int row)   /* rl_link: labor_castle_block 0x41dedb (engine_labor.c) */
+{ rl_41dedb((int)c, (int)x, (int)y, (int)row); }
 static void button_strip(int x, int y, const void *recs, int n)   /* 0x40cfd2 = engine_button_render_list (linked), called through
                                                                      retail: its pressed-button mark seam is bound by rh_hooks_gfx.c to
                                                                      the gfx table's own dirty copy, not the mirror this port runs on */

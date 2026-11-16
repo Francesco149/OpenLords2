@@ -164,9 +164,9 @@ static void load_background(const void *name, int h)   /* gfx_load_background_im
 { rl_408fcb((int)(uintptr_t)name, h); }
 static void load_panel_sheet(int n) { rl_4b25b0(n); }   /* gfx_load_panel_sheet (rl_host) */
 static void set_palette(const void *pal) { rl_4b0ab5((int)(uintptr_t)pal); }   /* the palette set 0x4b0ab5 (rl_host) */
-static void panel_box(int x, int y, int cols, int rows)   /* TODO(rl-link): 0x409397 = gfx_panel_draw_border_chrome(mode 0) + gfx_panel_fill_interior_chrome (a static in several modules) */
-{ engine_retail_call(0x409397u, 4, (uint32_t)x, (uint32_t)y, (uint32_t)cols, (uint32_t)rows); }
-static void bf_minimap_scroll(int a) { engine_retail_call(0x4bc1d1u, 1, (uint32_t)a); }   /* TODO(rl-link): engine_battlefield_render_minimap_scroll */
+static void panel_box(int x, int y, int cols, int rows)   /* 0x409397 (rl_link) = gfx_panel_draw_border_chrome(mode 0) + gfx_panel_fill_interior_chrome (a static in several modules) */
+{ rl_409397((int)x, (int)y, (int)cols, (int)rows); }
+static void bf_minimap_scroll(int a) { rl_4bc1d1((int)a); }   /* rl_link: engine_battlefield_render_minimap_scroll */
 static void load_system_sheet(int a) { rl_499a1c(a); }   /* gfx_load_system_sheet_select (rl turn) */
 static int  file_size(const char *name) { return rl_4af70c((int)(uintptr_t)name); }   /* 0x4af70c: the size, 0 when absent (ui2) */
 /* 0x46ead0 is memset(record, 0, 0x1a4) (no other effect; EAX unused): inlined */

@@ -10,3 +10,9 @@ extern int32_t g_rl_56d628;                  /* .data 0x56d628: supply pool b */
 extern uint8_t g_rl_50a49e;                  /* .data 0x50a49e: the army-state walk's abort flag */
 extern int32_t g_rl_553f08;                  /* .data 0x553f08: the army-state walk's live count */
 extern int32_t g_rl_4e59dc;                  /* .data 0x4e59dc: the raider target cursor */
+/* the screens env's fixed tables (src/rl_link_screens.c: the battlefield renderer's, the armory's) */
+extern uint8_t g_rl_4e3bf0[0x440];            /* .data 0x4e3bf0: the battlefield anim offsets at zoom 16, (dx, dy) dwords */
+extern uint8_t g_rl_4e4030[0x440];            /* .data 0x4e4030: … at zoom 32 */
+extern uint8_t g_rl_4e4470[0x80];             /* .data 0x4e4470: the effect chain's anim offsets, (dx, dy) × 16 */
+extern uint8_t g_rl_4e4520[0x60];             /* .data 0x4e4520: the debug label's suffix string */
+extern uint8_t g_rl_4d2c88[0x100];            /* .data 0x4d2c88: the armory interiors arm_it_<c>.pl8, 16 B each */

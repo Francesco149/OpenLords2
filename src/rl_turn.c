@@ -370,10 +370,9 @@ static void label(int v, const char *suffix, int x, int y)   /* 0x402f64 ('@' pa
 {
     gfx_text_label_render_dec(v, 0x40, suffix, x, y, FONT, GLYPHS, 0x3f);
 }
-static void num_units(int v, int noun, int x, int y)   /* TODO(rl-link): labor_num_units 0x41ab67 (engine_labor.c: a static) */
+static void num_units(int v, int noun, int x, int y)   /* labor_num_units 0x41ab67 (rl_link) */
 {
-    engine_retail_call(0x41ab67u, 6, (uint32_t)v, (uint32_t)noun, (uint32_t)x, (uint32_t)y,
-                       (uint32_t)(uintptr_t)FONT, 0x3fu);
+    rl_41ab67(v, noun, x, y, (int)(uintptr_t)FONT, 0x3f);
 }
 static void button_strip(int table_va)   /* 0x40cfd2 = engine_button_render_list (linked), through retail as rl_render's:
                                             its pressed-button seam is bound to the gfx table's own dirty copy */

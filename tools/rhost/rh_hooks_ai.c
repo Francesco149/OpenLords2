@@ -49,6 +49,7 @@ A(g_sim_mp_active,0x553030)
 /* rl_link_globals.c (the link layer's mirrored globals no partition declared) */
 A(g_rl_55cd6c,0x55cd6c) A(g_rl_5656f0,0x5656f0) A(g_rl_57c904,0x57c904) A(g_rl_56d628,0x56d628) A(g_rl_50a49e,0x50a49e)
 A(g_rl_553f08,0x553f08) A(g_rl_4e59dc,0x4e59dc)
+A(g_rl_4e3bf0,0x4e3bf0) A(g_rl_4e4030,0x4e4030) A(g_rl_4e4470,0x4e4470) A(g_rl_4e4520,0x4e4520) A(g_rl_4d2c88,0x4d2c88)
 /* engine_territory_globals.c: the cell sweeps' counter (quirk #237) */
 A(g_cell_sweep_counter,0x53e974)
 /* save_schema_globals.c: every s_slot_<VA> is retail VA <VA> */

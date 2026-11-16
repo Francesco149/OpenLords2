@@ -655,7 +655,7 @@ static void wrap_line_c(int idx, int skip, int x, int y, int w, const uint8_t *f
     gfx_wrap_localized_line_centered(loc_in(), idx, skip, x, y, w, font, GLYPHS, METRICS, (uint8_t)color);
     loc_out();
 }
-static void bf_minimap_scroll(int a) { engine_retail_call(0x4bc1d1u, 1, (uint32_t)a); }   /* TODO(rl-link): engine_battlefield_render_minimap_scroll */
+static void bf_minimap_scroll(int a) { rl_4bc1d1((int)a); }   /* rl_link: engine_battlefield_render_minimap_scroll */
 /* DAT_005533e0[p]: a side's ready flag — [2] IS DAT_005533e8, engine_army_state's g_army_state_index (a mirror) */
 static int32_t ready(int p)
 { return p == 2 ? (int32_t)g_army_state_index : AT(int32_t, g_rl_5533e0, 0x5533e0u, 0x5533e0u + 4 * p); }

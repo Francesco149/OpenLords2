@@ -88,7 +88,7 @@
    actions 24 / 46, the late-action path 0x4470c4 → 90 reached in retail. **Every MP message id now has a port** (47
    functions, fe9a756 / ec746c4: 10 rows reached, 0 divergences, hybrid PASS; 37 dead-code rows unverified — no carrier);
    standalone 39/39 MP sides = pure retail; static gaps 107 → 66. **2026-11-16: the last 24 delayed-action handlers ported** (table 0x4d5c98 complete,
-   rl-mpmsg3.md; dead but for 25 / 35, reachable by forging 53 / 68): static gaps 66 → 44. Next: ★5 (rl-link: the link layer landed 2026-11-16, the screens family next); ★4 is CRT only.
+   rl-mpmsg3.md; dead but for 25 / 35, reachable by forging 53 / 68): static gaps 66 → 44. Next: ★5 (rl-link: the link layer + the screens family landed 2026-11-16; mapview / logic next); ★4 is CRT only.
 0b. **rd campaigns** — **campaign 6 (2026-11-14, API drivers):** ai-recall filed (sub_48B7FC 0x48b7fc first time: an Equal
    field skirmish after a Play Now → New Game trip — a cold skirmish leaves byte_553080 zero, so the recall never fires;
    +12 blocks); ai-surrender blocked (probe: no skirmish attacker is knights-only; the battle ends when a side has 0 men
@@ -154,8 +154,10 @@
    event queue / environment came only from rhost's row wrappers): **the link layer `src/rl_link.c`** (2026-11-16,
    `docs/findings/rl-link.md`) — mirror sync, liveness, event queue, the walker and the hud-panel env moved out of
    rhost (rh_port_* forward to it); 7 seams to existing rl_ ports + the pilot `rl_40f7d3` / `rl_41a734` (verify: 0
-   divergences, hybrid PASS; standalone 121/121 = pure retail). **Left: 144 sites / 81 VAs** in three env families
-   (rl-link.md §Left): screens (`scr_bind` → `rl_link_screens_bind`, 56 VAs), mapview (5), logic / EVQ (19). Then
+   divergences, hybrid PASS; standalone 121/121 = pure retail). **Screens family done** (2026-11-16, rl-link.md §Screens):
+   `src/rl_link_screens.c` = scr_bind + the context builders + 104 `rl_<va>` entries (every rh_hooks_screens.c row calls
+   one), all 56 screens VAs' seam sites switched; verify `--hooks '^scr_'` 99/104 reached, 0 divergences, hybrid PASS;
+   standalone 121/121 = pure retail. **Left: 36 sites / 24 VAs**: mapview (5: mv_bind / TI), logic / EVQ (19). Then
    `rl_link_bind_once` from the port's start (the product build's binds).
 6. **Unreached code**: 939 functions / 172 KB no scenario reaches (`docs/findings/coverage-round3.md`): multiplayer
    (DirectPlay / serial — a fake transport in rhost would open it), dead code (zoom-1 / zoom-16 drawers, unwritten

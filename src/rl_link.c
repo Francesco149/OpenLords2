@@ -190,10 +190,8 @@ void rl_link_loc_store(void)
 static void panel_wf_rows(int county) { engine_workforce_compute_rows(county); }   /* FUN_0045161e (an old port) */
 static void panel_wf_redraw(void)   /* 0x4120e0: the workforce backdrop + rows + seal (retail layout) */
 {
-    rl_link_loc_store();
-    rl_link_retail_enter();
+    rl_link_loc_store();   /* retail-layout code runs with the mirrors live: only the walker changes hands */
     rl_4120e0();
-    rl_link_retail_leave();
     rl_link_loc_load();
 }
 void rl_link_panel_env(void)

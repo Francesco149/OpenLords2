@@ -266,9 +266,9 @@ static int hotspot_click(int x, int y, const void *table, int n)
 static int button_click(int x, int y, const void *table, int n)
 { return rl_40da1e(x, y, (int)(uintptr_t)table, n); }
 /* the panel backdrop strips 0x4b3f0a (capture) / 0x4b3ec0 (restore) (buf, height) on retail's blit globals
- * (engine_workforce_hud.c, not linked: TODO(rl-link)) */
-static int backdrop_capture(int buf, int h) { return (int)engine_retail_call(0x4b3f0au, 2, (uint32_t)buf, (uint32_t)h); }
-static int backdrop_restore(int buf, int h) { return (int)engine_retail_call(0x4b3ec0u, 2, (uint32_t)buf, (uint32_t)h); }
+ * (engine_workforce_hud.c through rl_link) */
+static int backdrop_capture(int buf, int h) { return rl_4b3f0a((int)buf, (int)h); }
+static int backdrop_restore(int buf, int h) { return rl_4b3ec0((int)buf, (int)h); }
 /* the confirm dialog 0x40e6f2(msg, x, y, callback VA): retail keeps the callback's ADDRESS — retail's VA here
  * (rl_40e6f2, rl ui4) */
 static int confirm(int msg, uint32_t cb_va)
@@ -605,12 +605,12 @@ int rl_434cee(void)
 /* the event queue post 0x472bc5 */
 static int evq_post(int a, int b, int code, int d, int e, int f, int g, int h) { return rl_472bc5(a, b, code, d, e, f, g, h); }
 /* the line editor 0x402009(buf, max, width px, flag) / 0x401f49() on retail's editor globals (text_input.c works on a
- * port struct: TODO(rl-link)) */
+ * port struct: rl_link) */
 static void editor_open(const void *buf, int max, int w, int flag)
 { rl_402009((int)(uintptr_t)buf, max, w, flag); }
 static void editor_length(void) { rl_401f49(); }
 /* unported or unlinked retail helpers */
-static int map_scene_tick(void) { return (int)engine_retail_call(0x4050c0u, 0); }   /* TODO(rl-link): engine_map_scene_tick */
+static int map_scene_tick(void) { return (int)engine_retail_call(0x4050c0u, 0); }   /* rl_link: engine_map_scene_tick */
 static int popup_dismiss(void) { return rl_476768(); }    /* engine_popup_scroll_dismiss (rl turn) */
 static int cursor_in(int x, int y, int w, int h)   /* engine_popup_cursor_in_rect 0x4b1deb (rl_host) */
 { return rl_4b1deb(x, y, w, h); }
@@ -866,7 +866,7 @@ int rl_4374c4(void)
     engine_set_current_screen(0);
     if (MP_ON)
         rl_43eda0(54, 0);
-    else   /* TODO(rl-link): engine_combat_transfer_army (takes a port event queue) */
+    else   /* rl_link: engine_combat_transfer_army (takes a port event queue) */
         engine_retail_call(0x437535u, 2, (uint32_t)g_siege_sel_attacker, (uint32_t)g_siege_sel_region);
     engine_territory_mark_full_screen_dirty();
     engine_set_demand_redraw(2);
@@ -917,7 +917,7 @@ int rl_438acc(void)
     if (s_slot_0057cb18 == 2)
         return 0;
     g_rl_52afbc = ARMY32(g_rl_5681e0[0], 0x53fb6c);
-    return (int)engine_retail_call(0x41b032u, 0);   /* TODO(rl-link): engine.c's 0x41b032 */
+    return (int)engine_retail_call(0x41b032u, 0);   /* rl_link: engine.c's 0x41b032 */
 }
 
 /* ---------------------------------------------------------------- the battle prompt / siege preparation */
@@ -937,7 +937,7 @@ int rl_43b593(void)
             rl_43eda0(61, 0);
             bf_sleep(10);
             return rl_43eda0(61, 0);
-        }   /* TODO(rl-link): engine_combat_auto_resolve_button (takes a port event queue) */
+        }   /* rl_link: engine_combat_auto_resolve_button (takes a port event queue) */
         return (int)engine_retail_call(0x43b622u, 0);
     }
     return 0;
@@ -1002,7 +1002,7 @@ int rl_43b848(void)
 
 /* Port of FUN_0043b98a (23 B) — the siege assault by besieger `occ` (0x4a8aab). */
 int rl_43b98a(int occ)
-{   /* TODO(rl-link): engine_combat_siege_assault (takes a port event queue) */
+{   /* rl_link: engine_combat_siege_assault (takes a port event queue) */
     return (int)engine_retail_call(0x4a8aabu, 1, (uint32_t)occ);
 }
 
@@ -1050,7 +1050,7 @@ int rl_4782c5(void)
         r = rl_42c64f();   /* the siege result (partition skirmish) */
         s_slot_0057c8fc = 0;
         g_engine_state = 2;
-    } else {   /* TODO(rl-link): engine_combat_aftermath (takes a port event queue) */
+    } else {   /* rl_link: engine_combat_aftermath (takes a port event queue) */
         engine_retail_call(0x4ab383u, 1, 1u);
         if (engine_current_screen() != 19) {
             engine_set_current_screen(19);
@@ -1128,7 +1128,7 @@ int rl_47703a(void)
     if (g_rl_4eac00 == 0)
         return 0;
     g_rl_4eac00 = 0;
-    engine_retail_call(0x477249u, 0);   /* TODO(rl-link): engine_tooltip.c's tooltip_clamp */
+    rl_477249();   /* rl_link: engine_tooltip.c's tooltip_clamp */
     g_rl_591524 = g_rl_4eb268;
     g_rl_591528 = g_rl_4eb270;
     g_rl_5c9258 = 48;
@@ -1440,7 +1440,7 @@ int rl_43eda0(int id, int dest)
 /* Port of FUN_0040ae12 (175 B) — load sprite `k` of a .pl8 file into `dst`: its 16-B header (at 16 k + 8, into
  * DAT_00522d10) gives the blit width / height (DAT_005c9258 / 5aeb70), the file offset (DAT_0058fe04), the
  * flags DAT_00591568, DAT_005bb478 (zero-extended), DAT_0057d3c0; the w × h pixels are read from there (0x4af8d9;
- * TODO(rl-link): io_read_file_at) and the offset reset. Returns the header read's result (retail's EAX: the
+ * rl_link: io_read_file_at) and the offset reset. Returns the header read's result (retail's EAX: the
  * pixel read's result, or 0). */
 int rl_40ae12(int file, int dst, int k)
 {
@@ -1482,7 +1482,7 @@ static int tile_header(void)
 }
 
 /* Port of FUN_0042a8d1 (218 B) — draw the current tile, drawer A (0x45337b / 0x46079d / 0x463c06 by terrain set;
- * TODO(rl-link): engine_map_terrain.c, gen/blit_table_463c06.h). Returns retail's EAX (char). */
+ * rl_link: engine_map_terrain.c, gen/blit_table_463c06.h). Returns retail's EAX (char). */
 int rl_42a8d1(void)
 {
     if (!tile_header())
@@ -1509,7 +1509,7 @@ int rl_42d179(void)
         AT(int32_t, g_rl_51fd00, 0x51fd00u, 0x51fd00u + 4 * i) = AT(int32_t, g_rl_4d49c8, 0x4d49c8u, 0x4d49c8u + 4 * i);
         AT(int32_t, g_rl_51fd28, 0x51fd28u, 0x51fd28u + 4 * i) = 0;
     }
-    for (int j = 0; j < 10; j++) {   /* TODO(rl-link): localization_seek_skip */
+    for (int j = 0; j < 10; j++) {   /* rl_link: localization_seek_skip */
         rl_4018d7(7, AT(int32_t, g_rl_4d49c8, 0x4d49c8u, 0x4d49f0u + 4 * j));
         strutil_bounded_copy(g_rl_51fbc0 + 32 * j, (const void *)(uintptr_t)g_rl_5c9270, 32);
     }
@@ -1564,7 +1564,7 @@ int rl_4b1310(void)
 }
 
 /* Port of FUN_00409429 (68 B) — a framed panel: the frame (0x409934, style 2) at (x, y) w × h, its title strip
- * (0x409c93) at (x + 16, y), w - 2 by h - 1. TODO(rl-link): gfx_panel_draw_border_chrome /
+ * (0x409c93) at (x + 16, y), w - 2 by h - 1. rl_link: gfx_panel_draw_border_chrome /
  * gfx_panel_fill_interior_chrome (gfx_panel.c, linked and on retail's layout since 7965fc7, but they take the chrome
  * sheet retail bakes in, DAT_0057d3d0, which has no port symbol yet). */
 int rl_409429(int x, int y, int w, int h)
@@ -1620,7 +1620,7 @@ int rl_475b41(int p, int why)
 
 /* Port of FUN_00475d73 (148 B) — load realm `p`'s portrait for the popup: faces.pl8 sprite 3 × face (+7) - 3, a
  * human's (+5) 12, below 1 16, past 5 17, into DAT_004eeb80 (0x40ae12; the base directory first, 0x4af502:
- * TODO(rl-link): io_path_chdir_base). */
+ * rl_link: io_path_chdir_base). */
 int rl_475d73(int p)
 {
     rl_4af502();

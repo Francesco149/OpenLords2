@@ -1905,13 +1905,13 @@ int rl_446d4e(void)
 /* Port of FUN_00447b31 (31 B) — action 4: the wanted level +1 of county +4 (0x43a23f; +8 pushed too, unread). */
 int rl_447b31(void)
 {
-    return (int)engine_retail_call(0x43a23fu, 2, (uint32_t)A4, (uint32_t)A8);   /* TODO(rl-link): the panel struct */
+    return rl_43a23f((int)A4);   /* rl_link: the panel struct */
 }
 
 /* Port of FUN_00447b50 (31 B) — action 5: the wanted level −1 (0x43a307; +8 pushed too, unread). */
 int rl_447b50(void)
 {
-    return (int)engine_retail_call(0x43a307u, 2, (uint32_t)A4, (uint32_t)A8);   /* TODO(rl-link): the panel struct */
+    return rl_43a307((int)A4);   /* rl_link: the panel struct */
 }
 
 /* Port of FUN_00447b6f (31 B) — action 6: 0x43a997(+4, +8). */
@@ -1923,13 +1923,13 @@ int rl_447b6f(void)
 /* Port of FUN_00447bce (25 B) — action 8: the tax rate +1 of county +4 (0x43aa83). */
 int rl_447bce(void)
 {
-    return (int)engine_retail_call(0x43aa83u, 1, (uint32_t)A4);   /* TODO(rl-link): the panel struct */
+    return rl_43aa83((int)A4);   /* rl_link: the panel struct */
 }
 
 /* Port of FUN_00447be7 (25 B) — action 9: the tax rate −1 (0x43ab25). */
 int rl_447be7(void)
 {
-    return (int)engine_retail_call(0x43ab25u, 1, (uint32_t)A4);   /* TODO(rl-link): the panel struct */
+    return rl_43ab25((int)A4);   /* rl_link: the panel struct */
 }
 
 /* Port of FUN_00447c00 (43 B) — action 10: 0x439b52(+4, +8, +0xc, +0x10). */

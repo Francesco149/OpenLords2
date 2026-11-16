@@ -1867,7 +1867,7 @@ int rl_497a34(int fresh)
     rl_467770((int)s_slot_0053f034);
     rl_4298c1(0);                                        /* engine_map_init_build_cells (rl ui4) */
     s_slot_0053f268 = 4;
-    engine_retail_call(0x4ae5e2u, 1, s_slot_0053e8a4);   /* TODO(rl-link): engine_title_render_setup_clamp_player_count */
+    rl_4ae5e2(s_slot_0053e8a4);   /* rl_link: engine_title_render_setup_clamp_player_count */
     rl_433cc1();
     rl_498270();                                         /* engine_map_init_strategic (rl turn) */
     r = g_gfx_last_error;   /* DAT_005aeb68 */
@@ -1900,7 +1900,7 @@ int rl_497a34(int fresh)
         }
         g_rl_5530f0 = 1;
     }
-    r = (int)engine_retail_call(0x41e7e1u, 0);   /* TODO(rl-link): engine_title_render_scene */
+    r = rl_41e7e1();   /* rl_link: engine_title_render_scene */
     g_rl_567d00 = 0;
     g_rl_53f038 = 10;
     g_rl_5c9274 = 0;

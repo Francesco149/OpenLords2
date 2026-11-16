@@ -96,22 +96,22 @@ static void wrap_line(int idx, int skip, int x, int y, const uint8_t *font, int 
 
 /* ---------------------------------------------------------------- seams (callees outside the partition) */
 /* ported, not on retail's layout / not linked in rhost (a context struct, a file-static) — TODO(rl-link) */
-static int panel_box(int x, int y, int cols, int rows)   /* TODO(rl-link): 0x409397 (the chrome panel + fill: a static in several modules) */
-{ return (int)engine_retail_call(0x409397u, 4, (uint32_t)x, (uint32_t)y, (uint32_t)cols, (uint32_t)rows); }
-static int year_number(int v, int x, int y, int mode)   /* TODO(rl-link): county_year_number 0x41a900 */
-{ return (int)engine_retail_call(0x41a900u, 4, (uint32_t)v, (uint32_t)x, (uint32_t)y, (uint32_t)mode); }
+static int panel_box(int x, int y, int cols, int rows)   /* 0x409397: the chrome panel + fill (rl_link) */
+{ return rl_409397((int)x, (int)y, (int)cols, (int)rows); }
+static int year_number(int v, int x, int y, int mode)   /* rl_link: county_year_number 0x41a900 */
+{ return rl_41a900((int)v, (int)x, (int)y, (int)mode); }
 static int territory_panel(int a) { return rl_40f7d3(a); }   /* strat_draw_territory_panel 0x40f7d3 (rl_link: engine_hud_panel) */
 static int endturn_panel(int a) { return rl_41a734(a); }     /* engine_hud_panel_render_endturn 0x41a734 (rl_link) */
-static int minimap_render(int x, int y) { return (int)engine_retail_call(0x410aa9u, 2, (uint32_t)x, (uint32_t)y); }   /* TODO(rl-link): engine_minimap_render 0x410aa9 */
-static int title_scene(void) { return (int)engine_retail_call(0x41e7e1u, 0); }          /* TODO(rl-link): engine_title_render_scene 0x41e7e1 */
-static int treasury_render(void) { return (int)engine_retail_call(0x416925u, 0); }      /* TODO(rl-link): engine_treasury_render 0x416925 */
-static int noble_faces_render(void) { return (int)engine_retail_call(0x416cf3u, 0); }   /* TODO(rl-link): engine_noble_faces_render 0x416cf3 */
-static int armory_render(int a) { return (int)engine_retail_call(0x417ea7u, 1, (uint32_t)a); }   /* TODO(rl-link): engine_armory_render 0x417ea7 */
-static int armory_overlay(void) { return (int)engine_retail_call(0x418653u, 0); }       /* TODO(rl-link): engine_armory_overlay_render 0x418653 */
-static int trade_render(void) { return (int)engine_retail_call(0x416308u, 0); }         /* TODO(rl-link): engine_trade_render 0x416308 */
-static int county_panel(uint32_t va) { return (int)engine_retail_call(va, 0); }         /* TODO(rl-link): the county panels 0x4110b1 / 0x41152f / 0x4116fb / 0x411b72 */
-static int workforce_render(int a) { return (int)engine_retail_call(0x412143u, 1, (uint32_t)a); }   /* TODO(rl-link): engine_workforce_hud_render 0x412143 */
-static int terrain_panel(void) { return (int)engine_retail_call(0x41b032u, 0); }        /* TODO(rl-link): 0x41b032 (engine_terrain_info) */
+static int minimap_render(int x, int y) { return (int)engine_retail_call(0x410aa9u, 2, (uint32_t)x, (uint32_t)y); }   /* rl_link: engine_minimap_render 0x410aa9 */
+static int title_scene(void) { return rl_41e7e1(); }          /* rl_link: engine_title_render_scene 0x41e7e1 */
+static int treasury_render(void) { return rl_416925(); }      /* rl_link: engine_treasury_render 0x416925 */
+static int noble_faces_render(void) { return rl_416cf3(); }   /* rl_link: engine_noble_faces_render 0x416cf3 */
+static int armory_render(int a) { return rl_417ea7((int)a); }   /* rl_link: engine_armory_render 0x417ea7 */
+static int armory_overlay(void) { return rl_418653(); }       /* rl_link: engine_armory_overlay_render 0x418653 */
+static int trade_render(void) { return rl_416308(); }         /* rl_link: engine_trade_render 0x416308 */
+static int county_panel(int (*panel)(void)) { return panel(); }   /* the county panels 0x4110b1 / 0x41152f / 0x4116fb / 0x411b72 (rl_link) */
+static int workforce_render(int a) { return rl_412143((int)a); }   /* rl_link: engine_workforce_hud_render 0x412143 */
+static int terrain_panel(void) { return (int)engine_retail_call(0x41b032u, 0); }        /* rl_link: 0x41b032 (engine_terrain_info) */
 /* ported at the end of this file (the standalone's last seams) */
 static int screen_41e5d0(void) { return rl_41e5d0(); }   /* screen 0x45 */
 static int screen_425a6a(void) { return rl_425a6a(); }   /* screen 0x44 */
@@ -947,10 +947,10 @@ int rl_40f1a0(int a)
     case 0x1a: r = rl_41789b(); break;
     case 0x0c: r = trade_render(); break;
     case 0x18: r = rl_41ad5d(); break;
-    case 0x14: r = county_panel(0x4110b1u); break;
-    case 0x15: r = county_panel(0x41152fu); break;
-    case 0x16: r = county_panel(0x4116fbu); break;
-    case 0x19: r = county_panel(0x411b72u); break;
+    case 0x14: r = county_panel(rl_4110b1); break;
+    case 0x15: r = county_panel(rl_41152f); break;
+    case 0x16: r = county_panel(rl_4116fb); break;
+    case 0x19: r = county_panel(rl_411b72); break;
     case 0x0f: r = rl_412b33(); break;
     case 0x02: r = workforce_render(1); break;
     case 0x04: r = terrain_panel(); break;
@@ -1162,7 +1162,7 @@ int rl_427ed0(void)
     for (int i = 0; i < 6; i++) {
         int k = s_slot_00569518[i];
         if (k == 0) break;
-        if (engine_retail_call(0x428007u, 1, (uint32_t)k) == 0 &&   /* TODO(rl-link): game_init's army_near (bit0) */
+        if (engine_retail_call(0x428007u, 1, (uint32_t)k) == 0 &&   /* rl_link: game_init's army_near (bit0) */
             rl_428078(k) == 0)                                      /* … (flag 0 / 2) */
             continue;
         rl_46e1b0(3, g_cell_cursor_col, g_cell_cursor_row, 6);
@@ -1617,19 +1617,18 @@ static void p5_label_ls(int v, int mode, const char *lab, const char *suffix, in
 static void p5_seal(int x, int y, int mode) { gfx_sprite_seal_draw(P5_SYSTEM, x, y, mode); }   /* 0x40d1bc */
 
 /* ---------------------------------------------------------------- seams */
-/* ported, not on retail's layout (a context struct) — TODO(rl-link) */
-static int p5_num_units(int v, int mode, int x, int y, const uint8_t *font, int color)   /* TODO(rl-link): labor_num_units 0x41ab67 (engine_county_panels: a ctx) */
+/* ported, not on retail's layout (a context struct) — rl_link */
+static int p5_num_units(int v, int mode, int x, int y, const uint8_t *font, int color)   /* labor_num_units 0x41ab67 (rl_link) */
 {
-    return (int)engine_retail_call(0x41ab67u, 6, (uint32_t)v, (uint32_t)mode, (uint32_t)x, (uint32_t)y,
-                                   (uint32_t)(uintptr_t)font, (uint32_t)color);
+    return rl_41ab67(v, mode, x, y, (int)(uintptr_t)font, color);
 }
-static int p5_castle_block(int county, int x, int y, int row)   /* TODO(rl-link): labor_castle_block 0x41dedb (engine_labor: a ctx) */
-{ return (int)engine_retail_call(0x41dedbu, 4, (uint32_t)county, (uint32_t)x, (uint32_t)y, (uint32_t)row); }
-static int p5_armory_racks(void) { return (int)engine_retail_call(0x418426u, 0); }    /* TODO(rl-link): armory_racks 0x418426 (engine_armory: a ctx) */
-static int p5_armory_counts(void) { return (int)engine_retail_call(0x4181ebu, 0); }   /* TODO(rl-link): engine_armory_counts_render 0x4181eb */
-static int p5_minimap_plot(int county, int x, int y, int mode)   /* TODO(rl-link): engine_minimap_plot 0x410cbd */
+static int p5_castle_block(int county, int x, int y, int row)   /* rl_link: labor_castle_block 0x41dedb (engine_labor: a ctx) */
+{ return rl_41dedb((int)county, (int)x, (int)y, (int)row); }
+static int p5_armory_racks(void) { return rl_418426(); }    /* rl_link: armory_racks 0x418426 (engine_armory: a ctx) */
+static int p5_armory_counts(void) { return rl_4181eb(); }   /* rl_link: engine_armory_counts_render 0x4181eb */
+static int p5_minimap_plot(int county, int x, int y, int mode)   /* rl_link: engine_minimap_plot 0x410cbd */
 { return (int)engine_retail_call(0x410cbdu, 4, (uint32_t)county, (uint32_t)x, (uint32_t)y, (uint32_t)mode); }
-static int p5_title_setup(int tab) { return (int)engine_retail_call(0x41f6c7u, 1, (uint32_t)tab); }   /* TODO(rl-link): engine_title_render_setup_screen 0x41f6c7 */
+static int p5_title_setup(int tab) { return rl_41f6c7((int)tab); }   /* rl_link: engine_title_render_setup_screen 0x41f6c7 */
 static int p5_title_41f77a(int tab) { return rl_41f77a(tab); }  /* 0x41f77a (rl mpnet) */
 static int p5_title_420630(int tab) { return rl_420630(tab); }  /* the MP skirmish setup page (rl mpnet2) */
 

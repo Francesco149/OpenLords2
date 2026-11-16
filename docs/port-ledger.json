@@ -1142,7 +1142,8 @@
     "src/engine_sendsupplies.h",
     "src/engine_terrain_info.c",
     "src/engine_terrain_info.h",
-    "src/engine_workforce_hud.c"
+    "src/engine_workforce_hud.c",
+    "src/rl_link_screens.c"
    ]
   },
   {
@@ -2921,7 +2922,8 @@
     "src/engine_title_render.c",
     "src/engine_title_render.h",
     "src/gfx_sprite.c",
-    "src/main.c"
+    "src/main.c",
+    "src/rl_link_screens.c"
    ]
   },
   {
@@ -3660,7 +3662,8 @@
    "status": "ported",
    "src": [
     "src/engine_labor.c",
-    "src/engine_labor.h"
+    "src/engine_labor.h",
+    "src/rl_link_screens.c"
    ]
   },
   {
@@ -3803,7 +3806,8 @@
    "status": "tested",
    "src": [
     "src/engine_mp_render.c",
-    "src/engine_mp_render.h"
+    "src/engine_mp_render.h",
+    "src/rl_link_screens.c"
    ]
   },
   {
@@ -3883,7 +3887,8 @@
    "status": "tested",
    "src": [
     "src/engine_title_render.c",
-    "src/engine_title_render.h"
+    "src/engine_title_render.h",
+    "src/rl_link_screens.c"
    ]
   },
   {
@@ -3905,7 +3910,8 @@
    "status": "tested",
    "src": [
     "src/engine_title_render.c",
-    "src/engine_title_render.h"
+    "src/engine_title_render.h",
+    "src/rl_link_screens.c"
    ]
   },
   {
@@ -6818,7 +6824,8 @@
     "src/engine_armory.c",
     "src/engine_armory.h",
     "src/engine_ingame_input.c",
-    "src/engine_ingame_input.h"
+    "src/engine_ingame_input.h",
+    "src/rl_link_screens.c"
    ]
   },
   {
@@ -7286,7 +7293,8 @@
     "src/engine.c",
     "src/engine_county_panels.c",
     "src/engine_county_panels.h",
-    "src/engine_ingame_input.h"
+    "src/engine_ingame_input.h",
+    "src/rl_link_screens.c"
    ]
   },
   {
@@ -20140,7 +20148,8 @@
     "src/engine_ingame_input.c",
     "src/engine_ingame_input.h",
     "src/engine_sendsupplies.h",
-    "src/engine_sendsupplies_model.c"
+    "src/engine_sendsupplies_model.c",
+    "src/rl_link_screens.c"
    ]
   },
   {

@@ -1419,11 +1419,11 @@ int rl_4ba26e(void)
     case 21: buttons(0, 0, BTN(g_rl_4dd790, 0x4dd790u), 2); break;
     case 25:
         buttons(0, 0, BTN(g_rl_4dd7c0, 0x4dd7c0u), 2);
-        rcall0(0x411fdeu);   /* TODO(rl-link): engine_county_ration_slider_render (engine_county_panels.c: a port struct) */
+        rl_411fde();   /* rl_link: engine_county_ration_slider_render (engine_county_panels.c: a port struct) */
         break;
     case 8: rl_41608b(); buttons(0, 0, BTN(g_rl_4dd808, 0x4dd808u), g_rl_569500); break;
     case 12:
-        rcall0(0x41635fu);   /* TODO(rl-link): engine_trade_content (engine_trade.c: a port struct) */
+        rl_41635f();   /* rl_link: engine_trade_content (engine_trade.c: a port struct) */
         buttons(48, 80, g_trade_buttons, g_trade_widget_count);
         break;
     case 24: rl_41aea2(); buttons(0, 0, BTN(g_rl_4dd538, 0x4dd538u), 6); break;
@@ -1435,16 +1435,16 @@ int rl_4ba26e(void)
         break;
     case 17: rl_419354(); buttons(0, 0, BTN(g_rl_4dd388, 0x4dd388u), g_rl_55321c); break;
     case 10:
-        rcall0(0x418fc5u);   /* TODO(rl-link): engine_armory_march_restore (engine_armory.c, its screen binder) */
-        rcall0(0x419243u);   /* TODO(rl-link): engine_armory_refresh */
-        rcall0(0x4190dbu);   /* TODO(rl-link): engine_armory_march_step */
+        rl_418fc5();   /* rl_link: engine_armory_march_restore (engine_armory.c, its screen binder) */
+        rl_419243();   /* rl_link: engine_armory_refresh */
+        rl_4190db();   /* rl_link: engine_armory_march_step */
         break;
     case 13:
-        rcall0(0x418fc5u);   /* TODO(rl-link): as above */
-        rcall0(0x419243u);   /* TODO(rl-link) */
-        rcall0(0x4181ebu);   /* TODO(rl-link): engine_armory_counts_render */
+        rl_418fc5();   /* rl_link: as above */
+        rl_419243();   /* rl_link */
+        rl_4181eb();   /* rl_link: engine_armory_counts_render */
         rl_418e2d();
-        rcall0(0x4190dbu);   /* TODO(rl-link) */
+        rl_4190db();   /* rl_link */
         buttons(96, 4, BTN(g_rl_4dd8c8, 0x4dd8c8u), 4);
         break;
     case 27: rl_4198aa(); buttons(0, 0, BTN(g_rl_4ddb80, 0x4ddb80u), 2); break;
@@ -1466,31 +1466,31 @@ int rl_4ba26e(void)
     case 29: buttons(0, 0, BTN(g_rl_4ddf10, 0x4ddf10u), 6); break;
     case 31:
         switch (g_rl_5530f0) {
-        case 1: rcall0(0x41eaa3u); break;   /* TODO(rl-link): engine_title_render_buttons (engine_title_render.c) */
-        case 2: rcall0(0x41ece6u); break;   /* TODO(rl-link): engine_title_render_options_buttons */
+        case 1: rl_41eaa3(); break;   /* rl_link: engine_title_render_buttons (engine_title_render.c) */
+        case 2: rl_41ece6(); break;   /* rl_link: engine_title_render_options_buttons */
         case 3:
-            rcall2(0x4149ecu, g_rl_4e65dc, 1);   /* TODO(rl-link): engine_title_render_filelist_content */
+            rl_4149ec(g_rl_4e65dc, 1);   /* rl_link: engine_title_render_filelist_content */
             buttons(96, 10, BTN(g_rl_4ddd78, 0x4ddd78u), 4);
             break;
         case 4:
-            rcall0(0x41f321u);   /* TODO(rl-link): the choose-title name box */
-            rcall0(0x41f1ddu);   /* TODO(rl-link): … shields */
-            rcall0(0x41f01fu);   /* TODO(rl-link): … buttons */
+            rl_41f321();   /* rl_link: the choose-title name box */
+            rl_41f1dd();   /* rl_link: … shields */
+            rl_41f01f();   /* rl_link: … buttons */
             break;
         case 7:
-            rcall0(0x41f98bu);   /* TODO(rl-link): engine_title_render_setup_country_list */
-            rcall1(0x41f86du, 999);   /* TODO(rl-link): engine_title_render_setup_tabs */
+            rl_41f98b();   /* rl_link: engine_title_render_setup_country_list */
+            rl_41f86d(999);   /* rl_link: engine_title_render_setup_tabs */
             rl_41ff75(0);
             break;
         case 8:
-            rcall0(0x41f98bu);   /* TODO(rl-link): as above */
-            rcall1(0x41f86du, 999);   /* TODO(rl-link) */
+            rl_41f98b();   /* rl_link: as above */
+            rl_41f86d(999);   /* rl_link */
             rl_41ff75(0);
             rl_420147(0);
             break;
         case 13: rl_414e06(g_rl_4e65dc); buttons(0, 0, BTN(g_rl_4dddd8, 0x4dddd8u), 2); break;
         case 6: rcall0(0x41f4a1u); break;   /* TODO(rl-extern): 0x41f4a1 */
-        case 5: rcall0(0x41f5e8u); break;   /* TODO(rl-link): engine_title_render_play_now_buttons */
+        case 5: rl_41f5e8(); break;   /* rl_link: engine_title_render_play_now_buttons */
         case 12:
         case 11:
             rl_41ff75(1);
@@ -1506,7 +1506,7 @@ int rl_4ba26e(void)
     case 33: rl_40cd58(); buttons(g_rl_58fe20, g_rl_58fe24, BTN(g_rl_4ddbe0, 0x4ddbe0u), 2); break;
     case 53:
     case 54:
-        rcall2(0x4149ecu, g_rl_4e65dc, 0);   /* TODO(rl-link): engine_title_render_filelist_content */
+        rl_4149ec(g_rl_4e65dc, 0);   /* rl_link: engine_title_render_filelist_content */
         buttons(16, 144, BTN(g_rl_4ddd78, 0x4ddd78u), 4);
         break;
     case 57: buttons(0, 0, BTN(g_rl_4ddc10, 0x4ddc10u), g_rl_56d8a0); break;
@@ -1553,7 +1553,7 @@ int rl_4ba9c8(void)
     case 25: if (bclick(0, 0, BTNI(g_rl_4dd7c0, 0x4dd7c0u), 2) != 0) return 1; break;
     case 32: if (click(0, 0, HOT(0x4dc890u), 7) != 0) return 1; break;
     case 8:
-        if (engine_retail_call(0x4357a6u, 0) != 0)   /* TODO(rl-link): engine_merchant_zone_at (engine_merchant.c, its screen binder) */
+        if (engine_retail_call(0x4357a6u, 0) != 0)   /* rl_link: engine_merchant_zone_at (engine_merchant.c, its screen binder) */
             return 1;
         if (bclick(0, 0, BTNI(g_rl_4dd808, 0x4dd808u), g_rl_569500) != 0)
             return 1;
@@ -1842,7 +1842,7 @@ int rl_4b99c0(void)
                 bf_489401();
                 bf_4859e5();
             }
-            engine_retail_call(0x477dfcu, 0);   /* TODO(rl-link): engine_combat_battlefield_end_tick (an event-queue argument) */
+            engine_retail_call(0x477dfcu, 0);   /* rl_link: engine_combat_battlefield_end_tick (an event-queue argument) */
         }
     }
     rl_49a3e6();
@@ -1856,18 +1856,18 @@ int rl_4b99c0(void)
         rl_4247f5();   /* the dumb-view banner (rl ui4) */
     } else if ((int)s_slot_0057c8fc == 0) {
         if (engine_current_screen() == 0 || engine_current_screen() == 16) {
-            engine_retail_call(0x4050c0u, 0);   /* TODO(rl-link): engine_map_scene_tick (engine_map_scene.c, its binder) */
+            engine_retail_call(0x4050c0u, 0);   /* rl_link: engine_map_scene_tick (engine_map_scene.c, its binder) */
             rl_475e07_res_in = 0x405ac5;        /* the scene's imprint on 0x475e07's [ebp-8] (quirk #240) */
         }
     } else if ((int)s_slot_0057c8fc == 2 && engine_current_screen() >= 0x28 && engine_current_screen() < 0x2b) {
         if (engine_territory_dirty_state()->below_status_redraw != 0) {
-            engine_retail_call(0x4bc1d1u, 1, 80u);   /* TODO(rl-link): engine_battlefield_render_minimap_scroll */
+            rl_4bc1d1(80u);   /* rl_link: engine_battlefield_render_minimap_scroll */
             rl_45240a();
         } else {
-            engine_retail_call(0x4bc1d1u, 1, 4u);    /* TODO(rl-link): as above */
+            rl_4bc1d1(4u);    /* rl_link: as above */
             rl_4527a6(480, 24, 10, 10, 1);
         }
-        engine_retail_call(0x4bc142u, 2, s_slot_0055ce70, s_slot_005678a0);   /* TODO(rl-link): engine_battlefield_render_frame */
+        rl_4bc142(s_slot_0055ce70, s_slot_005678a0);   /* rl_link: engine_battlefield_render_frame */
     }
     rl_4b0aaa(0xf7);
     if ((int)s_slot_0057c8fc == 0) {
@@ -1897,7 +1897,7 @@ int rl_4b99c0(void)
         rl_41a734(0);   /* engine_hud_panel_render_endturn (rl_link) */
     if (g_bf_53f238 != 0) {
         if ((int)s_slot_0057c8fc == 2)
-            engine_retail_call(0x423b4fu, 0);   /* TODO(rl-link): engine_mp_render_status_line (engine_mp_render.c) */
+            rl_423b4f();   /* rl_link: engine_mp_render_status_line (engine_mp_render.c) */
         else
             g_bf_53f238 = 0;
     }
@@ -1915,8 +1915,8 @@ int rl_4b99c0(void)
     rl_44098f();
     rl_4b0aaa(0xf9);
     rl_41a639();
-    engine_retail_call(0x41f15au, 0);   /* TODO(rl-link): engine_mp_render_player_indicator (engine_mp_render.c) */
-    engine_retail_call(0x476e95u, 0);   /* TODO(rl-link): engine_tooltip_tick (engine_tooltip.c, its context) */
+    rl_41f15a();   /* rl_link: engine_mp_render_player_indicator (engine_mp_render.c) */
+    rl_476e95();   /* rl_link: engine_tooltip_tick (engine_tooltip.c, its context) */
     rl_4b0aaa(0x20);
     rl_4b1dd5();
     rl_42a15f();

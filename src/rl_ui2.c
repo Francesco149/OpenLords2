@@ -109,14 +109,14 @@ static int32_t add32(int32_t a, int32_t b) { return (int32_t)((uint32_t)a + (uin
 
 /* ---------------------------------------------------------------- seams (callees outside the partition) */
 /* ported, not on retail's layout / not linked in rhost — TODO(rl-link) */
-static int row_sprite(int c, int cat)   /* TODO(rl-link): engine_workforce_row_sprite_index 0x4517ca (engine_workforce_hud.c) */
-{ return (int)engine_retail_call(0x4517cau, 2, (uint32_t)c, (uint32_t)cat); }
+static int row_sprite(int c, int cat)   /* engine_workforce_row_sprite_index 0x4517ca (rl_link) */
+{ return rl_4517ca((int)c, (int)cat); }
 static int cell_hit(int x, int y)   /* 0x4398f5 (rl_ctl) */
 { return rl_4398f5(x, y); }
 static void plan_owner(int owner)   /* 0x448648 (rl_ctl) */
 { rl_448648(owner); }
-static int workforce_hud_render(int a)   /* TODO(rl-link): engine_workforce_hud_render 0x412143 */
-{ return (int)engine_retail_call(0x412143u, 1, (uint32_t)a); }
+static int workforce_hud_render(int a)   /* rl_link: engine_workforce_hud_render 0x412143 */
+{ return rl_412143((int)a); }
 static void set_camera(int mode) { rl_451fcc(mode); }   /* 0x451fcc (rl_ctl) */
 static int  load_season(void) { return rl_4984dc(); }   /* the season loader 0x4984dc (rl turn) */
 static int  present(int full) { return rl_452160(full); }   /* 0x452160 (rl_ctl) */
@@ -128,7 +128,7 @@ static void text_input_open(const void *init, int n, int x, int y)   /* text_inp
 { rl_402009((int)(uintptr_t)init, n, x, y); }
 static int  text_recompute_length(void) { return rl_401f49(); }   /* text_input_recompute_length 0x401f49 (rl ui4) */
 static int  smithy_panel(void) { return rl_413155(); }   /* labor_panel_smithy 0x413155 (rl ui4) */
-static int  title_filelist(int page) { return (int)engine_retail_call(0x4148e4u, 1, (uint32_t)page); }   /* TODO(rl-link): engine_title_render_filelist 0x4148e4 */
+static int  title_filelist(int page) { return rl_4148e4((int)page); }   /* rl_link: engine_title_render_filelist 0x4148e4 */
 static int  mp_quit_session(void) { return rl_4b74ce(); }   /* 0x4b74ce (rl ui4) */
 
 /* 0x46d5fe on retail's globals: the pure engine_map_query_terrain_info over the cell grid (DAT_00522f90), the county
@@ -975,8 +975,8 @@ static int  read_file_at(const void *name, void *dst, uint32_t n, uint32_t off) 
 { return rl_4af8d9((int)(uintptr_t)name, (int)(uintptr_t)dst, (int)n, (int)off); }
 static int bind_hex_grid(const uint32_t a[11])   /* engine_battlefield_render_bind_hex_grid_context 0x4bc020 (rl host) */
 { const int *v = (const int *)a; return rl_4bc020(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], v[10]); }
-static int bind_minimap(int a, int b, int c, int d, int e, int f)   /* TODO(rl-link): engine_battlefield_render_bind_minimap_context 0x4bc107 */
-{ return (int)engine_retail_call(0x4bc107u, 6, (uint32_t)a, (uint32_t)b, (uint32_t)c, (uint32_t)d, (uint32_t)e, (uint32_t)f); }
+static int bind_minimap(int a, int b, int c, int d, int e, int f)   /* rl_link: engine_battlefield_render_bind_minimap_context 0x4bc107 */
+{ return rl_4bc107((int)a, (int)b, (int)c, (int)d, (int)e, (int)f); }
 static void mp_leave_session(void) { rl_4b743b(); }   /* leave the MP session (rl mpnet2) */
 static void mp_close(int a) { engine_retail_call(0x43e8f4u, 1, (uint32_t)a); }   /* TODO(rl-extern): 0x43e8f4 */
 
@@ -1610,8 +1610,8 @@ int rl_4b3994(int k)
 
 /* ================================================================ the county field panel (terrain info, kind 19) */
 
-static int num_units(int n, int str, int x, int y, const uint8_t *font, int color)   /* TODO(rl-link): labor_num_units 0x41ab67 */
-{ return (int)engine_retail_call(0x41ab67u, 6, (uint32_t)n, (uint32_t)str, (uint32_t)x, (uint32_t)y, (uint32_t)(uintptr_t)font, (uint32_t)color); }
+static int num_units(int n, int str, int x, int y, const uint8_t *font, int color)   /* rl_link: labor_num_units 0x41ab67 */
+{ return rl_41ab67((int)n, (int)str, (int)x, (int)y, (int)(uintptr_t)font, (int)color); }
 #define TI     g_rl_5681e0[0]                      /* DAT_005681e0: the county under the cursor */
 #define ROW(k) (16 * g_rl_553d2c + (k))             /* the panel's first row DAT_00553d2c */
 
