@@ -16,15 +16,28 @@
 static volatile LONG g_lock;
 static uint32_t g_top, g_committed;
 static void *g_free[32];
+static uint64_t g_listed;            /* bytes on the free lists (reusable by their class) */
 
 static void lock(void) { while (InterlockedCompareExchange(&g_lock, 1, 0)) YieldProcessor(); }
 static void unlock(void) { InterlockedExchange(&g_lock, 0); }
 
+/* Never a dialog: a modal MessageBox on a headless host (WMI-started, bunker's wine) blocked the process forever —
+ * the live sessions' --live-idle never fired (2026-11-13: two ev13d sessions sat 3 days on "host heap exhausted").
+ * rh_fatal (rhost.c) logs FATAL + RESULT status=fatal to rhost.log and exits 3. */
+void rh_fatal(const char *fmt, ...);
 static void die(const char *m)
 {
     OutputDebugStringA(m);
-    MessageBoxA(NULL, m, "rhost host heap", MB_OK);
-    ExitProcess(70);
+    InterlockedExchange(&g_lock, 0);                  /* (init dies holding it; rh_fatal's log must not spin) */
+    rh_fatal("%s (top %08x, %u MB on free lists)", m, (unsigned)g_top, (unsigned)(g_listed >> 20));
+}
+
+size_t rh_host_headroom(void)
+{
+    lock();
+    size_t r = (g_top ? HH_HI - g_top : HH_HI - HH_LO) + (size_t)g_listed;
+    unlock();
+    return r;
 }
 
 static void init(void)
@@ -48,7 +61,7 @@ void *rh_hmalloc(size_t n)
     lock();
     if (!g_top) init();
     uint8_t *b = g_free[c];
-    if (b) g_free[c] = *(void **)(b + HDR);
+    if (b) { g_free[c] = *(void **)(b + HDR); g_listed -= (uint64_t)1 << c; }
     else {
         uint32_t sz = 1u << c;
         if (sz > HH_HI - g_top) { unlock(); die("rhost: host heap exhausted"); }
@@ -76,7 +89,7 @@ void rh_hfree(void *p)
     int c = (int)*(uint32_t *)b;
     lock();
     *(void **)p = g_free[c];
-    g_free[c] = b;
+    g_free[c] = b; g_listed += (uint64_t)1 << c;
     unlock();
 }
 

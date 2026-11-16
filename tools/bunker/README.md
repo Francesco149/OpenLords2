@@ -43,7 +43,9 @@ C:\ol2-rhost\runs\drive\<name> --live 0 --live-idle N` → rhost writes `<run>\l
 bunker's sshd refuses past `MaxStartups 10:30:100`. Every command, rsync and session forward rides ONE master:
 `ControlPath=$XDG_RUNTIME_DIR/ol2-bunker-<host>.ctl` (own master, separate from openrecet's), started once under a
 lock (`ssh -fN -o ControlMaster=yes -o ControlPersist=2h`), checked with `ssh -O check`; sessions add
-`ssh -O forward -L lp:127.0.0.1:port` and remove it with `-O cancel`.
+`ssh -O forward -L lp:127.0.0.1:port` and remove it with `-O cancel`. A master holding a forward never reaches ControlPersist, so every forward
+is registered in `<ctl>.fwd`; `reap()` (rd reap) cancels those whose session `pool.py ports` no longer lists. `pool.py
+reap` (also run first by `spawn`) ends hung (no CPU for `--live-idle` + 600 s) or > 24 h sessions.
 
 ## The pool (`pool.py`, runs on bunker as root)
 - One transient unit **`ol2-bunker-pool.service`** (`sleep infinity` holding a cgroup): `MemoryMax=4G MemorySwapMax=0`,

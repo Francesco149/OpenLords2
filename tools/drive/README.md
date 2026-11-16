@@ -53,6 +53,15 @@ the process), else bunker (`tools/bunker/README.md`: wine in the `ol2-bunker-poo
 else wine here (≤ `RD_LOCAL_MAX` 6, ≥ 8 GB available). `search -j N` workers spill win → bunker → wine. A session
 keeps its host; the exe is content-addressed (`bin\<sha12>\ol2-rhost.exe`) so a rebuild never swaps a running image.
 
+**Reaper (2026-11-16).** A session whose CPU time has not moved for its own `--live-idle` + 600 s is hung (an idle one
+exits by itself after `--live-idle`); one older than 24 h goes regardless (`RD_REAP_SLACK`, `RD_REAP_MAX_AGE_H`). Each
+host's admission runs a pass (Windows inside the admission mutex, bunker `pool.py reap`, wine here); `rd reap [--dry]`
+runs all three, cancels bunker forwards whose session is gone (registry `$XDG_RUNTIME_DIR/ol2-bunker-*.ctl.fwd`),
+deletes Windows run dirs no session names (> 6 h old) and drops dead `session.json` records. rd turns SIGTERM / SIGHUP
+into SystemExit so a search's `finally` ends its workers. Origin: two `ev13d` search workers sat 3 days in rhost's modal
+"host heap exhausted" MessageBox (now `rh_fatal`; savestates refuse below 128 MB host-heap headroom, `RH_SNAP_HOST_MB`,
+and explore evicts — `stats` shows `host_headroom_mb` / `host_refusals`).
+
 ## Screen state for agents
 
 - `rd text R`: the text rows retail drew since the screen opened (call-site recorders on 0x402637 / 0x4025d7), with

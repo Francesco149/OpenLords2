@@ -14,6 +14,7 @@ void *rh_hrealloc(void *p, size_t n);
 void  rh_hfree(void *p);
 char *rh_hstrdup(const char *s);
 int   rh_host_in(unsigned v);   /* v inside the host heap region */
+size_t rh_host_headroom(void);  /* bytes still allocatable: never touched + on the free lists (class-bound) */
 #ifndef RH_HOSTALLOC_IMPL
 #define malloc rh_hmalloc
 #define calloc rh_hcalloc

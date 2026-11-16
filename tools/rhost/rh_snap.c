@@ -131,7 +131,7 @@ typedef struct snap {
 } snap_t;
 #define MAX_SNAP 65536
 static snap_t **g_snap; static int g_next_id = 1, g_live_snaps; static snap_t *g_cur;
-static uint64_t g_takes, g_restores, g_copied, g_decommits, g_commits;
+static uint64_t g_takes, g_restores, g_copied, g_decommits, g_commits, g_host_refusals;
 static double g_take_ms, g_restore_ms;
 static plist_t g_pl;
 static double now_ms(void) { static LARGE_INTEGER f; LARGE_INTEGER t; if (!f.QuadPart) QueryPerformanceFrequency(&f); QueryPerformanceCounter(&t); return (double)t.QuadPart * 1000.0 / (double)f.QuadPart; }
@@ -155,6 +155,12 @@ int rh_snap_take(void)
     int id = 0;
     for (int k = 0; k < MAX_SNAP - 1; k++) { int c = g_next_id; g_next_id = g_next_id + 1 < MAX_SNAP ? g_next_id + 1 : 1; if (!g_snap[c]) { id = c; break; } }
     if (!id) return 0;
+    /* the host heap (896 MB, rh_hostalloc.c) holds each savestate's metadata + its run-dir file blob (~1.6 MB per
+     * game-file generation: a search across End turn makes one per branch). Refuse like an exhausted slab pool —
+     * explore evicts and retries — instead of dying in malloc. RH_SNAP_HOST_MB: the reserve kept free (128). */
+    static size_t reserve;
+    if (!reserve) { char e[16] = ""; reserve = (size_t)(GetEnvironmentVariableA("RH_SNAP_HOST_MB", e, sizeof e) ? atoi(e) : 128) << 20; }
+    if (rh_host_headroom() < reserve) { g_host_refusals++; return 0; }
     tracked(&g_pl);
     snap_t *s = calloc(1, sizeof *s), *par = g_cur;
     s->id = id; s->n = g_pl.n; s->frame = g_frame;
@@ -247,8 +253,9 @@ int rh_snap_live(void) { return g_live_snaps; }
 
 void rh_snap_stats(char *b, size_t n)
 {
-    snprintf(b, n, "snap: pages=%u takes=%llu (%.3f ms avg) restores=%llu (%.3f ms avg) live=%d slabs=%u (%u MB) copied=%llu commits=%llu decommits=%llu stack_lw=%08x",
+    snprintf(b, n, "snap: pages=%u takes=%llu (%.3f ms avg) restores=%llu (%.3f ms avg) live=%d slabs=%u (%u MB) copied=%llu commits=%llu decommits=%llu stack_lw=%08x host_headroom_mb=%u host_refusals=%llu",
              g_pl.n, (unsigned long long)g_takes, g_takes ? g_take_ms / (double)g_takes : 0.0, (unsigned long long)g_restores,
              g_restores ? g_restore_ms / (double)g_restores : 0.0, g_live_snaps, g_live_slabs, g_live_slabs >> 8,
-             (unsigned long long)g_copied, (unsigned long long)g_commits, (unsigned long long)g_decommits, g_lw);
+             (unsigned long long)g_copied, (unsigned long long)g_commits, (unsigned long long)g_decommits, g_lw,
+             (unsigned)(rh_host_headroom() >> 20), (unsigned long long)g_host_refusals);
 }

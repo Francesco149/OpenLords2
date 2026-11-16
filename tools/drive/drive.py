@@ -794,6 +794,91 @@ def local_sessions():
     return n
 
 
+# ---- the reaper: a live session whose CPU time has not moved for its own --live-idle + REAP_SLACK s is hung (an idle one
+# exits by itself after --live-idle, rh_live.c); one older than REAP_MAX_AGE_H goes regardless (rd re-attaches by replay).
+# 2026-11-13: two ev13d search workers (win, bunker) sat 3 days in rhost's modal "host heap exhausted" MessageBox —
+# --live-idle never fired, the rd that spawned them had been killed (no finally). Samples persist per host between
+# passes (.reap.json in the sessions' dir); admission runs a pass on win / bunker / wine, `rd reap` on all three.
+REAP_SLACK = int(os.environ.get("RD_REAP_SLACK", "600"))
+REAP_MAX_AGE = int(os.environ.get("RD_REAP_MAX_AGE_H", "24")) * 3600
+
+
+def win_reap_ps(dry=False):
+    """PowerShell: one reap pass over OUR drive sessions on the Windows box (by PID + command line, never by name)"""
+    return ("$rf = '" + WIN_SESS + "\\.reap.json'; $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); $old = @{}\n"
+            "if (Test-Path $rf) { try { (Get-Content $rf -Raw | ConvertFrom-Json).PSObject.Properties | ForEach-Object { $old[$_.Name] = $_.Value } } catch {} }\n"
+            "$new = @{}\n"
+            "foreach ($q in @(Get-CimInstance Win32_Process -Filter \"Name='" + RH.WEXE + "'\" | Where-Object { $_.CommandLine -like '*\\runs\\drive\\*' })) {\n"
+            "  $id = [int]$q.ProcessId; $key = \"$id/\" + $q.CreationDate.Ticks; $cpu = [int64]$q.KernelModeTime + [int64]$q.UserModeTime\n"
+            "  $idle = 1800; if ($q.CommandLine -match '--live-idle (\\d+)') { $idle = [int]$Matches[1] }\n"
+            "  $age = ((Get-Date) - $q.CreationDate).TotalSeconds; $o = $old[$key]\n"
+            "  $since = if ($o -and [int64]$o.cpu -eq $cpu) { [int64]$o.since } else { $now }\n"
+            "  $why = $null\n"
+            f"  if ($now - $since -gt $idle + {REAP_SLACK}) {{ $why = \"hung: no CPU for $($now - $since)s (--live-idle $idle)\" }}\n"
+            f"  elseif ($age -gt {REAP_MAX_AGE}) {{ $why = \"over age ($([int]($age / 3600)) h)\" }}\n"
+            "  if ($why) {\n"
+            "    $rd = if ($q.CommandLine -match '--run (\\S+)') { $Matches[1].Trim('\"') } else { '' }\n"
+            "    \"REAP $rd pid ${id}: $why" + (" (dry)" if dry else "") + "\"\n"
+            + ("" if dry else
+               "    Stop-Process -Id $id -Force -ErrorAction SilentlyContinue; Wait-Process -Id $id -Timeout 10 -ErrorAction SilentlyContinue\n"
+               "    if ($rd -like '" + WIN_SESS + "\\*') { Remove-Item $rd -Recurse -Force -ErrorAction SilentlyContinue }\n"
+               "    continue\n") +
+            "  }\n"
+            "  $new[$key] = @{ cpu = $cpu; since = $since } }\n"
+            + ("" if dry else "$new | ConvertTo-Json | Set-Content $rf\n") +
+            # run dirs no live session names, untouched for 6 h (a session killed without kill_session left them)
+            "$cls = @(Get-CimInstance Win32_Process -Filter \"Name='" + RH.WEXE + "'\" | ForEach-Object { $_.CommandLine })\n"
+            "Get-ChildItem '" + WIN_SESS + "' -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne '.reap.json' -and $_.LastWriteTime -lt (Get-Date).AddHours(-6) } | ForEach-Object {\n"
+            "  $n = $_.Name; if (-not ($cls | Where-Object { $_ -like \"*\\$n*\" })) {\n"
+            "    \"REAP $($_.FullName): no session" + (" (dry)" if dry else "") + "\"\n"
+            + ("" if dry else "    Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue\n") +
+            "  } }\n")
+
+
+def local_reap(dry=False):
+    """one reap pass over OUR wine sessions on this host → report lines"""
+    rf, now = os.path.join(SESS, ".reap.json"), time.time()
+    try:
+        old = json.load(open(rf))
+    except (OSError, ValueError):
+        old = {}
+    tck = os.sysconf("SC_CLK_TCK")
+    btime = next(int(l.split()[1]) for l in open("/proc/stat") if l.startswith("btime"))
+    new, out = {}, []
+    for p in os.listdir("/proc"):
+        if not p.isdigit():
+            continue
+        try:
+            cl = open(f"/proc/{p}/cmdline", "rb").read().split(b"\0")
+            if not any(b"\\runs\\drive\\" in a for a in cl) or not any(RH.WEXE.encode() in a for a in cl[:2]):
+                continue
+            f = open(f"/proc/{p}/stat").read().rsplit(") ", 1)[1].split()
+        except OSError:
+            continue
+        cpu, start = int(f[11]) + int(f[12]), int(f[19])
+        idle = int(cl[cl.index(b"--live-idle") + 1]) if b"--live-idle" in cl else 1800
+        key = f"{p}/{start}"
+        o = old.get(key)
+        since = o["since"] if o and o["cpu"] == cpu else now
+        age = now - (btime + start / tck)
+        why = (f"hung: no CPU for {now - since:.0f}s (--live-idle {idle})" if now - since > idle + REAP_SLACK else
+               f"over age ({age / 3600:.1f} h)" if age > REAP_MAX_AGE else None)
+        if why:
+            out.append(f"REAP wine pid {p}: {why}" + (" (dry)" if dry else ""))
+            if not dry:
+                try:
+                    pg = os.getpgid(int(p))
+                    os.killpg(pg, signal.SIGKILL) if pg != os.getpgrp() else os.kill(int(p), signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    pass
+                continue
+        new[key] = {"cpu": cpu, "since": since}
+    if not dry and os.path.isdir(SESS):
+        json.dump(new, open(rf + ".tmp", "w"))
+        os.replace(rf + ".tmp", rf)
+    return out
+
+
 def win_spawn(name, ld, args, wait, tag):
     """ld (a local dir with the session's files) → C:\\ol2-rhost\\runs\\drive\\NAME; start ol2-rhost.exe there detached
     (WMI: outside the job sshd kills on disconnect), admitted (≤ RD_WIN_MAX_SESSIONS of our sessions, ≥ 1.5 GB free)"""
@@ -808,6 +893,9 @@ def win_spawn(name, ld, args, wait, tag):
           f"$rd = '{rd}'; $cl = '{cl.replace(chr(39), chr(39) * 2)}'\n"
           "$m = New-Object System.Threading.Mutex($false, 'Global\\ol2-rhost-admit')\n"
           f"$deadline = (Get-Date).AddSeconds({wait}); $wpid = 0\n"
+          "try { [void]$m.WaitOne() } catch [System.Threading.AbandonedMutexException] {}\n"
+          "try {\n" + win_reap_ps() + "} catch { \"[reap failed: $_]\" }\n"
+          "$m.ReleaseMutex()\n"
           "while ($true) {\n"
           "  try { [void]$m.WaitOne() } catch [System.Threading.AbandonedMutexException] {}\n"
           "  $mine = @(Get-CimInstance Win32_Process -Filter \"Name='ol2-rhost.exe'\" | Where-Object { $_.CommandLine -like '*\\runs\\drive\\*' }).Count\n"
@@ -943,6 +1031,8 @@ def spawn_live(tag, movie, upto=None, idle=1800, wait=300, host=None):
             raise
         return s
     t0 = time.time()
+    for l in local_reap():
+        print(f"[{l}]")
     while local_sessions() >= LOCAL_MAX or mem_available_gb() < LOCAL_FLOOR_GB:
         if time.time() - t0 > wait:
             shutil.rmtree(ld, ignore_errors=True)
@@ -1936,7 +2026,7 @@ def search_body(r, lv, a, P, st):
             ths = [threading.Thread(target=one, args=(lv, a.seed, 0, f"main@{main}"))]
             lvs = []
             for i, h in workers:
-                lx = Live(h["port"]); lvs.append(lx)
+                lx = Live(h["port"], timeout=a.time_limit + a.refine + 180); lvs.append(lx)   # (= the main session's)
                 ths.append(threading.Thread(target=one, args=(lx, a.seed + i * 7919, 0, f"w{i}@{h['host']}")))
             [t.start() for t in ths]
             [t.join() for t in ths]
@@ -2473,6 +2563,37 @@ def cmd_stop(a):
     r.close()
 
 
+def cmd_reap(a):
+    """end hung / over-age live sessions on every host, cancel dead bunker forwards, drop stale session records"""
+    out = []
+    if host_up("win"):
+        rc, o = win_ps(win_reap_ps(a.dry), timeout=180)
+        out += [f"win: {l}" for l in o.splitlines() if l.strip()]
+    else:
+        out.append(f"win: {RH.WIN} does not answer (not reaped)")
+    if BK and host_up("bunker"):
+        out += [f"bunker: {l}" for l in BK.reap(a.dry)]
+    out += [f"wine: {l}" for l in local_reap(a.dry)]
+    if os.path.isdir(RUNS):
+        for n in sorted(os.listdir(RUNS)):
+            sp = os.path.join(RUNS, n, "session.json")
+            if not os.path.exists(sp):
+                continue
+            try:
+                s = json.load(open(sp))
+                if (s.get("host") == "win" and not host_up("win")) or (s.get("host") == "bunker" and not (BK and host_up("bunker"))):
+                    continue
+                dead = not sess_alive(s)
+            except (OSError, ValueError):
+                continue
+            if dead:
+                out.append(f"run {n}: its session ({s.get('host', 'wine')} pid {s.get('pid')}) is gone — record dropped" + (" (dry)" if a.dry else ""))
+                if not a.dry:
+                    kill_session(s)               # (its forward / run dir, if any are left)
+                    os.remove(sp)
+    print("\n".join(out) if out else "nothing to reap")
+
+
 def cmd_ls(a):
     if not os.path.isdir(RUNS):
         return
@@ -2549,6 +2670,8 @@ def main():
     p.add_argument("--target", choices=("win", "wine", "bunker")); p.set_defaults(fn=cmd_cov)
     p = sp.add_parser("stop"); p.add_argument("run"); p.set_defaults(fn=cmd_stop)
     sp.add_parser("ls").set_defaults(fn=cmd_ls)
+    p = sp.add_parser("reap", help="end hung / over-age live sessions on all hosts (admission runs it per host too)")
+    p.add_argument("--dry", action="store_true"); p.set_defaults(fn=cmd_reap)
     argv, i = [], 1
     while i < len(sys.argv):
         t = sys.argv[i]
@@ -2558,6 +2681,10 @@ def main():
         else:
             argv.append(t); i += 1
     a = ap.parse_args(argv)
+    # SIGTERM / SIGHUP (a timed-out tool call, a closed terminal) → SystemExit, so the finally blocks run: a search's extra
+    # sessions and bunker forwards are ended there (an rd killed without them left orphans: 2026-11-13). SIGKILL → rd reap.
+    for sig in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, lambda n, f: sys.exit(128 + n))
     try:
         sys.exit(a.fn(a) or 0)
     except SessionEnded:

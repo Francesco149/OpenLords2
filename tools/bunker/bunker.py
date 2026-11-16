@@ -97,10 +97,51 @@ def ssh(cmd, check=True, capture=False, input=None, timeout=None):
     return r.stdout if capture else r.returncode
 
 
+FWD_REG = CTL + ".fwd"         # "LPORT RPORT" per forward this host added on the master (rd reap cancels the dead ones:
+                               # an rd killed mid-search left one, and a master with a forward never hits ControlPersist)
+
+
+def _fwd_reg(add=None, drop=None):
+    with open(FWD_REG, "a+") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        f.seek(0)
+        rows = {tuple(map(int, l.split())) for l in f if len(l.split()) == 2}
+        if add:
+            rows.add(add)
+        rows.discard(drop)
+        f.seek(0)
+        f.truncate()
+        f.writelines(f"{a} {b}\n" for a, b in sorted(rows))
+        return rows
+
+
 def forward(lport, rport, cancel=False):
     """add (cancel) a local forward 127.0.0.1:LPORT → bunker 127.0.0.1:RPORT on the master → ok"""
-    return subprocess.run(["ssh"] + OPTS + ["-O", "cancel" if cancel else "forward", "-L", f"127.0.0.1:{lport}:127.0.0.1:{rport}", HOST],
-                          capture_output=True).returncode == 0
+    ok = subprocess.run(["ssh"] + OPTS + ["-O", "cancel" if cancel else "forward", "-L", f"127.0.0.1:{lport}:127.0.0.1:{rport}", HOST],
+                        capture_output=True).returncode == 0
+    if ok or cancel:
+        _fwd_reg(drop=(lport, rport)) if cancel else _fwd_reg(add=(lport, rport))
+    return ok
+
+
+def reap(dry=False):
+    """end hung / over-age sessions in the pool (pool.py reap), then cancel the master's forwards to sessions that are
+    gone → the report lines"""
+    if not ensure_master():
+        return []
+    ss = scripts_sig()                                  # (pool.py's reap / ports came 2026-11-16: stage it if stale)
+    if (ssh(f"cat {W}/bin/{STAMP} 2>/dev/null || true", capture=True) or "").strip() != ss:
+        stage_scripts()
+        ssh(f"echo {ss} > {W}/bin/{STAMP}")
+    out = ssh(f"{POOL} reap" + (" --dry" if dry else ""), check=False, capture=True, timeout=120) or ""
+    lines = [l for l in out.splitlines() if l.strip()]
+    live = set((ssh(f"{POOL} ports", check=False, capture=True, timeout=60) or "").split())
+    for lp, rp in sorted(_fwd_reg()):
+        if str(rp) not in live:
+            lines.append(f"forward 127.0.0.1:{lp} -> bunker:{rp}: session gone, cancelled" + (" (dry)" if dry else ""))
+            if not dry:
+                forward(lp, rp, cancel=True)
+    return lines
 
 
 def rsync(*args):

@@ -55,7 +55,7 @@ rd seasons R N [--until EXPR] [--watch EXPR,..] [--battle auto|field] [--feed] [
                         sow: siegeknights3:won2 + --feed peaks at 1158 people (turn 44), starves by turn ~60 when crowns
                         run out — sow wheat in Winter for longer setups)
 rd covered VA|NAME ..   (is a retail function reached by the corpus, by which scenarios — before you start)
-rd check R TASK.md      rd verify R      rd cov R [--blocks]      rd lint TASK.md --on RUN      rd movie R      rd stop R      rd ls
+rd check R TASK.md      rd verify R      rd cov R [--blocks]      rd lint TASK.md --on RUN      rd movie R      rd stop R      rd ls      rd reap [--dry]
 ```
 
 **Input spec** (640×480 game coordinates; tokens separated by spaces; `*N` repeats a token; `( … )xN` a group):

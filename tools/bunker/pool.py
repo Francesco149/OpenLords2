@@ -14,7 +14,8 @@ written by two at once.
     pool.py run NAME [--rw-prefix] CMD..              # CMD in a container, foreground (batches; setup's wineboot)
     pool.py spawn NAME --wait S --max N --floor-mb M  # stdin = tar of the session dir → C:\\ol2-rhost\\runs\\drive\\NAME;
                                                       #   admitted, started detached → "LIVE <pid> <port>" | NOADMIT .. | NOSTART ..
-    pool.py alive PID NAME | kill PID NAME | stat | free
+    pool.py alive PID NAME | kill PID NAME | stat | free | ports
+    pool.py reap [--dry]                              # end HUNG / over-age live sessions (spawn runs it first)
 Env: OL2_MEM (4G) OL2_CPUS (0-3,6-9) OL2_QUOTA (600%) OL2_WINE (gcroots link name) OL2_HOST_FLOOR_MB (1024)
      OL2_STARTING_MB (150).
 """
@@ -38,6 +39,12 @@ HOST_FLOOR = int(os.environ.get("OL2_HOST_FLOOR_MB", "1024")) << 20
 # a session still replaying to its head (no live.port yet) will grow by ~this. README "Measured": a booted live session
 # = ~56 MB in the pool's accounting (anon + overlay shmem), ~70 MB with 50 savestates (Lords2's state is ~6 MB)
 STARTING_MB = int(os.environ.get("OL2_STARTING_MB", "150"))
+# reap: a session whose CPU time has not moved for its own --live-idle + REAP_SLACK s is hung (an idle one exits by
+# itself after --live-idle: rh_live.c) — 2026-11-13 two ev13d sessions sat 3 days in a modal "host heap exhausted"
+# dialog; one older than REAP_MAX_AGE goes regardless (rd re-attaches by replay). Samples persist in REAP between calls.
+REAP = f"{SESS}/.reap.json"
+REAP_SLACK = int(os.environ.get("OL2_REAP_SLACK", "600"))
+REAP_MAX_AGE = int(os.environ.get("OL2_REAP_MAX_AGE_H", "24")) * 3600
 
 
 def gc(n):
@@ -143,6 +150,10 @@ def cmd_spawn(argv):
             os.chown(x, 0, 0)
     spec = json.load(open(f"{rd}/spawn.json"))       # {"exe": C:\..\ol2-rhost.exe, "args": [...]}
     ensure()
+    try:
+        cmd_reap([])                                   # (hung sessions hold slots + memory forever otherwise)
+    except Exception as e:                             # noqa: BLE001 — admission must not fail on the reaper
+        print(f"[reap failed: {e}]", flush=True)
     deadline = time.time() + wait
     with open(LOCK, "a") as lk:
         while True:
@@ -201,7 +212,11 @@ def cmd_alive(argv):
 
 
 def cmd_kill(argv):
-    pid, name = int(argv[0]), argv[1]
+    kill(int(argv[0]), argv[1])
+    print("KILLED")
+
+
+def kill(pid, name):
     if not NAME_RE.fullmatch(name):
         raise SystemExit(f"bad session name {name!r}")
     if ours(pid, name):
@@ -220,7 +235,60 @@ def cmd_kill(argv):
                 except ProcessLookupError:
                     pass
     subprocess.run(["rm", "-rf", f"{SESS}/{name}"])
-    print("KILLED")
+
+
+def proc_stat(p):
+    """→ (utime + stime ticks, start ticks since boot)"""
+    f = open(f"/proc/{p}/stat").read().rsplit(") ", 1)[1].split()
+    return int(f[11]) + int(f[12]), int(f[19])
+
+
+def cmd_reap(argv):
+    dry = "--dry" in argv
+    tck = os.sysconf("SC_CLK_TCK")
+    btime = next(int(l.split()[1]) for l in open("/proc/stat") if l.startswith("btime"))
+    now = time.time()
+    try:
+        old = json.load(open(REAP))
+    except (OSError, ValueError):
+        old = {}
+    new = {}
+    for name, pids in sessions().items():
+        cpu, start, root, idle = 0, None, None, 1800
+        for p in pids:
+            try:
+                c, st = proc_stat(p)
+                cl = open(f"/proc/{p}/cmdline", "rb").read().split(b"\0")
+            except OSError:
+                continue
+            cpu += c
+            if cl and cl[0] == b"/bin/sh":
+                root, start = p, st
+            if b"--live-idle" in cl:
+                idle = int(cl[cl.index(b"--live-idle") + 1] or 1800)
+        if root is None:
+            continue
+        key = f"{name}/{start}"
+        o = old.get(key)
+        since = o["since"] if o and o["cpu"] == cpu else now
+        age = now - (btime + start / tck)
+        why = (f"hung: no CPU for {now - since:.0f}s (--live-idle {idle})" if now - since > idle + REAP_SLACK else
+               f"over age ({age / 3600:.1f} h)" if age > REAP_MAX_AGE else None)
+        if why:
+            print(f"REAP {name} pid {root}: {why}" + (" (dry)" if dry else ""), flush=True)
+            if not dry:
+                kill(root, name)
+                continue
+        new[key] = {"cpu": cpu, "since": since}
+    if not dry:
+        json.dump(new, open(REAP + ".tmp", "w"))
+        os.replace(REAP + ".tmp", REAP)
+
+
+def cmd_ports(argv):
+    """the bunker-side ports of the live sessions (rd reap cancels forwards to any other)"""
+    ss = sessions()
+    print(" ".join(open(f"{SESS}/{n}/live.port").read().split()[0] for n in ss if os.path.exists(f"{SESS}/{n}/live.port")))
 
 
 def cmd_stat(argv):
@@ -239,7 +307,7 @@ def cmd_stat(argv):
 def main():
     cmd, argv = sys.argv[1], sys.argv[2:]
     {"ensure": lambda a: ensure(), "run": cmd_run, "spawn": cmd_spawn, "alive": cmd_alive, "kill": cmd_kill,
-     "stat": cmd_stat, "free": lambda a: print(*[x >> 20 for x in pool_free()])}[cmd](argv)
+     "stat": cmd_stat, "reap": cmd_reap, "ports": cmd_ports, "free": lambda a: print(*[x >> 20 for x in pool_free()])}[cmd](argv)
 
 
 if __name__ == "__main__":
