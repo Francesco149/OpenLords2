@@ -169,6 +169,12 @@ __attribute__((naked)) int __stdcall rl_40e9ab(HINSTANCE inst, HINSTANCE prev, L
 int rl_crt_start(void)
 {
     rl_link_bind_all();   /* the old ports' runtime binds (rl_link*.c; under rhost rh_port_bind_once made them: no-ops) */
+    /* retail-layout code reads / writes the link layer's mirrors by name: they are live from the start (as inside every
+     * rhost row), never closed.  Until 2026-11-16 the first seam's rl_link_retail_leave made them live: a mirror write
+     * before it (rl_46c4a3's cell cursor) was reloaded over by the next port_enter — masked by the speed probe's
+     * engine_retail_call(0x4b209a), whose retail_enter stored it (20 MP sides off pure retail at 0x569570 when the
+     * probe called rl_4b209a directly). */
+    (void)rl_link_port_enter();
     rl_crt_4c3370();
     return 0;
 }

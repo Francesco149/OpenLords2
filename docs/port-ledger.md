@@ -424,7 +424,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4526b3 | FUN_004526b3 | 87 | engine_dirty_rect.c, engine_dirty_rect.h |
 | 0x45270a | FUN_0045270a | 43 | engine_dirty_rect.h, engine_ingame_input.h, engine_workforce_hud.c (+2) |
 | 0x452735 | FUN_00452735 | 53 | engine_dirty_rect.h |
-| 0x452775 | FUN_00452775 | 49 | engine_button.c, engine_button.h, rl_ctl.c |
+| 0x452775 | FUN_00452775 | 49 | engine_button.c, engine_button.h, rl_ctl.c (+1) |
 | 0x4527a6 | FUN_004527a6 | 101 | engine.c, engine_armory.c, engine_battlefield_render.c (+15) |
 | 0x4650b0 | FUN_004650b0 | 265 | engine.c, engine_army_state.c, engine_army_state.h (+3) |
 | 0x4651b9 | FUN_004651b9 | 91 | engine.c, engine_territory.c, engine_territory.h (+1) |

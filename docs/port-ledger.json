@@ -12999,7 +12999,8 @@
    "src": [
     "src/engine_button.c",
     "src/engine_button.h",
-    "src/rl_ctl.c"
+    "src/rl_ctl.c",
+    "src/rl_link_mapview.c"
    ]
   },
   {
