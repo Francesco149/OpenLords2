@@ -1,0 +1,227 @@
+# CRT gap partition "env" (src/rl_crt_env.c): synthetic carriers for the locale / environment / wide-char / file paths
+# (docs/findings/crt-gap-env.md). Frame 1700 = the strategic map, debug heap live. `$name` = what the call line ending in ` @name` returned.
+# Locale state retail never enters ("C" locale: __lc_handle[LC_CTYPE] 0, __mb_cur_max 1, SBCS mbctype, the NLS A
+# APIs) is set with memset rows (rl_crt_4c2200) and put back after; FILE streams are _iob slots 5..8 filled the same
+# way (+ parse_cmdline rl_crt_4c9570 to store a heap pointer into a FILE field). Retail names in the comments.
+scenario newgame-playnow
+
+# ---- CPtoLCID, _validdrive (rhost's GetDriveTypeA: DRIVE_FIXED)
+1700 rl_crt_4c8d50 932
+1700 rl_crt_4c8d50 936
+1700 rl_crt_4c8d50 949
+1700 rl_crt_4c8d50 950
+1700 rl_crt_4c8d50 1252
+1700 rl_crt_4c1c80 0
+1700 rl_crt_4c1c80 3
+# ---- _isctype: the table path, -1, then c > 255 through __crtGetStringTypeA (the first call picks the A API)
+1700 rl_crt_4c5710 0x41 0x103
+1700 rl_crt_4c5710 -1 0xffff
+1700 rl_crt_4c5710 0x20 8
+1700 rl_crt_4c5710 0x4142 0x103
+1700 rl_crt_4c5710 0x1234 4
+# ---- atol
+1700 rl_crt_4c1df0 "  -12345xyz"
+1700 rl_crt_4c1df0 "+77"
+1700 rl_crt_4c1df0 "\t\n 2147483647"
+1700 rl_crt_4c1df0 "99999999999"
+1700 rl_crt_4c1df0 "abc"
+1700 rl_crt_4c1df0 "-"
+# ---- strchr / _mbschr (SBCS: __mbcodepage 0 → strchr)
+1700 rl_crt_4ce7f0 "realm=lords" 0x3d
+1700 rl_crt_4ce7f0 "realm" 0x7a
+1700 rl_crt_4ce7f0 "realm" 0
+1700 rl_crt_4ce7f0 "abcdefghijklmnop\xe9q" 0x1e9
+1700 rl_crt_4ce550 "KEY=VALUE" 0x3d
+1700 rl_crt_4ce550 "NOEQ" 0x3d
+# ---- strncnt (aw_map.c / aw_cmp.c), wcslen, wcsncnt
+1700 rl_crt_4cbb80 "abcdef" 3
+1700 rl_crt_4cbb80 "abc" 10
+1700 rl_crt_4cbb80 "abc" 0
+1700 rl_crt_4cde00 "abcdef" 4
+1700 rl_crt_4cde00 "ab" 9
+1700 rl_crt_4ccb30 w"wide"
+1700 rl_crt_4ccb30 w""
+1700 rl_crt_4cbf50 w"wide" 2
+1700 rl_crt_4cbf50 w"wide" 10
+1700 rl_crt_4cbf50 w"wide" 4
+# ---- the NLS wrappers on the A APIs (f_use 2)
+1700 rl_crt_4cb350 1 "Ab1 " 4 buf:16 0 0
+1700 rl_crt_4cb860 0x409 0x200 "Lords" 5 buf:16 16 0
+1700 rl_crt_4cb860 0x409 0x100 "Realm II" -1 buf:16 16 0
+1700 rl_crt_4cb860 0x409 0x200 "abc" 3 0 0 0
+1700 rl_crt_4cd9a0 0x409 1 "lords" 5 "LORDS" 5 0
+1700 rl_crt_4cd9a0 0x409 0 "abc" -1 "abd" -1 0
+1700 rl_crt_4cd9a0 0 0 "b" 1 "a" 1 0
+1700 rl_crt_4ccb80 "path" "PATH" 4
+1700 rl_crt_4ccb80 "a" "b" 0
+1700 rl_crt_4ccb80 "abc" "abd" 3
+# ---- wctomb / wcstombs, "C" locale (a wchar > 0xff spelled as raw bytes: "A\0\x01\x01\0\0")
+1700 rl_crt_4cc770 buf:4 0x41
+1700 rl_crt_4cc770 buf:4 0x141
+1700 rl_crt_4cc770 0 0x41
+1700 rl_crt_4cbbf0 buf:16 w"wide str" 16
+1700 rl_crt_4cbbf0 buf:16 w"wide str" 4
+1700 rl_crt_4cbbf0 buf:8 "A\0\x01\x01\0\0" 8
+1700 rl_crt_4cbbf0 0 w"length" 0
+1700 rl_crt_4cbbf0 buf:4 w"x" 0
+# ---- a locale: __lc_handle[LC_CTYPE] = 0x409 (__lc_codepage stays 0 = CP_ACP), SBCS then DBCS (__mb_cur_max 2)
+1700 rl_crt_4c2200 va:0x4e5658 0x09 1
+1700 rl_crt_4c2200 va:0x4e5659 0x04 1
+1700 rl_crt_4cc770 buf:4 0xe9
+1700 rl_crt_4cc770 buf:4 0x3a9
+1700 rl_crt_4cbbf0 buf:16 w"locale" 16
+1700 rl_crt_4cbbf0 buf:16 "A\0\xa9\x03\0\0" 16
+1700 rl_crt_4cbbf0 0 w"locale" 0
+1700 rl_crt_4cbbf0 0 "A\0\xa9\x03\0\0" 0
+1700 rl_crt_4cbbf0 buf:16 w"abcdef" 3
+1700 rl_crt_4c2200 va:0x4e5044 2 1
+1700 rl_crt_4cbbf0 buf:16 w"dbcs" 16
+1700 rl_crt_4cbbf0 buf:16 w"overflowing" 4
+1700 rl_crt_4cbbf0 buf:16 "A\0\xa9\x03\0\0" 16
+1700 rl_crt_4cc770 buf:4 0x42
+1700 rl_crt_4c1df0 " \t42z"
+1700 rl_crt_4c2200 va:0x4e5044 1 1
+1700 rl_crt_4c2200 va:0x4e5658 0 2
+# ---- the NLS wrappers on the W APIs (f_use 1 — Win9x without the A entries), then back to 2
+1700 rl_crt_4c2200 va:0x4e5644 1 1
+1700 rl_crt_4cb350 1 "Ab1 " 4 buf:16 0 0
+1700 rl_crt_4c5710 0x4142 0x103
+1700 rl_crt_4c2200 va:0x4e5644 2 1
+1700 rl_crt_4c2200 va:0x4e564c 1 1
+1700 rl_crt_4cb860 0x409 0x200 "Lords" 5 buf:16 16 0
+1700 rl_crt_4cb860 0x409 0x200 "abc" -1 0 0 0
+1700 rl_crt_4cb860 0x409 0x400 "abc" 3 buf:64 64 0
+1700 rl_crt_4cb860 0x409 0x400 "abc" 3 buf:4 2 0
+1700 rl_crt_4cb860 0x409 0x400 "abc" 3 0 0 0
+1700 rl_crt_4c2200 va:0x4e564c 2 1
+1700 rl_crt_4c2200 va:0x4e598c 1 1
+1700 rl_crt_4cd9a0 0x409 1 "lords" 5 "LORDS" 5 0
+1700 rl_crt_4cd9a0 0x409 0 "" 0 "" 0 0
+1700 rl_crt_4cd9a0 0x409 0 "" 0 "ab" 2 0
+1700 rl_crt_4cd9a0 0x409 0 "ab" 2 "" 0 0
+1700 rl_crt_4cd9a0 0x409 0 "a" 1 "" 0 0
+1700 rl_crt_4cd9a0 0x409 0 "" 0 "a" 1 0
+1700 rl_crt_4cd9a0 0x411 0 "\x82" 1 "" 0 932
+1700 rl_crt_4cd9a0 0x411 0 "" 0 "A" 1 932
+1700 rl_crt_4cd9a0 0x409 0 "abc" -1 "abd" -1 0
+1700 rl_crt_4ccb80 "Path" "PATH" 4
+1700 rl_crt_4c2200 va:0x4e598c 2 1
+# ---- DBCS mbctype (code page 932 lead bytes 0x81..0x9f, __mbcodepage 932): _mbschr; setSBCS puts SBCS back
+1700 rl_crt_4c2200 va:0x4e5352 4 31
+1700 rl_crt_4c2200 va:0x4e53d4 0xa4 1
+1700 rl_crt_4c2200 va:0x4e53d5 0x03 1
+1700 rl_crt_4c2200 va:0x4e53d8 0x11 1
+1700 rl_crt_4c2200 va:0x4e53d9 0x04 1
+1700 rl_crt_4ce550 "ab\x82=cd=e" 0x3d
+1700 rl_crt_4ce550 "x\x82=y" 0x823d
+1700 rl_crt_4ce550 "x\x82" 0x3d
+1700 rl_crt_4ce550 "abc" 0
+1700 rl_crt_4ce550 "abc" 0x7a
+1700 rl_crt_4c8df0
+# ---- the environment: heap strings (_CRT_BLOCK, as __crtsetenv keeps the pointer); the first call copies _environ
+1700 rl_crt_4bfa30 32 2 0 0 @s1
+1700 rl_crt_4c2080 $s1 "OL2PROBE=one"
+1700 rl_crt_4cde70 $s1 0
+1700 rl_crt_4ce1e0 "OL2PROBE" 8
+1700 rl_crt_4ce1e0 "ol2probe=x" 8
+1700 rl_crt_4ce1e0 "NOSUCHVAR" 9
+1700 rl_crt_4bfa30 32 2 0 0 @s2
+1700 rl_crt_4c2080 $s2 "OL2PROBE=two"
+1700 rl_crt_4cde70 $s2 1
+1700 rl_crt_4bfa30 32 2 0 0 @s3
+1700 rl_crt_4c2080 $s3 "OL2OTHER=3"
+1700 rl_crt_4cde70 $s3 1
+1700 rl_crt_4cde70 0 0
+1700 rl_crt_4cde70 "NOEQUALS" 0
+1700 rl_crt_4cde70 "=x" 0
+1700 rl_crt_4cde70 "OL2ABSENT=" 1
+# copy_environ on a string array built by parse_cmdline (argv = A, args = B)
+1700 rl_crt_4bfa30 16 2 0 0 @arr
+1700 rl_crt_4bfa30 16 2 0 0 @strs
+1700 rl_crt_4c9570 "a bb ccc" $arr $strs buf:4 buf:4
+1700 rl_crt_4ce280 $arr
+1700 rl_crt_4ce280 0
+# removal (last env call: retail's _realloc_dbg cuts the array's terminator slot — quirk, crt-gap-env.md)
+1700 rl_crt_4bfa30 32 2 0 0 @s4
+1700 rl_crt_4c2080 $s4 "OL2PROBE="
+1700 rl_crt_4cde70 $s4 1
+# ---- fds: _setmode / _commit / _chsize on a fresh binary read-write file
+1700 rl_crt_4cea50 "ol2probe.tmp" 0x8302 0x40 0x180 @fd
+1700 rl_crt_4cf9c0 $fd 0x4000
+1700 rl_crt_4cf9c0 $fd 0x8000
+1700 rl_crt_4cf9c0 $fd 0x1234
+1700 rl_crt_4cf9c0 99 0x8000
+1700 rl_crt_4cf9c0 -1 0x8000
+1700 rl_crt_4cf9c0 30 0x4000
+1700 rl_crt_4ce470 $fd
+1700 rl_crt_4ce470 99
+1700 rl_crt_4ce470 30
+1700 rl_crt_4cc0b0 $fd "hello, realm" 12
+1700 rl_crt_4cf640 $fd 5000
+1700 rl_crt_4cf490 $fd
+1700 rl_crt_4cf640 $fd 100
+1700 rl_crt_4cf490 $fd
+1700 rl_crt_4cf640 $fd 100
+1700 rl_crt_4cf640 99 10
+1700 rl_crt_4cf9c0 $fd 0x4000
+1700 rl_crt_4cf640 $fd 300
+1700 rl_crt_4cf9c0 $fd 0x8000
+1700 rl_crt_4cc3b0 $fd 0 1
+# a read-only fd: the grow fails in _write (EACCES), the cut in SetEndOfFile
+1700 rl_crt_4cea50 "ol2probe.tmp" 0x8000 0x40 0 @ro
+1700 rl_crt_4cf640 $ro 1000
+1700 rl_crt_4cf640 $ro 10
+1700 rl_crt_4ce470 $ro
+1700 rl_crt_4ce640 $ro
+1700 rl_crt_4ce640 $fd
+# _sopen's own carrier: a text-mode read-write open of a file ending in ^Z cuts it (_chsize from _sopen)
+1700 rl_crt_4cea50 "ol2probe3.tmp" 0x8302 0x40 0x180 @z
+1700 rl_crt_4cc0b0 $z "data\x1a" 5
+1700 rl_crt_4ce640 $z
+1700 rl_crt_4cea50 "ol2probe3.tmp" 0x4002 0x40 0 @zt
+1700 rl_crt_4cf490 $zt
+1700 rl_crt_4ce640 $zt
+# ---- streams (_iob[5] 0x4e5780): fclose of a write stream with no buffer, again (not in use), a string stream
+1700 rl_crt_4cea50 "ol2probe2.tmp" 0x8302 0x40 0x180 @f1
+1700 rl_crt_4c2200 va:0x4e5780 0 32
+1700 rl_crt_4c2200 va:0x4e578c 0x02 1
+1700 rl_crt_4c2200 va:0x4e5790 $f1 1
+1700 rl_crt_4ce380 va:0x4e5780
+1700 rl_crt_4ce380 va:0x4e5780
+1700 rl_crt_4c2200 va:0x4e578c 0x40 1
+1700 rl_crt_4ce380 va:0x4e5780
+# fclose of a write stream with its own buffer (2 bytes pending) and a _tmpfname: _flush writes, _freebuf frees,
+# _close, the name freed. _base = B (parse_cmdline argv = &_base), _ptr = B + 2 (argv = &_iob[4]._tmpfname: argv[1]
+# lands on _ptr, argv[2] = NULL on _cnt), _tmpfname = T (argv[1] = NULL on _iob[6]._ptr)
+1700 rl_crt_4cea50 "ol2probe2.tmp" 0x8302 0x40 0x180 @f2
+1700 rl_crt_4bfa30 16 2 0 0 @buf
+1700 rl_crt_4bfa30 16 2 0 0 @tmp
+1700 rl_crt_4c9570 "x" va:0x4e5788 $buf buf:4 buf:4
+1700 rl_crt_4c9570 "q xyz" va:0x4e577c $buf buf:4 buf:4
+1700 rl_crt_4c9570 "t" va:0x4e579c $tmp buf:4 buf:4
+1700 rl_crt_4c2200 va:0x4e577c 0 4
+1700 rl_crt_4c2200 va:0x4e578c 0x0a 1
+1700 rl_crt_4c2200 va:0x4e5790 $f2 1
+1700 rl_crt_4ce380 va:0x4e5780
+1700 rl_crt_4cf490 $f2
+# _freebuf direct (_iob[8] 0x4e57e0): _IORW | _IOMYBUF | _IOSETVBUF with a buffer, again, then not open
+1700 rl_crt_4bfa30 16 2 0 0 @b3
+1700 rl_crt_4c9570 "y" va:0x4e57e8 $b3 buf:4 buf:4
+1700 rl_crt_4c2200 va:0x4e57ec 0x88 1
+1700 rl_crt_4c2200 va:0x4e57ed 0x04 1
+1700 rl_crt_4ce750 va:0x4e57e0
+1700 rl_crt_4ce750 va:0x4e57e0
+1700 rl_crt_4c2200 va:0x4e57ec 0x08 1
+1700 rl_crt_4ce750 va:0x4e57e0
+1700 rl_crt_4c2200 va:0x4e57e0 0 32
+# _fcloseall: _iob[6] a read stream on an fd (closed, counted), _iob[7] _IOREAD | _IOSTRG (fclose -1, not counted)
+1700 rl_crt_4cea50 "ol2probe2.tmp" 0x8000 0x40 0 @f3
+1700 rl_crt_4c2200 va:0x4e57a0 0 64
+1700 rl_crt_4c2200 va:0x4e57ac 0x01 1
+1700 rl_crt_4c2200 va:0x4e57b0 $f3 1
+1700 rl_crt_4c2200 va:0x4e57cc 0x41 1
+1700 rl_crt_4cd1b0
+1700 rl_crt_4cd1b0
+1700 rl_crt_4c22c0 "ol2probe.tmp"
+1700 rl_crt_4c22c0 "ol2probe2.tmp"
+1700 rl_crt_4c22c0 "ol2probe3.tmp"

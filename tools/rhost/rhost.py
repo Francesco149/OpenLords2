@@ -235,7 +235,7 @@ def make_batch(a, runs, tag, root_local=None):
     for name, *_ in runs:
         run_win = f"{WROOT}\\runs\\{batch}\\{name}"
         lines.append(f"Write-Output '=== {name}'")
-        lines.append(f"if (Test-Path '{run_win}\\rhost.log') {{ Select-String -Path '{run_win}\\rhost.log' -Pattern 'RESULT|FATAL|DIVERGE|hook-result|probe |MessageBox|UNIMPL|STALL|AV f' | ForEach-Object {{ $_.Line }} }}")
+        lines.append(f"if (Test-Path '{run_win}\\rhost.log') {{ Select-String -Path '{run_win}\\rhost.log' -Pattern 'RESULT|FATAL|DIVERGE|hook-result|probe |SKIP |MessageBox|UNIMPL|STALL|AV f' | ForEach-Object {{ $_.Line }} }}")
         lines.append(f"if (Test-Path '{run_win}\\stderr.txt') {{ Get-Content '{run_win}\\stderr.txt' -TotalCount 5 }}")
     open(os.path.join(bdir, "go.ps1"), "w").write("\r\n".join(lines) + "\r\n")
     return batch, bdir
@@ -349,7 +349,7 @@ def run_batch_wine(a, runs, tag):
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, a.jobs)) as ex:
         for name, log in ex.map(one, runs):
             out_lines.append(f"=== {name}")
-            out_lines += [l for l in log.splitlines() if re.search(r"RESULT|FATAL|DIVERGE|hook-result|^probe |MessageBox|UNIMPL|STALL|AV f", l)]
+            out_lines += [l for l in log.splitlines() if re.search(r"RESULT|FATAL|DIVERGE|hook-result|^probe |^SKIP |MessageBox|UNIMPL|STALL|AV f", l)]
     out = "\n".join(out_lines)
     print(f"[wine batch {batch}: {len(runs)} run(s) in {time.time() - t0:.1f}s (-j{a.jobs}) → {bdir}]")
     return batch, bdir, parse_out(out), out
@@ -711,9 +711,9 @@ def cmd_probe(a):
     be called as often as the file says, with 0 divergences. Evidence for dead / error-path code only: a probe run is
     not a pure replay (its end state is not compared with the corpus)."""
     files = a.files or sorted(os.path.join(PROBES, f) for f in os.listdir(PROBES) if f.endswith(".probe"))
-    runs, want = [], {}
+    runs, want, pframes = [], {}, {}
     for f in files:
-        scen, n = None, {}
+        scen, n, fr = None, {}, set()
         for line in open(f):
             t = line.split()
             if not t or t[0].startswith("#"):
@@ -723,9 +723,11 @@ def cmd_probe(a):
                 continue
             if t[1] != "poke":   # `F poke VA D...`: prior state (rh_hooks.c probe_poke), not a row
                 n[t[1]] = n.get(t[1], 0) + 1
+            fr.add(int(t[0], 0))
         if not scen:
             raise SystemExit(f"{f}: no `scenario NAME` line")
         name = os.path.splitext(os.path.basename(f))[0]
+        pframes[name] = fr
         tr, meta = scenario_inputs(scen)
         meta = dict(meta, _probe=f)
         runs.append((name, tr, meta))
@@ -737,8 +739,13 @@ def cmd_probe(a):
     bad = 0
     print("\nprobe file           row                            want   ran  calls  diverge  skipped")
     for name, n in want.items():
-        got, ran = {}, {}
+        got, ran, skipout = {}, {}, {}
         for note in res.get(name + "#notes", []):
+            # a shadow the harness could not compare (rh_hooks.c logs a row's first 5: SKIP ROW fF why) at a frame
+            # without probe lines is the scenario's own call (the boot's first arena commit), not a carrier's
+            m = re.match(r"SKIP (\S+) f(\d+) ", note)
+            if m and int(m.group(2)) not in pframes[name]:
+                skipout[m.group(1)] = skipout.get(m.group(1), 0) + 1
             m = re.match(r"hook-result (\S+) mode=\S+ calls=(\d+) diverge=(\d+) skipped=(\d+)", note)
             if m:
                 got[m.group(1)] = tuple(int(m.group(k)) for k in (2, 3, 4))
@@ -752,9 +759,11 @@ def cmd_probe(a):
             bad += 1
         for r, k in sorted(n.items()):
             c, d, sk = got.get(r, (0, 0, 0))
-            ok = ran.get(r, 0) == k and c >= k and d == 0 and sk == 0
+            so = skipout.get(r, 0)
+            ok = ran.get(r, 0) == k and c - so >= k and d == 0 and sk == so
             bad += not ok
-            print(f"{name:20s} {r:28s} {k:5d} {ran.get(r, 0):5d} {c:6d} {d:8d} {sk:8d}{'' if ok else '  FAIL'}")
+            print(f"{name:20s} {r:28s} {k:5d} {ran.get(r, 0):5d} {c:6d} {d:8d} {sk:8d}"
+                  f"{f' (not probe frames: {so})' if so else ''}{'' if ok else '  FAIL'}")
     print(f"\nPROBE: {sum(len(n) for n in want.values())} row(s) in {len(want)} file(s), {bad} failing")
     return 1 if bad else 0
 

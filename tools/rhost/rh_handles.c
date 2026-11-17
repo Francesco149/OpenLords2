@@ -208,19 +208,24 @@ uint32_t rh_handles_issued(void) { return g_next; }
  * handle opened by a discarded run is dropped (leaked to the OS), never closed twice. Also each live FILE's position
  * (after real[]: an int64 per slot, -1 = not a file): a shadowed call that reads / seeks / writes a file opened before
  * it leaves the OS position where retail's side stopped — the port side must start where retail's did (_read,
- * _lseek, _write rows). A file the call closed is re-opened (its CreateFileA arguments, OPEN_EXISTING) at restore. */
+ * _lseek, _write rows). A file the call closed is re-opened (its CreateFileA arguments, OPEN_EXISTING) at restore.
+ * And each live FILE's size (after pos[]): a call that grows or cuts a file opened before it (_chsize: zeros written /
+ * SetEndOfFile) is undone to that size before the port side (a cut grown back reads zeros — what _chsize wrote; a
+ * file opened inside the call is rh_files' journal's). */
 typedef struct { uint32_t next; long live; HANDLE real[]; } handles_meta_t;
 #define META_POS(m) ((int64_t *)((m)->real + (m)->next))
+#define META_SIZE(m) (META_POS(m) + (m)->next)
 void *rh_handles_meta_save(void)
 {
     EnterCriticalSection(&g_lk);
-    handles_meta_t *m = malloc(sizeof *m + g_next * (sizeof(HANDLE) + sizeof(int64_t)));
+    handles_meta_t *m = malloc(sizeof *m + g_next * (sizeof(HANDLE) + 2 * sizeof(int64_t)));
     m->next = g_next; m->live = g_live; memcpy(m->real, g_real, g_next * sizeof(HANDLE));
     g_gen++;
-    int64_t *pos = META_POS(m);
+    int64_t *pos = META_POS(m), *size = META_SIZE(m);
     for (uint32_t k = 0; k < g_next; k++) {
-        LARGE_INTEGER z = { .QuadPart = 0 }, at;
-        pos[k] = g_real[k] && g_fo[k] && SetFilePointerEx(g_real[k], z, &at, FILE_CURRENT) ? at.QuadPart : -1;
+        LARGE_INTEGER z = { .QuadPart = 0 }, at, sz;
+        pos[k] = g_real[k] && g_fo[k] && g_fo[k]->fl != FO_MMIO && SetFilePointerEx(g_real[k], z, &at, FILE_CURRENT) ? at.QuadPart : -1;
+        size[k] = pos[k] >= 0 && GetFileSizeEx(g_real[k], &sz) ? sz.QuadPart : -1;
     }
     LeaveCriticalSection(&g_lk);
     return m;
@@ -228,7 +233,7 @@ void *rh_handles_meta_save(void)
 void rh_handles_meta_restore(const void *p)
 {
     const handles_meta_t *m = p;
-    const int64_t *pos = META_POS(m);
+    const int64_t *pos = META_POS(m), *size = META_SIZE(m);
     EnterCriticalSection(&g_lk);
     for (uint32_t k = m->next; k < g_next; k++) g_real[k] = NULL;
     memcpy(g_real, m->real, m->next * sizeof(HANDLE)); g_next = m->next; g_live = m->live;
@@ -264,7 +269,11 @@ void rh_handles_meta_restore(const void *p)
     }
     for (uint32_t k = 0; k < m->next; k++)
         if (g_real[k] && pos[k] >= 0) {
-            LARGE_INTEGER to = { .QuadPart = pos[k] };
+            LARGE_INTEGER sz, to = { .QuadPart = size[k] };
+            if (size[k] >= 0 && GetFileSizeEx(g_real[k], &sz) && sz.QuadPart != size[k] &&
+                SetFilePointerEx(g_real[k], to, NULL, FILE_BEGIN))
+                SetEndOfFile(g_real[k]);   /* (a handle without write access: it fails, nothing to undo then) */
+            to.QuadPart = pos[k];
             SetFilePointerEx(g_real[k], to, NULL, FILE_BEGIN);
         }
     LeaveCriticalSection(&g_lk);
