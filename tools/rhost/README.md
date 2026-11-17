@@ -14,6 +14,7 @@ python3 tools/rhost/rhost.py run endturn-2 --shot-every 300               # repl
 python3 tools/rhost/rhost.py det endturn-2 -n 3                           # determinism gate (dumps diffed)
 python3 tools/rhost/rhost.py corpus --check                               # every scenario vs expected.json
 python3 tools/rhost/rhost.py corpus --check --target wine                 # … on this host (expected.wine.json)
+python3 tools/rhost/rhost.py corpus --check --standalone --target wine    # … + every scenario again under --standalone (no retail code)
 python3 tools/rhost/rhost.py verify                                       # every hook, shadow by nesting pass + hybrid pass
 python3 tools/rhost/rhost.py verify --only '^mp-' --target wine --wine-timeout 18000   # long shadow passes (mp-war, mp-skirmish): the per-run cap (default 3600 s; a timed-out run = status=timeout, the batch goes on)
   # a single-flag --extra needs '=': --extra=--fb-hash

@@ -551,9 +551,45 @@ def cmd_corpus(a):
         for n, diffs in expected_diffs(names, res, tgt).items():
             print(f"  {n}: {'PASS' if not diffs else 'FAIL ' + '; '.join(diffs)}")
             bad += bool(diffs)
+    if a.check and getattr(a, "standalone", False):
+        bad += corpus_check_standalone(a, names, tgt)
     if a.check:
         print(f"CORPUS CHECK: {'PASS' if not bad else f'FAIL ({bad})'}")
     return 1 if bad else 0
+
+
+STANDALONE_KEYS = ("frame", "tick", "rng", "fb", "state_sem")   # cmd_standalone's equality: the screen id is retail's dispatch
+
+
+def corpus_check_standalone(a, names, tgt):
+    """corpus --check --standalone: every scenario once more under --standalone (no retail code) — it must run to the
+    end with no gap and equal the blessed pure-retail values (STANDALONE_KEYS). Returns the failure count."""
+    sa = argparse.Namespace(**vars(a))
+    sa.extra = ((a.extra or "") + " --standalone").strip()
+    batch, bdir, res, out = run_batch(sa, resolve_runs(names), "corpus-standalone")
+    gaps = {}
+    cur = None
+    for line in out.splitlines():
+        if line.startswith("=== "):
+            cur = line[4:].strip()
+        m = re.search(r"reached retail code at ([0-9a-f]{8})", line)
+        if cur and m:
+            gaps[cur] = m.group(1)
+    bad = 0
+    t = "wine" if tgt == "bunker" else tgt
+    for n in names:
+        ep = os.path.join(SCEN, n, "expected.json" if t == "win" else f"expected.{t}.json")
+        exp, r = (json.load(open(ep)) if os.path.exists(ep) else {}), res.get(n, {})
+        if n in gaps:
+            diffs = [f"gap: reached retail code at {gaps[n]}"]
+        elif r.get("status") not in FINISHED:
+            diffs = [f"status {r.get('status')}"]
+        else:
+            diffs = [f"{k} {exp.get(k)}→{r.get(k)}" for k in STANDALONE_KEYS if exp.get(k) != r.get(k)]
+        print(f"  {n} (standalone): {'PASS' if not diffs else 'FAIL ' + '; '.join(diffs)}")
+        bad += bool(diffs)
+    print(f"STANDALONE CHECK: {len(names) - bad}/{len(names)} = pure retail; results in {bdir}")
+    return bad
 
 
 def snap_windows(tr, meta, k):
@@ -1161,6 +1197,7 @@ def main():
     sp = sub.add_parser("corpus"); common(sp); sp.add_argument("--only"); sp.add_argument("--check", action="store_true")
     sp.add_argument("--bless", action="store_true")
     sp.add_argument("--tracked", action="store_true", help="only scenarios git tracks (the pre-commit gate)")
+    sp.add_argument("--standalone", action="store_true", help="with --check: also every scenario under --standalone (no retail code) = the blessed values")
     sp.set_defaults(fn=cmd_corpus)
     sp = sub.add_parser("verify"); common(sp); sp.add_argument("--only")
     sp.add_argument("--hooks", help="regex: verify only the matching hook rows (iteration; writes no evidence)")

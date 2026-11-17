@@ -152,7 +152,9 @@
    engine_retail_call left in the CRT; `prove_no_retail_code.py --gaps-only` 0 gaps; standalone 121/121 = pure retail.
    Unverified by shadow: _amsg_exit / _exit / abort / terminate (never return: hybrid only), __wtomb_environ (faults on
    _wenviron = NULL in both). The 37 MP dead-code rows: probed too (2026-11-17, `tests/probes/mp-dead-{host,guest}.probe`, rl-mpmsg3.md:
-   0 divergences); all 6 probe files PASS on Windows ≡ wine. Next: the standalone joins `corpus --check` and `--live` (★3).
+   0 divergences); all 6 probe files PASS on Windows ≡ wine. **The standalone joins the gate** (2026-11-17): `corpus --check --standalone` runs every scenario a
+   second time under `--standalone` (no gap, = the bless in frame / tick / RNG / fb / state_sem); the pre-commit hook
+   adds it when `src/` changes (wine: 121/121 = pure retail, 8 min for both halves). Next: `--live` (★3).
 5. **The TODO(rl-link) seams** (rl_ functions reaching an OLD port through engine_retail_call; the old port's mirrors /
    event queue / environment came only from rhost's row wrappers) — `docs/findings/rl-link.md`. 2026-11-16: the link
    layer `src/rl_link.c`, the pilot, the **screens** (`rl_link_screens.c`, 104 entries), **mapview**
