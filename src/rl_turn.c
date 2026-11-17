@@ -121,6 +121,7 @@ int rl_4a545f(int a0, int a1) { engine_combat_pool_commit(a0, a1); return 0; }
 
 /* ================================================================ route (b): fresh ports on retail's layout */
 #include "rl_turn_globals.h"
+#include "rl_mpnet_globals.h"
 #include "rl_mpnet.h"             /* rl_475e07 + its residue model */
 #include "rl_io_plat.h"         /* timeGetTime, malloc, exit, remove, rename */
 #include "engine.h"             /* g_sim_mp_active (DAT_00553030), the screen / redraw bridges */
@@ -301,7 +302,10 @@ int rl_476da9(int a0)
         return SCREEN;
     g_rl_4f0350 = SCREEN;
     SET_SCREEN(0x27);
-    int v = AT(uint8_t, g_rl_4d6e88, 0x4d6e88u, 0x4d6ed8 + a0);
+    /* byte_4D6ED8[a0]: the caller's hints 200..218 land at 0x4d6fa0.., inside the 0x4d6f30 block (k_hint_report_panel,
+     * docs/data/catalog.tsv) — the port's blocks are separate symbols, so index the one the VA falls in */
+    uint32_t va = 0x4d6ed8u + (uint32_t)a0;
+    int v = va >= 0x4d6f30u ? AT(uint8_t, g_rl_4d6f30, 0x4d6f30u, va) : AT(uint8_t, g_rl_4d6e88, 0x4d6e88u, va);
     /* byte_4F0298[a0]: the only caller (0x476aa7) passes the hints 200..218 = the seen flags DAT_004f0360[a0 - 200]
      * (one array in retail; the standalone keeps the two blocks apart) */
     if (a0 >= 200 && a0 < 220)
