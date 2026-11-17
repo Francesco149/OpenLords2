@@ -1,0 +1,99 @@
+# Synthetic carriers for the MP message ids no send site reaches (docs/findings/rl-mpmsg3.md §The last ids; src/rl_mpmsg3.c):
+# the host side. mp-desync-p1 at f25050 = p1 (host, DAT_00553248 = 1) on the battlefield (DAT_0057c8fc = 2), 4 frames
+# before the end (the actions builders file come due after it). A builder fills the send ring's slot 0 (0x512fb0: the
+# ring wraps 39 → 1, slot 0 is never sent) through the write cursor DAT_00512f8c; its receiver then reads the same
+# bytes back through the read cursor DAT_00515918 (a round trip). Scratch dwords: 0x512fb0 + 240.. (slot 0's tail).
+scenario mp-desync-p1
+
+# ---- the empty ones: 0 / 98 / 99, 31, 32, 78, 79, 81 (builder), 92; receiver 81 sets DAT_0058fe10 = 1
+25050 rl_441050
+25050 rl_44105b
+25050 rl_443322
+25050 rl_44332d
+25050 rl_443338
+25050 rl_443343
+25050 rl_44603e
+25050 rl_446049
+25050 rl_446054
+25050 rl_44605f
+25050 rl_4460d8
+25050 poke 0x512fa0 [0x58fe10]
+25050 rl_4460e3
+25050 poke 0x58fe10 [0x512fa0]
+25050 rl_4469a7
+25050 rl_4469b2
+
+# ---- 19 (debug key): built twice (DAT_0056d690 and the pause flip back), received once
+25050 poke 0x512f8c 0x512fb4
+25050 rl_442b18
+25050 poke 0x515918 0x512fb4
+25050 rl_442b80
+25050 rl_442b18
+# ---- 26: DAT_00553f4c stepped five times (0..4 cycle back)
+25050 poke 0x512f8c 0x512fb4
+25050 rl_442f5f
+25050 rl_442f5f
+25050 rl_442f5f
+25050 rl_442f5f
+25050 rl_442f5f
+# ---- 27: the event staging record (the receiver, which publishes it, is verified by mp-forge2)
+25050 poke 0x512f8c 0x512fb4
+25050 rl_44300a
+
+# ---- 52 / 53: action 24 / 25 filed for us; 53's receiver files 25 for the sender
+25050 poke 0x512f8c 0x512fb4
+25050 rl_444479
+25050 poke 0x512f8c 0x512fb4
+25050 rl_444554
+25050 poke 0x515918 0x512fb4
+25050 rl_4445cb
+
+# ---- 65: the host builds (0x479558 packs two groups from the cursor DAT_00522f80), the guest arm returns at once;
+# the payload unpacked straight from DAT_00544030 (0x479738); 0x479558 once more on its own
+25050 poke 0x512f8c 0x512fb4
+25050 rl_444db9
+25050 rl_444dfc
+25050 rl_479738
+25050 rl_479558
+25050 rl_479738
+
+# ---- 68: action 35 for us, then for the sender
+25050 poke 0x512f8c 0x512fb4
+25050 rl_4453a3
+25050 poke 0x515918 0x512fb4
+25050 rl_445407
+
+# ---- 80: realm DAT_0059154c (0 here: 0x4692a7(0) faults in retail — set 1, put back); gather / scatter on their own
+25050 poke 0x512fa4 [0x59154c]
+25050 poke 0x59154c 1
+25050 poke 0x512f8c 0x512fb4
+25050 rl_44606a
+25050 poke 0x515918 0x512fb4
+25050 rl_4460a1
+25050 poke 0x59154c [0x512fa4]
+25050 rl_4692a7 2
+25050 rl_469370 2
+
+# ---- 88: 0x43fd2a both ways
+25050 rl_4468a6
+25050 rl_4468b6
+
+# ---- 89: record 5 of the selected snapshot (0x43fa1d), built and received back (0x43faa4: index != 399 → 0);
+# then 399: 0x43faa4's compare (selected snapshot over the units 0x554630, the other over 0x522f50)
+25050 poke 0x512fa8 [0x53e978]
+25050 poke 0x53e978 5
+25050 rl_43fa1d
+25050 poke 0x512f8c 0x512fb4
+25050 rl_4468c6
+25050 poke 0x515918 0x512fb4
+25050 rl_4468f3
+25050 poke 0x53e978 399
+25050 rl_43fa1d
+25050 rl_43faa4
+25050 poke 0x53e978 [0x512fa8]
+
+# ---- 97: action 46 for us; received back (filed at the builder's due: quirk)
+25050 poke 0x512f8c 0x512fb4
+25050 rl_446c61
+25050 poke 0x515918 0x512fb4
+25050 rl_446d4e

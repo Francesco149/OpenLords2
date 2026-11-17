@@ -234,3 +234,10 @@ string). Static gaps 69 → 66.
 Evidence: `verify --target wine --only '^mp-'` (39 sides) with the 47 rows: 10 reached (0x442b80, 0x442ff0, 0x443024,
 0x4444f0, 0x44692a, 0x446935, 0x446d4e, 0x447f44, 0x4483fb, 0x4470c4), 13 calls, 0 divergences; hybrid PASS.
 Unverified (never called): the other 37, incl. every builder but 90's and the callees of 65 / 80 / 89.
+**Probed (2026-11-17, synthetic carriers `tests/probes/mp-dead-host.probe` / `mp-dead-guest.probe`):** all 37 on
+mp-desync-p1 (host) / -p2 (guest) at f25050, both on the battlefield: a builder fills the send ring's slot 0 (never
+sent: the ring wraps 39 → 1) through DAT_00512f8c, its receiver reads the bytes back through DAT_00515918; receiver 65
+on the guest reads DAT_00544030 in place (a live pair, then a dead group → 0x46ebae); 89 at record 5 (round trip) and
+399 (0x43faa4's compare: first difference at +0x1a8); 80 with DAT_0059154c poked 0 → 1 (retail's 0x4692a7(0) faults on
+the roster's realm-0 row: never called so). `rhost.py probe`: 49 lines, 0 divergences, wine and Windows (same end
+state_sem). Shadow evidence only (probes: no replace pass) — the hybrid pass needs a carrier.

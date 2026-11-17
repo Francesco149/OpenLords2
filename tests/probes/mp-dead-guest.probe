@@ -1,0 +1,35 @@
+# Synthetic carriers for the MP ids no send site reaches (rl-mpmsg3.md §The last ids): the guest side. mp-desync-p2
+# at f25050 = p2 (DAT_00553248 = 0) on the battlefield. Receiver 65 unpacks DAT_00544030: the read cursor DAT_00515918
+# pointed at DAT_00544030 itself (GET copies the 7 bytes onto themselves). Scratch dwords: 0x512fb0 + 240..
+scenario mp-desync-p2
+
+# ---- 65: the host arm returns at once; a live pair packed from the cursor (0x479558) and received
+25050 rl_444db9
+25050 rl_479558
+25050 poke 0x515918 0x544030
+25050 rl_444dfc
+# group 5 marked dead (bytes 2 / 3 = 0xff) → cleared (0x46ebae)
+25050 poke 0x544030 0xffff0505 0xffffffff
+25050 poke 0x515918 0x544030
+25050 rl_444dfc
+25050 poke 0x544030 0xffff0606 0xffffffff
+25050 rl_479738
+
+# ---- 80 with the realm of this side (DAT_0059154c 0 → 1, put back)
+25050 poke 0x512fa4 [0x59154c]
+25050 poke 0x59154c 1
+25050 poke 0x512f8c 0x512fb4
+25050 rl_44606a
+25050 poke 0x515918 0x512fb4
+25050 rl_4460a1
+25050 poke 0x59154c [0x512fa4]
+
+# ---- 68 / 53 / 97 receivers on the guest
+25050 poke 0x512f8c 0x512fb4
+25050 rl_4453a3
+25050 poke 0x515918 0x512fb4
+25050 rl_445407
+25050 poke 0x512f8c 0x512fb4
+25050 rl_446c61
+25050 poke 0x515918 0x512fb4
+25050 rl_446d4e

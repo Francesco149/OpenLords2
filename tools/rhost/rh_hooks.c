@@ -285,12 +285,10 @@ static void probe_poke(int i)
     char *e; const char *p = g_pr[i].args;
     uint32_t va = (uint32_t)strtoul(p, &e, 0), n = 0;
     if (e == p || va < 0x400000u) rh_fatal("--probe: line %d: poke needs a retail address", i);
-    for (p = e; *p; p = e) {
+    for (p = e; *p; ) {
         while (*p == ' ') p++;
         if (!*p) break;
-        uint32_t v = (uint32_t)strtoll(p, &e, 0);
-        if (e == p) rh_fatal("--probe: line %d: bad poke value '%s'", i, p);
-        G32(va + 4u * n++) = v;
+        G32(va + 4u * n++) = probe_expr(i, &p);   /* a number, [X] (save / restore a global through a scratch dword), $N … */
     }
     rh_log("probe poke %08x f%u n=%u\n", va, g_frame, n);
 }

@@ -146,7 +146,8 @@ a `HOOK_SO` row compares it), `buf:N="text"` (the same, starting with the text: 
 `$N` (what call line N returned — retail's EAX; call lines counted from 1 in file order, poke lines not counted), `$name`
 (the call line ending in ` @name`), `[X]` (the dword at X when the line runs); a number / `va:` / `$N` / `$name` / `[X]`
 takes `+K` / `-K` terms (`[$3+0x810]+8`: a chain of heap blocks without fixed addresses). `F poke VA D0 D1 ...` writes
-dwords at VA before the frame's later lines (prior state: a FILE in a free `_iob` slot, a report mode, a signal handler
+dwords at VA before the frame's later lines (each value an argument expression: `[X]` saves a global into a scratch
+dword and puts it back after) (prior state: a FILE in a free `_iob` slot, a report mode, a signal handler
 — kept; poke the old value back). A probe line logs its arguments and result (`probe ROW fF … ret=R line=N a= …`).
 PASS = every line ran, 0 divergences. Not a pure replay: the end state is not
 compared with the corpus. Self-test `tests/probes/selftest.probe`; `--extra "--shadow-poison VA"` must FAIL it.
