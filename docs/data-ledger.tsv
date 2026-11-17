@@ -6,50 +6,40 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 400098	224	headers	header	named	46	0	0		0		0	0		IMAGE_OPTIONAL_HEADER32	
 400178	240	headers	header	named	90	0	0		0		0	0		section table	
 400268	408	headers	header	named	0	0	0		0		0	0		header padding	
-4d0000	84	.rdata	header	named	27	0	0		0		0	0		IMAGE_DEBUG_DIRECTORY	
+4d0000	84	.rdata	header	documented	27	0	0		0		0	0		IMAGE_DEBUG_DIRECTORY	k_pe_debug_directory
 4d0054	4	.rdata	zero	unreferenced	0	0	0		0		0	0			
-4d0058	208	.rdata	table	documented	192	0	0		1	4b8243	0	0			k_dx_iids
+4d0058	208	.rdata	table	documented	192	0	0		1	4b8243	0	2	g_rl_4d0058		k_dx_iids
 4d0128	36	.rdata	string	documented	25	0	0	6	0		5	0			k_crt_block_use_names
-4d014c	1800	.rdata	string	documented	1675	0	0	49	14	4bfb30,4bff80,4c05a0,4c09f0,4c0b90,4c0c60,4c0cf0,4c1370,…	0	3	S_BADSIZE,S_BADTYPE,S_BLOCKTYPE,S_BLOCKUSE,S_CHECKMEM,S_DBGHEAP_C,…		k_crt_dbgheap_msgs
-4d0854	60	.rdata	string	documented	47	0	0	10	4	4c29d0,4c2a80,4ca900,4ca9f0	0	0			k_crt_assert_files_a
-4d0890	12	.rdata	table	referenced	10	2	0		1	4c3370	0	0			
-4d089c	572	.rdata	string	documented	507	0	0	16	4	4c3950,4c3d40,4ca330,4cb010	3	0			k_crt_dbgrpt_msgs
+4d014c	1800	.rdata	string	documented	1675	0	0	49	14	4bfb30,4bff80,4c05a0,4c09f0,4c0b90,4c0c60,4c0cf0,4c1370,…	0	5	S_ALLOCATED,S_BADBLOCK,S_BADSIZE,S_BADTYPE,S_BLOCKTYPE,S_BLOCKUSE,…		k_crt_dbgheap_msgs
+4d0854	60	.rdata	string	documented	47	0	0	10	4	4c29d0,4c2a80,4ca900,4ca9f0	0	2	S_DBGDEL_CPP,S_FMTCHECK,S_FORMATNULL,S_SPRINTF_C,S_STRCHECK,S_STRINGNULL		k_crt_assert_files_a
+4d0890	12	.rdata	table	documented	10	2	0		1	4c3370	0	0			k_crt_start_scopetable
+4d089c	572	.rdata	string	documented	507	0	0	16	4	4c3950,4c3d40,4ca330,4cb010	3	1	S_ASSERT,S_ASSERT_NF,S_CR,S_DBGLIB,S_DBGRPT_C,S_DEBUGFMT,…		k_crt_dbgrpt_msgs
 4d0ad8	64	.rdata	string	documented	57	0	0	21	1	4c2340	0	1	S_DAYNAMES,S_MONNAMES		k_crt_asctime_names
-4d0b18	100	.rdata	string	documented	91	0	0	7	5	4c5a60,4c6650,4c68f0,4cc4d0,4ce380	0	1	S_TZ,S_TZSET_C		k_crt_misc_asserts
-4d0b7c	148	.rdata	table	documented	95	0	0		1	4c68f0	2	0			k_crt_output_data
+4d0b18	100	.rdata	string	documented	91	0	0	7	5	4c5a60,4c6650,4c68f0,4cc4d0,4ce380	0	3	S_FLSBUF_C,S_IOBFIELDS,S_STRNOTNULL,S_STR_NULL,S_TZ,S_TZSET_C		k_crt_misc_asserts
+4d0b7c	148	.rdata	table	documented	95	0	0		1	4c68f0	2	1	S_CH_NOT_EOS,S_OUTPUT_C,T_LOOKUP		k_crt_output_data
 4d0c10	120	.rdata	table	documented	69	15	0		6	4c7ed0,4c8110,4c82e0,4c85c0,4c8700,4c87d0	0	0			k_crt_eh_scopetables
 4d0c88	48	.rdata	string	documented	34	0	0	9	5	4c9360,4c94a0,4c9930,4c9bf0,4c9e50	0	1	S_AW_ENV_C,S_IOINIT_C,S_STDARGV_C,S_STDENVP_C		k_crt_assert_files_b
-4d0cb8	720	.rdata	string	documented	656	0	0	14	1	4ca330	18	0			k_crt_rterr_msgs
-4d0f88	12	.rdata	string	documented	10	0	0	10	1	4ca9f0	0	0			k_crt_assert_file_vsprintf
-4d0f94	48	.rdata	string	documented	44	0	0	18	1	4cb010	0	0			k_crt_msgbox_imports
-4d0fc4	268	.rdata	string	documented	206	0	0	8	18	4cb0f0,4cb350,4cb4f0,4cb860,4cbbf0,4cc4d0,4cc5e0,4ccbf0,…	0	1	S_FILE_C,S_ONEXIT_C,S_OSFINFO_C		k_crt_assert_files_c
-4d10d0	12	.rdata	table	referenced	8	0	1		1	4b7a9a	0	0			
-4d10dc	20	.rdata	zero	unreferenced	0	0	0		0		0	0			
-4d10f0	8	.rdata	table	referenced	7	1	0		0		1	0			
-4d2000	8	.data	table	named	3	1	0		1	4bf6a0	0	1	T_XC_A		
-4d2008	4	.data	zero	named	0	0	0		1	4bf6a0	0	1	T_XC_Z		
-4d200c	12	.data	table	named	6	2	0		1	4bf6a0	0	1	T_XI_A		
-4d2018	4	.data	zero	named	0	0	0		1	4bf6a0	0	1	T_XI_Z		
-4d201c	8	.data	table	named	3	1	0		1	4bf770	0	1	T_XP_A		
-4d2024	4	.data	zero	named	0	0	0		1	4bf770	0	1	T_XP_Z		
-4d2028	4	.data	zero	named	0	0	0		1	4bf770	0	1	T_XT_A		
-4d202c	4	.data	zero	named	0	0	0		1	4bf770	0	1	T_XT_Z		
-4d2030	32	.data	table	referenced	16	0	0		1	401666	0	2	g_rl_4d2030		
+4d0cb8	720	.rdata	string	documented	656	0	0	14	1	4ca330	18	1	S_RTLIB,S_RUNTIMEERR		k_crt_rterr_msgs
+4d0f88	12	.rdata	string	documented	10	0	0	10	1	4ca9f0	0	1	S_VSPRINTF_C		k_crt_assert_file_vsprintf
+4d0f94	48	.rdata	string	documented	44	0	0	18	1	4cb010	0	1	S_ACTWIN,S_MSGBOXA,S_POPUP		k_crt_msgbox_imports
+4d0fc4	268	.rdata	string	documented	206	0	0	8	18	4cb0f0,4cb350,4cb4f0,4cb860,4cbbf0,4cc4d0,4cc5e0,4ccbf0,…	0	3	S_AW_CMP_C,S_AW_MAP_C,S_AW_STR_C,S_A_SPACE,S_CCHCOUNT,S_CHSIZE_C,…		k_crt_assert_files_c
+4d10d0	40	.rdata	table	documented	15	1	1		1	4b7a9a	1	1	g_rl_4d10d0		k_eh_funcinfo_mp_resume
+4d2000	48	.data	table	documented	12	4	0		2	4bf6a0,4bf770	0	1	T_XC_A,T_XC_Z,T_XI_A,T_XI_Z,T_XP_A,T_XP_Z,…		k_crt_init_tables
+4d2030	32	.data	table	documented	16	0	0		1	401666	0	2	g_rl_4d2030		k_pow10
 4d2050	68	.data	string	documented	59	0	0	19	1	4071a0	0	2	OVERLAY_ERR_BAD_DATA_HIGH,OVERLAY_ERR_BAD_DATA_LOW,OVERLAY_ERR_NO_DATA		k_log_overlay_army
-4d2094	4	.data	scalar	referenced	1	0	0		1	407f82	0	0			
-4d2098	4	.data	scalar	referenced	1	0	0		1	408c50	0	0			
-4d209c	4	.data	scalar	referenced	1	0	0		1	408c50	0	0			
+4d2094	12	.data	string	documented	3	0	0	0	2	407f82,408c50	0	0			s_label_space_suffixes
 4d20a0	60	.data	table	documented	39	0	0		1	408f1a	0	2	g_rl_4d20a0		k_iff_ilbm_header
 4d20dc	64	.data	string	documented	48	0	0	12	2	408df6,408e4d	0	1			k_dbg_quick_save_names
 4d211c	52	.data	string	documented	36	0	0	9	1	408ea4	0	2	g_rl_4d211c		k_screenshot_names
-4d2150	4	.data	zero	referenced	0	0	0		1	4451cc	0	1			
-4d2154	4	.data	zero	referenced	0	0	0		1	4451cc	0	0			
-4d2158	4	.data	zero	referenced	0	0	0		1	4451cc	0	0			
-4d215c	4	.data	zero	referenced	0	0	0		2	423ba4,4bb978	0	1	g_rl_4d215c		
+4d2150	4	.data	zero	referenced	0	0	0		1	4451cc	0	2	g_rl_4d2150		
+4d2154	4	.data	zero	referenced	0	0	0		1	4451cc	0	1	g_rl_4d2154		
+4d2158	4	.data	zero	referenced	0	0	0		1	4451cc	0	1	g_rl_4d2158		
+4d215c	4	.data	zero	referenced	0	0	0		2	423ba4,4bb978	0	2	g_rl_4d215c		
 4d2160	4	.data	zero	referenced	0	0	0		3	423ba4,43de70,43e5c1	0	1	g_rl_4d2160		
 4d2164	4	.data	zero	referenced	0	0	0		2	43f01d,4bb978	0	2	g_rl_4d2164		
 4d2168	4	.data	zero	referenced	0	0	0		4	40f10f,423ba4,441066,4410bd	0	3	g_rl_4d2168		
-4d216c	68	.data	table	referenced	30	0	0		4	40f10f,423ba4,441066,4410bd	0	2	g_rl_4d216c		
+4d216c	4	.data	zero	documented	0	0	0		4	40f10f,423ba4,441066,4410bd	0	2	g_rl_4d216c		g_bench_repaint_ms
+4d2170	64	.data	table	documented	30	0	0		0		0	2			k_dir8_offsets
 4d21b0	28	.data	string	documented	20	0	0	20	0		0	0			k_dbg_county_marker
 4d21cc	772	.data	string	documented	704	0	0	21	13	408fcb,40946d,4097c5,409934,409c93,409e09,40a127,40a21a,…	0	5	g_rl_4d21cc		k_log_gfx_blit_errors
 4d24d0	64	.data	table	documented	64	0	0		1	40bccd	0	0			k_lzh_p_len
@@ -57,9 +47,7 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4d2550	256	.data	table	documented	224	0	0		1	40bdf1	0	0			k_lzh_d_code
 4d2650	256	.data	table	documented	256	0	0		2	40bdf1,40da1e	0	2	g_rl_4d2748		k_lzh_d_len
 4d2750	40	.data	table	documented	17	0	0		0		0	0			k_btn_repeat_gate
-4d2778	4	.data	scalar	referenced	1	0	0		1	40cd58	0	3	g_rl_4d2778		
-4d277c	4	.data	scalar	referenced	1	0	0		1	40cd58	0	1			
-4d2780	4	.data	scalar	referenced	1	0	0		1	40cd58	0	1			
+4d2778	12	.data	string	documented	3	0	0	0	1	40cd58	0	3	g_rl_4d2778		s_numentry_suffixes
 4d2784	7	.data	string	documented	6	0	0	6	1	40e9ab	0	2			s_eng_file
 4d278b	1	.data	zero	unreferenced	0	0	0		0		0	0			
 4d278c	30	.data	string	documented	29	0	0	29	1	40e9ab	0	1			s_log_no_window
@@ -77,7 +65,7 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4d282c	11	.data	string	documented	10	0	0	10	1	40e9ab	0	1			s_help_file
 4d2837	1	.data	zero	unreferenced	0	0	0		0		0	0			
 4d2838	192	.data	string	documented	166	0	0	6	1	40ecc4	0	2	g_rl_4d2838		k_cfg_ini_keys
-4d28f8	56	.data	table	documented	56	0	0		1	410cbd	0	1			k_minimap_colors
+4d28f8	56	.data	table	documented	56	0	0		1	410cbd	0	3	g_rl_4d28f8		k_minimap_colors
 4d2930	4	.data	zero	referenced	0	0	0		1	412421	0	1	g_rl_4d2930		
 4d2934	4	.data	zero	referenced	0	0	0		1	412421	0	1	g_rl_4d2934		
 4d2938	4	.data	zero	referenced	0	0	0		1	412421	0	1	g_rl_4d2938		
@@ -86,45 +74,30 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4d2944	4	.data	zero	referenced	0	0	0		1	412421	0	1	g_rl_4d2944		
 4d2948	4	.data	zero	referenced	0	0	0		1	412421	0	1	g_rl_4d2948		
 4d294c	4	.data	zero	referenced	0	0	0		1	412421	0	1	g_rl_4d294c		
-4d2950	36	.data	table	referenced	6	0	0		1	412b33	0	3	g_rl_4d2950		
-4d2974	44	.data	table	referenced	9	0	0		1	412b33	0	1			
-4d29a0	40	.data	table	referenced	9	0	0		1	412b33	0	1			
-4d29c8	24	.data	table	referenced	6	0	0		2	412e6b,413155	0	1			
-4d29e0	24	.data	table	referenced	6	0	0		1	413155	0	1			
-4d29f8	80	.data	table	referenced	20	0	0		1	4156a7	0	2			
-4d2a48	120	.data	table	referenced	43	0	0		1	4156a7	0	1			
-4d2ac0	96	.data	table	referenced	22	0	0		1	4156a7	0	1			
-4d2b20	32	.data	table	referenced	8	0	0		1	41593b	0	2	g_rl_4d2b20		
-4d2b40	24	.data	table	referenced	8	0	0		1	41593b	0	1			
-4d2b58	24	.data	table	referenced	5	0	0		1	41593b	0	1			
-4d2b70	4	.data	scalar	referenced	1	0	0		1	41608b	0	3	g_rl_4d2b70		
-4d2b74	12	.data	table	referenced	3	0	0		1	41608b	0	1			
-4d2b80	264	.data	table	referenced	66	0	0		1	41635f	0	1			
-4d2c88	96	.data	string	documented	72	0	0	12	1	417ea7	0	1			k_armory_interior_names
-4d2ce8	4	.data	scalar	referenced	1	0	0		1	4181eb	0	1			
-4d2cec	4	.data	scalar	referenced	1	0	0		1	4181eb	0	0			
-4d2cf0	4	.data	scalar	referenced	2	0	0		1	4181eb	0	0			
-4d2cf4	4	.data	scalar	referenced	1	0	0		1	4181eb	0	0			
-4d2cf8	144	.data	table	referenced	59	0	0		1	4181eb	0	0			
-4d2d88	4	.data	zero	referenced	0	0	0		1	418426	0	1			
-4d2d8c	4	.data	scalar	referenced	1	0	0		1	418426	0	0			
-4d2d90	64	.data	table	referenced	19	0	0		1	418426	0	0			
-4d2dd0	24	.data	table	referenced	4	0	0		1	419789	0	2	g_rl_4d2dd0		
-4d2de8	4	.data	zero	referenced	0	0	0		1	4198aa	0	1			
-4d2dec	4	.data	scalar	referenced	1	0	0		1	4198aa	0	1			
-4d2df0	56	.data	table	referenced	13	0	0		1	4198aa	0	1			
-4d2e28	4	.data	scalar	referenced	1	0	0		1	4198aa	0	1			
-4d2e2c	4	.data	scalar	referenced	1	0	0		1	4198aa	0	1			
-4d2e30	52	.data	table	referenced	20	0	0		1	4198aa	0	1			
-4d2e64	28	.data	table	referenced	7	0	0		1	4198aa	0	1			
-4d2e80	72	.data	table	referenced	43	0	0		1	41a639	0	1			
-4d2ec8	464	.data	table	documented	115	0	0		1	41c208	0	1			k_terrain_feature_text
-4d3098	4	.data	scalar	referenced	1	0	0		1	41f86d	0	0			
-4d309c	4	.data	scalar	referenced	2	0	0		1	41f86d	0	0			
-4d30a0	136	.data	table	referenced	62	0	0		1	41f86d	0	0			
-4d3128	48	.data	table	referenced	11	0	0		2	41f86d,41fdd6	0	2	g_rl_4d3128		
-4d3158	4	.data	scalar	referenced	1	0	0		2	41fdd6,433ce4	0	3	g_rl_4d3158		
-4d315c	140	.data	table	referenced	56	0	0		2	41fdd6,433ce4	0	2			
+4d2950	36	.data	table	documented	6	0	0		1	412b33	0	3	g_rl_4d2950		k_labor_task_cue
+4d2974	44	.data	table	documented	9	0	0		1	412b33	0	1			k_labor_task_icon
+4d29a0	40	.data	table	documented	9	0	0		1	412b33	0	1			k_labor_task_rows
+4d29c8	24	.data	table	documented	6	0	0		2	412e6b,413155	0	1			k_smithy_weapon_noun
+4d29e0	24	.data	table	documented	6	0	0		1	413155	0	1			k_smithy_hearth_yoff
+4d29f8	80	.data	table	documented	20	0	0		1	4156a7	0	2			k_county_graph_bucket
+4d2a48	120	.data	table	documented	43	0	0		1	4156a7	0	1			k_county_graph_yscale
+4d2ac0	96	.data	table	documented	22	0	0		1	4156a7	0	1			k_county_graph_barw
+4d2b20	32	.data	table	documented	8	0	0		1	41593b	0	2	g_rl_4d2b20		k_rank_cat_x
+4d2b40	24	.data	table	documented	8	0	0		1	41593b	0	1			k_rank_slot_x
+4d2b58	24	.data	table	documented	5	0	0		1	41593b	0	1			k_rank_slot_player
+4d2b70	280	.data	table	documented	70	0	0		2	41608b,41635f	0	3	g_rl_4d2b70		k_trade_good_tiles
+4d2c88	96	.data	string	documented	72	0	0	12	1	417ea7	0	2	g_rl_4d2c88		k_armory_interior_names
+4d2ce8	160	.data	table	documented	64	0	0		1	4181eb	0	1			k_armory_tally_slots
+4d2d88	72	.data	table	documented	20	0	0		1	418426	0	1			k_armory_rack_icons
+4d2dd0	24	.data	table	documented	4	0	0		1	419789	0	2	g_rl_4d2dd0		k_castle_tier_pic
+4d2de8	64	.data	table	documented	14	0	0		1	4198aa	0	1			k_castle_tier_sprite_a
+4d2e28	60	.data	table	documented	22	0	0		1	4198aa	0	1			k_castle_tier_sprite_b
+4d2e64	28	.data	table	documented	7	0	0		1	4198aa	0	1			k_castle_bar_marker_x
+4d2e80	72	.data	table	documented	43	0	0		1	41a639	0	1			k_screen_hide_turn_icon
+4d2ec8	464	.data	table	documented	115	0	0		1	41c208	0	2	g_rl_4d2ec8		k_terrain_feature_text
+4d3098	144	.data	table	documented	65	0	0		1	41f86d	0	0			k_setup_tab_geom
+4d3128	48	.data	table	documented	11	0	0		2	41f86d,41fdd6	0	2	g_rl_4d3128		k_setup_tab_value_base
+4d3158	144	.data	table	documented	57	0	0		2	41fdd6,433ce4	0	3	g_rl_4d3158		k_setup_dropdown_geom
 4d31e8	4	.data	zero	referenced	0	0	0		1	420d40	0	3	g_rl_4d31e8		
 4d31ec	4	.data	zero	referenced	0	0	0		1	420d40	0	1	g_rl_4d31ec		
 4d31f0	2856	.data	table	documented	678	0	0		3	4238b8,4239d5,43c2a9	0	3	g_bf_4d31f0		k_bf_roster_slots
@@ -134,119 +107,94 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4d3fe0	248	.data	string	documented	162	0	0	11	6	417ea7,4180f6,4181eb,4184c6,418653,418e2d	0	2	g_rl_4d4024,g_rl_4d4044,g_rl_4d40d4		k_lit_armoury_screens
 4d40d8	140	.data	string	documented	74	0	0	12	4	4192b1,419354,419789,4198aa	0	3	g_rl_4d40d8		k_lit_army_castle_screens
 4d4164	104	.data	string	documented	74	0	0	7	2	419c78,41a166	0	3	g_rl_4d4164,g_rl_4d41c4		k_lit_menubar_debug
-4d41cc	204	.data	string	documented	65	0	0	0	12	41a5ad,41a639,41a900,41ab67,41ac95,41aea2,41b19d,41c208,…	0	6	g_rl_4d41d0,g_rl_4d4208,g_rl_4d4218,g_rl_4d4240,g_rl_4d4258		k_lit_county_boxes
-4d4298	220	.data	string	documented	188	0	0	10	3	41e1dd,41e5d0,41e61d	0	4	g_rl_4d4298,g_rl_4d42e4		k_lit_title_screens
+4d41cc	204	.data	string	documented	65	0	0	0	12	41a5ad,41a639,41a900,41ab67,41ac95,41aea2,41b19d,41c208,…	0	8	g_rl_4d41d0,g_rl_4d4208,g_rl_4d4218,g_rl_4d4230,g_rl_4d4240,g_rl_4d4258		k_lit_county_boxes
+4d4298	220	.data	string	documented	188	0	0	10	3	41e1dd,41e5d0,41e61d	0	4	g_rl_4d4298,g_rl_4d42d4,g_rl_4d42e4		k_lit_title_screens
 4d4374	212	.data	string	documented	105	0	0	0	9	4209c1,420de4,42130f,421707,421d09,421f14,4224e7,422d22,…	0	5	g_rl_4d4374,g_rl_4d43f4		k_lit_battle_setup_screens
 4d4448	252	.data	string	documented	132	0	0	0	3	423530,4239d5,423ba4	0	4	g_bf_4d4450,g_rl_4d4458		k_lit_bf_hud_netdebug
-4d4544	528	.data	string	documented	255	0	0	13	9	4247f5,4248a3,424992,425314,425487,42563c,425799,425941,…	0	4	g_rl_4d4554,g_rl_4d46ec		k_lit_bf_debug_inspectors
-4d4754	4	.data	scalar	referenced	1	0	0		1	426b92	0	3	g_rl_4d4754		
-4d4758	4	.data	scalar	referenced	2	0	0		3	426534,426b92,426d11	0	2			
-4d475c	4	.data	scalar	referenced	1	0	0		1	426534	0	1	g_rl_4d475c		
+4d4544	528	.data	string	documented	255	0	0	13	9	4247f5,4248a3,424992,425314,425487,42563c,425799,425941,…	0	6	g_rl_4d4544,g_rl_4d4554,g_rl_4d46ec,g_rl_4d4710,g_rl_4d4750		k_lit_bf_debug_inspectors
+4d4754	8	.data	scalar	documented	3	0	0		3	426534,426b92,426d11	0	4	g_rl_4d4754		k_dsound_timer
+4d475c	4	.data	scalar	documented	1	0	0		1	426534	0	1	g_rl_4d475c		k_dsound_stream_chunks
 4d4760	4	.data	zero	referenced	0	0	0		16	425b10,425d35,425e4b,426120,426216,4262eb,426360,4263ad,…	0	3	g_bf_4d4760		
 4d4764	4	.data	zero	referenced	0	0	0		1	426dd5	0	2	g_rl_4d4764		
 4d4768	592	.data	string	documented	530	0	0	19	8	425b10,425d35,425e4b,426120,4263ad,426534,426dd5,427990	0	7	g_bf_4d4850,g_rl_4d4768,g_rl_4d4800,g_rl_4d4814,g_rl_4d4864		k_log_dsound
-4d49b8	16	.data	table	referenced	3	0	0		4	42ba40,42bf46,42c2ed,42c64f	0	2	g_rl_4d49b8		
-4d49c8	40	.data	table	referenced	13	0	0		1	42d179	0	3	g_rl_4d49c8		
-4d49f0	40	.data	table	referenced	10	0	0		1	42d179	0	1			
-4d4a18	16	.data	table	referenced	1	0	0		1	47c4ba	0	3	g_bf_4d4a18		
-4d4a28	48	.data	zero	unreferenced	0	0	0		0		0	0			
-4d4a58	64	.data	table	referenced	8	0	0		1	477dfc	0	1			
-4d4a98	44	.data	table	referenced	4	0	0		1	47c4ba	0	3	g_bf_4d4a98		
-4d4ac4	20	.data	zero	unreferenced	0	0	0		0		0	0			
-4d4ad8	16	.data	table	referenced	3	0	0		1	47c4ba	0	1			
-4d4ae8	48	.data	zero	unreferenced	0	0	0		0		0	0			
-4d4b18	64	.data	table	referenced	7	0	0		1	496b9f	0	1			
-4d4b58	64	.data	table	referenced	11	0	0		3	43d929,43d9cd,43dc1d	0	2	g_rl_4d4b58		
-4d4b98	48	.data	table	referenced	11	0	0		7	42130f,42bf46,42c476,42c4e2,42c64f,47efee,4ab2aa	0	3	g_bf_4d4b98		
-4d4bc8	224	.data	table	referenced	55	0	0		1	42ba40	0	3	g_rl_4d4bc8		
-4d4ca8	4	.data	scalar	referenced	1	0	0		1	42ba40	0	1			
-4d4cac	36	.data	table	referenced	9	0	0		1	42ba40	0	1			
+4d49b8	16	.data	table	documented	3	0	0		4	42ba40,42bf46,42c2ed,42c64f	0	2	g_rl_4d49b8		k_skirmish_set_base
+4d49c8	40	.data	table	documented	13	0	0		1	42d179	0	3	g_rl_4d49c8		k_hiscore_default_scores
+4d49f0	40	.data	table	documented	10	0	0		1	42d179	0	1			k_hiscore_default_names
+4d4a18	64	.data	table	documented	1	0	0		1	47c4ba	0	3	g_bf_4d4a18		k_siege_battle_flag_57cb48
+4d4a58	64	.data	table	documented	8	0	0		1	477dfc	0	1			k_siege_battle_holds
+4d4a98	64	.data	table	documented	4	0	0		1	47c4ba	0	3	g_bf_4d4a98		k_siege_battle_flag_55307c
+4d4ad8	64	.data	table	documented	3	0	0		1	47c4ba	0	1			k_siege_battle_kit
+4d4b18	64	.data	table	documented	7	0	0		1	496b9f	0	1			k_siege_battle_gate_breaks
+4d4b58	64	.data	table	documented	11	0	0		3	43d929,43d9cd,43dc1d	0	2	g_rl_4d4b58		k_siege_battle_castle
+4d4b98	48	.data	table	documented	11	0	0		7	42130f,42bf46,42c476,42c4e2,42c64f,47efee,4ab2aa	0	3	g_bf_4d4b98		k_troop_type_cost
+4d4bc8	224	.data	table	documented	55	0	0		1	42ba40	0	3	g_rl_4d4bc8		k_skirmish_battle_lord
+4d4ca8	40	.data	table	documented	10	0	0		1	42ba40	0	1			k_skirmish_lord_banner
 4d4cd0	128	.data	string	documented	109	0	0	11	5	42aa90,42ac0c,42d216,42d2dc,42d389	0	1			k_skirmish_file_names
-4d4d50	8	.data	scalar	unreferenced	3	0	0		0		0	0			
+4d4d50	8	.data	table	documented	3	0	0		0		0	0			k_unref_u16_0123
 4d4d58	8	.data	zero	referenced	0	0	0		7	42d96e,42da18,42dbc7,42df30,42dfe2,42e298,42e3ba	0	2	g_rl_4d4d58		
 4d4d60	640	.data	string	documented	452	0	0	9	3	42e381,42f306,4b14ff	0	3	g_rl_4d4e2e		k_movie_viewer_names
 4d4fe0	272	.data	string	documented	241	0	0	23	4	42da18,42dbc7,42df30,42e060	0	7	g_rl_4d4fe0,g_rl_4d5080,g_rl_4d50ac		k_log_smacker
 4d50f0	64	.data	table	documented	39	0	0		2	42f306,4b14ff	0	4	g_rl_4d50f0		k_sys_palette_static
 4d5130	920	.data	string	documented	860	0	0	26	6	42e5c0,42eaa6,42eb7c,42ec91,42f148,42f1df	0	6	g_rl_4d5130,g_rl_4d51dc,g_rl_4d51f0,g_rl_4d548c,g_rl_4d54a8		k_log_ddraw
-4d54c8	64	.data	table	unreferenced	23	0	0		0		0	0			
-4d5508	4	.data	scalar	referenced	1	0	0		1	432893	0	4	g_rl_4d5508		
-4d550c	4	.data	scalar	referenced	2	0	0		1	432893	0	1			
-4d5510	4	.data	scalar	referenced	1	0	0		1	432893	0	1			
-4d5514	52	.data	table	referenced	17	0	0		1	432893	0	1			
-4d5548	4	.data	scalar	referenced	1	0	0		2	432fab,4330c6	0	2			
-4d554c	20	.data	table	referenced	5	0	0		1	43306a	0	1			
-4d5560	48	.data	table	referenced	12	0	0		1	433998	0	1	g_rl_4d5560		
+4d54c8	64	.data	table	documented	23	0	0		0		0	0			k_unref_right_panel_rects
+4d5508	64	.data	table	documented	21	0	0		1	432893	0	5	g_rl_4d5508		k_hud_dirty_rects
+4d5548	24	.data	table	documented	6	0	0		3	432fab,43306a,4330c6	0	4			k_title_slot_shield
+4d5560	48	.data	table	documented	12	0	0		1	433998	0	1	g_rl_4d5560		k_option_tab_value_count
 4d5590	80	.data	string	documented	55	0	0	11	1	436b59	0	2	g_rl_4d5590		k_castle_tier_movies
-4d55e0	24	.data	table	referenced	5	0	0		1	43cca5	0	1			
-4d55f8	24	.data	table	referenced	5	0	0		1	43cca5	0	0			
-4d5610	8	.data	scalar	referenced	3	0	0		1	43cca5	0	0			
-4d5618	8	.data	scalar	referenced	3	0	0		1	43cca5	0	0			
-4d5620	448	.data	string	documented	341	0	0	12	23	42ff10,432b05,432cc8,433155,43338e,433461,433551,4335f0,…	0	6	g_bf_4d57d0,g_rl_4d5620,g_rl_4d56e4,g_rl_4d56f8,g_rl_4d5710,g_rl_4d5740,…		k_lit_menu_input
-4d57e0	4	.data	scalar	referenced	4	0	0		1	4b7250	0	2	g_rl_4d57e0		
-4d57e4	4	.data	scalar	referenced	4	0	0		1	4b7250	0	1	g_rl_4d57e4		
-4d57e8	4	.data	scalar	referenced	3	0	0		1	4b7250	0	1	g_rl_4d57e8		
-4d57ec	4	.data	scalar	referenced	4	0	0		1	4b7250	0	1	g_rl_4d57ec		
-4d57f0	400	.data	ptr(code)	documented	299	100	0		1	43eda0	0	2	g_rl_4d57f0		k_mp_send_builders
-4d5980	400	.data	ptr(code)	documented	299	100	0		1	43eac1	0	1			k_mp_recv_handlers
-4d5b10	4	.data	zero	referenced	0	0	0		2	43faa4,43fd2a	0	0			
-4d5b14	4	.data	zero	referenced	0	0	0		2	43faa4,43fd2a	0	0			
-4d5b18	40	.data	table	referenced	10	0	0		2	43faa4,43fd2a	0	0			
-4d5b40	4	.data	scalar	referenced	1	0	0		1	43fc58	0	0			
-4d5b44	4	.data	scalar	referenced	2	0	0		1	43fc58	0	0			
-4d5b48	72	.data	table	referenced	28	0	8		1	43fc58	0	0			
-4d5b90	256	.data	table	documented	245	0	0		2	43eac1,43eda0	0	1	g_rl_4d5b90		k_mp_packet_size
+4d55e0	64	.data	table	documented	16	0	0		1	43cca5	0	1			k_dbg_id_skip_lists
+4d5620	448	.data	string	documented	341	0	0	12	23	42ff10,432b05,432cc8,433155,43338e,433461,433551,4335f0,…	0	10	g_bf_4d57d0,g_rl_4d5620,g_rl_4d56dc,g_rl_4d56e4,g_rl_4d56f0,g_rl_4d56f8,…		k_lit_menu_input
+4d57e0	16	.data	table	documented	15	0	0		1	4b7250	0	2	g_rl_4d57e0,g_rl_4d57e4,g_rl_4d57e8,g_rl_4d57ec		k_mp_app_guid
+4d57f0	400	.data	ptr(code)	documented	299	100	0		1	43eda0	0	6	g_rl_4d57f0		k_mp_send_builders
+4d5980	400	.data	ptr(code)	documented	299	100	0		1	43eac1	0	5	g_rl_4d5980		k_mp_recv_handlers
+4d5b10	96	.data	table	documented	19	0	0		3	43faa4,43fc58,43fd2a	0	3	g_rl_4d5b10		k_mp_sync_ranges
+4d5b70	32	.data	ptr(data)	documented	22	0	8		0		0	0			k_unref_sync_bases
+4d5b90	256	.data	table	documented	245	0	0		2	43eac1,43eda0	0	2	g_rl_4d5b90		k_mp_packet_size
 4d5c90	8	.data	zero	referenced	0	0	0		1	43de70	0	2	g_rl_4d5c90		
-4d5c98	200	.data	ptr(code)	documented	149	50	0		1	4472ce	0	2	g_rl_4d5c98		k_delayed_action_handlers
-4d5d60	456	.data	string	documented	413	0	0	12	4	43e668,43e6a2,43eac1,43eda0	0	2	g_rl_4d5f10		k_log_net_transport
-4d5f28	64	.data	string	documented	48	0	0	12	2	43f5c5,43f7e3	0	1			k_mp_turn_save_names
-4d5f68	36	.data	string	documented	19	0	0	5	1	44098f	0	2	g_rl_4d5f68		k_lit_mp_checksum
-4d5f8c	120	.data	string	documented	110	0	0	33	2	441905,4419f9	0	1			k_log_mp_newgame
-4d6004	100	.data	string	documented	90	0	0	0	5	4430d5,443143,444a2f,444a9b,4470c4	0	0			k_lit_mp_save_msgs
-4d6068	160	.data	string	documented	134	0	0	10	4	44779c,4477e7,447a59,447ac5	0	2	g_rl_4d6080		k_mp_record_names
-4d6108	512	.data	table	documented	42	0	0		1	448819	0	2			k_realm_event_deck
-4d6308	160	.data	table	referenced	56	0	0		1	449ef3	0	2			
-4d63a8	24	.data	table	referenced	4	0	0		1	449ef3	0	2			
-4d63c0	24	.data	table	referenced	3	0	0		1	449ef3	0	2			
+4d5c98	200	.data	ptr(code)	documented	149	50	0		1	4472ce	0	4	g_rl_4d5c98		k_delayed_action_handlers
+4d5d60	456	.data	string	documented	413	0	0	12	4	43e668,43e6a2,43eac1,43eda0	0	8	g_rl_4d5d60,g_rl_4d5d70,g_rl_4d5ea4,g_rl_4d5f10		k_log_net_transport
+4d5f28	64	.data	string	documented	48	0	0	12	2	43f5c5,43f7e3	0	4	g_rl_4d5f28		k_mp_turn_save_names
+4d5f68	36	.data	string	documented	19	0	0	5	1	44098f	0	3	g_rl_4d5f68		k_lit_mp_checksum
+4d5f8c	120	.data	string	documented	110	0	0	33	2	441905,4419f9	0	3	g_rl_4d5f8c		k_log_mp_newgame
+4d6004	100	.data	string	documented	90	0	0	0	5	4430d5,443143,444a2f,444a9b,4470c4	0	4	g_rl_4d6004,g_rl_4d6014,g_rl_4d603c		k_lit_mp_save_msgs
+4d6068	160	.data	string	documented	134	0	0	10	4	44779c,4477e7,447a59,447ac5	0	4	g_rl_4d6080,g_rl_4d60f8		k_mp_record_names
+4d6108	512	.data	table	documented	42	0	0		1	448819	0	3			k_realm_event_deck
+4d6308	160	.data	table	documented	56	0	0		1	449ef3	0	2			k_pop_birth_rate
+4d63a8	24	.data	table	documented	4	0	0		1	449ef3	0	2			k_pop_death_health
+4d63c0	24	.data	table	documented	3	0	0		1	449ef3	0	2			k_pop_death_season
 4d63d8	208	.data	table	documented	124	0	0		1	44b80b	0	1			k_taxsetting_tally_modifier
 4d64a8	120	.data	table	documented	77	0	0		1	44bd9f	0	1			k_tax_approval_tbl
 4d6520	40	.data	table	documented	9	0	0		1	44bd9f	0	1			k_tax_band_threshold
 4d6548	24	.data	table	documented	10	0	0		1	44bd9f	0	1			k_tax_band_modifier
 4d6560	24	.data	table	documented	17	0	0		1	44d60d	0	1			k_stock_a_rate
-4d6578	448	.data	table	unreferenced	111	0	0		0		0	0			
+4d6578	448	.data	table	documented	111	0	0		0		0	0			k_unref_pct_curve
 4d6738	48	.data	table	documented	11	0	0		1	44df5f	0	0			k_supply_table
-4d6768	24	.data	table	referenced	5	0	0		2	4502ca,450639	0	2	g_rl_4d6768		
-4d6780	32	.data	table	referenced	7	0	0		1	4517ca	0	1			
-4d67a0	104	.data	table	referenced	25	0	0		1	4519ca	0	1			
-4d6808	40	.data	table	referenced	9	0	0		1	4518a5	0	1			
-4d6830	32	.data	table	referenced	25	0	0		1	4519ca	0	0			
-4d6850	16	.data	table	referenced	15	0	0		1	451a5d	0	0			
-4d6860	496	.data	table	referenced	51	0	0		1	451a5d	0	0			
+4d6768	24	.data	table	documented	5	0	0		2	4502ca,450639	0	2	g_rl_4d6768		k_workforce_share_pct
+4d6780	32	.data	table	documented	7	0	0		1	4517ca	0	1			k_workforce_row_sprite
+4d67a0	104	.data	table	documented	25	0	0		1	4519ca	0	1			k_workforce_cell_colour
+4d6808	40	.data	table	documented	9	0	0		1	4518a5	0	1			k_workforce_row_fill
+4d6830	32	.data	table	documented	25	0	0		1	4519ca	0	0			k_workforce_cell_order
+4d6850	16	.data	table	documented	15	0	0		1	451a5d	0	0			k_workforce_dual_order_a
+4d6860	16	.data	table	documented	15	0	0		1	451a5d	0	0			k_workforce_dual_order_b
+4d6870	480	.data	table	documented	36	0	0		0		0	0			k_unref_records16
 4d6a50	24	.data	table	documented	15	5	0		1	4650b0	0	0			k_army_state_handlers
 4d6a68	16	.data	table	documented	9	3	0		0		0	0			k_army_state_handlers_x
-4d6a78	20	.data	table	referenced	3	0	0		2	46521f,465486	0	4	g_rl_4d6a78		
-4d6a8c	44	.data	table	referenced	9	0	0		1	47309e	0	4	g_rl_4d6a8c		
-4d6ab8	64	.data	table	referenced	13	0	0		2	465622,465761	0	3	g_rl_4d6ab8		
+4d6a78	64	.data	table	documented	12	0	0		3	46521f,465486,47309e	0	6	g_rl_4d6a78,g_rl_4d6a8c		k_army_step_frame_march
+4d6ab8	64	.data	table	documented	13	0	0		2	465622,465761	0	3	g_rl_4d6ab8		k_army_step_frame_idle
 4d6af8	240	.data	string	documented	135	0	0	9	2	46a037,46a101	0	3	g_rl_4d6af8		k_map_sheet_names
-4d6be8	4	.data	zero	referenced	0	0	0		1	46de05	0	3	g_rl_4d6be8		
-4d6bec	60	.data	table	referenced	28	0	0		1	46de05	0	1			
-4d6c28	4	.data	scalar	referenced	1	0	0		1	46de05	0	1			
-4d6c2c	60	.data	table	referenced	21	0	0		1	46de05	0	1			
+4d6be8	64	.data	table	documented	28	0	0		1	46de05	0	3	g_rl_4d6be8		k_terr_hex_nbr_odd
+4d6c28	64	.data	table	documented	22	0	0		1	46de05	0	1			k_terr_hex_nbr_even
 4d6c68	48	.data	string	documented	39	0	0	11	3	467770,46797d,46a037	0	1			k_map_data_names
-4d6c98	32	.data	table	referenced	20	0	0		4	4710f2,471718,471da6,472392	0	7	g_bf_4d6c98		
-4d6cb8	4	.data	zero	referenced	0	0	0		2	4710f2,471718	0	1			
-4d6cbc	60	.data	table	referenced	30	0	0		2	4710f2,471718	0	1			
+4d6c98	32	.data	table	documented	20	0	0		4	4710f2,471718,471da6,472392	0	7	g_bf_4d6c98		k_dir8_cell_delta
+4d6cb8	64	.data	table	documented	30	0	0		2	4710f2,471718	0	1			k_dir8_dxdy
 4d6cf8	400	.data	string	documented	245	0	0	12	1	475b41	0	2	g_rl_4d6cf8		k_endgame_movie_names
 4d6e88	48	.data	string	documented	36	0	0	12	1	47309e	0	3	g_rl_4d6e88		k_capture_movie_names
-4d6eb8	4	.data	scalar	referenced	1	0	0		1	47309e	0	1			
-4d6ebc	4	.data	scalar	referenced	1	0	0		1	47309e	0	1			
-4d6ec0	4	.data	scalar	referenced	1	0	0		1	47309e	0	1			
-4d6ec4	20	.data	table	referenced	5	0	0		1	47309e	0	1			
-4d6ed8	88	.data	table	referenced	22	0	0		1	476da9	0	2			
-4d6f30	4	.data	scalar	referenced	1	0	0		2	475e07,476488	0	1			
-4d6f34	132	.data	table	referenced	47	0	0		2	475e07,476488	0	1			
-4d6fb8	72	.data	table	referenced	36	0	0		1	4772b6	0	2			
-4d7000	148	.data	string	documented	105	0	0	11	5	47309e,475b41,475d73,475e07,476488	0	5	g_rl_4d7000,g_rl_4d7058		k_lit_event_popup
-4d7094	32	.data	string	documented	26	0	0	26	1	476768	0	3	g_rl_4d7094		s_log_exited_game_flow
+4d6eb8	96	.data	table	documented	24	0	0		2	47309e,476da9	0	2			k_help_popup_rects
+4d6f18	24	.data	table	documented	6	0	0		0		0	0			k_help_para_count
+4d6f30	112	.data	table	documented	28	0	0		2	475e07,476488	0	4	g_rl_4d6f30		k_mp_msg_popup_rows
+4d6fa0	24	.data	table	documented	20	0	0		0		0	1			k_hint_report_panel
+4d6fb8	72	.data	table	documented	36	0	0		1	4772b6	0	3			k_tooltip_mode
+4d7000	148	.data	string	documented	105	0	0	11	5	47309e,475b41,475d73,475e07,476488	0	9	g_rl_4d7000,g_rl_4d7058,g_rl_4d7074,g_rl_4d7080		k_lit_event_popup
+4d7094	32	.data	string	documented	26	0	0	26	1	476768	0	4	g_rl_4d7094		s_log_exited_game_flow
 4d70b4	284	.data	table	documented	110	0	0		0		0	0			k_unref_after_exit_log
 4d71d0	256	.data	table	documented	119	0	0		4	4014f0,4015b9,402637,402a14	0	4	g_rl_4d71d0		k_font_glyph_map
 4d72d0	64	.data	table	documented	60	0	0		0		0	0			k_unref_perm16x4
@@ -261,31 +209,23 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4d7b7c	4	.data	zero	unreferenced	0	0	0		0		0	0			
 4d7b80	512	.data	table	documented	348	0	0		1	47c4ba	0	2	g_bf_4d7b80		k_bf_castle_tiles_stone
 4d7d80	512	.data	table	documented	349	0	0		1	47c4ba	0	2	g_bf_4d7d80		k_bf_castle_tiles_other
-4d7f80	352	.data	table	unreferenced	133	0	0		0		0	0			
-4d80e0	8	.data	scalar	referenced	3	0	0		2	46a578,46ac22	0	4	g_rl_4d80e0		
-4d80e8	16	.data	table	referenced	8	0	0		2	46a790,46ac22	0	1			
-4d80f8	16	.data	table	referenced	15	0	0		2	46a9c7,46ac22	0	1			
-4d8108	768	.data	table	documented	482	0	0		1	408438	0	3			k_map_unit_disp
+4d7f80	352	.data	table	documented	133	0	0		0		0	0			k_unref_after_castle_tiles
+4d80e0	40	.data	table	documented	26	0	0		4	46a578,46a790,46a9c7,46ac22	0	4	g_rl_4d80e0		k_terr_block_fill_order
+4d8108	768	.data	table	documented	482	0	0		1	408438	0	5	g_rl_4d8108		k_map_unit_disp
 4d8408	384	.data	table	documented	240	0	0		0		0	1			k_unref_unit_disp8
-4d8588	32	.data	table	referenced	23	0	0		2	471da6,4972f9	0	1	g_bf_4d8588		
+4d8588	32	.data	table	documented	23	0	0		2	471da6,4972f9	0	1	g_bf_4d8588		k_bf_dir8_cell_offset
 4d85a8	64	.data	table	documented	18	0	0		3	412666,43958a,43982c	0	3	g_rl_4d85a8		k_workforce_box_origins
 4d85e8	56	.data	table	documented	43	0	0		2	4126c9,43958a	0	1			k_workforce_cell_offsets
 4d8620	344	.data	table	documented	300	0	0		0		0	0			k_unref_ramps20
-4d8778	408	.data	table	referenced	101	0	0		4	435ebc,4a5003,4a50ae,4a5389	0	3			
-4d8910	128	.data	table	referenced	34	0	0		1	42847c	0	2	g_rl_4d8910		
-4d8990	4	.data	scalar	referenced	1	0	0		6	413155,44ea92,44ef4e,44f15b,44f318,49ed13	0	1			
-4d8994	36	.data	table	referenced	8	0	0		6	413155,44ea92,44ef4e,44f15b,44f318,49ed13	0	1			
-4d89b8	4	.data	scalar	referenced	1	0	0		2	4198aa,436d02	0	7	g_rl_4d89b8		
-4d89bc	4	.data	scalar	referenced	1	0	0		2	4198aa,436d02	0	1			
-4d89c0	4	.data	scalar	referenced	2	0	0		2	4198aa,436d02	0	2			
-4d89c4	36	.data	table	referenced	15	0	0		2	4198aa,436d02	0	1			
-4d89e8	36	.data	table	referenced	16	0	0		2	4198aa,436d02	0	2			
-4d8a0c	4	.data	scalar	referenced	2	0	0		6	41da2f,41dedb,437afb,47309e,4a79a3,4a9372	0	5			
-4d8a10	20	.data	table	referenced	7	0	0		4	4198aa,49f12f,4a07f2,4a6270	0	2			
-4d8a24	4	.data	zero	referenced	0	0	0		2	41da2f,41dedb	0	1			
-4d8a28	20	.data	table	referenced	5	0	0		1	4198aa	0	1			
-4d8a3c	4	.data	zero	referenced	0	0	0		2	47309e,4a551b	0	5	g_rl_4d8a3c		
-4d8a40	24	.data	table	referenced	6	0	0		1	4a551b	0	1			
+4d8778	408	.data	table	documented	101	0	0		4	435ebc,4a5003,4a50ae,4a5389	0	3			k_conscript_happy_cost
+4d8910	64	.data	table	documented	12	0	0		1	42847c	0	2	g_rl_4d8910		k_trade_default_price
+4d8950	64	.data	table	documented	22	0	0		0		0	0			k_unref_price_tail
+4d8990	48	.data	table	documented	11	0	0		8	413155,4198aa,436d02,44ea92,44ef4e,44f15b,44f318,49ed13	0	8	g_rl_4d89b8		k_weapon_cost
+4d89c0	40	.data	table	documented	17	0	0		2	4198aa,436d02	0	2			k_castle_cost
+4d89e8	40	.data	table	documented	18	0	0		8	4198aa,41da2f,41dedb,436d02,437afb,47309e,4a79a3,4a9372	0	6			k_castle_work
+4d8a10	20	.data	table	documented	7	0	0		4	4198aa,49f12f,4a07f2,4a6270	0	2			k_castle_garrison_cap
+4d8a24	24	.data	table	documented	5	0	0		3	4198aa,41da2f,41dedb	0	1			k_castle_tax_boost
+4d8a3c	28	.data	table	documented	6	0	0		2	47309e,4a551b	0	5	g_rl_4d8a3c		k_castle_garrison_grant
 4d8a58	960	.data	table	documented	155	0	0		14	49d638,49dd01,49e39b,49e77d,49edc7,49f12f,49f431,49f977,…	0	6	g_rl_4d8a58,g_rl_4d8af8		k_ai_personality
 4d8e18	320	.data	table	documented	60	0	0		1	499e5d	0	5	g_rl_4d8e18		k_scenario_presets_a
 4d8f58	384	.data	table	documented	91	0	0		1	499e5d	0	3	g_rl_4d8f58		k_scenario_presets_b
@@ -297,49 +237,35 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4d91d0	40	.data	table	documented	27	9	0		1	489401	0	0			k_bf_stance_siege_a
 4d91f8	48	.data	table	documented	33	11	0		1	489401	0	0			k_bf_stance_siege_d
 4d9228	80	.data	string	documented	55	0	0	11	1	477b2f	0	2	g_bf_4d9228		k_bf_music_names
-4d9278	768	.data	string	documented	576	0	0	12	1	477dfc	0	3			k_bf_end_movie_names
-4d9578	4	.data	zero	referenced	0	0	0		1	47b8b2	0	3	g_bf_4d9578		
-4d957c	92	.data	table	referenced	43	0	0		1	47b8b2	0	1			
-4d95d8	64	.data	table	referenced	23	0	0		1	47efee	0	1			
-4d9618	64	.data	table	referenced	18	0	0		1	47efee	0	1			
-4d9658	40	.data	table	referenced	9	0	0		2	47fea7,4801f8	0	1			
-4d9680	40	.data	table	referenced	27	0	0		1	47efee	0	1			
-4d96a8	40	.data	table	referenced	8	0	0		1	47efee	0	1			
-4d96d0	4	.data	scalar	referenced	1	0	0		1	480599	0	1			
-4d96d4	4	.data	scalar	referenced	1	0	0		2	480599,4819cc	0	2			
-4d96d8	4	.data	scalar	referenced	1	0	0		2	480599,4819cc	0	2			
-4d96dc	4	.data	zero	referenced	0	0	0		1	480599	0	1			
-4d96e0	208	.data	table	referenced	43	0	0		1	480599	0	1			
-4d97b0	4	.data	zero	referenced	0	0	0		1	480599	0	1			
-4d97b4	4	.data	zero	referenced	0	0	0		1	480599	0	1			
-4d97b8	4	.data	zero	referenced	0	0	0		1	480599	0	1			
-4d97bc	4	.data	zero	referenced	0	0	0		1	480599	0	1			
-4d97c0	64	.data	table	referenced	14	0	0		1	480599	0	1			
-4d9800	4	.data	scalar	referenced	1	0	0		1	47f42d	0	1			
-4d9804	4	.data	scalar	referenced	1	0	0		1	47f42d	0	1			
-4d9808	104	.data	table	referenced	26	0	0		1	47f42d	0	1			
-4d9870	48	.data	table	referenced	10	0	0		1	47fea7	0	1			
-4d98a0	32	.data	table	referenced	7	0	0		1	4801f8	0	1			
+4d9278	768	.data	string	documented	576	0	0	12	1	477dfc	0	4	g_rl_4d9278		k_bf_end_movie_names
+4d9578	96	.data	table	documented	43	0	0		1	47b8b2	0	3	g_bf_4d9578		k_bf_marker_deploy_offsets
+4d95d8	64	.data	table	documented	23	0	0		1	47efee	0	1			k_bf_size_tier_thresholds
+4d9618	64	.data	table	documented	18	0	0		1	47efee	0	1			k_bf_engine_weight
+4d9658	40	.data	table	documented	9	0	0		2	47fea7,4801f8	0	1			k_bf_troops_per_unit
+4d9680	40	.data	table	documented	27	0	0		1	47efee	0	1			k_bf_tier_param_a
+4d96a8	40	.data	table	documented	8	0	0		1	47efee	0	1			k_bf_tier_param_b
+4d96d0	224	.data	table	documented	46	0	0		2	480599,4819cc	0	2			k_bf_class_spawn
+4d97b0	80	.data	table	documented	14	0	0		1	480599	0	1			k_bf_missile_params
+4d9800	112	.data	table	documented	28	0	0		1	47f42d	0	1			k_bf_band_thresholds
+4d9870	48	.data	table	documented	10	0	0		1	47fea7	0	1			k_bf_field_spawn_order
+4d98a0	32	.data	table	documented	7	0	0		1	4801f8	0	1			k_bf_siege_spawn_order
 4d98c0	8	.data	zero	referenced	0	0	0		1	4816f9	0	1	g_bf_4d98c0		
-4d98c8	48	.data	table	referenced	10	0	0		1	4819cc	0	3	g_bf_4d98c8		
-4d98f8	56	.data	table	referenced	28	0	0		1	481abb	0	1			
-4d9930	32	.data	zero	unreferenced	0	0	0		0		0	0			
-4d9950	88	.data	table	referenced	81	0	0		1	485bb1	0	1			
+4d98c8	48	.data	table	documented	10	0	0		1	4819cc	0	3	g_bf_4d98c8		k_bf_class_lead_priority
+4d98f8	88	.data	table	documented	28	0	0		1	481abb	0	1			k_bf_band_step
+4d9950	88	.data	table	documented	81	0	0		1	485bb1	0	1			k_bf_effect4_frames
 4d99a8	68	.data	table	documented	66	0	0		1	485bb1	0	1			k_bf_effect_frames
 4d99ec	20	.data	zero	unreferenced	0	0	0		0		0	0			
-4d9a00	40	.data	table	referenced	8	0	0		1	486249	0	1			
-4d9a28	40	.data	table	referenced	6	0	0		2	486249,4867cc	0	1			
-4d9a50	40	.data	table	referenced	5	0	0		2	486249,4867cc	0	1			
-4d9a78	40	.data	table	referenced	6	0	0		1	4867cc	0	1			
-4d9aa0	40	.data	table	referenced	5	0	0		1	4867cc	0	0			
-4d9ac8	32	.data	table	referenced	30	0	0		1	48804a	0	2	g_bf_4d9ac8		
-4d9ae8	48	.data	zero	unreferenced	0	0	0		0		0	0			
-4d9b18	80	.data	table	referenced	67	0	0		1	48804a	0	1			
-4d9b68	32	.data	table	referenced	30	0	0		1	488240	0	1			
-4d9b88	48	.data	zero	unreferenced	0	0	0		0		0	0			
-4d9bb8	80	.data	table	referenced	67	0	0		1	488240	0	0			
-4d9c08	40	.data	table	referenced	39	0	0		1	48895e	0	2	g_bf_4d9c08		
-4d9c30	64	.data	table	referenced	16	0	0		2	486249,4867cc	0	1			
+4d9a00	40	.data	table	documented	8	0	0		1	486249	0	1			k_bf_walk_phase_a
+4d9a28	40	.data	table	documented	6	0	0		2	486249,4867cc	0	1			k_bf_walk_phase_b
+4d9a50	40	.data	table	documented	5	0	0		2	486249,4867cc	0	1			k_bf_walk_phase_c
+4d9a78	40	.data	table	documented	6	0	0		1	4867cc	0	1			k_bf_walk_phase_alt_a
+4d9aa0	40	.data	table	documented	5	0	0		1	4867cc	0	0			k_bf_walk_phase_alt_b
+4d9ac8	80	.data	table	documented	30	0	0		1	48804a	0	2	g_bf_4d9ac8		k_bf_shot_frames_b
+4d9b18	80	.data	table	documented	67	0	0		1	48804a	0	1			k_bf_shot_frames_a
+4d9b68	80	.data	table	documented	30	0	0		1	488240	0	1			k_bf_shot_frames_alt_b
+4d9bb8	80	.data	table	documented	67	0	0		1	488240	0	0			k_bf_shot_frames_alt_a
+4d9c08	40	.data	table	documented	39	0	0		1	48895e	0	2	g_bf_4d9c08		k_bf_engine7_overlay
+4d9c30	64	.data	table	documented	16	0	0		2	486249,4867cc	0	1			k_bf_facing_frames
 4d9c70	4	.data	zero	referenced	0	0	0		1	489401	0	1	g_bf_4d9c70		
 4d9c74	4	.data	zero	referenced	0	0	0		1	48d16e	0	1	g_bf_4d9c74		
 4d9c78	4	.data	zero	referenced	0	0	0		1	48d16e	0	1	g_bf_4d9c78		
@@ -347,12 +273,12 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4d9c80	4	.data	zero	referenced	0	0	0		1	48d412	0	1	g_bf_4d9c80		
 4d9c84	4	.data	zero	referenced	0	0	0		1	48d6fc	0	1	g_bf_4d9c84		
 4d9c88	8	.data	zero	referenced	0	0	0		1	48d9ce	0	1	g_bf_4d9c88		
-4d9c90	96	.data	table	referenced	33	0	0		1	490fa2	0	5	g_bf_4d9c90		
-4d9cf0	160	.data	table	referenced	54	0	0		1	491147	0	1			
-4d9d90	32	.data	table	referenced	9	0	0		1	491492	0	1			
-4d9db0	32	.data	table	referenced	11	0	0		1	491492	0	1			
+4d9c90	96	.data	table	documented	33	0	0		1	490fa2	0	5	g_bf_4d9c90		k_bf_edge_cells_straight
+4d9cf0	160	.data	table	documented	54	0	0		1	491147	0	1			k_bf_edge_cells_diag
+4d9d90	32	.data	table	documented	9	0	0		1	491492	0	1			k_bf_dock_far
+4d9db0	32	.data	table	documented	11	0	0		1	491492	0	1			k_bf_dock_near
 4d9dd0	72	.data	table	documented	36	0	0		2	491492,4917dd	0	2			k_bf_gate_tiles
-4d9e18	112	.data	table	referenced	28	0	0		1	496b9f	0	1			
+4d9e18	112	.data	table	documented	28	0	0		1	496b9f	0	1			k_bf_gate_breach_tiles
 4d9e88	192	.data	string	documented	160	0	0	26	7	4778a0,477b2f,477c89,4788c6,47cec1,48551d,49694f	0	7	g_bf_4d9ee8,g_rl_4d9ecc		k_lit_bf_setup
 4d9f48	264	.data	table	documented	162	0	0		1	499859	0	4	g_rl_4d9f48		k_sys_file_records
 4da050	1280	.data	table	documented	856	0	0		1	4984dc	0	1			k_pl8_bank_table
@@ -363,29 +289,24 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4db0d0	2816	.data	string	documented	1784	0	0	11	1	499cb1	0	3	g_bf_4db0d0		k_unit_voice_names
 4dbbd0	32	.data	string	documented	21	0	0	11	1	499a1c	0	3	g_rl_4dbbd0		k_system_sheet_names
 4dbbf0	8	.data	zero	referenced	0	0	0		1	499a1c	0	1	g_rl_4dbbf0		
-4dbbf8	32	.data	table	referenced	8	0	0		1	499dc3	0	3	g_rl_4dbbf8		
-4dbc18	20	.data	table	referenced	9	0	0		1	499dc3	0	2			
+4dbbf8	32	.data	table	documented	8	0	0		1	499dc3	0	3	g_rl_4dbbf8		k_cfg_turn_time
+4dbc18	20	.data	table	documented	9	0	0		1	499dc3	0	2			k_cfg_start_crowns
 4dbc2c	1092	.data	string	documented	1003	0	0	10	13	497a34,498270,498458,4984dc,4987b7,498dcb,498fb3,499034,…	0	9	g_bf_4dbd3c,g_rl_4dbc2c,g_rl_4dbc60,g_rl_4dbc7c,g_rl_4dbcd4,g_rl_4dbe08,…		k_lit_strategic_loaders
-4dc070	96	.data	table	referenced	10	0	0		1	49bd99	0	4	g_rl_4dc070		
-4dc0d0	4	.data	scalar	referenced	1	0	0		1	49bd99	0	1			
-4dc0d4	4	.data	scalar	referenced	1	0	0		1	49bd99	0	1			
-4dc0d8	4	.data	scalar	referenced	1	0	0		1	49bd99	0	1			
-4dc0dc	4	.data	scalar	referenced	1	0	0		1	49bd99	0	1			
-4dc0e0	48	.data	table	referenced	14	0	0		1	49bd99	0	1			
-4dc110	108	.data	table	referenced	8	0	0		1	49bd99	0	1			
-4dc17c	4	.data	zero	named	0	0	0		1	49caaa	0	2	DC_BASE		
-4dc180	78	.data	table	referenced	78	0	0		1	49caaa	0	2			
-4dc1ce	1	.data	scalar	referenced	1	0	0		2	42ba40,49caaa	0	5	g_rl_4dc1ce		
-4dc1cf	17	.data	table	referenced	11	0	0		2	42ba40,49caaa	0	3			
-4dc1e0	80	.data	table	referenced	26	0	0		1	49d638	0	2			
-4dc230	96	.data	table	referenced	24	0	0		1	49d638	0	1			
-4dc290	208	.data	string	documented	156	0	0	12	2	49a453,49b973	0	2	g_rl_4dc290		k_turn_save_names
+4dc070	96	.data	table	documented	10	0	0		1	49bd99	0	4	g_rl_4dc070		k_cfg_start_weapons
+4dc0d0	64	.data	table	documented	18	0	0		1	49bd99	0	1			k_cfg_start_county
+4dc110	112	.data	table	documented	8	0	0		2	49bd99,49caaa	0	2	DC_BASE		k_cfg_start_army
+4dc180	80	.data	table	documented	80	0	0		2	42ba40,49caaa	0	6	g_rl_4dc1ce		k_realm_personality_pref
+4dc1d0	16	.data	table	documented	10	0	0		0		0	0			k_realm_colour_pair
+4dc1e0	80	.data	table	documented	26	0	0		1	49d638	0	2			k_ai_crown_grant_hi
+4dc230	80	.data	table	documented	20	0	0		1	49d638	0	1			k_ai_crown_grant_lo
+4dc280	16	.data	table	documented	4	0	0		0		0	0			k_unref_4dc280
+4dc290	208	.data	string	documented	156	0	0	12	2	49a453,49b973	0	4	g_rl_4dc290,g_rl_4dc320		k_turn_save_names
 4dc360	48	.data	table	documented	19	4	0		0		1	0			k_menu_items_1
 4dc390	60	.data	table	documented	24	5	0		0		1	0			k_menu_items_2
 4dc3cc	4	.data	zero	unreferenced	0	0	0		0		0	0			
 4dc3d0	84	.data	table	documented	34	7	0		0		1	0			k_menu_items_3
 4dc424	4	.data	zero	unreferenced	0	0	0		0		0	0			
-4dc428	48	.data	table	documented	21	0	3		2	419c78,42ff10	0	2	g_rl_4dc428		k_menubar_titles
+4dc428	48	.data	table	documented	21	0	3		2	419c78,42ff10	0	3	g_rl_4dc428		k_menubar_titles
 4dc458	120	.data	table	documented	23	6	0		0		0	2			k_menu_items_x
 4dc4d0	72	.data	table	documented	32	3	0		1	438990	0	2	g_rl_4dc4d0		k_hs_county_panel
 4dc518	24	.data	table	documented	10	1	0		0		0	0			k_hs_county_panel_x
@@ -432,10 +353,10 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4dd9d0	96	.data	table	documented	38	4	0		2	4ba26e,4ba9c8	0	2	g_rl_4dd9d0		k_btn_gift
 4dda30	48	.data	table	documented	21	2	0		2	4ba26e,4ba9c8	0	2	g_rl_4dda30		k_btn_diplo_msg
 4dda60	48	.data	table	documented	19	2	0		2	4ba26e,4ba9c8	0	2	g_rl_4dda60		k_btn_diplo_b
-4dda90	48	.data	table	documented	19	2	0		2	47309e,47685d	0	3	g_rl_4dda90		k_btn_popup_0a
-4ddac0	48	.data	table	documented	19	2	0		3	47309e,475e07,47685d	0	2			k_btn_popup_0b
-4ddaf0	48	.data	table	documented	19	2	0		2	475e07,47685d	0	2			k_btn_popup_fa
-4ddb20	48	.data	table	documented	19	2	0		2	475e07,47685d	0	2			k_btn_popup_fb
+4dda90	48	.data	table	documented	19	2	0		2	47309e,47685d	0	4	g_rl_4dda90		k_btn_popup_0a
+4ddac0	48	.data	table	documented	19	2	0		3	47309e,475e07,47685d	0	3			k_btn_popup_0b
+4ddaf0	48	.data	table	documented	19	2	0		2	475e07,47685d	0	3			k_btn_popup_fa
+4ddb20	48	.data	table	documented	19	2	0		2	475e07,47685d	0	3			k_btn_popup_fb
 4ddb50	48	.data	table	documented	21	2	0		2	47309e,47685d	0	2			k_btn_popup_11
 4ddb80	48	.data	table	documented	21	2	0		2	4ba26e,4ba9c8	0	3	g_rl_4ddb80		k_btn_castle_seal
 4ddbb0	48	.data	table	documented	19	2	0		2	4ba26e,4ba9c8	0	2	g_rl_4ddbb0		k_btn_battle_prompt
@@ -451,18 +372,17 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4ddfa0	96	.data	table	documented	38	4	0		2	4ba26e,4ba9c8	0	2	g_rl_4ddfa0		k_btn_screen68
 4de000	1056	.data	table	documented	412	44	0		2	4ba26e,4ba9c8	0	2	g_rl_4de000		k_btn_skirmish_custom
 4de420	32	.data	table	documented	13	0	2		0		0	0			k_x_4de420
-4de440	16	.data	table	referenced	4	0	0		2	4a80db,4a8507	0	0			
+4de440	16	.data	table	documented	4	0	0		2	4a80db,4a8507	0	0			k_siege_engine_work
 4de450	672	.data	string	documented	504	0	0	12	1	4aabd8	0	3	g_rl_4de450		k_march_troop_sheets
-4de6f0	32	.data	table	referenced	10	0	0		1	4aabd8	0	3	g_rl_4de6f0		
-4de710	76	.data	table	referenced	24	0	0		1	4aad07	0	1			
-4de75c	51	.data	table	referenced	13	0	0		1	4ac904	0	2	g_rl_4de75c		
-4de78f	16	.data	table	referenced	12	0	0		1	4ac904	0	1			
-4de79f	5	.data	scalar	referenced	4	0	0		1	4ac904	0	1			
-4de7a4	11	.data	string	unreferenced	8	0	0	5	0		0	0			
-4de7af	13	.data	table	referenced	12	0	0		1	4ac904	0	1			
-4de7bc	48	.data	table	referenced	22	0	0		1	4ac904	0	1			
-4de7ec	52	.data	table	referenced	24	0	0		1	4ac904	0	2			
-4de820	80	.data	table	referenced	19	0	0		1	4ac904	0	1			
+4de6f0	32	.data	table	documented	10	0	0		1	4aabd8	0	3	g_rl_4de6f0		k_march_target_x
+4de710	80	.data	table	documented	25	0	0		2	4aad07,4ac904	0	2	g_rl_4de75c		k_casualty_survivors
+4de760	48	.data	table	documented	12	0	0		1	4ac904	0	1			k_merc_men
+4de790	16	.data	table	documented	12	0	0		1	4ac904	0	1			k_merc_class
+4de7a0	15	.data	table	documented	12	0	0		0		0	0			k_merc_period
+4de7af	13	.data	table	documented	12	0	0		1	4ac904	0	1			k_merc_dwell
+4de7bc	52	.data	table	documented	24	0	0		1	4ac904	0	2			k_merc_hire_cost
+4de7f0	48	.data	table	documented	22	0	0		0		0	0			k_merc_wage
+4de820	80	.data	table	documented	19	0	0		1	4ac904	0	1			k_merc_band_count
 4de870	160	.data	string	documented	144	0	0	11	6	4a6a30,4a6c68,4a7158,4a8aab,4aabd8,4ab383	0	1	g_rl_4de8e8		k_lit_combat_cues
 4de910	4	.data	zero	referenced	0	0	0		1	4ae642	0	0			
 4de914	76	.data	zero	referenced	0	0	0		1	4ae642	0	0			
@@ -472,7 +392,7 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4df120	360	.data	string	documented	324	0	0	11	8	4ade93,4adfe6,4ae15f,4ae1b8,4ae310,4ae8a9,4ae968,4aea70	0	8	g_rl_4df120,g_rl_4df154,g_rl_4df160,g_rl_4df17c,g_rl_4df1c8		k_lit_save_files
 4df288	4	.data	zero	referenced	0	0	0		4	42f1df,42f58c,4b0ab5,4b28cd	0	2	g_rl_4df288		
 4df28c	4	.data	zero	referenced	0	0	0		4	42dbc7,42e3ba,42ec91,452160	0	1	g_rl_4df28c		
-4df290	16	.data	table	referenced	1	0	0		3	434b10,4b2922,4b29be	0	2	g_rl_4df290		
+4df290	16	.data	table	documented	1	0	0		3	434b10,4b2922,4b29be	0	2	g_rl_4df290		g_disp_recreating
 4df2a0	264	.data	zero	referenced	0	0	0		2	4afab9,4afe3a	0	1	g_rl_4df2a0		
 4df3a8	4	.data	zero	referenced	0	0	0		1	4b29be	0	1	g_rl_4df3a8		
 4df3ac	252	.data	string	documented	160	0	0	7	3	4aef7e,4af116,4af312	0	5	g_rl_4df3ac,g_rl_4df3e0		k_io_path_literals
@@ -485,7 +405,7 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4df5c7	1	.data	zero	unreferenced	0	0	0		0		0	0			
 4df5c8	15	.data	string	documented	14	0	0	14	1	4b2258	0	1			s_wndclass2
 4df5d7	1	.data	zero	unreferenced	0	0	0		0		0	0			
-4df5d8	480	.data	string	documented	429	0	0	32	7	4b2636,4b26b8,4b26f8,4b2730,4b284e,4b2922,4b29be	0	5	g_rl_4df5d8,g_rl_4df658,g_rl_4df6b0		k_log_app_shell
+4df5d8	480	.data	string	documented	429	0	0	32	7	4b2636,4b26b8,4b26f8,4b2730,4b284e,4b2922,4b29be	0	7	g_rl_4df5d8,g_rl_4df648,g_rl_4df658,g_rl_4df668,g_rl_4df6b0		k_log_app_shell
 4df7b8	256	.data	string	documented	176	0	0	11	1	4b36c0	0	3	g_rl_4df7b8		k_voice_confirm
 4df8b8	256	.data	string	documented	176	0	0	11	1	4b3714	0	1			k_voice_send_supplies
 4df9b8	1120	.data	string	documented	770	0	0	11	1	4b35c1	0	4	g_rl_4df9b8		k_voice_events_1xx
@@ -493,161 +413,114 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4e0458	7168	.data	string	documented	4928	0	0	11	1	4b35c1	0	3	g_rl_4e0458		k_voice_events_kt
 4e2058	272	.data	string	documented	187	0	0	11	3	4b3768,4b37bc,4b3940	0	4	g_rl_4e2058,g_rl_4e20d8		k_voice_cues_misc
 4e2168	192	.data	string	documented	132	0	0	11	2	4b3994,4b39e8	0	2	g_rl_4e2168		k_voice_battle_result
-4e2228	104	.data	table	referenced	27	0	0		1	4b3acd	0	2	g_rl_4e2228		
+4e2228	104	.data	table	documented	27	0	0		1	4b3acd	0	2	g_rl_4e2228		k_event_narration_seq
 4e2290	560	.data	string	documented	385	0	0	11	2	4b3acd,4b3b92	0	2	g_rl_4e2470		k_voice_event_narration
 4e24c0	12	.data	string	documented	9	0	0	9	1	4b3571	0	2	g_rl_4e24c0		s_intro_movie
-4e24cc	620	.data	string	documented	577	0	0	7	3	4b62ea,4b63d0,4b64d8	0	1			k_sigs_bootstrap_texts
-4e2738	344	.data	string	documented	295	0	0	13	1	4b6754	0	0			k_sigs_dll_exports
-4e2890	408	.data	string	documented	366	0	0	20	3	4b6a15,4b6ef7,4b7052	0	0			k_sigs_debug_traces
-4e2a28	4	.data	zero	referenced	0	0	0		12	423ba4,43e9e2,441066,44121a,4412cc,4429f2,4b7250,4b743b,…	0	5	g_rl_4e2a28		
-4e2a2c	4	.data	zero	referenced	0	0	0		9	4b7180,4b7250,4b743b,4b7514,4b7585,4b8243,4b85b7,4b8c3a,…	0	2			
+4e24cc	620	.data	string	documented	577	0	0	7	3	4b62ea,4b63d0,4b64d8	0	3	g_rl_4e24cc		k_sigs_bootstrap_texts
+4e2738	344	.data	string	documented	295	0	0	13	1	4b6754	0	1			k_sigs_dll_exports
+4e2890	408	.data	string	documented	366	0	0	20	3	4b6a15,4b6ef7,4b7052	0	4	g_rl_4e2890,g_rl_4e29a4		k_sigs_debug_traces
+4e2a28	4	.data	zero	referenced	0	0	0		12	423ba4,43e9e2,441066,44121a,4412cc,4429f2,4b7250,4b743b,…	0	8	g_rl_4e2a28		
+4e2a2c	4	.data	zero	referenced	0	0	0		9	4b7180,4b7250,4b743b,4b7514,4b7585,4b8243,4b85b7,4b8c3a,…	0	4			
 4e2a30	4	.data	zero	referenced	0	0	0		8	4b7180,4b743b,4b74ce,4b7585,4b79e3,4b7a9a,4b8c3a,4b90fb	0	1	g_rl_4e2a30		
-4e2a34	4	.data	zero	referenced	0	0	0		2	4b85b7,4b8b87	0	1			
-4e2a38	16	.data	string	documented	15	0	0	15	2	4b7585,4b8439	0	1	g_rl_4e2a38		s_dp_session_name
+4e2a34	4	.data	zero	referenced	0	0	0		2	4b85b7,4b8b87	0	2	g_rl_4e2a34		
+4e2a38	16	.data	string	documented	15	0	0	15	2	4b7585,4b8439	0	3	g_rl_4e2a38		s_dp_session_name
 4e2a48	24	.data	zero	unreferenced	0	0	0		0		0	0			
-4e2a60	4	.data	zero	referenced	0	0	0		1	4b7a9a	0	1			
-4e2a64	616	.data	string	documented	545	0	0	16	7	4b7180,4b7250,4b7514,4b7585,4b79e3,4b7a9a,4b7f78	0	3	g_rl_4e2a64,g_rl_4e2a8c,g_rl_4e2ae4		k_log_dplay_session
-4e2ccc	884	.data	string	documented	815	0	0	17	3	4b85b7,4b8c3a,4b90fb	0	2	g_rl_4e2eb0		k_log_dplay_io
-4e3040	88	.data	string	documented	76	0	0	20	3	4b92e0,4b95ba,4b984f	0	2	g_rl_4e3040		k_log_wav_loader
-4e3098	68	.data	table	referenced	5	0	0		1	4b99c0	0	2	g_rl_4e3098		
-4e30dc	212	.data	zero	unreferenced	0	0	0		0		0	0			
+4e2a60	4	.data	zero	referenced	0	0	0		1	4b7a9a	0	2	g_rl_4e2a60		
+4e2a64	616	.data	string	documented	545	0	0	16	7	4b7180,4b7250,4b7514,4b7585,4b79e3,4b7a9a,4b7f78	0	6	g_rl_4e2a64,g_rl_4e2a8c,g_rl_4e2ac4,g_rl_4e2ae4,g_rl_4e2c18,g_rl_4e2c20		k_log_dplay_session
+4e2ccc	884	.data	string	documented	815	0	0	17	3	4b85b7,4b8c3a,4b90fb	0	6	g_rl_4e2ccc,g_rl_4e2eb0,g_rl_4e2fa8		k_log_dplay_io
+4e3040	88	.data	string	documented	76	0	0	20	3	4b92e0,4b95ba,4b984f	0	3	g_rl_4e3040		k_log_wav_loader
+4e3098	280	.data	table	documented	5	0	0		1	4b99c0	0	2	g_rl_4e3098		k_screen_cursor
 4e31b0	72	.data	table	documented	33	0	0		1	4bb978	0	2	g_rl_4e31b0		k_screen_sim_gate
 4e31f8	72	.data	table	documented	13	0	0		1	4b99c0	0	1			k_screen_endturn_panel
 4e3240	32	.data	table	documented	10	0	0		1	4bb978	0	1			k_popup_mp_sim_gate
 4e3260	2400	.data	table	documented	895	0	0		1	4bb978	0	2			k_sim_duty_lut
-4e3bc0	4	.data	zero	referenced	0	0	0		1	4bbf89	0	1			
-4e3bc4	4	.data	zero	referenced	0	0	0		1	4bbfd2	0	0			
-4e3bc8	40	.data	string	documented	34	0	0	34	1	4b99c0	0	1	g_rl_4e3bc8		s_log_sprite_reload
-4e3bf0	1088	.data	table	documented	480	0	0		3	4bdc31,4be4df,4be7be	0	1			k_bf_anim_off_z16
-4e4030	1088	.data	table	documented	450	0	0		5	4bdc31,4be070,4be4df,4be7be,4beab9	0	0			k_bf_anim_off_z32
-4e4470	4	.data	scalar	referenced	4	0	0		1	4beed4	0	0			
-4e4474	124	.data	table	referenced	58	0	0		1	4beed4	0	0			
+4e3bc0	4	.data	zero	referenced	0	0	0		1	4bbf89	0	2	g_rl_4e3bc0		
+4e3bc4	4	.data	zero	referenced	0	0	0		1	4bbfd2	0	1	g_rl_4e3bc4		
+4e3bc8	40	.data	string	documented	34	0	0	34	1	4b99c0	0	2	g_rl_4e3bc8		s_log_sprite_reload
+4e3bf0	1088	.data	table	documented	480	0	0		3	4bdc31,4be4df,4be7be	0	2	g_rl_4e3bf0		k_bf_anim_off_z16
+4e4030	1088	.data	table	documented	450	0	0		5	4bdc31,4be070,4be4df,4be7be,4beab9	0	1	g_rl_4e4030		k_bf_anim_off_z32
+4e4470	128	.data	table	documented	62	0	0		1	4beed4	0	1	g_rl_4e4470		k_bf_effect_jitter
 4e44f0	48	.data	string	documented	45	0	0	45	1	4bdc31	0	1			s_log_tilemap_no_data
-4e4520	16	.data	table	referenced	1	0	0		1	4bf1f9	0	0			
-4e4530	4	.data	zero	named	0	0	0		20	4c1b40,4c1d60,4c43e0,4c5930,4cab10,4cbbf0,4cc0b0,4cc3b0,…	0	1	G_ERRNO		
-4e4534	4	.data	zero	named	0	0	0		17	4c1b40,4c1d60,4c43e0,4c5930,4cab10,4cc0b0,4cc3b0,4cce10,…	0	1	G_DOSERRNO		
+4e4520	16	.data	string	documented	1	0	0	0	1	4bf1f9	0	1	g_rl_4e4520		s_bf_debug_cell_label
+4e4530	4	.data	zero	named	0	0	0		20	4c1b40,4c1d60,4c43e0,4c5930,4cab10,4cbbf0,4cc0b0,4cc3b0,…	0	3	G_ERRNO		
+4e4534	4	.data	zero	named	0	0	0		17	4c1b40,4c1d60,4c43e0,4c5930,4cab10,4cc0b0,4cc3b0,4cce10,…	0	3	G_DOSERRNO		
 4e4538	4	.data	zero	named	0	0	0		1	4cea50	0	1	G_UMASK		
-4e453c	1	.data	zero	named	0	0	0		1	4c3370	0	2	G_OSVER		
+4e453c	1	.data	zero	named	0	0	0		1	4c3370	0	1	G_OSVER		
 4e453d	3	.data	zero	referenced	0	0	0		1	4c1170	0	0			
-4e4540	4	.data	zero	named	0	0	0		1	4c3370	0	2	G_WINVER		
-4e4544	4	.data	zero	named	0	0	0		1	4c3370	0	2	G_WINMINOR		
-4e4548	4	.data	zero	named	0	0	0		1	4c3370	0	2	G_WINMAJOR		
+4e4540	4	.data	zero	named	0	0	0		1	4c3370	0	1	G_WINVER		
+4e4544	4	.data	zero	named	0	0	0		1	4c3370	0	1	G_WINMINOR		
+4e4548	4	.data	zero	named	0	0	0		1	4c3370	0	1	G_WINMAJOR		
 4e454c	4	.data	zero	named	0	0	0		1	4c94a0	0	1	G_ARGC		
 4e4550	8	.data	zero	named	0	0	0		1	4c94a0	0	1	G_ARGV		
-4e4558	4	.data	zero	named	0	0	0		4	4c9360,4cbfc0,4cde70,4ce1e0	0	1	G_ENVIRON		
-4e455c	4	.data	zero	referenced	0	0	0		1	4cde70	0	0			
-4e4560	8	.data	zero	named	0	0	0		3	4cbfc0,4ccbf0,4cde70	0	1	G_WENVIRON		
+4e4558	4	.data	zero	named	0	0	0		4	4c9360,4cbfc0,4cde70,4ce1e0	0	2	G_ENVIRON		
+4e455c	4	.data	zero	named	0	0	0		1	4cde70	0	1	G_INITENV		
+4e4560	8	.data	zero	named	0	0	0		3	4cbfc0,4ccbf0,4cde70	0	2	G_WENVIRON		
 4e4568	8	.data	zero	named	0	0	0		1	4c94a0	0	1	G_PGMPTR		
 4e4570	4	.data	zero	named	0	0	0		2	4bf770,4cc740	0	1	G_EXITFLAG		
 4e4574	4	.data	zero	named	0	0	0		1	4bf770	0	1	G_TERMDONE		
 4e4578	4	.data	zero	named	0	0	0		1	4bf770	0	1	G_EXITDONE		
 4e457c	4	.data	zero	named	0	0	0		1	4bf770	0	1	G_LEAKSDONE		
-4e4580	4	.data	scalar	named	1	0	0		10	4bfb30,4bff80,4c05a0,4c09f0,4c0cf0,4c1070,4c10a0,4c14b0,…	0	2	G_DBGFLAG,g_rl_4e4580		
-4e4584	4	.data	scalar	named	1	0	0		3	4bfb30,4bff80,4c1240	0	2	G_REQCURR		
-4e4588	4	.data	scalar	named	4	0	0		3	4bfb30,4bff80,4c0b60	0	1	G_BREAKALLOC		
-4e458c	4	.data	scalar	named	1	0	0		4	4bfb30,4bff80,4c05a0,4c0cf0	0	2	G_NOMANSLAND,g_rl_4e458c		
-4e4590	4	.data	scalar	referenced	1	0	0		2	4c05a0,4c0cf0	0	1	g_rl_4e4590		
-4e4594	4	.data	scalar	named	1	0	0		2	4bfb30,4bff80	0	1	G_CLEANLAND		
-4e4598	24	.data	table	referenced	15	0	5		3	4c05a0,4c0cf0,4c1a40	0	1	g_rl_4e4598		
-4e45b0	16	.data	table	referenced	4	0	0		2	4c2c39,4c2c42	0	1			
+4e4580	24	.data	table	documented	9	0	0		12	4bfb30,4bff80,4c05a0,4c09f0,4c0b60,4c0cf0,4c1070,4c10a0,…	0	3	G_BREAKALLOC,G_CLEANLAND,G_DBGFLAG,G_DEADLAND,G_NOMANSLAND,G_REQCURR,…		g_crt_dbgheap_vars
+4e4598	24	.data	string	documented	15	0	5	0	3	4c05a0,4c0cf0,4c1a40	0	2	G_BLOCKNAMES,g_rl_4e4598		k_crt_block_use_name_ptrs
+4e45b0	16	.data	table	documented	4	0	0		2	4c2c39,4c2c42	0	1			g_crt_nlg_destination
 4e45c0	8	.data	zero	named	0	0	0		2	4c3370,4c9360	0	1	G_AENVPTR		
-4e45c8	4	.data	ptr(code)	referenced	3	1	0		1	4c35c0	0	0			
-4e45cc	4	.data	zero	referenced	0	0	0		3	4c35c0,4ca2d0,4ca330	0	0			
-4e45d0	4	.data	scalar	named	1	0	0		4	4ca2d0,4ca330,4cce10,4ccf10	0	1	G_APPTYPE		
-4e45d4	4	.data	zero	named	0	0	0		4	4bfa00,4bfa30,4c3690,4c4160	0	1	G_NEWMODE		
-4e45d8	8	.data	scalar	referenced	4	0	0		1	4c3950	0	0			
-4e45e0	16	.data	table	referenced	3	0	0		2	4c37f0,4c3950	0	0			
-4e45f0	16	.data	table	referenced	12	0	0		2	4c3870,4c3950	0	0			
-4e4600	12	.data	ptr(data)	referenced	9	0	3		1	4c3d40	0	0			
-4e460c	4	.data	zero	referenced	0	0	0		1	4c3950	0	0			
-4e4610	8	.data	table	named	4	1	0		4	4bfb30,4bff80,4c05a0,4c0c30	0	2	G_ALLOCHOOK,g_rl_4e4610		
-4e4618	4	.data	ptr(data)	named	3	0	1		6	4c44e0,4c45b0,4c47c0,4c49d0,4c4b10,4c54a0	3	2	G_SBH_HEAD		
-4e461c	1040	.data	table	referenced	5	0	1		2	4c45b0,4c4850	0	0			
-4e4a2c	1020	.data	zero	unreferenced	0	0	0		0		0	0			
-4e4e28	4	.data	zero	named	0	0	0		2	4c45b0,4c47c0	0	1	G_SBH_HEAPHDR		
-4e4e2c	4	.data	ptr(data)	named	3	0	1		3	4c47c0,4c4b10,4c54a0	0	1	G_SBH_ROVER		
-4e4e30	4	.data	zero	named	0	0	0		2	4c4850,4c4a80	0	1	G_SBH_FREEPG		
-4e4e34	4	.data	scalar	named	2	0	0		5	4c3760,4c4090,4c4160,4c4540,4c4560	0	1	G_SBH_THRESH		
-4e4e38	8	.data	ptr(data)	named	6	0	2		6	4c18b0,4c1df0,4c1f30,4c5710,4c57f0,4c68f0	0	1	G_PCTYPE		
+4e45c8	12	.data	table	documented	4	1	0		5	4c35c0,4ca2d0,4ca330,4cce10,4ccf10	0	2	G_AEXIT_RTN,G_APPTYPE,G_ERRMODE		g_crt_crt0dat_vars
+4e45d4	4	.data	zero	named	0	0	0		4	4bfa00,4bfa30,4c3690,4c4160	0	2	G_NEWMODE		
+4e45d8	56	.data	table	documented	28	0	3		4	4c37f0,4c3870,4c3950,4c3d40	0	1	G_RPTBUSY,G_RPTFILE,G_RPTMODE,G_RPTTYPES,G_WSPRINTF		g_crt_dbgrpt_vars
+4e4610	8	.data	scalar	documented	4	1	0		4	4bfb30,4bff80,4c05a0,4c0c30	0	3	G_ALLOCHOOK,g_rl_4e4610		g_crt_alloc_hook
+4e4618	2068	.data	table	documented	8	0	2		7	4c44e0,4c45b0,4c47c0,4c4850,4c49d0,4c4b10,4c54a0	3	3	G_SBH_HEAD,G_SBH_HEAPHDR		g_crt_sbh_region0
+4e4e2c	12	.data	table	documented	5	0	1		10	4c3760,4c4090,4c4160,4c4540,4c4560,4c47c0,4c4850,4c4a80,…	0	2	G_SBH_FREEPG,G_SBH_ROVER,G_SBH_THRESH		g_crt_sbh_vars
+4e4e38	8	.data	ptr(data)	documented	6	0	2		6	4c18b0,4c1df0,4c1f30,4c5710,4c57f0,4c68f0	0	3	G_PCTYPE		g_crt_pctype
 4e4e40	514	.data	table	documented	128	0	0		1	4c92f0	2	1	G_CTYPE1		_ctype
 4e5042	2	.data	zero	unreferenced	0	0	0		0		0	0			
-4e5044	12	.data	table	named	3	0	0		6	4c18b0,4c1df0,4c1f30,4c57f0,4cbbf0,4cc770	0	1	G_MBCURMAX		
-4e5050	4	.data	scalar	named	1	0	0		1	4c5930	0	1	G_ERRTAB		
-4e5054	364	.data	table	referenced	90	0	0		1	4c5930	0	0			
-4e51c0	4	.data	scalar	named	2	0	0		3	4c24e0,4c5a60,4c6530	0	1	G_TIMEZONE		
-4e51c4	4	.data	scalar	named	1	0	0		4	4c24e0,4c5a60,4c5dc0,4c6530	0	1	G_DAYLIGHT		
-4e51c8	8	.data	scalar	named	4	0	0		4	4c24e0,4c5a60,4c6130,4c6530	0	1	G_DSTBIAS		
-4e51d0	4	.data	scalar	referenced	3	0	0		0		1	0			
-4e51d4	60	.data	zero	unreferenced	0	0	0		0		0	0			
-4e5210	4	.data	scalar	referenced	3	0	0		0		1	0			
-4e5214	60	.data	zero	unreferenced	0	0	0		0		0	0			
-4e5250	4	.data	ptr(data)	named	3	0	1		1	4c5a60	0	1	G_TZNAME0		
-4e5254	4	.data	ptr(data)	named	3	0	1		1	4c5a60	0	1	G_TZNAME1		
-4e5258	8	.data	zero	named	0	0	0		1	4c5a60	0	1	G_LASTTZ		
-4e5260	4	.data	scalar	named	4	0	0		3	4c5a60,4c5dc0,4c6130	0	1	G_DSTS_YR		
-4e5264	4	.data	zero	named	0	0	0		2	4c5dc0,4c6130	0	1	G_DSTS_YD		
-4e5268	8	.data	zero	named	0	0	0		2	4c5dc0,4c6130	0	1	G_DSTS_MS		
-4e5270	4	.data	scalar	named	4	0	0		3	4c5a60,4c5dc0,4c6130	0	1	G_DSTE_YR		
-4e5274	4	.data	zero	named	0	0	0		2	4c5dc0,4c6130	0	1	G_DSTE_YD		
-4e5278	4	.data	zero	named	0	0	0		2	4c5dc0,4c6130	0	1	G_DSTE_MS		
+4e5044	12	.data	table	documented	3	0	0		6	4c18b0,4c1df0,4c1f30,4c57f0,4cbbf0,4cc770	0	3	G_MBCURMAX		g_crt_nls_vars
+4e5050	368	.data	table	documented	91	0	0		1	4c5930	0	1	G_ERRTAB		k_crt_errtable
+4e51c0	152	.data	table	documented	19	0	2		5	4c24e0,4c5a60,4c5dc0,4c6130,4c6530	2	1	G_DAYLIGHT,G_DSTBIAS,G_TIMEZONE,G_TZNAME0,G_TZNAME1		g_crt_tz_vars
+4e5258	36	.data	string	documented	8	0	0	0	3	4c5a60,4c5dc0,4c6130	0	1	G_DSTE_MS,G_DSTE_YD,G_DSTE_YR,G_DSTS_MS,G_DSTS_YD,G_DSTS_YR,…		g_crt_tz_dst_cache
 4e527c	4	.data	zero	named	0	0	0		1	4c5a30	0	1	G_TZFIRST		
 4e5280	36	.data	zero	named	0	0	0		1	4c6340	0	1	G_TB		
-4e52a4	4	.data	ptr(data)	referenced	3	0	1		1	4c68f0	0	0			
-4e52a8	8	.data	ptr(mixed)	referenced	6	1	1		1	4c68f0	0	0			
+4e52a4	12	.data	ptr(mixed)	documented	9	1	2		1	4c68f0	0	1	S_NULL,S_WNULL		k_crt_nullstr_ptrs
 4e52b0	4	.data	zero	referenced	0	0	0		2	4c7940,4c8110	0	0			
 4e52b4	12	.data	zero	referenced	0	0	0		2	4c7940,4c8110	0	0			
 4e52c0	4	.data	zero	referenced	0	0	0		2	4c2e60,4c7bf0	0	0			
-4e52c4	4	.data	zero	referenced	0	0	0		1	4c8700	0	0			
-4e52c8	4	.data	ptr(code)	referenced	2	1	0		1	4c87a0	0	0			
-4e52cc	4	.data	ptr(code)	referenced	2	1	0		1	4c87d0	0	0			
-4e52d0	1	.data	zero	named	0	0	0		2	4c8990,4c8df0	0	1	G_MBCTYPE		
+4e52c4	4	.data	zero	named	0	0	0		1	4c8700	0	1	G_PTERMINATE		
+4e52c8	8	.data	ptr(code)	documented	4	2	0		2	4c87a0,4c87d0	0	0			g_crt_eh_hooks
+4e52d0	1	.data	zero	named	0	0	0		2	4c8990,4c8df0	0	2	G_MBCTYPE		
 4e52d1	259	.data	zero	referenced	0	0	0		7	4c2fb0,4c8870,4c8990,4c92f0,4c9570,4ce550,4cf8f0	0	0			
-4e53d4	4	.data	zero	named	0	0	0		8	4c8870,4c8990,4c8df0,4c8e70,4c92a0,4ccb80,4ce550,4cf8f0	0	1	G_MBCP		
-4e53d8	8	.data	zero	named	0	0	0		4	4c8990,4c8df0,4ccb80,4cf8f0	0	1	G_MBLCID		
-4e53e0	12	.data	zero	named	0	0	0		2	4c8990,4c8df0	0	1	G_MBULINFO		
+4e53d4	4	.data	zero	named	0	0	0		8	4c8870,4c8990,4c8df0,4c8e70,4c92a0,4ccb80,4ce550,4cf8f0	0	2	G_MBCP		
+4e53d8	8	.data	zero	named	0	0	0		4	4c8990,4c8df0,4ccb80,4cf8f0	0	2	G_MBLCID		
+4e53e0	12	.data	zero	named	0	0	0		2	4c8990,4c8df0	0	2	G_MBULINFO		
 4e53ec	4	.data	zero	named	0	0	0		2	4c8990,4c8cc0	0	1	G_CPSYSSET		
-4e53f0	8	.data	scalar	named	4	0	0		1	4c8990	0	1	G_MBMASKS		
-4e53f8	4	.data	scalar	named	2	0	0		1	4c8990	0	1	G_CPINFO		
-4e53fc	236	.data	table	referenced	79	0	0		1	4c8990	0	0			
-4e54e8	8	.data	scalar	referenced	3	0	0		2	4c90b0,4cafa0	0	0			
-4e54f0	112	.data	table	referenced	27	0	0		2	4c8eb0,4cad80	0	0			
-4e5560	4	.data	scalar	referenced	1	0	0		2	4c8eb0,4cad80	0	0			
-4e5564	4	.data	scalar	referenced	1	0	0		2	4c8eb0,4cad80	0	0			
-4e5568	4	.data	scalar	referenced	1	0	0		2	4c90b0,4cafa0	0	0			
-4e556c	4	.data	scalar	referenced	1	0	0		2	4c8eb0,4cad80	0	0			
-4e5570	4	.data	zero	referenced	0	0	0		2	4c8eb0,4cad80	0	0			
+4e53f0	248	.data	table	documented	85	0	0		1	4c8990	0	1	G_CPINFO,G_MBMASKS		k_crt_mbctype_tables
+4e54e8	140	.data	table	documented	34	0	0		4	4c8eb0,4c90b0,4cad80,4cafa0	0	1	G_FIRSTFPE,G_FPECODE,G_NUMFPE,G_PXCPTINFO,G_XCPTCOUNT,G_XCPTTAB		g_crt_xcpt_act_tab
 4e5574	4	.data	zero	referenced	0	0	0		1	4c9930	0	0			
 4e5578	8	.data	zero	named	0	0	0		1	4c9bf0	0	1	G_ENVUSE		
-4e5580	8	.data	scalar	referenced	5	0	0		1	4c6650	0	0			
-4e5588	144	.data	table	documented	72	0	18		2	4ca330,4ca550	0	0			k_crt_rterrs
-4e5618	8	.data	zero	referenced	0	0	0		1	4ca2d0	0	0			
-4e5620	4	.data	zero	referenced	0	0	0		3	4cab10,4cacf0,4cad80	0	0			
-4e5624	4	.data	zero	referenced	0	0	0		3	4cab10,4cacf0,4cad80	0	0			
-4e5628	4	.data	zero	referenced	0	0	0		2	4cab10,4cad80	0	0			
-4e562c	4	.data	zero	referenced	0	0	0		2	4cab10,4cad80	0	0			
+4e5580	8	.data	scalar	documented	5	0	0		1	4c6650	0	1	G_BADIOINFO		k_crt_badioinfo
+4e5588	144	.data	table	documented	72	0	18		2	4ca330,4ca550	0	1	G_NMSGTAB		k_crt_rterrs
+4e5618	8	.data	zero	named	0	0	0		1	4ca2d0	0	1	G_ADBGMSG		
+4e5620	4	.data	zero	named	0	0	0		3	4cab10,4cacf0,4cad80	0	1	G_SIGINT		
+4e5624	4	.data	zero	named	0	0	0		3	4cab10,4cacf0,4cad80	0	1	G_SIGBREAK		
+4e5628	4	.data	zero	named	0	0	0		2	4cab10,4cad80	0	1	G_SIGABRT		
+4e562c	4	.data	zero	named	0	0	0		2	4cab10,4cad80	0	1	G_SIGTERM		
 4e5630	4	.data	zero	referenced	0	0	0		1	4cab10	0	0			
-4e5634	4	.data	zero	referenced	0	0	0		1	4cb010	0	0			
-4e5638	4	.data	zero	referenced	0	0	0		1	4cb010	0	0			
-4e563c	4	.data	zero	referenced	0	0	0		1	4cb010	0	0			
+4e5634	4	.data	zero	named	0	0	0		1	4cb010	0	1	G_PFNMSGBOX		
+4e5638	4	.data	zero	named	0	0	0		1	4cb010	0	1	G_PFNACTWIN		
+4e563c	4	.data	zero	named	0	0	0		1	4cb010	0	1	G_PFNPOPUP		
 4e5640	4	.data	zero	referenced	0	0	0		1	4cb0f0	0	0			
-4e5644	4	.data	zero	referenced	0	0	0		1	4cb350	0	0			
+4e5644	4	.data	zero	named	0	0	0		1	4cb350	0	1	G_STRTYPE_F		
 4e5648	4	.data	zero	referenced	0	0	0		1	4cb4f0	0	0			
-4e564c	12	.data	zero	referenced	0	0	0		1	4cb860	0	0			
-4e5658	16	.data	zero	named	0	0	0		5	4c57f0,4cb0f0,4cb350,4cbbf0,4cc770	0	1	G_LCCTYPE		
-4e5668	4	.data	zero	named	0	0	0		10	4c8cc0,4c9930,4cb0f0,4cb350,4cb4f0,4cb860,4cbbf0,4cc770,…	0	1	G_LCCP		
+4e564c	12	.data	zero	named	0	0	0		1	4cb860	0	1	G_LCMAP_F		
+4e5658	16	.data	zero	named	0	0	0		5	4c57f0,4cb0f0,4cb350,4cbbf0,4cc770	0	2	G_LCCTYPE		
+4e5668	4	.data	zero	named	0	0	0		10	4c8cc0,4c9930,4cb0f0,4cb350,4cb4f0,4cb860,4cbbf0,4cc770,…	0	2	G_LCCP		
 4e566c	4	.data	zero	named	0	0	0		1	4c6130	0	1	G_LPDAYS_M1		
-4e5670	52	.data	table	named	20	0	0		2	4c6130,4c6340	0	1	G_LPDAYS		
+4e5670	52	.data	table	documented	20	0	0		2	4c6130,4c6340	0	1	G_LPDAYS		k_crt_lpdays
 4e56a4	4	.data	zero	named	0	0	0		2	4c6130,4c6530	0	1	G_DAYS_M1		
-4e56a8	56	.data	table	named	20	0	0		2	4c6130,4c6340	0	1	G_DAYS		
-4e56e0	16	.data	table	named	8	0	2		2	4c6650,4cc5e0	0	1	G_IOB		
-4e56f0	68	.data	table	referenced	5	0	0		1	4cc5e0	0	0			
-4e5734	556	.data	zero	unreferenced	0	0	0		0		0	0			
-4e5960	16	.data	zero	referenced	0	0	0		1	4cc4d0	0	0			
-4e5970	4	.data	ptr(code)	referenced	3	1	0		1	4c68f0	0	0			
-4e5974	8	.data	ptr(code)	referenced	6	2	0		1	4c68f0	0	0			
-4e597c	12	.data	ptr(code)	referenced	9	3	0		1	4c68f0	0	0			
+4e56a8	56	.data	table	documented	20	0	0		2	4c6130,4c6340	0	1	G_DAYS		k_crt_days
+4e56e0	640	.data	table	documented	13	0	2		2	4c6650,4cc5e0	0	2	G_IOB,G_IOB1,G_IOB2		g_crt_iob
+4e5960	16	.data	zero	named	0	0	0		1	4cc4d0	0	1	G_CFLUSH		
+4e5970	24	.data	ptr(code)	documented	18	6	0		1	4c68f0	0	1	P_CFLTCVT,P_CROPZEROS,P_FORCDECPT		k_crt_cfltcvt_tab
 4e5988	4	.data	zero	referenced	0	0	0		1	4cd640	0	0			
-4e598c	4	.data	zero	referenced	0	0	0		1	4cd9a0	0	0			
+4e598c	4	.data	zero	named	0	0	0		1	4cd9a0	0	1	G_CMPSTR_F		
 4e5990	8	.data	zero	named	0	0	0		1	4cea50	0	1	G_FMODE		
 4e5998	4	.data	zero	named	0	0	0		1	40acce	0	0	g_gfx_caret_blink		
 4e599c	4	.data	zero	referenced	0	0	0		1	410f4b	0	1	g_rl_4e599c		
@@ -666,7 +539,7 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4e59d0	4	.data	zero	referenced	0	0	0		1	4393eb	0	1	g_rl_4e59d0		
 4e59d4	4	.data	zero	referenced	0	0	0		1	43eda0	0	1	g_rl_4e59d4		
 4e59d8	4	.data	zero	referenced	0	0	0		1	49a010	0	3	g_rl_4e59d8		
-4e59dc	4	.data	zero	referenced	0	0	0		1	4ac5ba	0	1			
+4e59dc	4	.data	zero	referenced	0	0	0		1	4ac5ba	0	2	g_rl_4e59dc		
 4e59e0	4	.data	zero	referenced	0	0	0		1	4b27bf	0	1	g_rl_4e59e0		
 4e59e4	4	.data	zero	referenced	0	0	0		1	4b2177	0	1			
 4e59e8	4	.data	zero	referenced	0	0	0		1	4b2131	0	0			
@@ -686,29 +559,29 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 5cf330	44	.idata	import	named	20	0	0		0		0	0		ILT smackw32.DLL (10)	
 5cf35c	4	.idata	import	named	3	0	0		1	4bf572	0	1		IAT DDRAW.dll!DirectDrawCreate	
 5cf360	4	.idata	import	named	0	0	0		0		0	0		IAT DDRAW.dll terminator	
-5cf364	4	.idata	import	named	2	0	0		1	4bf614	0	0		IAT DPLAYX.dll!#1	
-5cf368	4	.idata	import	named	2	0	0		1	4bf60e	0	0		IAT DPLAYX.dll!#2	
+5cf364	4	.idata	import	named	2	0	0		1	4bf614	0	1		IAT DPLAYX.dll!#1	
+5cf368	4	.idata	import	named	2	0	0		1	4bf60e	0	2	I_DirectPlayEnumerateA	IAT DPLAYX.dll!#2	
 5cf36c	4	.idata	import	named	0	0	0		0		0	0		IAT DPLAYX.dll terminator	
 5cf370	4	.idata	import	named	3	0	0		1	4bf5b4	0	1		IAT DSOUND.dll!DirectSoundCreate	
 5cf374	4	.idata	import	named	0	0	0		0		0	0		IAT DSOUND.dll terminator	
 5cf378	4	.idata	import	named	3	0	0		2	42e5c0,4bf55a	0	1		IAT GDI32.dll!GetPaletteEntries	
 5cf37c	4	.idata	import	named	3	0	0		2	42f1df,4bf566	0	1		IAT GDI32.dll!SetSystemPaletteUse	
 5cf380	4	.idata	import	named	3	0	0		2	4b2258,4bf56c	0	1		IAT GDI32.dll!GetStockObject	
-5cf384	4	.idata	import	named	3	0	0		2	42e3ba,4bf554	0	0		IAT GDI32.dll!PatBlt	
+5cf384	4	.idata	import	named	3	0	0		2	42e3ba,4bf554	0	1		IAT GDI32.dll!PatBlt	
 5cf388	4	.idata	import	named	3	0	0		2	42e5c0,4bf560	0	1		IAT GDI32.dll!GetDeviceCaps	
 5cf38c	4	.idata	import	named	0	0	0		0		0	0		IAT GDI32.dll terminator	
-5cf390	4	.idata	import	named	3	0	0		2	4b64d8,4bf3f8	0	0		IAT KERNEL32.dll!CreateThread	
-5cf394	4	.idata	import	named	3	0	0		3	4b64d8,4b6a15,4bf3f2	0	0		IAT KERNEL32.dll!FreeLibrary	
-5cf398	4	.idata	import	named	3	0	0		3	4b63d0,4b6ef7,4bf3ec	0	0		IAT KERNEL32.dll!WaitForSingleObject	
-5cf39c	4	.idata	import	named	3	0	0		4	4b64d8,4bf3fe,4c3950,4cb010	0	0		IAT KERNEL32.dll!LoadLibraryA	
-5cf3a0	4	.idata	import	named	3	0	0		5	4b6ef7,4b7052,4bf410,4ce640,4cea50	0	1	I_CloseHandle	IAT KERNEL32.dll!CloseHandle	
-5cf3a4	4	.idata	import	named	3	0	0		2	4b6ef7,4bf416	0	0		IAT KERNEL32.dll!TerminateThread	
-5cf3a8	4	.idata	import	named	3	0	0		5	4b64d8,4b6754,4bf404,4c3950,4cb010	0	0		IAT KERNEL32.dll!GetProcAddress	
-5cf3ac	4	.idata	import	named	3	0	0		6	4b6b71,4b74ce,4b7a9a,4b8c3a,4bf40a,4c37d0	0	2	g_rl_5cf3ac	IAT KERNEL32.dll!DebugBreak	
-5cf3b0	4	.idata	import	named	3	0	0		2	4b6ef7,4bf428	0	1		IAT KERNEL32.dll!FormatMessageA	
-5cf3b4	4	.idata	import	named	3	0	0		8	4b63d0,4b6a15,4b6ef7,4b7052,4b7a9a,4b8c3a,4bf3e0,4c3950	0	2	g_rl_5cf3b4	IAT KERNEL32.dll!OutputDebugStringA	
-5cf3b8	4	.idata	import	named	3	0	0		2	4b63d0,4bf3e6	0	1		IAT KERNEL32.dll!ResetEvent	
-5cf3bc	4	.idata	import	named	3	0	0		5	4b7a9a,4bf43a,4c3d40,4c94a0,4ca330	0	1	I_GetModuleFileNameA	IAT KERNEL32.dll!GetModuleFileNameA	
+5cf390	4	.idata	import	named	3	0	0		2	4b64d8,4bf3f8	0	1		IAT KERNEL32.dll!CreateThread	
+5cf394	4	.idata	import	named	3	0	0		3	4b64d8,4b6a15,4bf3f2	0	2		IAT KERNEL32.dll!FreeLibrary	
+5cf398	4	.idata	import	named	3	0	0		3	4b63d0,4b6ef7,4bf3ec	0	2		IAT KERNEL32.dll!WaitForSingleObject	
+5cf39c	4	.idata	import	named	3	0	0		4	4b64d8,4bf3fe,4c3950,4cb010	0	2	I_LoadLibraryA	IAT KERNEL32.dll!LoadLibraryA	
+5cf3a0	4	.idata	import	named	3	0	0		5	4b6ef7,4b7052,4bf410,4ce640,4cea50	0	3	I_CloseHandle	IAT KERNEL32.dll!CloseHandle	
+5cf3a4	4	.idata	import	named	3	0	0		2	4b6ef7,4bf416	0	1		IAT KERNEL32.dll!TerminateThread	
+5cf3a8	4	.idata	import	named	3	0	0		5	4b64d8,4b6754,4bf404,4c3950,4cb010	0	2	I_GetProcAddress	IAT KERNEL32.dll!GetProcAddress	
+5cf3ac	4	.idata	import	named	3	0	0		6	4b6b71,4b74ce,4b7a9a,4b8c3a,4bf40a,4c37d0	0	3	I_DebugBreak,g_rl_5cf3ac	IAT KERNEL32.dll!DebugBreak	
+5cf3b0	4	.idata	import	named	3	0	0		2	4b6ef7,4bf428	0	2		IAT KERNEL32.dll!FormatMessageA	
+5cf3b4	4	.idata	import	named	3	0	0		8	4b63d0,4b6a15,4b6ef7,4b7052,4b7a9a,4b8c3a,4bf3e0,4c3950	0	4	I_OutputDebugStringA,g_rl_5cf3b4	IAT KERNEL32.dll!OutputDebugStringA	
+5cf3b8	4	.idata	import	named	3	0	0		2	4b63d0,4bf3e6	0	2		IAT KERNEL32.dll!ResetEvent	
+5cf3bc	4	.idata	import	named	3	0	0		5	4b7a9a,4bf43a,4c3d40,4c94a0,4ca330	0	3	I_GetModuleFileNameA	IAT KERNEL32.dll!GetModuleFileNameA	
 5cf3c0	4	.idata	import	named	3	0	0		3	4b7a9a,4bf440,4c3370	0	2	I_GetModuleHandleA	IAT KERNEL32.dll!GetModuleHandleA	
 5cf3c4	4	.idata	import	named	3	0	0		3	4b92e0,4b984f,4bf446	0	2	g_rl_5cf3c4	IAT KERNEL32.dll!GlobalAlloc	
 5cf3c8	4	.idata	import	named	3	0	0		2	4b2575,4bf3d4	0	1		IAT KERNEL32.dll!GlobalMemoryStatus	
@@ -718,40 +591,40 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 5cf3d8	4	.idata	import	named	3	0	0		6	4050c0,43eda0,43f01d,4b7250,4b8c3a,4bf3bc	0	3	g_rl_5cf3d8	IAT KERNEL32.dll!GetTickCount	
 5cf3dc	4	.idata	import	named	3	0	0		2	426dd5,4bf3b6	0	2		IAT KERNEL32.dll!InterlockedExchange	
 5cf3e0	4	.idata	import	named	3	0	0		6	425e4b,427990,4b92e0,4b97f9,4b984f,4bf3b0	0	1		IAT KERNEL32.dll!GlobalFree	
-5cf3e4	4	.idata	import	named	3	0	0		2	4b62ea,4bf3da	0	1		IAT KERNEL32.dll!CreateEventA	
-5cf3e8	4	.idata	import	named	3	0	0		17	4b6ef7,4bf42e,4c1d60,4c2260,4c22c0,4c43e0,4cab10,4cbbf0,…	0	1	I_GetLastError	IAT KERNEL32.dll!GetLastError	
-5cf3ec	4	.idata	import	named	3	0	0		2	4b7052,4bf434	0	0		IAT KERNEL32.dll!SetEvent	
-5cf3f0	4	.idata	import	named	3	0	0		2	4b6ef7,4bf41c	0	0		IAT KERNEL32.dll!GetExitCodeThread	
-5cf3f4	4	.idata	import	named	3	0	0		2	4b6ef7,4bf422	0	0		IAT KERNEL32.dll!LocalFree	
-5cf3f8	4	.idata	import	named	2	0	0		2	4cf640,4cfb00	0	0		IAT KERNEL32.dll!SetEndOfFile	
-5cf3fc	4	.idata	import	named	3	0	0		3	4cb4f0,4cb860,4ce9c4	0	0		IAT KERNEL32.dll!LCMapStringW	
-5cf400	4	.idata	import	named	3	0	0		3	4cb4f0,4cb860,4ce9be	0	0		IAT KERNEL32.dll!LCMapStringA	
-5cf404	4	.idata	import	named	3	0	0		3	4c8990,4cd9a0,4ce964	0	1	I_GetCPInfo	IAT KERNEL32.dll!GetCPInfo	
+5cf3e4	4	.idata	import	named	3	0	0		2	4b62ea,4bf3da	0	2		IAT KERNEL32.dll!CreateEventA	
+5cf3e8	4	.idata	import	named	3	0	0		17	4b6ef7,4bf42e,4c1d60,4c2260,4c22c0,4c43e0,4cab10,4cbbf0,…	0	4	I_GetLastError	IAT KERNEL32.dll!GetLastError	
+5cf3ec	4	.idata	import	named	3	0	0		2	4b7052,4bf434	0	1		IAT KERNEL32.dll!SetEvent	
+5cf3f0	4	.idata	import	named	3	0	0		2	4b6ef7,4bf41c	0	1		IAT KERNEL32.dll!GetExitCodeThread	
+5cf3f4	4	.idata	import	named	3	0	0		2	4b6ef7,4bf422	0	1		IAT KERNEL32.dll!LocalFree	
+5cf3f8	4	.idata	import	named	2	0	0		2	4cf640,4cfb00	0	1	I_SetEndOfFile	IAT KERNEL32.dll!SetEndOfFile	
+5cf3fc	4	.idata	import	named	3	0	0		3	4cb4f0,4cb860,4ce9c4	0	1	I_LCMapStringW	IAT KERNEL32.dll!LCMapStringW	
+5cf400	4	.idata	import	named	3	0	0		3	4cb4f0,4cb860,4ce9be	0	1	I_LCMapStringA	IAT KERNEL32.dll!LCMapStringA	
+5cf404	4	.idata	import	named	3	0	0		3	4c8990,4cd9a0,4ce964	0	2	I_GetCPInfo	IAT KERNEL32.dll!GetCPInfo	
 5cf408	4	.idata	import	named	3	0	0		3	4c45b0,4c4b10,4ce95e	0	1	I_VirtualAlloc	IAT KERNEL32.dll!VirtualAlloc	
 5cf40c	4	.idata	import	named	3	0	0		2	4c8cc0,4ce96a	0	1	I_GetACP	IAT KERNEL32.dll!GetACP	
 5cf410	4	.idata	import	named	3	0	0		2	4c4480,4ce952	0	1	I_HeapCreate	IAT KERNEL32.dll!HeapCreate	
 5cf414	4	.idata	import	named	3	0	0		3	4c4480,4c44e0,4ce94c	0	1	I_HeapDestroy	IAT KERNEL32.dll!HeapDestroy	
-5cf418	4	.idata	import	named	3	0	0		5	4c44e0,4c45b0,4c47c0,4c4850,4ce958	0	1	I_VirtualFree	IAT KERNEL32.dll!VirtualFree	
-5cf41c	4	.idata	import	named	3	0	0		3	4c4090,4c4160,4ce940	0	0		IAT KERNEL32.dll!HeapReAlloc	
-5cf420	4	.idata	import	named	3	0	0		2	4c3950,4ce93a	0	0		IAT KERNEL32.dll!InterlockedIncrement	
-5cf424	4	.idata	import	named	3	0	0		4	4c4370,4c45b0,4c47c0,4ce946	0	1	I_HeapFree	IAT KERNEL32.dll!HeapFree	
-5cf428	4	.idata	import	named	3	0	0		2	4c3950,4ce92e	0	0		IAT KERNEL32.dll!InterlockedDecrement	
-5cf42c	4	.idata	import	named	3	0	0		4	4c3870,4c9e50,4ca330,4ce928	0	1	I_GetStdHandle	IAT KERNEL32.dll!GetStdHandle	
-5cf430	4	.idata	import	named	3	0	0		4	4c3950,4ca330,4cc0b0,4ce934	0	1	I_WriteFile	IAT KERNEL32.dll!WriteFile	
-5cf434	4	.idata	import	named	3	0	0		2	4c3370,4ce91c	0	2	I_GetVersion	IAT KERNEL32.dll!GetVersion	
-5cf438	4	.idata	import	named	3	0	0		2	4c3370,4ce916	0	2	I_GetCommandLineA	IAT KERNEL32.dll!GetCommandLineA	
-5cf43c	4	.idata	import	named	3	0	0		4	4c3760,4c4160,4c45b0,4ce922	0	1	I_HeapAlloc	IAT KERNEL32.dll!HeapAlloc	
+5cf418	4	.idata	import	named	3	0	0		5	4c44e0,4c45b0,4c47c0,4c4850,4ce958	0	2	I_VirtualFree	IAT KERNEL32.dll!VirtualFree	
+5cf41c	4	.idata	import	named	3	0	0		3	4c4090,4c4160,4ce940	0	1	I_HeapReAlloc	IAT KERNEL32.dll!HeapReAlloc	
+5cf420	4	.idata	import	named	3	0	0		2	4c3950,4ce93a	0	1	I_InterlockedIncrement	IAT KERNEL32.dll!InterlockedIncrement	
+5cf424	4	.idata	import	named	3	0	0		4	4c4370,4c45b0,4c47c0,4ce946	0	2	I_HeapFree	IAT KERNEL32.dll!HeapFree	
+5cf428	4	.idata	import	named	3	0	0		2	4c3950,4ce92e	0	1	I_InterlockedDecrement	IAT KERNEL32.dll!InterlockedDecrement	
+5cf42c	4	.idata	import	named	3	0	0		4	4c3870,4c9e50,4ca330,4ce928	0	2	I_GetStdHandle	IAT KERNEL32.dll!GetStdHandle	
+5cf430	4	.idata	import	named	3	0	0		4	4c3950,4ca330,4cc0b0,4ce934	0	2	I_WriteFile	IAT KERNEL32.dll!WriteFile	
+5cf434	4	.idata	import	named	3	0	0		2	4c3370,4ce91c	0	1	I_GetVersion	IAT KERNEL32.dll!GetVersion	
+5cf438	4	.idata	import	named	3	0	0		2	4c3370,4ce916	0	1	I_GetCommandLineA	IAT KERNEL32.dll!GetCommandLineA	
+5cf43c	4	.idata	import	named	3	0	0		4	4c3760,4c4160,4c45b0,4ce922	0	2	I_HeapAlloc	IAT KERNEL32.dll!HeapAlloc	
 5cf440	4	.idata	import	named	3	0	0		1	4ce90a	0	0		IAT KERNEL32.dll!RtlUnwind	
-5cf444	4	.idata	import	named	3	0	0		2	4c2740,4ce904	0	2	I_GetLocalTime	IAT KERNEL32.dll!GetLocalTime	
-5cf448	4	.idata	import	named	3	0	0		3	4c3370,4c9e50,4ce910	0	2	I_GetStartupInfoA	IAT KERNEL32.dll!GetStartupInfoA	
-5cf44c	4	.idata	import	named	3	0	0		3	4c2740,4c5a60,4ce8f8	0	2	I_GetTimeZoneInformation	IAT KERNEL32.dll!GetTimeZoneInformation	
+5cf444	4	.idata	import	named	3	0	0		2	4c2740,4ce904	0	1	I_GetLocalTime	IAT KERNEL32.dll!GetLocalTime	
+5cf448	4	.idata	import	named	3	0	0		3	4c3370,4c9e50,4ce910	0	1	I_GetStartupInfoA	IAT KERNEL32.dll!GetStartupInfoA	
+5cf44c	4	.idata	import	named	3	0	0		3	4c2740,4c5a60,4ce8f8	0	1	I_GetTimeZoneInformation	IAT KERNEL32.dll!GetTimeZoneInformation	
 5cf450	4	.idata	import	named	3	0	0		2	4c22c0,4ce8f2	0	1	I_DeleteFileA	IAT KERNEL32.dll!DeleteFileA	
 5cf454	4	.idata	import	named	3	0	0		2	4c2740,4ce8fe	0	1	I_GetSystemTime	IAT KERNEL32.dll!GetSystemTime	
 5cf458	4	.idata	import	named	3	0	0		3	4c1d60,4ce8e6,4cf550	0	1	I_SetCurrentDirectoryA	IAT KERNEL32.dll!SetCurrentDirectoryA	
-5cf45c	4	.idata	import	named	3	0	0		2	4c1c80,4ce8e0	0	0		IAT KERNEL32.dll!GetDriveTypeA	
+5cf45c	4	.idata	import	named	3	0	0		2	4c1c80,4ce8e0	0	1	I_GetDriveTypeA	IAT KERNEL32.dll!GetDriveTypeA	
 5cf460	4	.idata	import	named	3	0	0		2	4c2260,4ce8ec	0	1	I_MoveFileA	IAT KERNEL32.dll!MoveFileA	
 5cf464	4	.idata	import	named	3	0	0		4	4c1b40,4c1cf0,4ce8d4,4cf550	0	1	I_GetCurrentDirectoryA	IAT KERNEL32.dll!GetCurrentDirectoryA	
-5cf468	4	.idata	import	named	3	0	0		3	4c1170,4c43e0,4ce8ce	0	1	I_HeapValidate	IAT KERNEL32.dll!HeapValidate	
+5cf468	4	.idata	import	named	3	0	0		3	4c1170,4c43e0,4ce8ce	0	2	I_HeapValidate	IAT KERNEL32.dll!HeapValidate	
 5cf46c	4	.idata	import	named	3	0	0		2	4c1b40,4ce8da	0	1	I_GetFullPathNameA	IAT KERNEL32.dll!GetFullPathNameA	
 5cf470	4	.idata	import	named	3	0	0		3	4c1110,4cca80,4ce8c2	0	1	I_IsBadWritePtr	IAT KERNEL32.dll!IsBadWritePtr	
 5cf474	4	.idata	import	named	3	0	0		2	4bf770,4ce8bc	0	1	I_GetCurrentProcess	IAT KERNEL32.dll!GetCurrentProcess	
@@ -762,26 +635,26 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 5cf488	4	.idata	import	named	3	0	0		2	4c8eb0,4ce976	0	0		IAT KERNEL32.dll!UnhandledExceptionFilter	
 5cf48c	4	.idata	import	named	3	0	0		3	4c9930,4c9bf0,4ce97c	0	1	I_FreeEnvironmentStringsA	IAT KERNEL32.dll!FreeEnvironmentStringsA	
 5cf490	4	.idata	import	named	3	0	0		3	4c9930,4c9bf0,4ce988	0	1	I_GetEnvironmentStrings	IAT KERNEL32.dll!GetEnvironmentStrings	
-5cf494	4	.idata	import	named	3	0	0		6	4c9930,4cb350,4cb4f0,4cb860,4cd9a0,4ce982	0	0		IAT KERNEL32.dll!MultiByteToWideChar	
-5cf498	4	.idata	import	named	3	0	0		2	4ccac0,4ce9d6	0	0		IAT KERNEL32.dll!IsBadCodePtr	
+5cf494	4	.idata	import	named	3	0	0		6	4c9930,4cb350,4cb4f0,4cb860,4cd9a0,4ce982	0	1	I_MultiByteToWideChar	IAT KERNEL32.dll!MultiByteToWideChar	
+5cf498	4	.idata	import	named	3	0	0		2	4ccac0,4ce9d6	0	1	I_IsBadCodePtr	IAT KERNEL32.dll!IsBadCodePtr	
 5cf49c	4	.idata	import	named	1	0	0		2	4cea50,4cfaf4	0	1	I_CreateFileA	IAT KERNEL32.dll!CreateFileA	
-5cf4a0	4	.idata	import	named	3	0	0		2	4ce470,4ce9f4	0	0		IAT KERNEL32.dll!FlushFileBuffers	
-5cf4a4	4	.idata	import	named	3	0	0		3	4cde70,4ce9ee,4cf550	0	1	I_SetEnvironmentVariableA	IAT KERNEL32.dll!SetEnvironmentVariableA	
+5cf4a0	4	.idata	import	named	3	0	0		2	4ce470,4ce9f4	0	1	I_FlushFileBuffers	IAT KERNEL32.dll!FlushFileBuffers	
+5cf4a4	4	.idata	import	named	3	0	0		3	4cde70,4ce9ee,4cf550	0	2	I_SetEnvironmentVariableA	IAT KERNEL32.dll!SetEnvironmentVariableA	
 5cf4a8	4	.idata	import	named	2	0	0		2	4ceff0,4cfafa	0	1	I_ReadFile	IAT KERNEL32.dll!ReadFile	
-5cf4ac	4	.idata	import	named	3	0	0		12	40e9ab,43ac23,43b593,43bdcd,43c634,43eda0,447b8e,4782c5,…	0	2	g_bf_5cf4ac	IAT KERNEL32.dll!Sleep	
-5cf4b0	4	.idata	import	named	3	0	0		3	4cd640,4cd9a0,4ce9e8	0	1		IAT KERNEL32.dll!CompareStringW	
-5cf4b4	4	.idata	import	named	3	0	0		3	4cd640,4cd9a0,4ce9e2	0	0		IAT KERNEL32.dll!CompareStringA	
+5cf4ac	4	.idata	import	named	3	0	0		12	40e9ab,43ac23,43b593,43bdcd,43c634,43eda0,447b8e,4782c5,…	0	3	g_bf_5cf4ac	IAT KERNEL32.dll!Sleep	
+5cf4b0	4	.idata	import	named	3	0	0		3	4cd640,4cd9a0,4ce9e8	0	2	I_CompareStringW	IAT KERNEL32.dll!CompareStringW	
+5cf4b4	4	.idata	import	named	3	0	0		3	4cd640,4cd9a0,4ce9e2	0	1	I_CompareStringA	IAT KERNEL32.dll!CompareStringA	
 5cf4b8	4	.idata	import	named	3	0	0		3	4cce10,4ccf10,4ce9dc	0	1	I_SetStdHandle	IAT KERNEL32.dll!SetStdHandle	
-5cf4bc	4	.idata	import	named	3	0	0		3	4cb0f0,4cb350,4ce9b8	0	0		IAT KERNEL32.dll!GetStringTypeW	
+5cf4bc	4	.idata	import	named	3	0	0		3	4cb0f0,4cb350,4ce9b8	0	1	I_GetStringTypeW	IAT KERNEL32.dll!GetStringTypeW	
 5cf4c0	4	.idata	import	named	3	0	0		3	4c9930,4c9bf0,4ce994	0	1	I_GetEnvironmentStringsW	IAT KERNEL32.dll!GetEnvironmentStringsW	
 5cf4c4	4	.idata	import	named	3	0	0		3	4c9930,4c9bf0,4ce98e	0	1	I_FreeEnvironmentStringsW	IAT KERNEL32.dll!FreeEnvironmentStringsW	
 5cf4c8	4	.idata	import	named	3	0	0		2	4bf770,4ce8b0	0	1	I_ExitProcess	IAT KERNEL32.dll!ExitProcess	
 5cf4cc	4	.idata	import	named	3	0	0		2	4bf770,4ce8b6	0	1	I_TerminateProcess	IAT KERNEL32.dll!TerminateProcess	
-5cf4d0	4	.idata	import	named	3	0	0		3	4cb0f0,4cb350,4ce9b2	0	0		IAT KERNEL32.dll!GetStringTypeA	
+5cf4d0	4	.idata	import	named	3	0	0		3	4cb0f0,4cb350,4ce9b2	0	1	I_GetStringTypeA	IAT KERNEL32.dll!GetStringTypeA	
 5cf4d4	4	.idata	import	named	3	0	0		2	4cab10,4ce9ac	0	0		IAT KERNEL32.dll!SetConsoleCtrlHandler	
 5cf4d8	4	.idata	import	named	3	0	0		4	4c9e50,4cd0b0,4ce9a6,4cea50	0	1	I_GetFileType	IAT KERNEL32.dll!GetFileType	
 5cf4dc	4	.idata	import	named	3	0	0		2	4c9e50,4ce9a0	0	1	I_SetHandleCount	IAT KERNEL32.dll!SetHandleCount	
-5cf4e0	4	.idata	import	named	3	0	0		9	4c9bf0,4cb0f0,4cb4f0,4cb860,4cbbf0,4cc770,4ccbf0,4cd640,…	0	1	I_WideCharToMultiByte	IAT KERNEL32.dll!WideCharToMultiByte	
+5cf4e0	4	.idata	import	named	3	0	0		9	4c9bf0,4cb0f0,4cb4f0,4cb860,4cbbf0,4cc770,4ccbf0,4cd640,…	0	2	I_WideCharToMultiByte	IAT KERNEL32.dll!WideCharToMultiByte	
 5cf4e4	4	.idata	import	named	0	0	0		0		0	0		IAT KERNEL32.dll terminator	
 5cf4e8	4	.idata	import	named	3	0	0		3	42e3ba,4b29be,4bf476	0	1		IAT USER32.dll!BeginPaint	
 5cf4ec	4	.idata	import	named	3	0	0		2	42e5c0,4bf4a6	0	1		IAT USER32.dll!SetWindowLongA	
@@ -792,30 +665,30 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 5cf500	4	.idata	import	named	3	0	0		2	42e5c0,4bf482	0	1		IAT USER32.dll!GetWindowRect	
 5cf504	4	.idata	import	named	3	0	0		2	42e5c0,4bf488	0	1		IAT USER32.dll!SystemParametersInfoA	
 5cf508	4	.idata	import	named	3	0	0		3	42e5c0,4b29be,4bf48e	0	1		IAT USER32.dll!AdjustWindowRectEx	
-5cf50c	4	.idata	import	named	3	0	0		2	4b85b7,4bf54e	0	0		IAT USER32.dll!SetTimer	
+5cf50c	4	.idata	import	named	3	0	0		2	4b85b7,4bf54e	0	1		IAT USER32.dll!SetTimer	
 5cf510	4	.idata	import	named	3	0	0		5	40e9ab,40ec2c,42e5c0,4b63d0,4bf458	0	2		IAT USER32.dll!DispatchMessageA	
 5cf514	4	.idata	import	named	3	0	0		6	40e9ab,40ec2c,43e668,4b18f8,4b29be,4bf452	0	2		IAT USER32.dll!PostMessageA	
 5cf518	4	.idata	import	named	3	0	0		4	40e9ab,434942,4b29be,4bf44c	0	2		IAT USER32.dll!WinHelpA	
 5cf51c	4	.idata	import	named	3	0	0		3	42e5c0,4b29be,4bf494	0	1		IAT USER32.dll!GetWindowLongA	
-5cf520	4	.idata	import	named	3	0	0		4	4b7f78,4b8439,4b85b7,4bf53c	0	0		IAT USER32.dll!GetDlgItem	
-5cf524	4	.idata	import	named	3	0	0		2	4b85b7,4bf548	0	0		IAT USER32.dll!KillTimer	
-5cf528	4	.idata	import	named	3	0	0		2	4b8439,4bf542	0	0		IAT USER32.dll!SendDlgItemMessageA	
+5cf520	4	.idata	import	named	3	0	0		4	4b7f78,4b8439,4b85b7,4bf53c	0	2		IAT USER32.dll!GetDlgItem	
+5cf524	4	.idata	import	named	3	0	0		2	4b85b7,4bf548	0	1		IAT USER32.dll!KillTimer	
+5cf528	4	.idata	import	named	3	0	0		2	4b8439,4bf542	0	1		IAT USER32.dll!SendDlgItemMessageA	
 5cf52c	4	.idata	import	named	3	0	0		2	4b7585,4bf52a	0	1		IAT USER32.dll!DialogBoxParamA	
-5cf530	4	.idata	import	named	3	0	0		5	4b7f78,4b82bf,4b85b7,4b8b87,4bf536	0	0		IAT USER32.dll!SendMessageA	
-5cf534	4	.idata	import	named	3	0	0		5	4b7f78,4b8335,4b8439,4b85b7,4bf530	0	0		IAT USER32.dll!EndDialog	
-5cf538	4	.idata	import	named	3	0	0		3	4b62ea,4b64d8,4bf518	0	0		IAT USER32.dll!MessageBoxA	
-5cf53c	4	.idata	import	named	3	0	0		2	4b7052,4bf524	0	0		IAT USER32.dll!ShowWindow	
-5cf540	4	.idata	import	named	3	0	0		2	4b7052,4bf51e	0	0		IAT USER32.dll!SetForegroundWindow	
+5cf530	4	.idata	import	named	3	0	0		5	4b7f78,4b82bf,4b85b7,4b8b87,4bf536	0	2		IAT USER32.dll!SendMessageA	
+5cf534	4	.idata	import	named	3	0	0		5	4b7f78,4b8335,4b8439,4b85b7,4bf530	0	2		IAT USER32.dll!EndDialog	
+5cf538	4	.idata	import	named	3	0	0		3	4b62ea,4b64d8,4bf518	0	1		IAT USER32.dll!MessageBoxA	
+5cf53c	4	.idata	import	named	3	0	0		2	4b7052,4bf524	0	1		IAT USER32.dll!ShowWindow	
+5cf540	4	.idata	import	named	3	0	0		2	4b7052,4bf51e	0	1		IAT USER32.dll!SetForegroundWindow	
 5cf544	4	.idata	import	named	3	0	0		2	4b29be,4bf506	0	1		IAT USER32.dll!GetClientRect	
 5cf548	4	.idata	import	named	3	0	0		2	4b29be,4bf512	0	1		IAT USER32.dll!ClientToScreen	
-5cf54c	4	.idata	import	named	3	0	0		3	4b29be,4b7052,4bf50c	0	1		IAT USER32.dll!IsIconic	
+5cf54c	4	.idata	import	named	3	0	0		3	4b29be,4b7052,4bf50c	0	2		IAT USER32.dll!IsIconic	
 5cf550	4	.idata	import	named	3	0	0		3	4b26f8,4b29be,4bf4f4	0	1		IAT USER32.dll!GetForegroundWindow	
 5cf554	4	.idata	import	named	3	0	0		2	4b29be,4bf500	0	1		IAT USER32.dll!PostQuitMessage	
 5cf558	4	.idata	import	named	3	0	0		2	4b29be,4bf4fa	0	1		IAT USER32.dll!DefWindowProcA	
 5cf55c	4	.idata	import	named	3	0	0		2	4b2258,4bf4e2	0	1		IAT USER32.dll!RegisterClassA	
-5cf560	4	.idata	import	named	3	0	0		2	4b26b8,4bf4ee	0	0		IAT USER32.dll!InvalidateRect	
+5cf560	4	.idata	import	named	3	0	0		2	4b26b8,4bf4ee	0	1		IAT USER32.dll!InvalidateRect	
 5cf564	4	.idata	import	named	3	0	0		2	4b2258,4bf4e8	0	1		IAT USER32.dll!LoadIconA	
-5cf568	4	.idata	import	named	3	0	0		8	4b2258,4b7052,4b7f78,4b82bf,4b8439,4b85b7,4b8b87,4bf4d0	0	1		IAT USER32.dll!SetFocus	
+5cf568	4	.idata	import	named	3	0	0		8	4b2258,4b7052,4b7f78,4b82bf,4b8439,4b85b7,4b8b87,4bf4d0	0	3		IAT USER32.dll!SetFocus	
 5cf56c	4	.idata	import	named	3	0	0		2	4b2258,4bf4dc	0	1		IAT USER32.dll!LoadCursorA	
 5cf570	4	.idata	import	named	3	0	0		2	4b2258,4bf4d6	0	1		IAT USER32.dll!CreateWindowExA	
 5cf574	4	.idata	import	named	3	0	0		3	42eb7c,4b2258,4bf4be	0	2		IAT USER32.dll!UpdateWindow	
@@ -844,8 +717,8 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 5cf5d0	4	.idata	import	named	3	0	0		2	4b95ba,4bf5f6	0	1		IAT WINMM.dll!mmioSeek	
 5cf5d4	4	.idata	import	named	0	0	0		0		0	0		IAT WINMM.dll terminator	
 5cf5d8	4	.idata	import	named	2	0	0		2	42dbc7,4bf59c	0	1		IAT smackw32.DLL!#32	
-5cf5dc	4	.idata	import	named	2	0	0		2	42e3ba,4bf5ae	0	1		IAT smackw32.DLL!#27	
-5cf5e0	4	.idata	import	named	2	0	0		2	42e3ba,4bf5a8	0	0		IAT smackw32.DLL!#17	
+5cf5dc	4	.idata	import	named	2	0	0		2	42e3ba,4bf5ae	0	2		IAT smackw32.DLL!#27	
+5cf5e0	4	.idata	import	named	2	0	0		2	42e3ba,4bf5a8	0	1		IAT smackw32.DLL!#17	
 5cf5e4	4	.idata	import	named	2	0	0		2	42e320,4bf5a2	0	2	g_rl_5cf5e4	IAT smackw32.DLL!#37	
 5cf5e8	4	.idata	import	named	2	0	0		2	42dbc7,4bf596	0	1		IAT smackw32.DLL!#28	
 5cf5ec	4	.idata	import	named	2	0	0		2	42da18,4bf584	0	1		IAT smackw32.DLL!#14	

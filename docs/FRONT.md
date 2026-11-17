@@ -195,10 +195,11 @@
    (rl_42ff10 / 4b191e / 4ba9c8 / 4472ce / 47685d), clocks with rare arms (rl_4b27bf / 40490d / 4bbc80), logic leaves
    (bf_*, eco_*), gated per-frame redraws (rl_render.c) — sampling by (caller, screen) would skip their rare arms.
    Next if verify time still hurts: sample per-frame rows except on frames with an input event or a state change.
-8. **Data-image documentation** (`docs/data-ledger.md`, catalog `docs/data/catalog.tsv`): document each item with
-   evidence (the bot exercises what it needs: a scenario that reads the item, a probe of its consumer); largest open:
-   the string tables (every unreferenced non-zero byte is a string), 0x4e3260 (2244 B, 0x4bb978), 0x4d3200 (0x43c2a9), the
-   draw tables 0x4e3bf4 / 0x4e4034, the menu / button records 0x4dc360..0x4de000. Goal: a port that loads nothing.
+8. **Data-image documentation** (`docs/data-ledger.md`, catalog `docs/data/catalog.tsv`): **2026-11-17: .rdata / .data
+   100 % of non-zero bytes documented** (397 rows; all sections 85.0 %, the rest PE headers / imports / resources) —
+   `docs/findings/data-catalog.md` (a port defect fixed, retail OOB reads, dead data, 17 port names to correct). Next
+   toward "a port that loads nothing": the port's own copies of each catalog item (generated from the exe today:
+   `src/gen/`, `g_rl_*` initializers) checked against the catalog; then the standalone maps no exe section.
 9. ~~**Port build `-std=gnu11`**~~ — done 2026-11-17: retail has no x87 code (IDA export: 0 FP mnemonics), the port
    none either; all 213 src modules compile to identical code under c11 / gnu11, rhost.exe byte-identical; src / tests
    Makefiles → gnu11.

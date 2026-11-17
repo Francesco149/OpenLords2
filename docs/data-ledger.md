@@ -11,22 +11,22 @@ Status: **documented** = a catalog row · **named** = a non-generic port name (o
 | section | range | bytes | non-zero | items | documented | named | referenced | unreferenced |
 |---|---|--:|--:|--:|--:|--:|--:|--:|
 | headers | 400000–400400 | 1024 | 214 | 6 | 0 B / 0 | 1024 B / 6 | 0 B / 0 | 0 B / 0 |
-| .rdata | 4d0000–4d10f8 | 4344 | 3760 | 20 | 4204 B / 14 | 84 B / 1 | 32 B / 3 | 24 B / 2 |
-| .data | 4d2000–4e5a00 | 80384 | 42826 | 649 | 65175 B / 217 | 534 B / 75 | 11555 B / 321 | 3120 B / 36 |
+| .rdata | 4d0000–4d10f8 | 4344 | 3760 | 18 | 4340 B / 17 | 0 B / 0 | 0 B / 0 | 4 B / 1 |
+| .data | 4d2000–4e5a00 | 80384 | 42826 | 524 | 79091 B / 380 | 290 B / 48 | 918 B / 76 | 85 B / 20 |
 | .idata | 5cf000–5d002a | 4138 | 3300 | 342 | 0 B / 0 | 4133 B / 337 | 0 B / 0 | 5 B / 5 |
 | .rsrc | 5d1000–5d341a | 9242 | 4692 | 88 | 0 B / 0 | 9236 B / 85 | 0 B / 0 | 6 B / 3 |
-| all |  | 99132 | 54792 | 1105 | 69379 B / 231 | 15011 B / 504 | 11587 B / 324 | 3155 B / 46 |
+| all |  | 99132 | 54792 | 978 | 83431 B / 397 | 14683 B / 476 | 918 B / 76 | 100 B / 29 |
 
 Non-zero bytes per status (zero bytes need no documentation beyond their extent):
 
 | section | documented | named | referenced | unreferenced |
 |---|--:|--:|--:|--:|
 | headers | 0 (0.0 %) | 214 (100.0 %) | 0 (0.0 %) | 0 (0.0 %) |
-| .rdata | 3708 (98.6 %) | 27 (0.7 %) | 25 (0.7 %) | 0 (0.0 %) |
-| .data | 39416 (92.0 %) | 118 (0.3 %) | 3014 (7.0 %) | 278 (0.6 %) |
+| .rdata | 3760 (100.0 %) | 0 (0.0 %) | 0 (0.0 %) | 0 (0.0 %) |
+| .data | 42826 (100.0 %) | 0 (0.0 %) | 0 (0.0 %) | 0 (0.0 %) |
 | .idata | 0 (0.0 %) | 3300 (100.0 %) | 0 (0.0 %) | 0 (0.0 %) |
 | .rsrc | 0 (0.0 %) | 4692 (100.0 %) | 0 (0.0 %) | 0 (0.0 %) |
-| all | 43124 (78.7 %) | 8351 (15.2 %) | 3039 (5.5 %) | 278 (0.5 %) |
+| all | 46586 (85.0 %) | 8206 (15.0 %) | 0 (0.0 %) | 0 (0.0 %) |
 
 By kind (all sections):
 
@@ -34,14 +34,14 @@ By kind (all sections):
 |---|--:|--:|--:|
 | header | 7 | 1108 | 241 |
 | import | 342 | 4138 | 3300 |
-| ptr(code) | 10 | 1108 | 826 |
-| ptr(data) | 7 | 40 | 30 |
-| ptr(mixed) | 1 | 8 | 6 |
+| ptr(code) | 6 | 1104 | 823 |
+| ptr(data) | 2 | 40 | 28 |
+| ptr(mixed) | 1 | 12 | 9 |
 | resource | 88 | 9242 | 4692 |
-| scalar | 83 | 366 | 146 |
-| string | 98 | 35392 | 26735 |
-| table | 282 | 44133 | 18816 |
-| zero | 187 | 3597 | 0 |
+| scalar | 4 | 28 | 13 |
+| string | 102 | 35481 | 26757 |
+| table | 280 | 46678 | 18929 |
+| zero | 146 | 1301 | 0 |
 
 ## Pointer slots (.reloc HIGHLOW entries inside the data image)
 
@@ -62,7 +62,7 @@ Code-pointer tables (items holding code-pointer slots, by slot count):
 | va | size | kind | status | code ptrs | data ptrs | funcs | port names |
 |---|--:|---|---|--:|--:|---|---|
 | 4d57f0 | 400 | ptr(code) | documented | 100 | 0 | 43eda0 | g_rl_4d57f0 |
-| 4d5980 | 400 | ptr(code) | documented | 100 | 0 | 43eac1 |  |
+| 4d5980 | 400 | ptr(code) | documented | 100 | 0 | 43eac1 | g_rl_4d5980 |
 | 4d5c98 | 200 | ptr(code) | documented | 50 | 0 | 4472ce | g_rl_4d5c98 |
 | 4de000 | 1056 | table | documented | 44 | 0 | 4ba26e,4ba9c8 | g_rl_4de000 |
 | 4dcf50 | 480 | table | documented | 20 | 0 | 4ba9c8 | g_rl_4dcf50 |
@@ -89,6 +89,7 @@ Code-pointer tables (items holding code-pointer slots, by slot count):
 | 4dd940 | 144 | table | documented | 6 | 0 | 4ba26e,4ba9c8 | g_noble_buttons |
 | 4ddce8 | 144 | table | documented | 6 | 0 | 4ba26e,4ba9c8 | g_rl_4ddce8 |
 | 4ddf10 | 144 | table | documented | 6 | 0 | 4ba26e,4ba9c8 | g_rl_4ddf10 |
+| 4e5970 | 24 | ptr(code) | documented | 6 | 0 | 4c68f0 | P_CFLTCVT, P_CROPZEROS, P_FORCDECPT |
 | 4d6a50 | 24 | table | documented | 5 | 0 | 4650b0 |  |
 | 4d91b8 | 24 | table | documented | 5 | 0 | 489401 |  |
 | 4dc390 | 60 | table | documented | 5 | 0 |  |  |
@@ -97,11 +98,10 @@ Code-pointer tables (items holding code-pointer slots, by slot count):
 | 4dcaa0 | 120 | table | documented | 5 | 0 |  |  |
 | 4dcba8 | 120 | table | documented | 5 | 0 | 4ba9c8 |  |
 | 4dd5c8 | 120 | table | documented | 5 | 0 |  |  |
+| 4d2000 | 48 | table | documented | 4 | 0 | 4bf6a0,4bf770 | T_XC_A, T_XC_Z, T_XI_A |
 | 4dc360 | 48 | table | documented | 4 | 0 |  |  |
 | 4dc620 | 96 | table | documented | 4 | 0 | 43292d | g_rl_4dc620 |
-| 4dc788 | 96 | table | documented | 4 | 0 |  |  |
-| 4dcb48 | 96 | table | documented | 4 | 0 | 4ba9c8 |  |
-| … 51 more | | | | 108 | | | |
+| … 46 more | | | | 106 | | | |
 
 ## Largest undocumented items (non-zero bytes)
 
@@ -116,38 +116,38 @@ Code-pointer tables (items holding code-pointer slots, by slot count):
 | 5d1a08 | 308 | 170 | .rsrc | resource | named | 0/0 | 0:  | resource RT_CURSOR/7/2057 (308 B) |
 | 5d1b3c | 308 | 158 | .rsrc | resource | named | 0/0 | 0:  | resource RT_CURSOR/8/2057 (308 B) |
 | 5d18d4 | 308 | 153 | .rsrc | resource | named | 0/0 | 0:  | resource RT_CURSOR/6/2057 (308 B) |
-| 4d7f80 | 352 | 133 | .data | table | unreferenced | 0/0 | 0:  |  |
 | 5d2934 | 280 | 128 | .rsrc | resource | named | 0/0 | 0:  | resource RT_DIALOG/108/1031 (280 B) |
 | 5d2a4c | 280 | 128 | .rsrc | resource | named | 0/0 | 0:  | resource RT_DIALOG/108/1036 (280 B) |
 | 5d2b64 | 280 | 128 | .rsrc | resource | named | 0/0 | 0:  | resource RT_DIALOG/108/2057 (280 B) |
-| 4d6578 | 448 | 111 | .data | table | unreferenced | 0/0 | 0:  |  |
-| 4d8778 | 408 | 101 | .data | table | referenced | 0/0 | 4: 435ebc,4a5003,4a50ae,… |  |
 | 5d2c7c | 220 | 99 | .rsrc | resource | named | 0/0 | 0:  | resource RT_DIALOG/116/1031 (220 B) |
 | 5d2d58 | 220 | 99 | .rsrc | resource | named | 0/0 | 0:  | resource RT_DIALOG/116/1036 (220 B) |
 | 5d2e34 | 218 | 99 | .rsrc | resource | named | 0/0 | 0:  | resource RT_DIALOG/116/2057 (218 B) |
-| 4e5054 | 364 | 90 | .data | table | referenced | 0/0 | 1: 4c5930 |  |
-| 4d9950 | 88 | 81 | .data | table | referenced | 0/0 | 1: 485bb1 |  |
-| 4e53fc | 236 | 79 | .data | table | referenced | 0/0 | 1: 4c8990 |  |
 | 5d2f10 | 188 | 79 | .rsrc | resource | named | 0/0 | 0:  | resource RT_DIALOG/129/1031 (188 B) |
 | 5d2fcc | 188 | 79 | .rsrc | resource | named | 0/0 | 0:  | resource RT_DIALOG/129/1036 (188 B) |
 | 5d3088 | 186 | 79 | .rsrc | resource | named | 0/0 | 0:  | resource RT_DIALOG/129/2057 (186 B) |
-| 4dc180 | 78 | 78 | .data | table | referenced | 0/0 | 1: 49caaa |  |
 | 5d3144 | 184 | 75 | .rsrc | resource | named | 0/0 | 0:  | resource RT_DIALOG/130/1031 (184 B) |
 | 5d31fc | 184 | 75 | .rsrc | resource | named | 0/0 | 0:  | resource RT_DIALOG/130/1036 (184 B) |
 | 5d32b4 | 182 | 75 | .rsrc | resource | named | 0/0 | 0:  | resource RT_DIALOG/130/2057 (182 B) |
-| 4d9b18 | 80 | 67 | .data | table | referenced | 0/0 | 1: 48804a |  |
-| 4d9bb8 | 80 | 67 | .data | table | referenced | 0/0 | 1: 488240 |  |
-| 4d2b80 | 264 | 66 | .data | table | referenced | 0/0 | 1: 41635f |  |
-| 4d30a0 | 136 | 62 | .data | table | referenced | 0/0 | 1: 41f86d |  |
-| 4d2cf8 | 144 | 59 | .data | table | referenced | 0/0 | 1: 4181eb |  |
-| 4e4474 | 124 | 58 | .data | table | referenced | 0/0 | 1: 4beed4 |  |
-| 4d315c | 140 | 56 | .data | table | referenced | 0/0 | 2: 41fdd6,433ce4 |  |
-| 4d6308 | 160 | 56 | .data | table | referenced | 0/0 | 1: 449ef3 |  |
-| 4d4bc8 | 224 | 55 | .data | table | referenced | 0/0 | 1: 42ba40 | g_rl_4d4bc8 |
-| 4d9cf0 | 160 | 54 | .data | table | referenced | 0/0 | 1: 491147 |  |
-| 4d6860 | 496 | 51 | .data | table | referenced | 0/0 | 1: 451a5d |  |
-| 4d6f34 | 132 | 47 | .data | table | referenced | 0/0 | 2: 475e07,476488 |  |
+| 5d1038 | 72 | 33 | .rsrc | resource | named | 0/0 | 0:  | rsrc directory RT_CURSOR |
+| 5d10d0 | 72 | 33 | .rsrc | resource | named | 0/0 | 0:  | rsrc directory RT_GROUP_CURSOR |
+| 5d1000 | 56 | 21 | .rsrc | resource | named | 0/0 | 0:  | rsrc directory root |
+| 5d10a0 | 48 | 21 | .rsrc | resource | named | 0/0 | 0:  | rsrc directory RT_DIALOG |
+| 5d1208 | 40 | 17 | .rsrc | resource | named | 0/0 | 0:  | rsrc directory RT_DIALOG/108 |
+| 5d1230 | 40 | 17 | .rsrc | resource | named | 0/0 | 0:  | rsrc directory RT_DIALOG/116 |
+| 5d1258 | 40 | 17 | .rsrc | resource | named | 0/0 | 0:  | rsrc directory RT_DIALOG/129 |
+| 5d1280 | 40 | 17 | .rsrc | resource | named | 0/0 | 0:  | rsrc directory RT_DIALOG/130 |
+| 5d33f8 | 34 | 17 | .rsrc | resource | named | 0/0 | 0:  | resource RT_GROUP_ICON/101/2057 (34 B) |
+| 5d1080 | 32 | 13 | .rsrc | resource | named | 0/0 | 0:  | rsrc directory RT_ICON |
+| 5d1118 | 24 | 9 | .rsrc | resource | named | 0/0 | 0:  | rsrc directory RT_GROUP_ICON |
+| 5d1130 | 24 | 9 | .rsrc | resource | named | 0/0 | 0:  | rsrc directory RT_CURSOR/3 |
+| 5d1148 | 24 | 9 | .rsrc | resource | named | 0/0 | 0:  | rsrc directory RT_CURSOR/4 |
+| 5d1160 | 24 | 9 | .rsrc | resource | named | 0/0 | 0:  | rsrc directory RT_CURSOR/5 |
+| 5d1178 | 24 | 9 | .rsrc | resource | named | 0/0 | 0:  | rsrc directory RT_CURSOR/6 |
+| 5d1190 | 24 | 9 | .rsrc | resource | named | 0/0 | 0:  | rsrc directory RT_CURSOR/7 |
+| 5d11a8 | 24 | 9 | .rsrc | resource | named | 0/0 | 0:  | rsrc directory RT_CURSOR/8 |
+| 5d11c0 | 24 | 9 | .rsrc | resource | named | 0/0 | 0:  | rsrc directory RT_CURSOR/9 |
+| 5d11d8 | 24 | 9 | .rsrc | resource | named | 0/0 | 0:  | rsrc directory RT_ICON/1 |
 
 ## Catalog
 
-231 rows in `docs/data/catalog.tsv`, 69379 B.
+397 rows in `docs/data/catalog.tsv`, 83431 B.
