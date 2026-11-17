@@ -12,6 +12,7 @@
  * DAT_00569570 / DAT_00569578) go through their owning port symbols (engine_path.h g_path_dist_*,
  * engine_map_query.h g_cell_cursor_*), never through their g_bf_ aliases. */
 #include "engine_bf.h"
+#include "rl.h"
 #include "rl_terr.h"            /* rl_46c2de */
 #include "engine_map_query.h"
 #include "engine_path.h"
@@ -44,7 +45,7 @@ int bf_426120(int id)
     g_bf_522b58 = ((bf_dsb_status_fn)(uintptr_t)BF_DSB_METHOD(buf, 0x24))(buf, &status[0]);
     if (g_bf_522b58 != 0) {
         /* TODO(bf-extern): the status-line logger 0x4afab9 is not ported */
-        engine_retail_call(0x4afab9u, 3, (uint32_t)(uintptr_t)g_bf_4d4850, 0u, (uint32_t)(id + 1));
+        rl_4afab9((uint32_t)(uintptr_t)g_bf_4d4850, 0u, (uint32_t)(id + 1));
         return 0;
     }
     if (status[0] == 1)
@@ -394,7 +395,7 @@ int bf_485861(int x, int y)
 int bf_48551d(int x, int y)
 {
     /* TODO(bf-link): the WAV cue loader 0x427990 (ported elsewhere, not linked in rhost) */
-    engine_retail_call(0x427990u, 3, (uint32_t)(uintptr_t)&AT(uint8_t, g_bf_4d9ee8, 0x4d9ee8, 0x4d9f28), 0u, 0u);
+    rl_427990((uint32_t)(uintptr_t)&AT(uint8_t, g_bf_4d9ee8, 0x4d9ee8, 0x4d9f28), 0u, 0u);
     bf_485675(x, y, 120);
     int sooner = 0;
     for (int r = 1; r < 6; r++) {

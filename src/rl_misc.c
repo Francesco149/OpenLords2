@@ -142,8 +142,7 @@ int rl_4bbf15(void)
 }
 
 /* Port of FUN_00497879 (52 B) — leave the scenario screen: on scenario 10 count a win (DAT_0053f258), take the chosen
- * scenario DAT_0053f034 into DAT_00553e78, apply its config (0x499e5d — game_init's port is not linked:
- * TODO(rl-link)), screen 28. */
+ * scenario DAT_0053f034 into DAT_00553e78, apply its config (0x499e5d), screen 28. */
 int rl_497879(void)
 {
     if (g_rl_53f0c4 == 10)

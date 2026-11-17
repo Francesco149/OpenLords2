@@ -55,14 +55,14 @@ extern uint8_t g_rl_4e5a00[4];       /* hWndMain (rl_misc_globals.h) */
 #define STRVA(blk, blkva, va) ((int)(uintptr_t)&AT(uint8_t, blk, blkva, va))   /* a retail string, as the int arg */
 
 /* ---------------------------------------------------------------- seams (callees outside the partition) */
-/* ported, not on retail's layout / not linked in rhost — TODO(rl-link) */
+/* retail-layout ports of other partitions */
 static int evq_post(int a, int b, int code, int d, int e, int f, int g, int h) { return rl_472bc5(a, b, code, d, e, f, g, h); }
 static void editor_open(const void *buf, int max, int w, int flag)   /* text_input_init 0x402009 (a port struct) */
 { rl_402009((int)(uintptr_t)buf, max, w, flag); }
 static void editor_length(void) { rl_401f49(); }   /* text_input_recompute_length 0x401f49 (rl ui4) */
 static int  cue_release(void) { return rl_427d19(); }   /* audio_cue_release 0x427d19 (rl ui4) */
-static int  palette_full(void) { return (int)engine_retail_call(0x4b2922u, 0); }  /* gfx_set_palette_full_range 0x4b2922 (gfx.c) */
-static int  read_file_at(int name, void *buf, int n, int off)   /* io_read_file_at 0x4af8d9 (io.c) */
+static int  palette_full(void) { return (int)rl_4b2922(); }  /* gfx_set_palette_full_range 0x4b2922 (rl host) */
+static int  read_file_at(int name, void *buf, int n, int off)   /* io_read_file_at 0x4af8d9 (rl host) */
 { return rl_4af8d9(name, (int)(uintptr_t)buf, n, off); }
 static int  roster_slot(int p) { return rl_4a9f72(p); }   /* spawn_pick_roster_slot 0x4a9f72 (rl_host) */
 /* unported — TODO(rl-extern) */

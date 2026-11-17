@@ -1291,7 +1291,7 @@ int rl_4ae310(void)
     g_rl_53f22c = 8;
     s_slot_0053f640 = 0;
     g_rl_53f644 = 0;
-    engine_retail_call(0x4ae539u, 0);   /* TODO(rl-extern): 0x4ae539 (the setup defaults; engine_title_render.c's port is unverified) */
+    rl_4ae539();
     for (int i = 0; i < 4; i++) {
         uint8_t *s = &AT(uint8_t, g_rl_53f2b8, 0x53f2b8u, 0x53f2b8u + 200 * i);
         for (int j = 0; j < 200; j++)
@@ -1393,13 +1393,8 @@ int rl_4ad9f0(void)
 
 /* ================================================================ the per-screen refresh (the frame driver's render step) */
 
-/* linked ports on port structs / bindings of their own (rh_hooks_screens.c binders, the gfx table's dirty copy):
- * through retail until they move to retail's layout — TODO(rl-link) */
-static void buttons(int x, int y, const void *recs, int n)   /* engine_button_render_list 0x40cfd2 (rl_render.c's reason) */
-{ engine_retail_call(0x40cfd2u, 4, (uint32_t)x, (uint32_t)y, (uint32_t)(uintptr_t)recs, (uint32_t)n); }
-static void rcall0(uint32_t va) { engine_retail_call(va, 0); }
-static void rcall1(uint32_t va, int a) { engine_retail_call(va, 1, (uint32_t)a); }
-static void rcall2(uint32_t va, int a, int b) { engine_retail_call(va, 2, (uint32_t)a, (uint32_t)b); }
+static void buttons(int x, int y, const void *recs, int n)   /* engine_button_render_list 0x40cfd2 (rl_link) */
+{ rl_40cfd2(x, y, (int)(uintptr_t)recs, n); }
 #define BTN(sym, va) ((const void *)&AT(uint8_t, &(sym), (va), (va)))   /* a button-record table (retail .data) */
 
 /* Port of FUN_004ba26e (1882 B) — the per-screen refresh of the frame driver (engine_diplomacy_action_refresh): by
@@ -1489,7 +1484,7 @@ int rl_4ba26e(void)
             rl_420147(0);
             break;
         case 13: rl_414e06(g_rl_4e65dc); buttons(0, 0, BTN(g_rl_4dddd8, 0x4dddd8u), 2); break;
-        case 6: rcall0(0x41f4a1u); break;   /* TODO(rl-extern): 0x41f4a1 */
+        case 6: rl_41f4a1(); break;
         case 5: rl_41f5e8(); break;   /* rl_link: engine_title_render_play_now_buttons */
         case 12:
         case 11:
@@ -1685,8 +1680,8 @@ int rl_4ba9c8(void)
                 return 1;
             if (click(0, 0, HOT2(0x4dce30u), 12) != 0)
                 return 1;
-            engine_retail_call(0x4bbf89u, 0);   /* TODO(rl-extern): 0x4bbf89 */
-            engine_retail_call(0x4bbfd2u, 0);   /* TODO(rl-extern): 0x4bbfd2 */
+            rl_4bbf89();
+            rl_4bbfd2();
             break;
         case 9:
             g_tr_selected_button = rl_433ce4();
@@ -1732,7 +1727,7 @@ int rl_4ba9c8(void)
             if (g_rl_5530f0 == 11) {
                 if (g_rl_553248 == 0)
                     return 0;
-                engine_retail_call(0x4bbf89u, 0);   /* TODO(rl-extern): 0x4bbf89 */
+                rl_4bbf89();
             }
             break;
         }

@@ -6,6 +6,7 @@
  * DAT_0052eff4 (g_bf_52eff4): retail re-reads both at every access, and callees change them, so the ports read the
  * globals, never a cached copy across a call. docs/findings/bf-action.md. */
 #include "engine_bf.h"
+#include "rl.h"
 #include "rl_terr.h"            /* rl_46c2de */
 #include "engine_path.h"        /* engine_path_dist_chebyshev / _manhattan (0x404f4c / 0x404ead) */
 #include "engine_map_query.h"   /* g_cell_cursor_col / _row (DAT_00569570 / DAT_00569578) */
@@ -824,7 +825,7 @@ int bf_49694f(int x, int y, int r)
 {
     int x0 = x - r, y0 = y - r, w = 2 * r + 1, h = 2 * r + 1, off;
     /* TODO(bf-extern): 0x427990, the WAV cue */
-    engine_retail_call(0x427990u, 3, (uint32_t)(uintptr_t)&AT(uint8_t, g_bf_4d9ee8, 0x4d9ee8, 0x4d9f38), 0u, 0u);
+    rl_427990((uint32_t)(uintptr_t)&AT(uint8_t, g_bf_4d9ee8, 0x4d9ee8, 0x4d9f38), 0u, 0u);
     if (x0 < 0) {
         w += x0;
         x0 = 0;

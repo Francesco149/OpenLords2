@@ -38,7 +38,7 @@ enum {
 };
 
 HOOK_V(battle_auto_resolve,      0, rl_43b622())
-HOOK_V(battle_end,               0, EVQ(engine_combat_battlefield_end(q, MP_ACTIVE)))
+HOOK_V(battle_end,               0, rl_43be65())
 HOOK_V(battle_end_tick,          0, rl_477dfc())
 HOOK_V(battle_pick_result_row,   0, engine_combat_pick_result_row())
 HOOK_V(battle_siege_assault,     1, rl_4a8aab(I(0)))

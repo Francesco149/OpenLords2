@@ -55,7 +55,7 @@ void rl_link_bind_all(void);   /* rl_link_bind_once + the mapview / screens bind
 int rl_448819(void); int rl_449889(void); int rl_44aa41(void); int rl_44ae3c(void); int rl_4508de(void); int rl_4acbd4(void);
 int rl_46eddf(int rec); int rl_49a581(void); int rl_4ac3c6(int realm); int rl_437535(int occ, int region); int rl_49b2a3(void);
 int rl_4abb36(int army, int region); int rl_4a8aab(int rec); int rl_43b622(void); int rl_477dfc(void);
-int rl_428007(int realm); int rl_43b412(int ox, int oy); int rl_4357a6(void);
+int rl_428007(int realm); int rl_43b412(int ox, int oy); int rl_4357a6(void); int rl_4ab383(int a0); int rl_43be65(void);
 
 /* the mapview family (src/rl_link_mapview.c; rows: tools/rhost/rh_hooks_mapview.c) */
 void rl_link_mapview_bind(void);
@@ -76,6 +76,9 @@ int rl_410cbd(int county, int x, int y, int mode); int rl_451bba(void);
 int rl_40fec1(int a0); int rl_4100af(void); int rl_41023a(void); int rl_4103c5(void); int rl_410502(void);
 int rl_410598(void); int rl_41062e(void); int rl_4106c4(void); int rl_4107d1(void);
 int rl_41b032(void); int rl_41befe(void); int rl_41c208(void);
+int rl_40a567(int blob, int frame, int x, int y); int rl_409934(int mode, int x, int y, int cols, int rows);
+int rl_409c93(int x, int y, int cols, int rows); int rl_402f64(int v, int prefix, int suffix, int x, int y, int font, int color);
+int rl_40cfd2(int x, int y, int recs, int n);
 
 /* the screens family (src/rl_link_screens.c; rows: tools/rhost/rh_hooks_screens.c) */
 void rl_link_screens_bind(void);

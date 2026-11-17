@@ -783,12 +783,12 @@ int bf_47aaa3(int a0)
         file = 0;
     }
     /* TODO(bf-link): io_path_chdir_base / io_read_file_at (io_path.c / io.c, not linked in rhost) */
-    engine_retail_call(0x4af502u, 0);
+    rl_4af502();
     uint32_t name = (uint32_t)(uintptr_t)&g_bf_4d9108[14 * file];
-    engine_retail_call(0x4af8d9u, 4, name, (uint32_t)g_bf_4eabec, 0x3e8u, 0u);
+    rl_4af8d9(name, (uint32_t)g_bf_4eabec, 0x3e8u, 0u);
     const uint8_t *idx = (const uint8_t *)(uintptr_t)g_bf_4eabec + 16 * S32(s_slot_00553528);
     uint32_t off = (uint32_t)idx[12] + ((uint32_t)idx[14] << 16) + ((uint32_t)idx[13] << 8);
-    engine_retail_call(0x4af8d9u, 4, name, (uint32_t)g_bf_4eabec, 0x1900u, off);
+    rl_4af8d9(name, (uint32_t)g_bf_4eabec, 0x1900u, off);
 
     int n = 0;
     BF_FOR_CELLS {
@@ -1239,12 +1239,12 @@ static int bf_clamp_slot(int v)
 int bf_47cec1(int castle)
 {
     /* TODO(bf-link): io_path_chdir_base / io_read_file_at (io_path.c / io.c, not linked in rhost) */
-    engine_retail_call(0x4af502u, 0);
-    engine_retail_call(0x4af8d9u, 4, (uint32_t)(uintptr_t)&g_bf_4d9ee8[s_slot_0057a0f0 != 0 ? 0x00 : 0x10],
+    rl_4af502();
+    rl_4af8d9((uint32_t)(uintptr_t)&g_bf_4d9ee8[s_slot_0057a0f0 != 0 ? 0x00 : 0x10],
                        (uint32_t)g_bf_4eabec, 0x3e8u, 0u);
     const uint8_t *idx = (const uint8_t *)(uintptr_t)g_bf_4eabec + 32 * castle;
     uint32_t off = (uint32_t)idx[28] + ((uint32_t)idx[30] << 16) + ((uint32_t)idx[29] << 8);
-    engine_retail_call(0x4af8d9u, 4, (uint32_t)(uintptr_t)&g_bf_4d9ee8[s_slot_0057a0f0 != 0 ? 0x20 : 0x30],
+    rl_4af8d9((uint32_t)(uintptr_t)&g_bf_4d9ee8[s_slot_0057a0f0 != 0 ? 0x20 : 0x30],
                        (uint32_t)g_bf_4eabec, 0x1900u, off);
     for (int i = 0; i < 16; i++)
         for (int j = 0; j < 5; j++) {
@@ -1359,12 +1359,12 @@ int bf_47c4ba(int castle)
         file = 1;
     }
     /* TODO(bf-link): io_path_chdir_base / io_read_file_at (io_path.c / io.c, not linked in rhost) */
-    engine_retail_call(0x4af502u, 0);
+    rl_4af502();
     uint32_t name = (uint32_t)(uintptr_t)&g_bf_4d9108[14 * file];
-    engine_retail_call(0x4af8d9u, 4, name, (uint32_t)g_bf_4eabec, 0x3e8u, 0u);
+    rl_4af8d9(name, (uint32_t)g_bf_4eabec, 0x3e8u, 0u);
     const uint8_t *idx = (const uint8_t *)(uintptr_t)g_bf_4eabec + 32 * S32(s_slot_00553528);
     uint32_t off = ((uint32_t)idx[14] << 16) + ((uint32_t)idx[13] << 8) + (uint32_t)idx[12];
-    engine_retail_call(0x4af8d9u, 4, name, (uint32_t)g_bf_4eabec, 0x1900u, off);
+    rl_4af8d9(name, (uint32_t)g_bf_4eabec, 0x1900u, off);
     s_slot_0057a0d8 = 0;
     s_slot_0056d648 = 0;
     bf_48eefd();
@@ -1516,11 +1516,11 @@ int bf_47c4ba(int castle)
 int bf_42d806(int m, int buf)
 {
     /* TODO(bf-link): io_path_chdir_base / io_read_file_at (io_path.c / io.c, not linked in rhost) */
-    engine_retail_call(0x4af502u, 0);
+    rl_4af502();
     /* retail: `offset byte_53F1E0 + 0x41c` — the custom map file's name buffer 0x53f5fc has no port symbol yet
      * (the standalone needs one; rhost: g_bf_53f1e0 sits at its VA, so the address is retail's) */
     uint32_t name = (uint32_t)(uintptr_t)g_bf_53f1e0 + 0x41cu;
-    return (int)engine_retail_call(0x4af8d9u, 4, name, (uint32_t)buf, 0x1900u, (uint32_t)(6400 * m + 5748));
+    return (int)rl_4af8d9(name, (uint32_t)buf, 0x1900u, (uint32_t)(6400 * m + 5748));
 }
 
 /* the 12 field deployment anchors around a custom map's marker at the cursor: (col, row) + the 12 offsets of
@@ -1556,7 +1556,7 @@ int bf_47b8b2(int a0)
     bf_46c7fc(5); bf_46c7fc(6); bf_46c7fc(1); bf_46c7fc(0);
     bf_46c7fc(3); bf_46c7fc(4); bf_46c7fc(7); bf_46c7fc(2);
     s_slot_00553528 = s_slot_0056d590;
-    engine_retail_call(0x4af502u, 0);   /* TODO(bf-link): io_path_chdir_base (io_path.c, not linked in rhost) */
+    rl_4af502();   /* io_path_chdir_base */
     bf_42d806(S32(s_slot_00553528), g_bf_4eabec);
     int n = 0;
     BF_FOR_CELLS {
@@ -1713,7 +1713,7 @@ static void bf_mark_below_status_redraw(void)
 /* the debug log line 0x4afab9(msg, 0, 0) */
 static void bf_log(const void *msg)
 {
-    engine_retail_call(0x4afab9u, 3, (uint32_t)(uintptr_t)msg, 0u, 0u);   /* TODO(bf-extern): 0x4afab9 (the log) */
+    rl_4afab9((uint32_t)(uintptr_t)msg, 0u, 0u);   /* 0x4afab9 (the log) */
 }
 
 /* Port of FUN_004778a0 (655 B) — enter the battlefield (screen 0x29, sub-state s_slot_0057c8fc = 2): the battle
@@ -1781,11 +1781,11 @@ int bf_4778a0(void)
     engine_territory_mark_full_screen_dirty();
     engine_set_demand_redraw(2);
     if (g_sim_mp_active != 0) {
-        /* TODO(bf-extern): 0x43f4b7 / 0x43fd2a (multiplayer sync; the ledger's "tested" is a comment mention) */
-        engine_retail_call(0x43f4b7u, 0);
-        engine_retail_call(0x43fd2au, 0);
-        engine_retail_call(0x43f4b7u, 0);
-        engine_retail_call(0x43fd2au, 0);
+        /* 0x43f4b7 / 0x43fd2a (the MP battle snapshot) */
+        rl_43f4b7();
+        rl_43fd2a();
+        rl_43f4b7();
+        rl_43fd2a();
     }
     int r = bf_43f304();
     g_bf_544030[0] = 1;

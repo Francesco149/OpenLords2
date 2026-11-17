@@ -783,7 +783,7 @@ int rl_4419f9(void)
         g_rl_5530f0 = 1;
         engine_set_demand_redraw(1);
         rl_43eda0(36, 0);
-        return (int)engine_retail_call(0x4b743bu, 0);   /* TODO(rl-extern): 0x4b743b (close the MP session) */
+        return (int)rl_4b743b();   /* 0x4b743b (close the MP session) */
     }
     rl_4afab9(OKSTR(0x4d5fe0), 0, g_rl_5aeb8c + 1);
     if (g_rl_5aeb8c != 0) {

@@ -26,7 +26,9 @@ enum {
 
 HOOK_R(rl_43958a, 0, rl_43958a())
 HOOK_R(rl_4399b0, 0, rl_4399b0())
-HOOK_R(rl_439b52, 4, rl_439b52(I(0), I(1), I(2), I(3)))
+/* EAX dead: every caller drops it (0x43a10c returns 1; the receivers / action 10 end in 0x43eac1 / the delayed-action
+ * runner, which ignore it); retail's is 0x412143's seal-draw leftover (0x11111111) — the link entry returns 0 */
+HOOK_V(rl_439b52, 4, rl_439b52(I(0), I(1), I(2), I(3)))
 HOOK_R(rl_439cc2, 3, rl_439cc2(I(0), I(1), I(2)))
 HOOK_R(rl_439f6a, 3, rl_439f6a(I(0), I(1), I(2)))
 HOOK_R(rl_439edb, 2, rl_439edb(I(0), I(1)))

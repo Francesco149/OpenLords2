@@ -848,7 +848,7 @@ static void wrap_buf(const uint8_t *buf, int x, int y, int w)   /* 0x40352f, the
 }
 static void button_strip(int table_va)   /* 0x40cfd2 through retail, as rl_turn.c does */
 {
-    engine_retail_call(0x40cfd2u, 4, 0u, 0u, (uint32_t)STRVA(g_rl_4dda90, 0x4dda90u, table_va), 2u);
+    rl_40cfd2(0u, 0u, (uint32_t)STRVA(g_rl_4dda90, 0x4dda90u, table_va), 2u);
 }
 
 /* Port of FUN_0041f3e9 (184 B) — the MP setup page's frame: the panel (DAT_004eabec) 32 × 8 at (64, 50) for the

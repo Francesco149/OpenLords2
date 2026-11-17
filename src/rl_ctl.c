@@ -531,7 +531,7 @@ int rl_4329ec(void)
         rl_43eda0(4, 0);
     }
     if (g_rl_553248 != 0)
-        engine_retail_call(0x4b7514u, 0);   /* TODO(rl-extern): the MP host's session step */
+        rl_4b7514();   /* the MP host's session step */
     engine_set_demand_redraw(2);
     g_rl_5aeb8c = 0;
     s_slot_005440c8 = s_slot_0053f26c;
@@ -550,7 +550,7 @@ int rl_43ad25(void)
         mode = 1;
         rl_4984dc();
     } else if (s == 34) {
-        engine_retail_call(0x42df30u, 0);   /* TODO(rl-extern): the screen-34 movie stop */
+        rl_42df30();   /* the screen-34 movie stop */
         mode = 1;
         rl_4984dc();
     }
@@ -1156,7 +1156,7 @@ int rl_433155(void)
     if (PARAM0 == 1) {
         if (MP_ON) {
             rl_4b743b();                               /* leave the MP session (rl mpnet2) */
-            engine_retail_call(0x43e8f4u, 1, 1u);      /* TODO(rl-extern) */
+            rl_43e8f4(1u);
         }
         g_tr_page = 1;
         s_slot_0057a0f0 = 0;
@@ -1234,7 +1234,7 @@ int rl_4335f0(void)
     case 1:
         if (MP_ON) {
             rl_4b743b();                               /* leave the MP session (rl mpnet2) */
-            engine_retail_call(0x43e8f4u, 1, 1u);      /* TODO(rl-extern) */
+            rl_43e8f4(1u);
         }
         g_tr_page = 1;
         s_slot_0057a0f0 = 0;
@@ -2311,13 +2311,13 @@ int rl_42ff10(void)
         break;
     case 34:
         if (g_sim_turn_progress != 0)
-            engine_retail_call(0x42df30u, 0);        /* TODO(rl-extern): the screen-34 movie stop */
+            rl_42df30();        /* the screen-34 movie stop */
         if (LMB_UP != 0)
-            engine_retail_call(0x42df30u, 0);
+            rl_42df30();
         if (g_bf_4e65d8 != 0)
-            engine_retail_call(0x42df30u, 0);
+            rl_42df30();
         if (g_rl_4eabb4 != 0)
-            engine_retail_call(0x42df30u, 0);
+            rl_42df30();
         break;
     case 35:
         break;
@@ -2435,8 +2435,8 @@ int rl_43de70(void)
         return 1;
     if (PL8(LOCAL, 0x57bf04) == 0)
         return 1;
-    if (engine_retail_call(0x43e433u, 0) != 0) {   /* TODO(rl-extern): count_active_allies_low */
-        int lo = (int)engine_retail_call(0x43e50du, 0);   /* TODO(rl-extern): min_tick_all */
+    if (rl_43e433() != 0) {   /* count_active_allies_low */
+        int lo = (int)rl_43e50d();   /* min_tick_all */
         int lead = AT(int32_t, &g_bf_53e8d0, 0x53e8d0u, 0x53e8d0 + 4 * LOCAL) - lo;
         int v;
         if (lead > 800)      v = 90;
@@ -2446,13 +2446,13 @@ int rl_43de70(void)
         else                 return -1;
         return 3 * g_rl_4d2160 > v ? 3 * g_rl_4d2160 : v;
     }
-    int lo = (int)engine_retail_call(0x43e330u, 1, 0u);   /* TODO(rl-extern): min_tick_filtered */
+    int lo = (int)rl_43e330(0u);   /* min_tick_filtered */
     if (g_rl_53f068 == 1)
         return 1;
     g_rl_515b20++;
     int lead = AT(int32_t, &g_bf_53e8d0, 0x53e8d0u, 0x53e8d0 + 4 * LOCAL) - lo;
     if (lead <= 0) {
-        int behind = (int)engine_retail_call(0x43e330u, 1, (uint32_t)LOCAL)   /* TODO(rl-extern): min_tick_filtered */
+        int behind = (int)rl_43e330((uint32_t)LOCAL)   /* min_tick_filtered */
                      - AT(int32_t, &g_bf_53e8d0, 0x53e8d0u, 0x53e8d0 + 4 * LOCAL);
         if (behind < 20)    return -2;
         if (behind < 50)    return -3;

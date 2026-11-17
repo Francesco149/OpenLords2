@@ -275,7 +275,7 @@ int bf_43c247(int p, int regroup, int col0, int row0, int x0, int y0, int x1, in
 /* ---------------------------------------------------------------- seams: retail functions this partition calls */
 #define MP_ON (g_sim_mp_active != 0)   /* DAT_00553030 */
 static int mp_message(int id)  { return rl_43eda0(id, 0); }
-static int wav(const void *name) { return (int)engine_retail_call(0x427990u, 3, (uint32_t)(uintptr_t)name, 1u, 0u); }   /* TODO(bf-link) */
+static int wav(const void *name) { return (int)rl_427990((uint32_t)(uintptr_t)name, 1u, 0u); }
 /* the confirm dialog 0x40e6f2(msg, x, y, callback VA): retail keeps the callback's ADDRESS — retail's VA here
  * (rl_40e6f2, rl ui4) */
 static int confirm(int msg, uint32_t cb_va) { return rl_40e6f2(msg, 160, 160, (int)cb_va); }
@@ -489,9 +489,9 @@ int bf_43bd02(void)
     return 0;
 }
 
-/* Port of FUN_0043bbd7 (16 B) — the retreat confirm's yes (IDA: 2 arguments from its call site, unused): leave the battlefield (0x43be65, ported in
- * engine_combat.c with an event-queue argument: TODO(bf-link)). */
-int bf_43bbd7(int a0, int a1) { (void)a0; (void)a1; return (int)engine_retail_call(0x43be65u, 0); }
+/* Port of FUN_0043bbd7 (16 B) — the retreat confirm's yes (IDA: 2 arguments from its call site, unused): leave the battlefield (0x43be65: engine_combat.c's
+ * port through its rl_link entry). */
+int bf_43bbd7(int a0, int a1) { (void)a0; (void)a1; return (int)rl_43be65(); }
 
 /* Port of FUN_0043bb68 (111 B) — the retreat confirm's callback: back to the screen before the dialog
  * (DAT_0057c90c), DAT_00553ed8 = 1; on yes (DAT_0059151c) the retreat flag DAT_005653f4 = 1 and the battle ends
@@ -550,7 +550,7 @@ int bf_43bdcd(void)
             bf_sleep(50);
             return mp_message(63);
         }
-        return (int)engine_retail_call(0x43be65u, 0);   /* 0x43be65 — TODO(bf-link): engine_combat_battlefield_end */
+        return (int)rl_43be65();   /* engine_combat_battlefield_end 0x43be65 (rl_link) */
     }
     return r;
 }
@@ -641,10 +641,10 @@ int bf_47f76d(void)
 /* ---------------------------------------------------------------- the unit roster (the panel's HUD) */
 /* the roster slot table at 0x4d31f0: 7 dwords a slot (sprite base, x, y, w, h, …), pages of 12 / 18 / 30 */
 #define ROSTER(slot, k) (((const int32_t *)g_bf_4d31f0)[7 * (slot) + (k)])
-static int sprite_opaque(int blob, int frame, int x, int y)   /* 0x40a567 — TODO(bf-link): gfx_sprite_render_opaque_from_blob */
-{ return (int)engine_retail_call(0x40a567u, 4, (uint32_t)blob, (uint32_t)frame, (uint32_t)x, (uint32_t)y); }
-static int label_dec(int v, int pad, const void *suffix, int x, int y, const void *font, int color)   /* 0x402f64 — TODO(bf-link) */
-{ return (int)engine_retail_call(0x402f64u, 7, (uint32_t)v, (uint32_t)pad, (uint32_t)(uintptr_t)suffix, (uint32_t)x,
+static int sprite_opaque(int blob, int frame, int x, int y)   /* gfx_sprite_render_opaque_from_blob 0x40a567 (rl_link) */
+{ return (int)rl_40a567((uint32_t)blob, (uint32_t)frame, (uint32_t)x, (uint32_t)y); }
+static int label_dec(int v, int pad, const void *suffix, int x, int y, const void *font, int color)   /* gfx_text_label_render_dec 0x402f64 (rl_link) */
+{ return (int)rl_402f64((uint32_t)v, (uint32_t)pad, (uint32_t)(uintptr_t)suffix, (uint32_t)x,
                                  (uint32_t)y, (uint32_t)(uintptr_t)font, (uint32_t)color); }
 
 /* Port of FUN_004238b8 (285 B) — draw the roster's unit icons: each of the local player's selected units with

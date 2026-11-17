@@ -33,6 +33,9 @@
 #include "gfx_dispatch.h"
 #include "gfx_sprite_render.h"
 #include "gfx_wrap.h"
+#include "gfx_panel.h"
+#include "gfx_text_label.h"
+#include "engine_button.h"
 
 /* the partitions' globals (their headers conflict when included together: DUP symbols typed per partition) */
 extern int32_t g_rl_55cea0[8385];     /* DAT_0055cea0: the 129 × 65 strategic tile grid (rl_ui2_globals.h) */
@@ -54,6 +57,10 @@ extern uint8_t g_rl_4d71d0[0x140];    /* the measure char map; the render map DA
 /* a callback into retail-layout code: only the walker changes hands */
 #define CALLOUT(...) do { rl_link_loc_store(); __VA_ARGS__; rl_link_loc_load(); } while (0)
 static void seam_log(uint32_t fmt, int n) { CALLOUT(rl_4afab9((int)fmt, 0, n)); }   /* FUN_004afab9(fmt, 0, n): status.txt */
+/* FUN_00452775: a pressed button's mark (rl_ctl; it marks rl_link_dirty, the rectangle the strip draws through) */
+/* the button strip's pressed mark: engine_button.c holds no walker (rl_40cfd2 never loads one) — a CALLOUT here stored a
+ * stale walker over DAT_005c9270 (shadow: button_render_list / rl_4b99c0, 1 dword) */
+static void seam_pressed_mark(int x, int y, int w, int h, int force) { rl_452775(x, y, w, h, force); }
 static uint32_t seam_clock(void) { return (uint32_t)rl_plat_GetTickCount(); }  /* retail's GetTickCount import */
 
 void rl_link_mapview_bind(void)
@@ -79,6 +86,7 @@ void rl_link_mapview_bind(void)
     gfx_dispatch_set_default_font(FONT_DEFAULT);
     gfx_sprite_render_set_log(seam_log);
     gfx_wrap_set_tall_font_marker(FONT_TALL);
+    engine_button_bind_pressed_mark(seam_pressed_mark);
 }
 
 /* ---------------------------------------------------------------- the terrain-info panel's environment */
@@ -177,3 +185,22 @@ int rl_4107d1(void) { PANEL(engine_hud_panel_draw_q2_type3()); return 0; }
 int rl_41b032(void) { TI(engine_terrain_info_panel()); return 0; }
 int rl_41befe(void) { TI(engine_terrain_info_simple()); return 0; }
 int rl_41c208(void) { TI(engine_terrain_info_text()); return 0; }
+
+/* ---------------------------------------------------------------- the gfx leaves the rl_ code still reached by seam
+ * (rows: tools/rhost/rh_hooks_gfx.c).  The sprite / panel / label drawers touch no mirror (bind only); the button
+ * strip marks the dirty rectangle (a mirror): MV. */
+#define GB(...) do { rl_link_mapview_bind(); __VA_ARGS__; } while (0)
+int rl_40a567(int blob, int frame, int x, int y)   /* gfx_sprite_render_opaque_from_blob */
+{ GB(gfx_sprite_render_opaque_from_blob(P(blob), frame, x, y)); return 0; }
+int rl_409934(int mode, int x, int y, int cols, int rows)   /* gfx_panel_draw_border_chrome (the chrome sheet DAT_0057d3d0) */
+{ GB(gfx_panel_draw_border_chrome(g_rl_57d3d0, mode, x, y, cols, rows)); return 0; }
+int rl_409c93(int x, int y, int cols, int rows)   /* gfx_panel_fill_interior_chrome */
+{ GB(gfx_panel_fill_interior_chrome(g_rl_57d3d0, x, y, cols, rows)); return 0; }
+int rl_402f64(int v, int prefix, int suffix, int x, int y, int font, int color)   /* gfx_text_label_render_dec */
+{ GB(gfx_text_label_render_dec(v, (char)prefix, (const char *)P(suffix), x, y, P(font), GLYPH_TABLE, (uint8_t)color)); return 0; }
+int rl_40cfd2(int x, int y, int recs, int n)   /* engine_button_render_list: the misc sheet DAT_005530c8, system2.pl8 */
+{
+    MV(engine_button_render_list(x, y, (const engine_button_rec_t *)P(recs), n, P(g_bf_5530c8), g_rl_5bb540,
+                                 engine_territory_dirty_state()));
+    return 0;
+}

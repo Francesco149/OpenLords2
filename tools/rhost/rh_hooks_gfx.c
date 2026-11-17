@@ -42,6 +42,7 @@
 #include "engine_hud_menubar.h"
 #include "engine_button.h"
 #include "engine_dirty_rect.h"
+#include "rl_link.h"
 
 /* ---------------------------------------------------------------- binding: gfx globals = retail memory */
 #define A(n, v) ".globl _" #n "\n\t.set _" #n ", " #v "\n\t"
@@ -81,7 +82,7 @@ A(g_gfx_menu_redraw_a,0x4eb260) A(g_gfx_menu_redraw_b,0x4e65f8)
 static void seam_log(uint32_t fmt, int n)
 { rh_port_retail_enter(); ((void (__cdecl *)(uint32_t, int, int))(uintptr_t)0x4afab9u)(fmt, 0, n); rh_port_retail_leave(); }
 /* the button strip's dirty rectangle: the port's state over retail's six globals (FUN_004527a6's), loaded / stored
- * around the call and around the pressed path's retail mark FUN_00452775 */
+ * around the call (the menubar labels; the button strip's entry rl_40cfd2 draws through rl_link_dirty) */
 static engine_dirty_rect_state_t s_bd;
 static engine_dirty_rect_state_t *bd_load(void)
 {
@@ -94,12 +95,6 @@ static void bd_store(void)
     PUT(0x50d09cu, s_bd.dirty_mark); PUT(0x50a4c4u, s_bd.dirty_xmin); PUT(0x50a4c8u, s_bd.dirty_xmax);
     PUT(0x50a4bcu, s_bd.dirty_ymin); PUT(0x50a4c0u, s_bd.dirty_ymax); PUT(0x53e9acu, s_bd.below_status_redraw);
 }
-static void seam_pressed_mark(int x, int y, int w, int h, int force)   /* FUN_00452775 (unported) */
-{
-    bd_store(); rh_port_retail_enter();
-    ((void (__cdecl *)(int, int, int, int, int))(uintptr_t)0x452775u)(x, y, w, h, force);
-    rh_port_retail_leave(); bd_load();
-}
 static void gfx_bind(void)
 {
     static int done;
@@ -108,7 +103,6 @@ static void gfx_bind(void)
     gfx_dispatch_set_default_font((const uint8_t *)(uintptr_t)0x5af8f0u);   /* &DAT_005af8f0: the default font blob */
     gfx_sprite_render_set_log(seam_log);
     gfx_wrap_set_tall_font_marker((const uint8_t *)(uintptr_t)0x5b2fa0u);   /* &DAT_005b2fa0: the tall (24 px) font blob */
-    engine_button_bind_pressed_mark(seam_pressed_mark);
 }
 __attribute__((constructor)) static void gfx_bind_register(void) { rh_port_register_bind(gfx_bind); }
 #define G(call) do { gfx_bind(); call; } while (0)
@@ -225,7 +219,7 @@ HOOK_V(gfx_bevel_dark_tl,        4, gfx_line_rect_bevel_dark_tl(I(0), I(1), I(2)
 HOOK_V(gfx_render_raw,           5, gfx_sprite_render_raw(P(0), I(1), I(2), (int16_t)a[3], (int16_t)a[4]))
 HOOK_V(gfx_render_from_blob,     4, G(gfx_sprite_render_from_blob(P(0), I(1), I(2), I(3))))
 HOOK_V(gfx_render_rle_from_blob, 4, G(gfx_sprite_render_rle_from_blob(P(0), I(1), I(2), I(3))))
-HOOK_V(gfx_render_opaque_from_blob, 4, G(gfx_sprite_render_opaque_from_blob(P(0), I(1), I(2), I(3))))
+HOOK_V(gfx_render_opaque_from_blob, 4, rl_40a567(I(0), I(1), I(2), I(3)))
 HOOK_V(gfx_seal_draw,            3, gfx_sprite_seal_draw(SYSTEM_SHEET, I(0), I(1), I(2)))
 HOOK_V(gfx_render,               3, G(gfx_sprite_render(I(0), I(1), I(2))))
 HOOK_V(gfx_render_trunc_bottom,  4, G(gfx_sprite_render_truncate_bottom(I(0), I(1), I(2), (int16_t)a[3])))
@@ -234,15 +228,15 @@ HOOK_V(gfx_render_trunc_top,     4, G(gfx_sprite_render_truncate_top(I(0), I(1),
 HOOK_V(gfx_panel_border,         6, G(gfx_panel_draw_border(P(0), I(1), I(2), I(3), I(4), I(5))))
 HOOK_V(gfx_panel_fill,           5, G(gfx_panel_fill_interior(P(0), I(1), I(2), I(3), I(4))))
 HOOK_V(gfx_panel_draw,           5, G(gfx_panel_draw(P(0), I(1), I(2), I(3), I(4))))
-HOOK_V(gfx_panel_border_chrome,  5, G(gfx_panel_draw_border_chrome(CHROME_SHEET, I(0), I(1), I(2), I(3), I(4))))
-HOOK_V(gfx_panel_fill_chrome,    4, G(gfx_panel_fill_interior_chrome(CHROME_SHEET, I(0), I(1), I(2), I(3))))
+HOOK_V(gfx_panel_border_chrome,  5, rl_409934(I(0), I(1), I(2), I(3), I(4)))
+HOOK_V(gfx_panel_fill_chrome,    4, rl_409c93(I(0), I(1), I(2), I(3)))
 HOOK_V(gfx_panel_bevel,          4, G(gfx_panel_draw_bevel(CHROME_SHEET, I(0), I(1), I(2), I(3))))
 /* gfx_text.c, gfx_text_label.c — retail's char tables are globals: render DAT_004d71f0, measure DAT_004d71d0 */
 HOOK_V(gfx_text_line,            5, G(gfx_text_render_line(U(0), I(1), I(2), P(3), GLYPH_TABLE, C(4))))
 HOOK_V(gfx_text_line_centered,   6, G(gfx_text_render_line_centered(U(0), I(1), I(2), I(3), P(4), GLYPH_TABLE, METRICS_TABLE, C(5))))
 HOOK_V(gfx_fmt_dec,              3, gfx_text_label_format_dec(I(0), I(1), I(2)))
 HOOK_V(gfx_fmt_hex,              3, gfx_text_label_format_hex(I(0), I(1), I(2)))
-HOOK_V(gfx_label_dec,            7, G(gfx_text_label_render_dec(I(0), (char)a[1], S(2), I(3), I(4), P(5), GLYPH_TABLE, C(6))))
+HOOK_V(gfx_label_dec,            7, rl_402f64(I(0), I(1), I(2), I(3), I(4), I(5), I(6)))
 HOOK_V(gfx_label_hex,            7, G(gfx_text_label_render_hex(I(0), (char)a[1], S(2), I(3), I(4), P(5), GLYPH_TABLE, C(6))))
 HOOK_V(gfx_label_dec_centered,   8, G(gfx_text_label_render_dec_centered(I(0), (char)a[1], S(2), I(3), I(4), I(5), P(6), GLYPH_TABLE,
                                                                          METRICS_TABLE, C(7))))
@@ -261,10 +255,9 @@ HOOK_V(hud_menubar_tile_strip,   4, G(engine_hud_menubar_tile_strip(CHROME_SHEET
 HOOK_V(hud_menubar_labels,       2, LOC(engine_hud_menubar_labels((int16_t *)(uintptr_t)a[0], I(1), (int)G32(0x522cb4u),
                                                                   (const uint8_t *)(uintptr_t)0x5af8f0u, GLYPH_TABLE, METRICS_TABLE,
                                                                   loc, 0x3f, bd_load()); bd_store()))
-/* engine_button.c — the misc sheet is the pointer DAT_005530c8, the system sheet the blob &DAT_005bb540 */
-HOOK_V(button_render_list,       4, G(engine_button_render_list(I(0), I(1), (const engine_button_rec_t *)(uintptr_t)a[2], I(3),
-                                                                (const uint8_t *)(uintptr_t)G32(0x5530c8u), SYSTEM_SHEET, bd_load());
-                                      bd_store()))
+/* engine_button.c — through its rl_link entry (src/rl_link_mapview.c: the misc sheet DAT_005530c8, system2.pl8, the
+ * dirty rectangle rl_link_dirty, the pressed mark rl_452775) */
+HOOK_V(button_render_list,       4, rl_40cfd2(I(0), I(1), I(2), I(3)))
 HOOK_V(gfx_label_labeled_signed, 9, G(gfx_text_label_render_labeled_signed(I(0), I(1), U(2), S(3), I(4), I(5), P(6), GLYPH_TABLE,
                                                                            C(7), C(8))))
 

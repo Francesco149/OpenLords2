@@ -88,10 +88,37 @@ The hybrid did not see it: the function holding that call site has no row, so it
 Verify (wine, every row of the mapview + ai / combat / battle / events / economy / state tables, 34 scenarios, after
 the fix): 270/281 rows reached, 0 divergences, hybrid PASS, 0 failed runs. Standalone (wine): 121/121 = pure retail.
 
+## Direct calls, the gfx entries, live from the start (2026-11-16, later)
+- **Literal seams 82 → 3.** 69 `engine_retail_call(0xVA, …)` sites in src whose VA already had a retail-layout port
+  (`rl_<va>`; their notes said TODO(rl-extern) / TODO(bf-link)) now call it — 39 VAs (MP session / link, io, the movie
+  stop, the slider render, the gift / tribute, …) — plus 10 sites of the 7 new entries below. `rl_43fd2a` takes no argument (retail pushes none;
+  the old seam passed the previous call's EAX). rl_host.c's `rcall0..2` are gone (0x41f4a1 → `rl_41f4a1`).
+- **New entries**: gfx leaves in `rl_link_mapview.c` — `rl_40a567` (sprite opaque from blob), `rl_409934` /
+  `rl_409c93` (the chrome panel twins), `rl_402f64` (decimal label), `rl_40cfd2` (engine_button_render_list: the
+  misc sheet DAT_005530c8, system2.pl8, `rl_link_dirty`; the pressed mark = `rl_452775`, bound in
+  `rl_link_mapview_bind`); logic EVQ entries `rl_4ab383` (combat aftermath) / `rl_43be65` (battlefield end) in
+  `rl_link_logic.c`. Their rows (rh_hooks_gfx / _combat / _battle) call them; rh_hooks_gfx.c's retail pressed-mark
+  seam (its own dirty copy) is gone.
+- **The mirrors are live from the standalone's start** (`rl_crt_start`: `rl_link_port_enter()`, never left). Found by
+  the switch: 20 MP sides off pure retail in state_sem, two dwords — the cell cursor 0x569570 / 0x569578. Bisected to
+  the startup speed probe rl_40f10f calling `rl_4b209a` directly; `--watch-write` + `rhs.py`: the only store of the
+  cursor written by rl_46c4a3 (a mirror write by name) was that seam's `rl_link_retail_enter` sync_out. Before the
+  first seam the link layer was NOT live, so a mirror write by rl_ code was reloaded over by the next port_enter. Under
+  rhost every rl_ row runs live (ctx_port); now the standalone does too.
+- **Walker hand-off.** The first verify (12 scenarios) had 3 diverging rows: button_render_list / rl_4b99c0, 1 dword,
+  the walker DAT_005c9270. `seam_pressed_mark` wrapped `rl_452775` in CALLOUT (store the walker, call, load), but
+  `rl_40cfd2` (MV) never loads one: the store wrote a stale offset. engine_button.c holds no walker — the seam now
+  calls `rl_452775` bare. Verify after (wine, 12 scenarios): 1501/1937 reached, 1 diverging — rl_439b52's EAX (r 0x11111111 /
+  p 0: 0x412143's seal-draw leftover on the selected-county path; every caller drops it — row → HOOK_V; strat-tour /
+  econ-tour / tooltips after: 973 reached, 0 divergences), hybrid PASS.
+- Left in src: `engine_retail_call(0x465d28)` (below), the two CRT debug entries (rl_io_plat.c, ★4), and the
+  dynamic-VA dispatches (retail tables of action / callback VAs: rl_glue's pull-down item action
+  (0x40dd92) and the tile drawers' pick (0x42a8d1 / 0x42a9ab), rl_ctl's delayed actions 0x4d5c98 and DAT_00552ff4, rl_ui4's hot-spot action (the routers' hs_fire), rl_mpmsg's handler tables 0x4d57f0 /
+  0x4d5980, rl_mpnet's CRT helpers) — the standalone reaches them through the entry thunks (the CRT helpers: ★4).
+
 ## Left (2026-11-16)
-- 0x465d28 (above). The other `TODO(rl-link)` notes name seams outside this list: engine_button_render_list 0x40cfd2
-  and the frame-refresh retail calls (rl_host.c), game_init's config apply 0x499e5d (rl_misc.c), engine_menu_input's
-  action VAs (rl_glue.c), engine_npc_schedule / engine_map_init (rl_io.c), gfx.c's palette 0x4b2922 (rl_ui3.c).
+- 0x465d28 (above).
+- The dynamic-VA dispatches (above): a VA → rl_ function map would remove the last need for entry thunks in src.
 
 Product gap: rhost-only binds left are engine_retail_call's binder and bf's sleep (`rh_bf_bind_seams`) — a build
 without rhost has no retail to call.

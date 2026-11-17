@@ -118,7 +118,7 @@ static int screen_425a6a(void) { return rl_425a6a(); }   /* screen 0x44 */
 static int quit_4b2234(void) { return rl_4b2234(); }     /* the fatal-load exit */
 __attribute__((used)) static int gfx_restore(void) { return rl_4b2730(); }   /* gfx_restore (called from asm below) */
 __attribute__((used)) static int lost_4b26b8(void) { return rl_4b26b8(); }  /* the surfaces cannot be restored (asm below) */
-__attribute__((used)) static int save_49792e(void) { return (int)engine_retail_call(0x49792eu, 0); }     /* TODO(rl-extern): 0x49792e (the MP save pump) */
+__attribute__((used)) static int save_49792e(void) { return (int)rl_49792e(); }     /* 0x49792e (the MP save pump) */
 
 /* ================================================================ strutil (0x401000..0x401666) */
 
@@ -1230,7 +1230,7 @@ typedef HRESULT (WINAPI *rl_com5_t)(uint32_t self, uint32_t a, uint32_t b, uint3
 #define HWNDMAIN  AT(uint32_t, g_rl_4e5a00, 0x4e5a00u, 0x4e5a00u)               /* hWndMain */
 #define S4D47(va) STRV(g_rl_4d4768, 0x4d4768u, va)
 static int ds_err(int hr) { return rl_427d72(hr); }   /* the DS error's index */
-static int ds_close(void) { return (int)engine_retail_call(0x425d35u, 0); }                 /* TODO(rl-extern): 0x425d35 (DirectSound off) */
+static int ds_close(void) { return (int)rl_425d35(); }                 /* 0x425d35 (DirectSound off) */
 
 /* Port of FUN_00425ded (94 B) — the primary buffer's format DAT_00522b90: PCM, 2 channels, 11025 Hz, block 2, 22050
  * B/s (the block x the rate), 8 bits, cbSize 0. EAX = the byte rate. Route (b): audio.c is not linked. */

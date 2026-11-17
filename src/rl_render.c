@@ -1432,10 +1432,8 @@ static void year_number(int v, int x, int y, int mode)   /* rl_link: county_year
 { rl_41a900((int)v, (int)x, (int)y, (int)mode); }
 static void castle_block(int c, int x, int y, int row)   /* rl_link: labor_castle_block 0x41dedb (engine_labor.c) */
 { rl_41dedb((int)c, (int)x, (int)y, (int)row); }
-static void button_strip(int x, int y, const void *recs, int n)   /* 0x40cfd2 = engine_button_render_list (linked), called through
-                                                                     retail: its pressed-button mark seam is bound by rh_hooks_gfx.c to
-                                                                     the gfx table's own dirty copy, not the mirror this port runs on */
-{ engine_retail_call(0x40cfd2u, 4, (uint32_t)x, (uint32_t)y, (uint32_t)(uintptr_t)recs, (uint32_t)n); }
+static void button_strip(int x, int y, const void *recs, int n)   /* engine_button_render_list 0x40cfd2 (rl_link) */
+{ rl_40cfd2(x, y, (int)(uintptr_t)recs, n); }
 
 #define ROW16 (16 * g_rl_553d2c)   /* the panel's first row (DAT_00553d2c: 2 / 15 / 18) in pixels */
 #define T_SEL g_rl_52afbc          /* the selected territory */

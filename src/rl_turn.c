@@ -377,7 +377,7 @@ static void num_units(int v, int noun, int x, int y)   /* labor_num_units 0x41ab
 static void button_strip(int table_va)   /* 0x40cfd2 = engine_button_render_list (linked), through retail as rl_render's:
                                             its pressed-button seam is bound to the gfx table's own dirty copy */
 {
-    engine_retail_call(0x40cfd2u, 4, 0u, 0u, (uint32_t)STRVA(g_rl_4dda90, 0x4dda90u, table_va), 2u);
+    rl_40cfd2(0u, 0u, (uint32_t)STRVA(g_rl_4dda90, 0x4dda90u, table_va), 2u);
 }
 static void panel(int x, int y, int cols, int rows) { gfx_panel_draw_bevel(CHROME, x, y, cols, rows); }   /* 0x4093e0 */
 static void seal(int x, int y) { gfx_sprite_seal_draw(SYSTEM, x, y, 0); }                                  /* 0x40d1bc */
@@ -1197,10 +1197,9 @@ int rl_4976a1(void)
     else
         bf_477b2f();
     if (MP_ON) {
-        /* TODO(rl-extern): 0x43f4b7, 0x43fd2a (the MP session; 0x43fd2a is called with no argument pushed: it reads
-         * the caller's saved EBX — passed here as 0x43f4b7's EAX, as rl_glue's 0x440666; MP is not in the corpus) */
-        uint32_t v = engine_retail_call(0x43f4b7u, 0);
-        engine_retail_call(0x43fd2au, 1, v);
+        /* 0x43f4b7, 0x43fd2a (the MP battle snapshot; 0x43fd2a is called with no argument pushed) */
+        rl_43f4b7();
+        rl_43fd2a();
     }
     rl_45240a();
     engine_army_ai_set_ranking_dirty(1);
@@ -1783,7 +1782,7 @@ int rl_4a38db(int a1, int a2, int a3)
         inbox_notice(a1, a2, 0xba, 1, a3);
     } else if (code == 0xbb) {
         inbox_notice(a1, a2, 0xbb, 1, a3);
-        engine_retail_call(0x4a1b29u, 4, (uint32_t)a1, (uint32_t)a2, (uint32_t)a3, 0u);   /* TODO(rl-extern): the gift 0x4a1b29 */
+        rl_4a1b29((uint32_t)a1, (uint32_t)a2, (uint32_t)a3, 0u);   /* the gift 0x4a1b29 */
     } else {
         s_slot_0055ce50 = (uint32_t)a3;
         s_slot_00567958 = (uint32_t)(PL8(a1, 0x57bf91 + 16 * a2) * PERS32(PL8(a1, 0x57bf07), 0x0c));
@@ -1814,7 +1813,7 @@ int rl_4a277d(int a1)
         case 2: rl_4a2f61(a1, sender); break;
         case 3: rl_4a30f6(a1, sender); break;
         case 4: rl_4a3475(a1, sender); break;
-        case 5: engine_retail_call(0x4a3551u, 3, (uint32_t)a1, (uint32_t)sender, (uint32_t)param); break;   /* TODO(rl-extern): the type-5 tribute 0x4a3551 */
+        case 5: rl_4a3551((uint32_t)a1, (uint32_t)sender, (uint32_t)param); break;   /* the type-5 tribute 0x4a3551 */
         case 6: rl_4a38db(a1, sender, param); break;
         }
     }
@@ -1974,7 +1973,7 @@ int rl_4997bf(void)
         if (g_wf_villani1 != NULL)
             return 1;
     }
-    engine_retail_call(0x4b2636u, 0);   /* TODO(rl-extern): 0x4b2636 (the display teardown) */
+    rl_4b2636();   /* 0x4b2636 (the display teardown) */
     rl_4afab9(STRVA(g_rl_4dbf38, 0x4dbf38u, 0x4dbf38u), 0, step + 1);   /* "ERR:Error loading temp2, cannot alloc no :- " */
     rl_plat_exit(100);
     return 0;

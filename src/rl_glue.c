@@ -260,7 +260,7 @@ int rl_46c4a3(int col, int row, int w, int h)
 
 /* ---------------------------------------------------------------- seams: retail functions this partition calls */
 /* the hotspot router 0x40e3ee(x, y, table, n) / the button-record router 0x40da1e(x, y, table, n): retail tables
- * of retail action VAs (engine_menu_input.c ports both over port structs and an input snapshot: TODO(rl-link)) */
+ * of retail action VAs (rl ui4) */
 static int hotspot_click(int x, int y, const void *table, int n)
 { return rl_40e3ee(x, y, (int)(uintptr_t)table, n); }
 static int button_click(int x, int y, const void *table, int n)
@@ -582,7 +582,7 @@ int rl_40e761(int kind, int value, int lo, int hi, int step, int x, int y, int f
     g_rl_5c927c = step;
     g_rl_5aeb74 = flag;
     g_rl_58fe1c = kind;
-    engine_retail_call(0x40cd58u, 0);   /* TODO(rl-extern): 0x40cd58 (the slider dialog's render) */
+    rl_40cd58();   /* 0x40cd58 (the slider dialog's render) */
     engine_territory_mark_full_screen_dirty();
     BELOW_STATUS() = 1;
     engine_set_demand_redraw(2);
@@ -1051,14 +1051,14 @@ int rl_4782c5(void)
         s_slot_0057c8fc = 0;
         g_engine_state = 2;
     } else {   /* rl_link: engine_combat_aftermath (takes a port event queue) */
-        engine_retail_call(0x4ab383u, 1, 1u);
+        rl_4ab383(1u);
         if (engine_current_screen() != 19) {
             engine_set_current_screen(19);
             g_combat_anim_clock = clock_ms();
             s_slot_00553c70 = s_slot_00568210;
             s_slot_00553d20 = s_slot_00568218;
         }
-        r = (int)engine_retail_call(0x4788c6u, 0);   /* TODO(rl-extern): 0x4788c6 (back to the map) */
+        r = (int)rl_4788c6();   /* 0x4788c6 (back to the map) */
     }
     engine_set_demand_redraw(2);
     return r;
@@ -1159,14 +1159,13 @@ int rl_440666(void)
     }
     if (s_slot_00568470 != 0)
         return 1;
-    int k = (int)engine_retail_call(0x440dd2u, 1, 0u);   /* TODO(rl-extern): 0x440dd2 (read the link) */
+    int k = (int)rl_440dd2(0u);   /* 0x440dd2 (read the link) */
     if (k == 0) {
         stalled = 1;
     } else if (k == 1) {
-        /* retail calls 0x43fd2a with no argument pushed (IDA's v1 = 0x43f8ff's EAX is a guess; 0x43fd2a reads the
-         * caller's saved EDI): MP only, unmodelled — 0x43f8ff's result passed */
-        uint32_t v = engine_retail_call(0x43f8ffu, 0);   /* TODO(rl-extern): 0x43f8ff */
-        engine_retail_call(0x43fd2au, 1, v);              /* TODO(rl-extern): 0x43fd2a */
+        /* retail calls 0x43fd2a with no argument pushed (IDA's v1 = 0x43f8ff's EAX is a guess) */
+        rl_43f8ff();
+        rl_43fd2a();
         g_rl_57cb3c++;
         if (g_rl_512f88 > 0)
             g_rl_512f88--;
@@ -1194,12 +1193,12 @@ int rl_49b8b0(void)
     if (g_sim_turn_progress == 0 || g_rl_553248 == 0)
         return 0;
     uint32_t now = clock_ms();
-    int v = (int)engine_retail_call(0x4407e5u, 0);   /* TODO(rl-extern): 0x4407e5 */
+    int v = (int)rl_4407e5();
     if (v != 0) {
         g_bf_59151c[0] = v == 1;
         rl_43eda0(22, 0);
         bf_sleep(1000);
-        engine_retail_call(0x49b973u, 1, (uint32_t)g_bf_59151c[0]);   /* TODO(rl-extern): 0x49b973 */
+        rl_49b973((uint32_t)g_bf_59151c[0]);
     } else if ((int)(now - (uint32_t)g_rl_56d658) >= 10000) {
         g_rl_56d658 = (int32_t)now;
         rl_43eda0(20, 0);
@@ -1444,7 +1443,7 @@ int rl_43eda0(int id, int dest)
  * pixel read's result, or 0). */
 int rl_40ae12(int file, int dst, int k)
 {
-    int r = (int)engine_retail_call(0x4af8d9u, 4, (uint32_t)file, (uint32_t)(uintptr_t)g_rl_522d10, 16u,
+    int r = (int)rl_4af8d9((uint32_t)file, (uint32_t)(uintptr_t)g_rl_522d10, 16u,
                                     (uint32_t)(16 * k + 8));
     if (r == 0)
         return r;
@@ -1455,7 +1454,7 @@ int rl_40ae12(int file, int dst, int k)
     g_rl_591568 = h[12];
     g_rl_5bb478 = h[13];
     g_rl_57d3c0 = h[14];
-    r = (int)engine_retail_call(0x4af8d9u, 4, (uint32_t)file, (uint32_t)dst, (uint32_t)(g_rl_5aeb70 * g_rl_5c9258),
+    r = (int)rl_4af8d9((uint32_t)file, (uint32_t)dst, (uint32_t)(g_rl_5aeb70 * g_rl_5c9258),
                                 (uint32_t)AT(int32_t, g_rl_58fe04, 0x58fe04u, 0x58fe04u));
     AT(int32_t, g_rl_58fe04, 0x58fe04u, 0x58fe04u) = 0;
     return r;
@@ -1569,8 +1568,8 @@ int rl_4b1310(void)
  * sheet retail bakes in, DAT_0057d3d0, which has no port symbol yet). */
 int rl_409429(int x, int y, int w, int h)
 {
-    engine_retail_call(0x409934u, 5, 2u, (uint32_t)x, (uint32_t)y, (uint32_t)w, (uint32_t)h);
-    return (int)engine_retail_call(0x409c93u, 4, (uint32_t)(x + 16), (uint32_t)y, (uint32_t)(w - 2), (uint32_t)(h - 1));
+    rl_409934(2u, (uint32_t)x, (uint32_t)y, (uint32_t)w, (uint32_t)h);
+    return (int)rl_409c93((uint32_t)(x + 16), (uint32_t)y, (uint32_t)(w - 2), (uint32_t)(h - 1));
 }
 
 /* Port of FUN_0040f10f (145 B) — the startup speed probe: the time of 10 × 0x4b209a(20) → DAT_004d2168 and of
@@ -1579,7 +1578,7 @@ int rl_40f10f(void)
 {
     uint32_t t = clock_ms();
     for (int i = 0; i < 10; i++)
-        engine_retail_call(0x4b209au, 1, 20u);   /* TODO(rl-extern): 0x4b209a */
+        rl_4b209a(20u);
     g_rl_4d2168 = (int32_t)(clock_ms() - t);
     t = clock_ms();
     for (int j = 0; j < 10; j++) {

@@ -232,7 +232,7 @@ int rl_4399b0(void)
  * plan (0x448648) — with the labour share (0x44ff4a) and the production shares (0x450000) between. For the selected
  * county owned locally: deselect, the workforce HUD (0x412143(0)), focus redraw DAT_005530d0, and the route
  * overlay's redraw while it is up (DAT_0057a0c4 > 0 → DAT_00567d0c). Returns retail's EAX (c; << 8 for the selected
- * county; the HUD's). */
+ * county) but for the HUD path: retail's is 0x412143's leftover, the link entry's 0 — every caller drops it. */
 int rl_439b52(int c, int from, int to, int n)
 {
     int owner = CO8(c, 0x53f9b5u);
@@ -978,7 +978,7 @@ static int bind_hex_grid(const uint32_t a[11])   /* engine_battlefield_render_bi
 static int bind_minimap(int a, int b, int c, int d, int e, int f)   /* rl_link: engine_battlefield_render_bind_minimap_context 0x4bc107 */
 { return rl_4bc107((int)a, (int)b, (int)c, (int)d, (int)e, (int)f); }
 static void mp_leave_session(void) { rl_4b743b(); }   /* leave the MP session (rl mpnet2) */
-static void mp_close(int a) { engine_retail_call(0x43e8f4u, 1, (uint32_t)a); }   /* TODO(rl-extern): 0x43e8f4 */
+static void mp_close(int a) { rl_43e8f4((uint32_t)a); }
 
 /* Port of FUN_0043d5b7 (146 B) — Go (the skirmish's battle start): in MP only when the host's ready flag
  * (DAT_005533e0[DAT_0056d5cc]) is set and — unless DAT_00591558 — after message 87 a connected session (DAT_00553248).
@@ -1390,7 +1390,7 @@ static void dp_drop(int close)   /* Close (+0x10) when asked, Release (+8), forg
 }
 /* the dialog procs (unported; retail's entries) — TODO(rl-extern): 0x4b7f78 (DialogFunc), 0x4b8335, 0x4b8439, 0x4b85b7 */
 #define DLG(va) ((DLGPROC)(uintptr_t)(va))
-static int mp_resume(void) { return (int)engine_retail_call(0x4b7a9au, 0); }   /* TODO(rl-extern): 0x4b7a9a */
+static int mp_resume(void) { return (int)rl_4b7a9a(); }
 static int mp_lobby_load(void) { return rl_49792e(); }   /* the MP lobby's game start (rl mpnet2) */
 static void log3(uint32_t fmt_va, int a, int n) { rl_4afab9((int)(uintptr_t)&AT(uint8_t, g_rl_4e2ae4, 0x4e2ae4u, fmt_va), a, n); }
 
@@ -1484,11 +1484,11 @@ int rl_4b7585(int g0, int g1, int g2, int g3)
     return 1;
 }
 
-static void mp_free_queues(void) { engine_retail_call(0x43f43eu, 0); }   /* TODO(rl-extern): 0x43f43e */
-static void mp_link_init(void) { engine_retail_call(0x43f01du, 0); }   /* TODO(rl-extern): 0x43f01d */
-static void mp_link_reset(void) { engine_retail_call(0x43fed2u, 0); }   /* TODO(rl-extern): 0x43fed2 */
-static void mp_host_ready(void) { engine_retail_call(0x43306au, 0); }   /* TODO(rl-extern): 0x43306a */
-static void mp_shutdown(int a) { engine_retail_call(0x4b7180u, 1, (uint32_t)a); }   /* TODO(rl-extern): 0x4b7180 */
+static void mp_free_queues(void) { rl_43f43e(); }
+static void mp_link_init(void) { rl_43f01d(); }
+static void mp_link_reset(void) { rl_43fed2(); }
+static void mp_host_ready(void) { rl_43306a(); }
+static void mp_shutdown(int a) { rl_4b7180((uint32_t)a); }
 
 /* Port of FUN_004b7250 (491 B) — Multiple players: the editor off, DAT_0055cd7c / DAT_0053f23c / MP off; the queues
  * (0x43f352; failing: 0x43f43e, 0); the session (0x4b7585 with the GUID DAT_004d57e0..ec; failing: MP off, 0). MP on,
@@ -1545,7 +1545,7 @@ int rl_4b7250(void)
     return 1;
 }
 
-static int msg_pump(void) { return (int)engine_retail_call(0x40ec2cu, 0); }   /* TODO(rl-extern): 0x40ec2c */
+static int msg_pump(void) { return (int)rl_40ec2c(); }
 
 /* Port of FUN_004adcf6 (413 B) — MP: wait (60 s, the message pump 0x40ec2c) until DAT_0057a0dc reaches the player
  * count DAT_00553f98 or no live player (+5 of the player records 1..5) is still unready (DAT_00553d30[i] 0): 1; a

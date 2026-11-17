@@ -17,7 +17,7 @@
 #include <string.h>
 
 /* ---------------------------------------------------------------- seams (callees outside the partition) */
-/* engine_npc_schedule.c / engine_map_init.c ports are not linked in rhost — TODO(rl-link) */
+/* retail-layout ports of other partitions */
 static int npc_schedule_init(void) { return rl_49caaa(); }   /* engine_npc_schedule_init (rl turn) */
 static void map_init_set_camera(int mode) { rl_451fcc(mode); }   /* 0x451fcc (rl_ctl) */
 
@@ -461,7 +461,7 @@ int rl_4996c8(void)
             }
         }
     }
-    engine_retail_call(0x4b2636u, 0);   /* TODO(rl-extern) */
+    rl_4b2636();
     rl_4afab9((int)(uintptr_t)RS(g_rl_4dbf0c, 0x4dbf0cu, 0x4dbf0cu), 0, n + 1);
     rl_plat_exit(100);
     return 0;
@@ -1714,7 +1714,7 @@ int rl_42dbc7(int first)
     if (SMKF(0x68) != 0)
         rl_42e362();
     if (rl_strcmp((const char *)g_rl_5169d0, RS(g_rl_4d4fe0, 0x4d4fe0u, 0x4d5028u)) == 0)   /* "intro.smk" */
-        engine_retail_call(0x41a166u, 1, SMKF(0x374));   /* TODO(rl-extern) */
+        rl_41a166(SMKF(0x374));
     if (g_rl_4df28c != 0) {
         memset(g_rl_5169e0, 0, 0x6c);
         AT(uint32_t, g_rl_5169e0, 0x5169e0u, 0x5169e0u) = 0x6c;   /* DDSURFACEDESC.dwSize */
@@ -1761,7 +1761,7 @@ int rl_42dbc7(int first)
     rl_4afab9((int)(uintptr_t)RS(g_rl_4d4fe0, 0x4d4fe0u, 0x4d5050u), (int)(uintptr_t)g_rl_5169d0, 0);   /* "OK :SMK natural end of " */
     int m = rl_4b2575();
     rl_4afab9((int)(uintptr_t)RS(g_rl_4d4fe0, 0x4d4fe0u, 0x4d5068u), 0, m + 1);   /* "MEM:Max alloc after = " */
-    engine_retail_call(0x42e060u, 1, 0u);   /* TODO(rl-extern) */
+    rl_42e060(0u);
     return 1;
 }
 
@@ -1957,7 +1957,7 @@ int rl_4b8c3a(void)
                 return 0;
             if (rl_4b6d44((uint32_t)NW) == 0) {
                 rl_plat_OutputDebugStringA(RS(g_rl_4e2eb0, 0x4e2eb0u, 0x4e2eb0u));   /* "RGM SIGS disconnected, shut down\n" */
-                engine_retail_call(0x43f43eu, 0);   /* TODO(rl-extern) */
+                rl_43f43e();
                 g_rl_568464 = 0;
                 rl_4b6a15((uint32_t)NW);          /* Close (rl mpnet2) */
                 if (NW != 0)
@@ -2022,7 +2022,7 @@ int rl_4b8c3a(void)
         } else if (from == SELF_ID) {
             rl_4afab9(DPS(0x4e2ed4u), 0, from + 1);   /* "OK :DP ignore self mess" */
         } else {
-            engine_retail_call(0x43eac1u, 1, (uint32_t)from);   /* TODO(rl-extern) */
+            rl_43eac1((uint32_t)from);
         }
     }
 }

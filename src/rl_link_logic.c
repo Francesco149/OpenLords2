@@ -152,6 +152,8 @@ int rl_4abb36(int army, int region) { EVQ(engine_combat_army_enter_region(army, 
 int rl_4a8aab(int rec) { EVQ(engine_combat_siege_assault(rec, q, MP_ACTIVE)); return 0; }
 int rl_43b622(void) { EVQ(engine_combat_auto_resolve_button(q, MP_ACTIVE)); return 0; }
 int rl_477dfc(void) { EVQ(engine_combat_battlefield_end_tick(q, MP_ACTIVE)); return 0; }
+int rl_4ab383(int a0) { EVQ(engine_combat_aftermath(a0, q, MP_ACTIVE)); return 0; }
+int rl_43be65(void) { EVQ(engine_combat_battlefield_end(q, MP_ACTIVE)); return 0; }
 /* engine_army_state: FUN_00428007 leaves the matched cell in the shared cursor DAT_00569570/78 (#226) */
 int rl_428007(int realm) { int r, c, w; LG(r = engine_army_state_find_settle_spot(realm, &c, &w)); return r; }
 /* the screens' hit tests over retail's input (cursor DAT_004e65fc / DAT_004e65f4, press DAT_004eafb4) */
