@@ -199,6 +199,7 @@ void rh_win_meta_restore(const void *m);
 /* rh_win.c — virtual window, message queue, input trace, recorder, visible presenter */
 #define RH_FAKE_HWND 0x00020c2eu
 void rh_win_install(void);
+FARPROC rh_win_proc(HMODULE m, const char *name);   /* user32 entries the debug CRT GetProcAddress-es: the fakes */
 void rh_win_frame(void);       /* frame boundary: inject this frame's trace events / record / present */
 void rh_win_present(void);
 HWND rh_win_real(HWND h);

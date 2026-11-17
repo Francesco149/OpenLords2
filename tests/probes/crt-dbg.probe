@@ -1,0 +1,188 @@
+# synthetic carriers for src/rl_crt_dbg.c (partition A "dbg": the debug CRT's report / message / exit / signal path).
+# rhost's fakes: MessageBoxA → IDOK (so no box ever answers Abort / Retry), GetActiveWindow → NULL, DebugBreak logs and
+# returns under --probe; WriteFile to handle -1 / 1 / 2 succeeds. Free _iob slots 5..9 (0x4e5780 + 32 k) hold the
+# FILEs / records the pokes build. Not probed (never return): _exit 4bf710, _amsg_exit 4c35c0, abort 4ccb00,
+# terminate 4c8700 (RH_SH_HOST rows; docs/findings/crt-gap-dbg.md).
+scenario newgame-playnow
+
+# __crtMessageBoxA: first call loads user32's three entries (0x4e5634..3c), then the cached path
+1700 rl_crt_4cb010 "probe text" "probe caption" 0x12012
+1700 rl_crt_4cb010 "again" va:0x4d0974 0
+
+# _CrtDbgBreak (DebugBreak: logged under --probe)
+1700 rl_crt_4c37d0
+
+# strcat / _itoa / xtoa
+1700 rl_crt_4c2090 buf:64="Lords of " "the Realm II"
+1700 rl_crt_4c2090 buf:64="" "x"
+1700 rl_crt_4c2090 buf:64="abcde" ""
+1700 rl_crt_4c2090 buf:64="ab" "0123456789abcdefghij"
+1700 rl_crt_4ca5d0 -12345 buf:40 10
+1700 rl_crt_4ca5d0 -1 buf:40 16
+1700 rl_crt_4ca5d0 0 buf:40 10
+1700 rl_crt_4ca5d0 255 buf:40 2
+1700 rl_crt_4ca5d0 123456789 buf:40 36
+1700 rl_crt_4ca5d0 2147483647 buf:40 10
+1700 rl_crt_4ca630 0x80000000 buf:40 10 1
+1700 rl_crt_4ca630 7 buf:40 8 0
+1700 rl_crt_4ca630 35 buf:40 36 0
+
+# _snprintf / _vsnprintf: fits, exact fit, no room for the terminator, overflow (→ _flsbuf on the string stream)
+1700 rl_crt_4ca900 buf:64 64 "%s=%d %x|%5.3s" "key" -17 0xbeef "abcdef"
+1700 rl_crt_4ca900 buf:16 5 "abcd"
+1700 rl_crt_4ca900 buf:16 4 "abcd"
+1700 rl_crt_4ca900 buf:16 8 "%s" "too long for it"
+1700 rl_crt_4ca900 buf:16 0 ""
+1700 rl_crt_4ca9f0 buf:32 32 "%d|%d|%c" "\x07\x00\x00\x00\xfe\xff\xff\xff\x41\x00\x00\x00"
+1700 rl_crt_4ca9f0 buf:8 3 "%d" "\x39\x30\x00\x00"
+
+# _isatty: fd 0 (FDEV), 3 (closed), -1 / 32 (>= _nhandle, unsigned)
+1700 rl_crt_4cc590 0
+1700 rl_crt_4cc590 3
+1700 rl_crt_4cc590 -1
+1700 rl_crt_4cc590 31
+1700 rl_crt_4cc590 32
+
+# _getbuf on a free _iob slot (a 4 KB _CRT_BLOCK)
+1700 poke 0x4e57c0 0 0 0 0 -1 0 0 0
+1700 rl_crt_4cc4d0 va:0x4e57c0
+
+# _flsbuf on _iob[5] (buffer: _iob[6], 32 bytes): not writable / string / read not at EOF → -1
+1700 poke 0x4e5780 0 0 0 0 -1 0 0 0
+1700 rl_crt_4c6650 0x41 va:0x4e5780
+1700 poke 0x4e5780 0 0 0 0x42 -1 0 0 0
+1700 rl_crt_4c6650 0x41 va:0x4e5780
+1700 poke 0x4e5780 0x4e57a5 3 0x4e57a0 0x81 -1 0 32 0
+1700 rl_crt_4c6650 0x41 va:0x4e5780
+# read at EOF, a user buffer: back to its start, nothing to flush (fd -1: __badioinfo, no FAPPEND) → ch
+1700 poke 0x4e5780 0x4e57a5 3 0x4e57a0 0x191 -1 0 32 0
+1700 rl_crt_4c6650 0x1c2 va:0x4e5780
+# buffered with 5 bytes, fd -1: _write fails → -1
+1700 poke 0x4e5780 0x4e57a5 0 0x4e57a0 0x102 -1 0 32 0
+1700 rl_crt_4c6650 0x42 va:0x4e5780
+# _ptr below _base: the "inconsistent IOB fields" assert (report → window → box), then -1
+1700 poke 0x4e5780 0x4e579c 0 0x4e57a0 0x102 -1 0 32 0
+1700 rl_crt_4c6650 0x43 va:0x4e5780
+# unbuffered (_IONBF) on fd -1 → -1
+1700 poke 0x4e5780 0 0 0 0x6 -1 0 0 0
+1700 rl_crt_4c6650 0x44 va:0x4e5780
+# stdout (fd -1, not a tty): _getbuf, ch stored → ch; again: the 1 byte flushed to fd -1 fails → -1
+1700 rl_crt_4c6650 0x45 va:0x4e5700
+1700 rl_crt_4c6650 0x46 va:0x4e5700
+# stderr on fd 0 (a tty): no buffer, the character written alone (fd 0: rhost's console) → ch; fd back to -1
+1700 poke 0x4e5730 0
+1700 rl_crt_4c6650 0x47 va:0x4e5720
+1700 poke 0x4e5730 -1
+# a real file (fd 3: O_WRONLY | O_APPEND | O_CREAT | O_BINARY): flush 5 bytes → ch; empty buffer on FAPPEND → seek
+# to the end → ch; unbuffered → ch; closed
+1700 rl_crt_4cea50 "dbgprobe.tmp" 0x8109 0x40 0x180
+1700 poke 0x4e57a0 0x64636261 0x65
+1700 poke 0x4e5780 0x4e57a5 0 0x4e57a0 0x102 3 0 32 0
+1700 rl_crt_4c6650 0x48 va:0x4e5780
+1700 poke 0x4e5780 0x4e57a0 0 0x4e57a0 0x102 3 0 32 0
+1700 rl_crt_4c6650 0x49 va:0x4e5780
+1700 poke 0x4e5780 0 0 0 0x6 3 0 0 0
+1700 rl_crt_4c6650 0x4a va:0x4e5780
+1700 rl_crt_4ce640 3
+
+# _NMSG_WRITE (GUI: report + "Runtime Error!" box) / 252 (nothing: index 16) / unknown (18)
+1700 rl_crt_4ca330 2
+1700 rl_crt_4ca330 252
+1700 rl_crt_4ca330 255
+1700 rl_crt_4ca330 7
+1700 rl_crt_4ca330 120
+# console (error mode 1): GetStdHandle(STD_ERROR_HANDLE) → WriteFile; fd 2's handle when set; the banner
+1700 poke 0x4e45cc 1
+1700 rl_crt_4ca330 9
+1700 rl_crt_4ca330 252
+1700 rl_crt_4ca2d0
+1700 poke 0x50000130 2
+1700 rl_crt_4ca330 28
+1700 poke 0x50000130 -1
+# default mode with a console app type; back to GUI (the banner: nothing)
+1700 poke 0x4e45cc 0
+1700 poke 0x4e45d0 1
+1700 rl_crt_4ca2d0
+1700 rl_crt_4ca330 24
+1700 poke 0x4e45d0 2
+1700 rl_crt_4ca2d0
+
+# _CrtMessageWindow: an assert with file / line / message, an empty message, a module cut to 64 characters (in place)
+1700 rl_crt_4c3d40 2 "f.c" "17" 0 "expr"
+1700 rl_crt_4c3d40 0 0 0 0 ""
+1700 rl_crt_4c3d40 1 "f.c" 0 "C:\\a\\very\\long\\module\\path\\that\\goes\\on\\and\\on\\past\\sixty\\four\\characters\\mod.dll" "msg"
+
+# _CrtDbgReport: bad types; warn (debugger); error / assert (window); no format; module cut; too long (vsnprintf /
+# snprintf); file mode with '\r'; the report hook declining; the second-chance assert
+1700 rl_crt_4c3950 -1 0 0 0 0
+1700 rl_crt_4c3950 3 0 0 0 0
+1700 rl_crt_4c3950 0 0 0 0 "warn %s %d\n" "x" 5
+1700 rl_crt_4c3950 0 "file.c" 12 0 "warn"
+1700 rl_crt_4c3950 1 "err.c" 99 0 "error %d" 3
+1700 rl_crt_4c3950 2 "a.c" 0 0 0
+1700 rl_crt_4c3950 1 0 0 0 0
+1700 rl_crt_4c3950 2 "assert.c" 42 "C:\\a\\very\\long\\module\\path\\that\\goes\\on\\and\\on\\past\\sixty\\four\\characters\\mod.dll" "x > 0"
+1700 rl_crt_4c3950 0 0 0 0 "%5000d" 1
+1700 rl_crt_4c3950 2 "a_file_name_long_enough_to_push_the_message_over_four_kilobytes_when_the_assertion_text_is_4000.c" 1 0 "%4000d" 1
+1700 poke 0x4e45e8 5
+1700 poke 0x4e45f8 1
+1700 rl_crt_4c3950 2 "m.c" 5 0 "file %s" "mode"
+1700 poke 0x4e45e8 4
+1700 poke 0x4e45f8 -1
+1700 poke 0x4e45e0 7
+1700 rl_crt_4c3950 0 "w.c" 6 0 "all modes"
+1700 poke 0x4e45e0 2
+1700 poke 0x5cee48 0x4c57f0
+1700 rl_crt_4c3950 0 0 0 0 "hooked"
+1700 poke 0x5cee48 0
+1700 poke 0x4e45d8 0
+1700 rl_crt_4c3950 2 "second.c" 77 0 "nested"
+1700 poke 0x4e45d8 -1
+
+# siglookup: SIGFPE / SIGILL / SIGSEGV, 7 (the slot past the table), not there
+1700 rl_crt_4cafa0 8
+1700 rl_crt_4cafa0 4
+1700 rl_crt_4cafa0 11
+1700 rl_crt_4cafa0 7
+1700 rl_crt_4cafa0 99
+# raise: unknown signals; SIG_IGN; a handler (toupper 0x4c57f0, cdecl) for each signal — reset to SIG_DFL after
+1700 rl_crt_4cad80 3
+1700 rl_crt_4cad80 0
+1700 rl_crt_4cad80 23
+1700 poke 0x4e5628 1
+1700 rl_crt_4cad80 22
+1700 poke 0x4e5628 0x4c57f0
+1700 rl_crt_4cad80 22
+1700 poke 0x4e5620 0x4c57f0
+1700 rl_crt_4cad80 2
+1700 poke 0x4e562c 0x4c57f0
+1700 rl_crt_4cad80 15
+1700 poke 0x4e5624 0x4c57f0
+1700 rl_crt_4cad80 21
+1700 poke 0x4e5570 0x1234
+1700 poke 0x4e5514 0x4c57f0
+1700 rl_crt_4cad80 8
+1700 poke 0x4e54f0 0x4c57f0
+1700 rl_crt_4cad80 11
+1700 poke 0x4e54fc 0x4c57f0
+1700 rl_crt_4cad80 4
+1700 poke 0x4e5570 0
+
+# _ValidateExecute: code / NULL / unmapped
+1700 rl_crt_4ccac0 0x4c57f0
+1700 rl_crt_4ccac0 0
+1700 rl_crt_4ccac0 0x10
+
+# __CxxUnhandledExceptionFilter: not a C++ exception (the code, the parameter count, the magic) → no previous filter: 0;
+# a previous filter (GetModuleHandleA's import thunk 0x4bf440, __stdcall 1: GetModuleHandleA("") → NULL)
+1700 rl_crt_4cc980 va:0x4e45c8
+1700 poke 0x4e5800 0xe06d7363 0 0 0 2 0x19930520
+1700 poke 0x4e5820 0x4e5800
+1700 rl_crt_4cc980 va:0x4e5820
+1700 poke 0x4e5800 0xe06d7363 0 0 0 3 0x19930521
+1700 rl_crt_4cc980 va:0x4e5820
+1700 poke 0x4e5800 0xe06d7364 0 0 0 3 0x19930520
+1700 rl_crt_4cc980 va:0x4e5820
+1700 poke 0x4e5d34 0x4bf440
+1700 rl_crt_4cc980 va:0x4e5820
+1700 poke 0x4e5d34 0

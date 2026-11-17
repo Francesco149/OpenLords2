@@ -383,14 +383,26 @@ static void WINAPI my_GlobalMemoryStatus(LPMEMORYSTATUS m)
 }
 static BOOL WINAPI my_SetConsoleCtrlHandler(PHANDLER_ROUTINE h, BOOL a) { (void)h; (void)a; return TRUE; }
 static void WINAPI my_OutputDebugStringA(LPCSTR s) { rh_log("retail OutputDebugString: %s\n", s ? s : ""); }
-static void WINAPI my_DebugBreak(void) { rh_fatal("retail DebugBreak at frame %u", g_frame); }
+/* DebugBreak is fatal — except under --probe, where a carrier drives the debug CRT's break paths on purpose
+ * (_CrtDbgBreak, the second-chance assert): logged, returns */
+static void WINAPI my_DebugBreak(void)
+{
+    if (O.probe) { rh_log("retail DebugBreak at frame %u (--probe: returns)\n", g_frame); return; }
+    rh_fatal("retail DebugBreak at frame %u", g_frame);
+}
 static HMODULE WINAPI my_LoadLibraryA(LPCSTR n)
 {
     HMODULE m; int net = rh_net_load(n, &m);
     rh_log("retail LoadLibraryA(%s) at frame %u%s\n", n ? n : "", g_frame, net ? " (rh_net)" : "");
     return net ? m : LoadLibraryA(n);
 }
-static FARPROC WINAPI my_GetProcAddress(HMODULE h, LPCSTR n) { FARPROC f; return rh_net_proc(h, n, &f) ? f : GetProcAddress(h, n); }
+static FARPROC WINAPI my_GetProcAddress(HMODULE h, LPCSTR n)
+{
+    FARPROC f;
+    if (rh_net_proc(h, n, &f)) return f;
+    if ((f = rh_win_proc(h, n))) { rh_log("retail GetProcAddress(user32, %s) at frame %u: rhost's fake\n", n, g_frame); return f; }
+    return GetProcAddress(h, n);
+}
 static BOOL WINAPI my_FreeLibrary(HMODULE h) { return rh_net_free(h) ? TRUE : FreeLibrary(h); }
 
 /* ---- imports rhost supplies instead of a DLL ---- */

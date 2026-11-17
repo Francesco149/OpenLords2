@@ -178,7 +178,9 @@ void rh_hooks_install(void)
  * row's wrapper with those arguments, exactly as a retail call site would: in shadow mode retail runs, then the port on
  * the identical pre-state, state + return value compared (hook-result). Arguments: an integer (0x.. / decimal /
  * negative), "text" (C escapes \n \t \\ \" \xHH; NUL-terminated on retail's stack above the call), w"text" (the same,
- * UTF-16), buf:N (N bytes 0xcc on the stack: an output — a HOOK_SO row compares it), va:VA (a retail address as is).
+ * UTF-16), buf:N (N bytes 0xcc on the stack: an output — a HOOK_SO row compares it), buf:N="text" (the same, starting
+ * with the text: a destination with room — strcat), va:VA (a retail address as is). `F poke VA D0 D1 ...` lines write
+ * dwords at VA (prior state a carrier needs: a FILE in a free _iob slot, a report mode, a signal handler; kept).
  * Stack data sits above the wrapper's e0, so retail's own frames never overwrite it. Lines: '#' comments; `scenario`
  * lines are rhost.py's (ignored here). The run is no longer a pure replay: rhost.py probe compares hook results only. */
 #define PROBE_MAX 512
@@ -198,7 +200,8 @@ static void probe_load(void)
         g_pr[g_npr].name[k] = 0; while (*p == ' ') p++;
         snprintf(g_pr[g_npr].args, sizeof g_pr[g_npr].args, "%s", p);
         char *nl = strpbrk(g_pr[g_npr].args, "\r\n"); if (nl) *nl = 0;
-        if (!find_hook(g_pr[g_npr].name)) rh_fatal("--probe: unknown row '%s'", g_pr[g_npr].name);
+        if (strcmp(g_pr[g_npr].name, "poke") && !find_hook(g_pr[g_npr].name))
+            rh_fatal("--probe: unknown row '%s'", g_pr[g_npr].name);
         g_npr++;
     }
     fclose(f);
@@ -215,8 +218,25 @@ static uint32_t probe_call(void *fn, const uint32_t *a, int n)
         : "=a"(r), "+c"(n), "+d"(a) : "a"(fn) : "memory", "ebx", "edi");
     return r;
 }
+/* `F poke VA D0 D1 ...`: dwords written at VA (a carrier's prior state: a stream in a free _iob slot, a mode, a
+ * handler) — outside any shadow, kept (a later poke puts the old value back) */
+static void probe_poke(int i)
+{
+    char *e; const char *p = g_pr[i].args;
+    uint32_t va = (uint32_t)strtoul(p, &e, 0), n = 0;
+    if (e == p || va < 0x400000u) rh_fatal("--probe: line %d: poke needs a retail address", i);
+    for (p = e; *p; p = e) {
+        while (*p == ' ') p++;
+        if (!*p) break;
+        uint32_t v = (uint32_t)strtoll(p, &e, 0);
+        if (e == p) rh_fatal("--probe: line %d: bad poke value '%s'", i, p);
+        G32(va + 4u * n++) = v;
+    }
+    rh_log("probe poke %08x f%u n=%u\n", va, g_frame, n);
+}
 static __attribute__((noinline)) void probe_one(int i)
 {
+    if (!strcmp(g_pr[i].name, "poke")) { probe_poke(i); return; }
     char buf[8192];   /* the probe's stack data, above every frame the call makes */
     uint32_t a[16]; int n = 0; size_t used = 0;
     const char *p = g_pr[i].args;
@@ -246,6 +266,12 @@ static __attribute__((noinline)) void probe_one(int i)
             size_t k = strtoul(p + 4, (char **)&p, 0);
             if (used + k + 4 > sizeof buf) rh_fatal("--probe: line %d: stack data over %u bytes", i, (unsigned)sizeof buf);
             memset(buf + used, 0xcc, k);
+            if (p[0] == '=' && p[1] == '"') {   /* buf:N="text": the N bytes start with the text (no escapes) + NUL */
+                size_t t = 0;
+                for (p += 2; *p && *p != '"'; p++) if (t + 1 < k) buf[used + t++] = *p;
+                if (*p == '"') p++;
+                if (k) buf[used + t] = 0;
+            }
             a[n++] = (uint32_t)(uintptr_t)(buf + used);
             used = (used + k + 3) & ~(size_t)3;
         } else if (!strncmp(p, "va:", 3)) {

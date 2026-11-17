@@ -721,7 +721,8 @@ def cmd_probe(a):
             if t[0] == "scenario":
                 scen = t[1]
                 continue
-            n[t[1]] = n.get(t[1], 0) + 1
+            if t[1] != "poke":   # `F poke VA D...`: prior state (rh_hooks.c probe_poke), not a row
+                n[t[1]] = n.get(t[1], 0) + 1
         if not scen:
             raise SystemExit(f"{f}: no `scenario NAME` line")
         name = os.path.splitext(os.path.basename(f))[0]
