@@ -3,8 +3,11 @@
 src/*_globals.c) gets ONE definition for the standalone: moved to src/rl_shared_globals.c as a byte array at the
 largest extent any definition had (aligned 4; each partition's header keeps its typed view), and its duplicate
 rhost aliases dropped (only the first alias header keeps it). Run after merging partitions; the standalone links
-every src/*.c (rhost aliases instead: build.sh links no *_globals.c)."""
+every src/*.c (rhost aliases instead: build.sh links no *_globals.c).
+--check: report only (exit 1 on a duplicate). Any file-scope g_bf_/g_rl_ definition the parser can't read is an error
+(a hand-edited definition with a trailing comment was invisible before 2026-11-17: g_rl_4dc428 / 4ea180 / 4d8a58)."""
 import collections
+import sys
 import glob
 import os
 import re
@@ -12,21 +15,37 @@ import re
 SRC = "src"
 RH = "tools/rhost"
 TY = {"uint8_t": 1, "int8_t": 1, "int16_t": 2, "uint16_t": 2, "int32_t": 4, "uint32_t": 4}
-defre = re.compile(r"^(u?int(?:8|16|32)_t) (g_(?:bf|rl)_[0-9a-f]{6})(?:\[(0x[0-9a-f]+|\d+)\])?(?: __attribute__\(\(aligned\(4\)\)\))?( = [^;]*)?;\s*$", re.M)
+defre = re.compile(r"^(u?int(?:8|16|32)_t) (g_(?:bf|rl)_[0-9a-f]{6})(?:\[(0x[0-9a-f]+|\d+)\])?(?: __attribute__\(\(aligned\(4\)\)\))?( = [^;]*)?;\s*(?:/\*.*?\*/|//.*)?\s*$", re.M)
+# any file-scope definition of a retail global (not extern / a comment / indented code): the strict parser must read it
+loosere = re.compile(r"^(?!extern\b)(?![ \t/*#])[^\n;]*?\b(g_(?:bf|rl)_[0-9a-f]{6})\b\s*(?:\[[^\]]*\])?[^\n;]*?(?:=|;)", re.M)
 shared = os.path.join(SRC, "rl_shared_globals.c")
 defs = collections.defaultdict(list)   # sym → [(file, size, has_init)]
+bad = []
 for fn in sorted(glob.glob(os.path.join(SRC, "*_globals.c"))):
-    for m in defre.finditer(open(fn).read()):
+    t = open(fn).read()
+    got = set()
+    for m in defre.finditer(t):
         n = int(m.group(3), 0) if m.group(3) else 1
         defs[m.group(2)].append((fn, TY[m.group(1)] * n, bool(m.group(4))))
+        got.add(m.start())
+    for m in loosere.finditer(t):
+        if m.start() not in got:
+            bad.append(f"{fn}:{t.count(chr(10), 0, m.start()) + 1}: {m.group(0)[:100]}")
+if bad:
+    print("dedup_globals: definitions the parser can't read (normalize them: <intN_t> g_xx_<va>[N] [aligned(4)] [= {...}];):")
+    print("\n".join("  " + b for b in bad))
+    raise SystemExit(2)
 dups = {s: d for s, d in defs.items() if len(d) > 1}
 if not dups:
-    print("no duplicate globals")
+    print(f"no duplicate globals ({len(defs)} definitions)")
     raise SystemExit(0)
+if "--check" in sys.argv[1:]:
+    for s, d in sorted(dups.items()):
+        print(f"DUP {s}: " + ", ".join(f"{f} [{n}]" for f, n, _ in d))
+    raise SystemExit(1)
 size = {s: max(n for _, n, _ in d) for s, d in dups.items()}
 inited = {s for s, d in dups.items() if any(i for _, _, i in d)}   # .data: the initial bytes from the exe itself
 if inited:
-    import sys
     sys.path.insert(0, os.path.dirname(__file__))
     import bfgraph as G
 for fn in {f for d in dups.values() for f, _, _ in d}:

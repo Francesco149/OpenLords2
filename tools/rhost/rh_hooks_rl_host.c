@@ -226,7 +226,7 @@ hook_t RH_HOOKS_RL_HOST[] = {
     { "rl_4b1867", 0x4b1867u, (void *)w_rl_4b1867, 0, 0, 0, 0, "", 0, RH_SH_MEDIA },
     { "rl_4b18e3", 0x4b18e3u, (void *)w_rl_4b18e3, 0, 0, 0, 0, "" },
     { "rl_4b191e", 0x4b191eu, (void *)w_rl_4b191e, 0, 0, 0, 0, "" },
-    { "rl_4b1de0", 0x4b1de0u, (void *)w_rl_4b1de0, 0, 0, 0, 0, "" },
+    { "rl_4b1de0", 0x4b1de0u, (void *)w_rl_4b1de0, 0, 0, 0, 0, "", 0, RH_SH_SAMPLE },   /* an empty retail function called every frame: sampled (2026-11-17, ~10% of a verify's shadowed calls with its siblings) */
     { "rl_4b1deb", 0x4b1debu, (void *)w_rl_4b1deb, 0, 0, 0, 0, "" },
     { "rl_4b20ed", 0x4b20edu, (void *)w_rl_4b20ed, 0, 0, 0, 0, "" },
     { "rl_4b25b0", 0x4b25b0u, (void *)w_rl_4b25b0, 0, 0, 0, 0, "" },

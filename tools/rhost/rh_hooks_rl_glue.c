@@ -113,7 +113,7 @@ HOOK_R(rl_42f148, 3, rl_42f148(I(0), I(1), I(2)))
 HOOK_V(rl_475d73, 1, rl_475d73(I(0)))
 
 hook_t RH_HOOKS_RL_GLUE[] = {
-    { "rl_41423f", 0x41423fu, (void *)w_rl_41423f, 0, 0, 0, 0, "" },
+    { "rl_41423f", 0x41423fu, (void *)w_rl_41423f, 0, 0, 0, 0, "", 0, RH_SH_SAMPLE },   /* an empty retail function called every frame: sampled (2026-11-17, ~10% of a verify's shadowed calls with its siblings) */
     { "rl_42e26f", 0x42e26fu, (void *)w_rl_42e26f, 0, 0, 0, 0, "" },
     { "rl_4360f2", 0x4360f2u, (void *)w_rl_4360f2, 0, 0, 0, 0, "" },
     { "rl_43496c", 0x43496cu, (void *)w_rl_43496c, 0, 0, 0, 0, "" },

@@ -187,9 +187,14 @@
    (DirectPlay / serial — a fake transport in rhost would open it), dead code (zoom-1 / zoom-16 drawers, unwritten
    orders 0 / 7 / 13 / 15 / 16), AI knight garrisons, DirectDraw errors (a fault-injection switch for 0x42f60e's
    HRESULT table), the human queue (below).
-7. **Tooling**: `tools/bf/dedup_globals.py` misses a duplicate whose two definitions differ in type / attributes
-   (g_rl_4dc428, g_rl_4ea180, g_rl_4d8a58 fixed by hand at merge); whole-corpus `--hooks '^rl_'` verifies take ~2 h on a
-   loaded box — the per-frame rows dominate (RH_SH_SAMPLE them).
+7. **Tooling** — 2026-11-17: `tools/bf/dedup_globals.py` read no definition with a trailing comment (every hand-edited one —
+   how g_rl_4dc428 / 4ea180 / 4d8a58 slipped through): fixed, any g_bf_/g_rl_ definition it can't parse is now an error,
+   `--check` = report only. Verify cost: the shadowed calls over every wine verify log (949 M) — 79 rows average ≥ 8k a
+   run (77 %); the 7 EMPTY per-frame functions (rl_4b0aaa / 41423f / 426529 / 4b1dd5 / 4b1de0 / 45242b / 4b12fb, ~10 %)
+   now RH_SH_SAMPLE (shadowed calls −85 %, 0 divergences, hybrid PASS). The rest stay full on purpose: input dispatch
+   (rl_42ff10 / 4b191e / 4ba9c8 / 4472ce / 47685d), clocks with rare arms (rl_4b27bf / 40490d / 4bbc80), logic leaves
+   (bf_*, eco_*), gated per-frame redraws (rl_render.c) — sampling by (caller, screen) would skip their rare arms.
+   Next if verify time still hurts: sample per-frame rows except on frames with an input event or a state change.
 8. **Data-image documentation** (`docs/data-ledger.md`, catalog `docs/data/catalog.tsv`): document each item with
    evidence (the bot exercises what it needs: a scenario that reads the item, a probe of its consumer); largest open:
    the string tables (every unreferenced non-zero byte is a string), 0x4e3260 (2244 B, 0x4bb978), 0x4d3200 (0x43c2a9), the

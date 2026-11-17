@@ -219,9 +219,9 @@ HOOK_R(rl_4b8c3a, 0, rl_4b8c3a())
 
 hook_t RH_HOOKS_RL_IO[] = {
     { "rl_41b013", 0x41b013u, (void *)w_rl_41b013, 0, 0, 0, 0, "" },
-    { "rl_426529", 0x426529u, (void *)w_rl_426529, 0, 0, 0, 0, "" },
+    { "rl_426529", 0x426529u, (void *)w_rl_426529, 0, 0, 0, 0, "", 0, RH_SH_SAMPLE },   /* an empty retail function called every frame: sampled (2026-11-17, ~10% of a verify's shadowed calls with its siblings) */
     { "rl_45280b", 0x45280bu, (void *)w_rl_45280b, 0, 0, 0, 0, "" },
-    { "rl_4b0aaa", 0x4b0aaau, (void *)w_rl_4b0aaa, 0, 0, 0, 0, "" },
+    { "rl_4b0aaa", 0x4b0aaau, (void *)w_rl_4b0aaa, 0, 0, 0, 0, "", 0, RH_SH_SAMPLE },   /* an empty retail function called every frame: sampled (2026-11-17, ~10% of a verify's shadowed calls with its siblings) */
     { "rl_4ae2ab", 0x4ae2abu, (void *)w_rl_4ae2ab, 0, 0, 0, 0, "" },
     { "rl_46ea9a", 0x46ea9au, (void *)w_rl_46ea9a, 0, 0, 0, 0, "" },
     { "rl_46f21f", 0x46f21fu, (void *)w_rl_46f21f, 0, 0, 0, 0, "" },

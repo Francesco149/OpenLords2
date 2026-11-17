@@ -37,16 +37,16 @@ HOOK_R(rl_4bbea7, 0, rl_4bbea7())
 HOOK_R(rl_4bbf15, 0, rl_4bbf15())
 
 hook_t RH_HOOKS_RL_MISC[] = {
-    { "rl_45242b", 0x45242bu, (void *)w_rl_45242b, 0, 0, 0, 0, "" },
+    { "rl_45242b", 0x45242bu, (void *)w_rl_45242b, 0, 0, 0, 0, "", 0, RH_SH_SAMPLE },   /* an empty retail function called every frame: sampled (2026-11-17, ~10% of a verify's shadowed calls with its siblings) */
     { "rl_497879", 0x497879u, (void *)w_rl_497879, 0, 0, 0, 0, "" },
     { "rl_49a3e6", 0x49a3e6u, (void *)w_rl_49a3e6, 0, 0, 0, 0, "" },
     { "rl_4b0cb4", 0x4b0cb4u, (void *)w_rl_4b0cb4, 0, 0, 0, 0, "" },
     { "rl_4b0e03", 0x4b0e03u, (void *)w_rl_4b0e03, 0, 0, 0, 0, "" },
-    { "rl_4b12fb", 0x4b12fbu, (void *)w_rl_4b12fb, 0, 0, 0, 0, "" },
+    { "rl_4b12fb", 0x4b12fbu, (void *)w_rl_4b12fb, 0, 0, 0, 0, "", 0, RH_SH_SAMPLE },   /* an empty retail function called every frame: sampled (2026-11-17, ~10% of a verify's shadowed calls with its siblings) */
     { "rl_4b1897", 0x4b1897u, (void *)w_rl_4b1897, 0, 0, 0, 0, "" },
     { "rl_4b18f8", 0x4b18f8u, (void *)w_rl_4b18f8, 0, 0, 0, 0, "" },
     { "rl_4b1cf3", 0x4b1cf3u, (void *)w_rl_4b1cf3, 0, 0, 0, 0, "" },
-    { "rl_4b1dd5", 0x4b1dd5u, (void *)w_rl_4b1dd5, 0, 0, 0, 0, "" },
+    { "rl_4b1dd5", 0x4b1dd5u, (void *)w_rl_4b1dd5, 0, 0, 0, 0, "", 0, RH_SH_SAMPLE },   /* an empty retail function called every frame: sampled (2026-11-17, ~10% of a verify's shadowed calls with its siblings) */
     { "rl_4b209a", 0x4b209au, (void *)w_rl_4b209a, 0, 0, 0, 0, "" },
     { "rl_4b25fc", 0x4b25fcu, (void *)w_rl_4b25fc, 0, 0, 0, 0, "" },
     { "rl_4b26f8", 0x4b26f8u, (void *)w_rl_4b26f8, 0, 0, 0, 0, "" },
