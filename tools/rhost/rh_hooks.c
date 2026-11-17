@@ -14,7 +14,7 @@
 void rh_hook_count(hook_t *h, int r, const char *why)
 {
     h->calls++;
-    if (r < 0) { h->skipped++; return; }
+    if (r < 0) { if (h->skipped++ < 5) rh_log("SKIP %s f%u %s\n", h->name, g_frame, why); return; }
     if (r > 0) {
         if (!h->diverge++) snprintf(h->first, sizeof h->first, "f%u %s", g_frame, why);
         if (h->diverge <= 5) rh_log("DIVERGE %s f%u %s\n", h->name, g_frame, why);
@@ -178,11 +178,13 @@ void rh_hooks_install(void)
  * row's wrapper with those arguments, exactly as a retail call site would: in shadow mode retail runs, then the port on
  * the identical pre-state, state + return value compared (hook-result). Arguments: an integer (0x.. / decimal /
  * negative), "text" (C escapes \n \t \\ \" \xHH; NUL-terminated on retail's stack above the call), w"text" (the same,
- * UTF-16), buf:N (N bytes 0xcc on the stack: an output — a HOOK_SO row compares it), va:VA (a retail address as is).
+ * UTF-16), buf:N (N bytes 0xcc on the stack: an output — a HOOK_SO row compares it), va:VA (a retail address as is),
+ * $N / $N+K / $N-K (the value probe call N returned — retail's EAX, N counting call lines from 1 — plus K: a heap block,
+ * an fd, a FILE* an earlier line set up, passed along).
  * Stack data sits above the wrapper's e0, so retail's own frames never overwrite it. Lines: '#' comments; `scenario`
  * lines are rhost.py's (ignored here). The run is no longer a pure replay: rhost.py probe compares hook results only. */
 #define PROBE_MAX 512
-static struct { uint32_t f; char name[64]; char args[400]; } g_pr[PROBE_MAX];
+static struct { uint32_t f; char name[64]; char args[400]; uint32_t ret; int ran; } g_pr[PROBE_MAX];
 static int g_npr, g_pr_done;
 static void probe_load(void)
 {
@@ -250,6 +252,14 @@ static __attribute__((noinline)) void probe_one(int i)
             used = (used + k + 3) & ~(size_t)3;
         } else if (!strncmp(p, "va:", 3)) {
             a[n++] = (uint32_t)strtoul(p + 3, (char **)&p, 0);
+        } else if (*p == '$') {
+            char *e; long k = strtol(p + 1, &e, 10);
+            if (e == p + 1 || k < 1 || k > g_npr) rh_fatal("--probe: line %d: bad reference '%s'", i, p);
+            if (!g_pr[k - 1].ran) rh_fatal("--probe: line %d: $%ld has not run yet", i, k);
+            p = e;
+            uint32_t v = g_pr[k - 1].ret;
+            if (*p == '+' || *p == '-') v += (uint32_t)strtol(p, (char **)&p, 0);
+            a[n++] = v;
         } else {
             char *e; a[n++] = (uint32_t)strtoll(p, &e, 0);
             if (e == p) rh_fatal("--probe: line %d: bad argument '%s'", i, p);
@@ -259,6 +269,7 @@ static __attribute__((noinline)) void probe_one(int i)
     hook_t *h = find_hook(g_pr[i].name);
     if (h->mode == H_OFF) rh_fatal("--probe: row %s is not hooked (--hook shadow:%s)", h->name, h->name);
     uint32_t r = probe_call(h->wrapper, a, n);
+    g_pr[i].ret = r; g_pr[i].ran = 1;
     rh_log("probe %s f%u args=%d ret=%08x\n", h->name, g_frame, n, r);
 }
 void rh_probe_frame(void)

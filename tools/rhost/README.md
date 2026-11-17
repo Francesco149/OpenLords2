@@ -138,7 +138,8 @@ reaches (dead or error-path code — the CRT's report / locale / environment pat
 (`scenario NAME`) and lines `FRAME ROW ARG…`; at the end of that frame rhost calls the row's wrapper on retail's stack
 as a call site would, in shadow mode: retail, then the port on the identical pre-state, state + return compared.
 Arguments: integers, `"text"` / `w"text"` (C escapes; on the stack above the call), `buf:N` (N bytes 0xcc: an output —
-a `HOOK_SO` row compares it), `va:VA`. PASS = every line ran, 0 divergences. Not a pure replay: the end state is not
+a `HOOK_SO` row compares it), `va:VA`, `$N` / `$N+K` / `$N-K` (what probe call N returned — retail's EAX, call lines
+counted from 1 — plus K: a heap block, an fd, a FILE an earlier line set up). PASS = every line ran, 0 divergences. Not a pure replay: the end state is not
 compared with the corpus. Self-test `tests/probes/selftest.probe`; `--extra "--shadow-poison VA"` must FAIL it.
 
 ## Control channel (`--bot HOST:PORT`, `rhbot.py`)

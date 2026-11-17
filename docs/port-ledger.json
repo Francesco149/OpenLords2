@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 788,
-  "ported": 1172,
-  "unported": 487,
+  "ported": 1199,
+  "unported": 460,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 1960,
-  "pct_touched": 80.1,
+  "touched": 1987,
+  "pct_touched": 81.2,
   "pct_tested": 32.2,
   "bytes_total": 838629,
-  "bytes_touched": 717933,
-  "pct_bytes_touched": 85.6
+  "bytes_touched": 726205,
+  "pct_bytes_touched": 86.6
  },
  "orphan_refs": [
   "0x004148",
@@ -13048,8 +13048,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/blit_table_452820.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13059,8 +13058,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/blit_table_45337b.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13070,8 +13068,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/blit_table_4538f6.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13081,8 +13078,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_table_453e71.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13092,8 +13088,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_455f04.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13103,8 +13098,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_456fd8.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13114,8 +13108,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_4580a9.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13125,8 +13118,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_459258.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13296,8 +13288,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/blit_table_463b42.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13307,8 +13298,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/blit_table_463c06.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13318,8 +13308,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/blit_table_463c62.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13329,8 +13318,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_table_463cbe.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13340,8 +13328,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_table_463e91.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13351,8 +13338,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_table_463fa5.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13362,8 +13348,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_4640b6.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13373,8 +13358,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_464209.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -18272,7 +18256,6 @@
     "src/engine_pl8.h",
     "src/game_init.c",
     "src/game_init.h",
-    "src/gen/pl8_table.h",
     "src/main.c",
     "src/rl_turn.c"
    ]
@@ -23684,8 +23667,10 @@
    "name": "__validdrive",
    "size": 105,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4c1cf0",
@@ -23710,8 +23695,10 @@
    "name": "_atol",
    "size": 282,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4c1f10",
@@ -24310,8 +24297,10 @@
    "name": "__isctype",
    "size": 182,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4c57d0",
@@ -24654,16 +24643,20 @@
    "name": "_CPtoLCID",
    "size": 107,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4c8df0",
    "name": "setSBCS",
    "size": 120,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4c8e70",
@@ -25030,8 +25023,10 @@
    "name": "___crtGetStringTypeA",
    "size": 406,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4cb4f0",
@@ -25054,32 +25049,40 @@
    "name": "___crtLCMapStringA",
    "size": 791,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4cbb80",
    "name": "_strncnt",
    "size": 100,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4cbbf0",
    "name": "_wcstombs",
    "size": 829,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4cbf50",
    "name": "wcsncnt",
    "size": 110,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4cbfc0",
@@ -25152,8 +25155,10 @@
    "name": "_wctomb",
    "size": 198,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4cc840",
@@ -25246,24 +25251,30 @@
    "name": "_wcslen",
    "size": 66,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4ccb80",
    "name": "__mbsnbicoll",
    "size": 103,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4ccbf0",
    "name": "___wtomb_environ",
    "size": 205,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4cccc0",
@@ -25318,8 +25329,10 @@
    "name": "__fcloseall",
    "size": 187,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4cd270",
@@ -25420,64 +25433,80 @@
    "name": "___crtCompareStringA",
    "size": 1107,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4cde00",
    "name": "_strncnt",
    "size": 100,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4cde70",
    "name": "___crtsetenv",
    "size": 867,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4ce1e0",
    "name": "findenv",
    "size": 155,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4ce280",
    "name": "copy_environ",
    "size": 255,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4ce380",
    "name": "_fclose",
    "size": 237,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4ce470",
    "name": "__commit",
    "size": 217,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4ce550",
    "name": "__mbschr",
    "size": 229,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4ce640",
@@ -25494,16 +25523,20 @@
    "name": "__freebuf",
    "size": 138,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4ce7f0",
    "name": "_strchr",
    "size": 193,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4ce90a",
@@ -25568,8 +25601,10 @@
    "name": "__chsize",
    "size": 675,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4cf8f0",
@@ -25586,8 +25621,10 @@
    "name": "__setmode",
    "size": 308,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_env.c"
+   ]
   },
   {
    "va": "0x4cfb08",
