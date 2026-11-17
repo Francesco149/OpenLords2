@@ -88,7 +88,7 @@
    actions 24 / 46, the late-action path 0x4470c4 → 90 reached in retail. **Every MP message id now has a port** (47
    functions, fe9a756 / ec746c4: 10 rows reached, 0 divergences, hybrid PASS; 37 dead-code rows unverified — no carrier);
    standalone 39/39 MP sides = pure retail; static gaps 107 → 66. **2026-11-16: the last 24 delayed-action handlers ported** (table 0x4d5c98 complete,
-   rl-mpmsg3.md; dead but for 25 / 35, reachable by forging 53 / 68): static gaps 66 → 44. ★5 closed (2026-11-17); next: ★4 (CRT only).
+   rl-mpmsg3.md; dead but for 25 / 35, reachable by forging 53 / 68): static gaps 66 → 44. ★5 closed (2026-11-17); ★4 closed (2026-11-17): 0 gaps.
 0b. **rd campaigns** — **campaign 6 (2026-11-14, API drivers):** ai-recall filed (sub_48B7FC 0x48b7fc first time: an Equal
    field skirmish after a Play Now → New Game trip — a cold skirmish leaves byte_553080 zero, so the recall never fires;
    +12 blocks); ai-surrender blocked (probe: no skirmish attacker is knights-only; the battle ends when a side has 0 men
@@ -145,11 +145,14 @@
    Next: the standalone joins `corpus --check` (the pre-commit gate); 21 unreached CRT seams (`_CrtDbgReport`,
    `_amsg_exit`, locale / TZ paths …) are standalone gaps (★4); then **`--live`**: a product exe on the real platform
    (real window / DirectDraw / DirectSound behind the same IAT slots).
-4. **The standalone's static gaps** (`tools/standalone/prove_no_retail_code.py --gaps-only`): 23 left (2026-11-16, from
-   213), all CRT entries (rl_crt.c's table: __CrtDbgReport, __amsg_exit, __realloc_dbg, locale / heap internals). The
-   last 21 non-CRT seams were ported 2026-11-16 (rl_ui4.c, rl-ui4.md §Gap ports); standalone 119/119 = pure retail.
-   2 of the 21 reached by new scenarios (siege-surrender → 0x43baf9, supplies-self → 0x43b101: 0 divergences); the
-   rest unreached (DD restore / paint, debug overlays, screens 0x44 / 0x45, title page 10, the MP error / leave paths).
+4. ~~**The standalone's static gaps**~~ — **0 left (2026-11-17)**: the last 23 (all CRT) + their unported closure, 67
+   functions, ported (src/rl_crt_{dbg,dbgheap,env}.c; crt-port.md §Gap ports) and verified by **synthetic carriers**
+   (`rhost.py probe`, `tests/probes/*.probe`, rhost README: a row's wrapper called with chosen arguments at a frame
+   boundary, shadowed — evidence for code no scenario reaches): 83 rows / 4 files, 0 divergences (wine). No
+   engine_retail_call left in the CRT; `prove_no_retail_code.py --gaps-only` 0 gaps; standalone 121/121 = pure retail.
+   Unverified by shadow: _amsg_exit / _exit / abort / terminate (never return: hybrid only), __wtomb_environ (faults on
+   _wenviron = NULL in both). Next: the 37 MP dead-code rows (no carrier) can get probes the same way; Windows run of
+   the probes (wine only so far); then the standalone joins `corpus --check` and `--live` (★3).
 5. **The TODO(rl-link) seams** (rl_ functions reaching an OLD port through engine_retail_call; the old port's mirrors /
    event queue / environment came only from rhost's row wrappers) — `docs/findings/rl-link.md`. 2026-11-16: the link
    layer `src/rl_link.c`, the pilot, the **screens** (`rl_link_screens.c`, 104 entries), **mapview**
@@ -170,7 +173,7 @@
    shared frame slot (quirk #241: 8 at a pass's start, then each handler's leftover); verify `--only '^mp-'` 6/6 rows,
    0 divergences, hybrid PASS; standalone 39/39 MP = pure retail, 0 rl_va misses. **0x465d28 done** (its residue was
    already rl_46521f's model; the binder moved into src: `rl_465d28_res`): standalone 121/121 = pure retail, 0 rl_va
-   misses. ★5 closed but for rl_mpnet's CRT helpers (★4) — rl-link.md §Left.
+   misses. ★5 closed (rl_mpnet's CRT helpers: ★4, done) — rl-link.md §Left.
 6. **Unreached code**: 939 functions / 172 KB no scenario reaches (`docs/findings/coverage-round3.md`): multiplayer
    (DirectPlay / serial — a fake transport in rhost would open it), dead code (zoom-1 / zoom-16 drawers, unwritten
    orders 0 / 7 / 13 / 15 / 16), AI knight garrisons, DirectDraw errors (a fault-injection switch for 0x42f60e's
