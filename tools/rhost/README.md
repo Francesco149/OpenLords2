@@ -108,7 +108,11 @@ pre-state (.data + arena + allocator metadata + virtual clock), every state dwor
 is kept; a divergence logs the first differing VAs. The state is write-protected for the call and a vectored
 handler copies each page on its first write, so a call costs the pages it writes (`--shadow-full`: copy the
 whole ~5 MB instead; `--shadow-poison VA` plants a one-bit difference after every port call — both modes must
-report it). **replace**: the port runs instead of retail (hybrid). A hook redirects retail's call sites;
+report it). A call that changes the arena's **commit pattern** (an sbh region reserved / decommitted / released,
+`_heap_init`, the arena grown — once "not compared", skipped) is compared too (2026-11-17): the paged shadow puts the
+pre-state back (`VirtualFree` keeps a decommitted page's pre-contents) and reruns retail on the copy path, which puts
+the pre-state's committed pages back before the port side and compares the port's pattern + contents with retail's
+(`commit pattern differs: …` names the first differing range). **replace**: the port runs instead of retail (hybrid). A hook redirects retail's call sites;
 a function no call site reaches (a pointer table) gets its entry patched instead — `jmp wrapper`, the displaced
 prologue in a trampoline the retail side calls (`--hook-entry` forces this for every hook, as a test). Add a function = adapter + table row
 (`rhost.py` reads the tables). Port code is compiled with the port's own `-std` (build.sh `PORT_OBJS`).
@@ -138,7 +142,10 @@ reaches (dead or error-path code — the CRT's report / locale / environment pat
 (`scenario NAME`) and lines `FRAME ROW ARG…`; at the end of that frame rhost calls the row's wrapper on retail's stack
 as a call site would, in shadow mode: retail, then the port on the identical pre-state, state + return compared.
 Arguments: integers, `"text"` / `w"text"` (C escapes; on the stack above the call), `buf:N` (N bytes 0xcc: an output —
-a `HOOK_SO` row compares it), `va:VA`. PASS = every line ran, 0 divergences. Not a pure replay: the end state is not
+a `HOOK_SO` row compares it), `va:VA`, `$N` (the value call line N returned: N counts call lines from 1 in file order —
+a heap block one line allocated, passed on), `[X]` (the dword at X when the line runs); a number / `va:` / `$N` / `[X]`
+takes `+K` / `-K` terms (`[$3+0x810]+8`). A probe line logs its arguments and result (`probe ROW fF … ret=R line=N
+a= …`). PASS = every line ran, 0 divergences. Not a pure replay: the end state is not
 compared with the corpus. Self-test `tests/probes/selftest.probe`; `--extra "--shadow-poison VA"` must FAIL it.
 
 ## Control channel (`--bot HOST:PORT`, `rhbot.py`)

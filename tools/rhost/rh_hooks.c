@@ -178,12 +178,17 @@ void rh_hooks_install(void)
  * row's wrapper with those arguments, exactly as a retail call site would: in shadow mode retail runs, then the port on
  * the identical pre-state, state + return value compared (hook-result). Arguments: an integer (0x.. / decimal /
  * negative), "text" (C escapes \n \t \\ \" \xHH; NUL-terminated on retail's stack above the call), w"text" (the same,
- * UTF-16), buf:N (N bytes 0xcc on the stack: an output — a HOOK_SO row compares it), va:VA (a retail address as is).
+ * UTF-16), buf:N (N bytes 0xcc on the stack: an output — a HOOK_SO row compares it), va:VA (a retail address as is),
+ * $N (the value probe call line N returned — N counts call lines from 1, file order; an earlier line that ran),
+ * [X] (the dword at address X when the line runs); a number / va: / $N / [X] may be followed by +K / -K terms
+ * (`[$3+0x810]-8`: a chain of heap blocks and the structures inside them, without fixed addresses).
  * Stack data sits above the wrapper's e0, so retail's own frames never overwrite it. Lines: '#' comments; `scenario`
  * lines are rhost.py's (ignored here). The run is no longer a pure replay: rhost.py probe compares hook results only. */
 #define PROBE_MAX 512
 static struct { uint32_t f; char name[64]; char args[400]; } g_pr[PROBE_MAX];
 static int g_npr, g_pr_done;
+static uint32_t g_pr_ret[PROBE_MAX];
+static uint8_t g_pr_ran[PROBE_MAX];
 static void probe_load(void)
 {
     FILE *f = fopen(O.probe, "r");
@@ -203,6 +208,42 @@ static void probe_load(void)
     }
     fclose(f);
     rh_log("probe: %d synthetic call(s) from %s\n", g_npr, O.probe);
+}
+/* an integer argument: a number, va:VA, $N or [X], then +K / -K terms */
+static uint32_t probe_expr(int i, const char **pp)
+{
+    const char *p = *pp;
+    char *e;
+    uint32_t v;
+    if (*p == '[') {
+        p++;
+        uint32_t at = probe_expr(i, &p);
+        if (*p != ']') rh_fatal("--probe: line %d: missing ']'", i);
+        p++;
+        v = G32(at);
+    } else if (*p == '$') {
+        long k = strtol(p + 1, &e, 10);
+        if (e == p + 1 || k < 1 || k > i || !g_pr_ran[k - 1])
+            rh_fatal("--probe: line %d: $%ld is not an earlier call line that ran", i + 1, k);
+        v = g_pr_ret[k - 1];
+        p = e;
+    } else if (!strncmp(p, "va:", 3)) {
+        v = (uint32_t)strtoul(p + 3, &e, 0);
+        p = e;
+    } else {
+        v = (uint32_t)strtoll(p, &e, 0);
+        if (e == p) rh_fatal("--probe: line %d: bad argument '%s'", i + 1, p);
+        p = e;
+    }
+    while (*p == '+' || *p == '-') {
+        int neg = *p == '-';
+        uint32_t k = (uint32_t)strtoul(p + 1, &e, 0);
+        if (e == p + 1) rh_fatal("--probe: line %d: bad term '%s'", i + 1, p);
+        v = neg ? v - k : v + k;
+        p = e;
+    }
+    *pp = p;
+    return v;
 }
 /* call `fn` with n dwords (cdecl or stdcall: esp is restored from esi either way) */
 static uint32_t probe_call(void *fn, const uint32_t *a, int n)
@@ -248,18 +289,16 @@ static __attribute__((noinline)) void probe_one(int i)
             memset(buf + used, 0xcc, k);
             a[n++] = (uint32_t)(uintptr_t)(buf + used);
             used = (used + k + 3) & ~(size_t)3;
-        } else if (!strncmp(p, "va:", 3)) {
-            a[n++] = (uint32_t)strtoul(p + 3, (char **)&p, 0);
-        } else {
-            char *e; a[n++] = (uint32_t)strtoll(p, &e, 0);
-            if (e == p) rh_fatal("--probe: line %d: bad argument '%s'", i, p);
-            p = e;
-        }
+        } else
+            a[n++] = probe_expr(i, &p);
     }
     hook_t *h = find_hook(g_pr[i].name);
     if (h->mode == H_OFF) rh_fatal("--probe: row %s is not hooked (--hook shadow:%s)", h->name, h->name);
     uint32_t r = probe_call(h->wrapper, a, n);
-    rh_log("probe %s f%u args=%d ret=%08x\n", h->name, g_frame, n, r);
+    g_pr_ret[i] = r; g_pr_ran[i] = 1;
+    char av[16 * 9 + 1] = "";
+    for (int k = 0; k < n; k++) snprintf(av + 9 * k, sizeof av - 9 * k, " %08x", a[k]);
+    rh_log("probe %s f%u args=%d ret=%08x line=%d a=%s\n", h->name, g_frame, n, r, i + 1, av);
 }
 void rh_probe_frame(void)
 {

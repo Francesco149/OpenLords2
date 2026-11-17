@@ -227,6 +227,18 @@ static HCURSOR WINAPI my_SetCursor(HCURSOR c) { uint32_t was = g_cursor_handle; 
 static BOOL WINAPI my_WinHelpA(HWND h, LPCSTR f, UINT c, ULONG_PTR d) { (void)h; (void)f; (void)c; (void)d; return TRUE; }
 static int WINAPI my_MessageBoxA(HWND h, LPCSTR text, LPCSTR cap, UINT t)
 { (void)h; (void)t; rh_log("MessageBoxA [%s] %s (frame %u)\n", cap ? cap : "", text ? text : "", g_frame); return IDOK; }
+/* the debug CRT's ___crtMessageBoxA 0x4cb010 asks GetProcAddress(user32, …) for these (rhost.c my_GetProcAddress): the
+ * fakes — no real window, never a modal box */
+static HWND WINAPI my_GetActiveWindow(void) { return NULL; }
+static HWND WINAPI my_GetLastActivePopup(HWND h) { return h; }
+FARPROC rh_win_proc(const char *name)
+{
+    if (!name || (uintptr_t)name < 0x10000u) return NULL;
+    if (!strcmp(name, "MessageBoxA")) return (FARPROC)my_MessageBoxA;
+    if (!strcmp(name, "GetActiveWindow")) return (FARPROC)my_GetActiveWindow;
+    if (!strcmp(name, "GetLastActivePopup")) return (FARPROC)my_GetLastActivePopup;
+    return NULL;
+}
 /* dialogs: without --net-sigs none is shown (-1). With it, a modal dialog runs against a fake dialog window whose
  * controls are list boxes (rh_net.c: the DirectPlay provider list 0x81 → "Sierra Internet Gaming System"): retail's
  * DLGPROC gets WM_INITDIALOG, then IDOK on whatever it selected; the result is its EndDialog code. */

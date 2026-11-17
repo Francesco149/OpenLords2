@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **1960** (80.1%) — tested 788, ported 1172
-- code bytes touched: **85.6%** (717,933 / 838,629 B)
-- unported: **487**
+- touched: **1978** (80.8%) — tested 788, ported 1190
+- code bytes touched: **86.4%** (724,602 / 838,629 B)
+- unported: **469**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (788) — ported + host unit suite
@@ -548,7 +548,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x497ced | FUN_00497ced | 376 | engine_load_pump.c, engine_territory.c, engine_territory.h (+4) |
 | 0x497e65 | FUN_00497e65 | 1025 | engine.c, engine.h, game_init.c (+2) |
 | 0x498270 | FUN_00498270 | 327 | engine_map_init.c, engine_map_init.h, main.c (+1) |
-| 0x4984dc | FUN_004984dc | 731 | engine.c, engine_ingame_input.c, engine_pl8.c (+6) |
+| 0x4984dc | FUN_004984dc | 731 | engine.c, engine_ingame_input.c, engine_pl8.c (+5) |
 | 0x499034 | FUN_00499034 | 197 | engine_menu_input.c, gfx.c, gfx.h (+1) |
 | 0x4997bf | FUN_004997bf | 151 | engine_workforce_hud.c, engine_workforce_hud.h, rl_turn.c |
 | 0x499a1c | FUN_00499a1c | 174 | engine.c, gfx.c, gfx.h (+2) |
@@ -810,7 +810,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (1172) — reimplemented, no host test yet
+## ported (1190) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -1461,14 +1461,14 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x451f8a | FUN_00451f8a | 66 | rl_glue.c |
 | 0x45242b | FUN_0045242b | 11 | rl_misc.c |
 | 0x45280b | FUN_0045280b | 11 | rl_io.c |
-| 0x452820 | FUN_00452820 | 2907 | engine_map_terrain.c, blit_table_452820.h |
-| 0x45337b | FUN_0045337b | 1403 | engine_map_terrain.c, blit_table_45337b.h |
-| 0x4538f6 | FUN_004538f6 | 1403 | engine_map_terrain.c, blit_table_4538f6.h |
-| 0x453e71 | FUN_00453e71 | 8339 | engine_map_terrain.c, drawb_table_453e71.h |
-| 0x455f04 | FUN_00455f04 | 4308 | engine_map_terrain.c, drawb_stripb_455f04.h |
-| 0x456fd8 | FUN_00456fd8 | 4305 | engine_map_terrain.c, drawb_stripb_456fd8.h |
-| 0x4580a9 | FUN_004580a9 | 4527 | engine_map_terrain.c, drawb_stripb_4580a9.h |
-| 0x459258 | FUN_00459258 | 4377 | engine_map_terrain.c, drawb_stripb_459258.h |
+| 0x452820 | FUN_00452820 | 2907 | engine_map_terrain.c |
+| 0x45337b | FUN_0045337b | 1403 | engine_map_terrain.c |
+| 0x4538f6 | FUN_004538f6 | 1403 | engine_map_terrain.c |
+| 0x453e71 | FUN_00453e71 | 8339 | engine_map_terrain.c |
+| 0x455f04 | FUN_00455f04 | 4308 | engine_map_terrain.c |
+| 0x456fd8 | FUN_00456fd8 | 4305 | engine_map_terrain.c |
+| 0x4580a9 | FUN_004580a9 | 4527 | engine_map_terrain.c |
+| 0x459258 | FUN_00459258 | 4377 | engine_map_terrain.c |
 | 0x460501 | FUN_00460501 | 668 | engine_map_terrain.c |
 | 0x46079d | FUN_0046079d | 321 | engine_map_terrain.c |
 | 0x4608de | FUN_004608de | 318 | engine_map_terrain.c |
@@ -1477,14 +1477,14 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x461623 | FUN_00461623 | 1073 | engine_map_terrain.c |
 | 0x461a54 | FUN_00461a54 | 1191 | engine_map_terrain.c |
 | 0x461efb | FUN_00461efb | 1145 | engine_map_terrain.c |
-| 0x463b42 | FUN_00463b42 | 196 | engine_map_terrain.c, blit_table_463b42.h |
-| 0x463c06 | FUN_00463c06 | 92 | engine_map_terrain.c, blit_table_463c06.h |
-| 0x463c62 | FUN_00463c62 | 92 | engine_map_terrain.c, blit_table_463c62.h |
-| 0x463cbe | FUN_00463cbe | 467 | engine_map_terrain.c, drawb_table_463cbe.h |
-| 0x463e91 | FUN_00463e91 | 276 | engine_map_terrain.c, drawb_table_463e91.h |
-| 0x463fa5 | FUN_00463fa5 | 273 | engine_map_terrain.c, drawb_table_463fa5.h |
-| 0x4640b6 | FUN_004640b6 | 339 | engine_map_terrain.c, drawb_stripb_4640b6.h |
-| 0x464209 | FUN_00464209 | 345 | engine_map_terrain.c, drawb_stripb_464209.h |
+| 0x463b42 | FUN_00463b42 | 196 | engine_map_terrain.c |
+| 0x463c06 | FUN_00463c06 | 92 | engine_map_terrain.c |
+| 0x463c62 | FUN_00463c62 | 92 | engine_map_terrain.c |
+| 0x463cbe | FUN_00463cbe | 467 | engine_map_terrain.c |
+| 0x463e91 | FUN_00463e91 | 276 | engine_map_terrain.c |
+| 0x463fa5 | FUN_00463fa5 | 273 | engine_map_terrain.c |
+| 0x4640b6 | FUN_004640b6 | 339 | engine_map_terrain.c |
+| 0x464209 | FUN_00464209 | 345 | engine_map_terrain.c |
 | 0x4692a7 | FUN_004692a7 | 201 | rl_mpmsg3.c |
 | 0x469370 | FUN_00469370 | 188 | rl_mpmsg3.c |
 | 0x46a101 | FUN_0046a101 | 165 | rl_io.c |
@@ -1902,13 +1902,20 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bfa90 | __nh_malloc_dbg | 101 | rl_crt.c |
 | 0x4bfb30 | __heap_alloc_dbg | 818 | rl_crt.c |
 | 0x4bfea0 | __calloc_dbg | 110 | rl_crt.c |
+| 0x4bff40 | __realloc_dbg | 55 | rl_crt_dbgheap.c |
+| 0x4bff80 | realloc_help | 1409 | rl_crt_dbgheap.c |
 | 0x4c0580 | FUN_004c0580 | 25 | rl_io.c |
 | 0x4c05a0 | __free_dbg | 1057 | rl_io.c |
 | 0x4c09f0 | __msize_dbg | 358 | rl_crt.c |
 | 0x4c0c60 | _CheckBytes | 140 | rl_crt.c |
+| 0x4c0cf0 | __CrtCheckMemory | 873 | rl_crt_dbgheap.c |
 | 0x4c1070 | __CrtSetDbgFlag | 48 | rl_crt.c |
 | 0x4c1110 | __CrtIsValidPointer | 92 | rl_crt.c |
 | 0x4c1170 | __CrtIsValidHeapPointer | 182 | rl_crt.c |
+| 0x4c1370 | __CrtMemCheckpoint | 316 | rl_crt_dbgheap.c |
+| 0x4c15f0 | __CrtMemDumpAllObjectsSince | 704 | rl_crt_dbgheap.c |
+| 0x4c18b0 | __printMemBlockData | 252 | rl_crt_dbgheap.c |
+| 0x4c19b0 | __CrtDumpMemoryLeaks | 132 | rl_crt_dbgheap.c |
 | 0x4c1b10 | __getcwd | 43 | rl_crt.c |
 | 0x4c1b40 | __getdcwd | 312 | rl_crt.c |
 | 0x4c1cf0 | __getdrive | 98 | rl_crt.c |
@@ -1926,16 +1933,27 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4c2a80 | _sprintf | 236 | rl_crt.c |
 | 0x4c2fb0 | __splitpath | 578 | rl_crt.c |
 | 0x4c3200 | operator_new | 30 | rl_crt.c |
+| 0x4c3220 | FID_conflict:_memcpy | 285 | rl_crt_dbgheap.c |
 | 0x4c3370 | entry | 494 | rl_crt.c |
+| 0x4c3650 | __callnewh | 62 | rl_crt_dbgheap.c |
+| 0x4c3690 | __malloc_base | 34 | rl_crt_dbgheap.c |
+| 0x4c36c0 | __nh_malloc_base | 150 | rl_crt_dbgheap.c |
 | 0x4c3760 | __heap_alloc_base | 99 | rl_crt.c |
 | 0x4c4070 | FUN_004c4070 | 21 | rl_crt.c |
+| 0x4c4090 | __expand_base | 195 | rl_crt_dbgheap.c |
+| 0x4c4160 | __realloc_base | 518 | rl_crt_dbgheap.c |
 | 0x4c4370 | __free_base | 105 | rl_crt.c |
+| 0x4c43e0 | __heapchk | 120 | rl_crt_dbgheap.c |
 | 0x4c4480 | __heap_init | 93 | rl_crt.c |
 | 0x4c45b0 | ___sbh_new_region | 508 | rl_crt.c |
+| 0x4c47c0 | ___sbh_release_region | 132 | rl_crt_dbgheap.c |
+| 0x4c4850 | ___sbh_decommit_pages | 376 | rl_crt_dbgheap.c |
 | 0x4c49d0 | ___sbh_find_block | 162 | rl_crt.c |
 | 0x4c4a80 | ___sbh_free_block | 136 | rl_crt.c |
 | 0x4c4b10 | ___sbh_alloc_block | 1207 | rl_crt.c |
 | 0x4c4fe0 | ___sbh_alloc_block_from_page | 763 | rl_crt.c |
+| 0x4c52e0 | ___sbh_resize_block | 439 | rl_crt_dbgheap.c |
+| 0x4c54a0 | ___sbh_heap_check | 617 | rl_crt_dbgheap.c |
 | 0x4c57f0 | _toupper | 313 | rl_crt.c |
 | 0x4c5930 | __dosmaperr | 177 | rl_crt.c |
 | 0x4c5a30 | ___tzset | 35 | rl_crt.c |

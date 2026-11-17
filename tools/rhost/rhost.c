@@ -390,7 +390,15 @@ static HMODULE WINAPI my_LoadLibraryA(LPCSTR n)
     rh_log("retail LoadLibraryA(%s) at frame %u%s\n", n ? n : "", g_frame, net ? " (rh_net)" : "");
     return net ? m : LoadLibraryA(n);
 }
-static FARPROC WINAPI my_GetProcAddress(HMODULE h, LPCSTR n) { FARPROC f; return rh_net_proc(h, n, &f) ? f : GetProcAddress(h, n); }
+/* user32's MessageBoxA / GetActiveWindow / GetLastActivePopup asked by name (the debug CRT's ___crtMessageBoxA): rhost's
+ * fakes — the real MessageBoxA would block a headless run forever */
+static FARPROC WINAPI my_GetProcAddress(HMODULE h, LPCSTR n)
+{
+    FARPROC f;
+    if (rh_net_proc(h, n, &f)) return f;
+    if (h && h == GetModuleHandleA("user32.dll") && (f = rh_win_proc(n)) != NULL) return f;
+    return GetProcAddress(h, n);
+}
 static BOOL WINAPI my_FreeLibrary(HMODULE h) { return rh_net_free(h) ? TRUE : FreeLibrary(h); }
 
 /* ---- imports rhost supplies instead of a DLL ---- */

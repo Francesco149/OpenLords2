@@ -202,6 +202,7 @@ void rh_win_install(void);
 void rh_win_frame(void);       /* frame boundary: inject this frame's trace events / record / present */
 void rh_win_present(void);
 HWND rh_win_real(HWND h);
+FARPROC rh_win_proc(const char *name);   /* user32 entries GetProcAddress hands out as rhost's fakes (MessageBoxA …) */
 uint32_t rh_trace_last_frame(void);
 const char *rh_trace_status(void);
 void rh_trace_finish(void);
@@ -259,6 +260,7 @@ int  rh_snap_live(void);
 long rh_snap_diff(int id, uint32_t lo, uint32_t hi, void (*cb)(uint32_t va, uint32_t was, uint32_t now, void *u), void *u);
 void rh_snap_stats(char *buf, size_t n);
 void rh_heap_meta_restore_snap(void *m);   /* rh_heap.c: + the regions' commit marks */
+int rh_heap_in_arena(uint32_t a);          /* rh_heap.c: inside the fixed-address arena (its commit pattern is state) */
 void *rh_handles_snap(void);               /* rh_handles.c */
 void rh_handles_unsnap(void *s);
 void *rh_files_snap(void);                 /* rh_files.c */

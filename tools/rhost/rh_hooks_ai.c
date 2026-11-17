@@ -164,6 +164,7 @@ typedef struct port_ctx {
     hook_t *h; uint32_t e0, ebp0; uint32_t a[10]; rh_port_fn port; uint32_t ret_r, ret_p;
     uint32_t res[RES_N]; int nput; int put_off[PUT_N]; uint32_t put_v[PUT_N]; int put_cmp[PUT_N];
     struct port_ctx *outer;
+    int nretail;   /* retail runs so far: the shadow reruns retail when the call changed the arena's commit pattern */
 } port_ctx_t;
 static port_ctx_t *g_cur;   /* the port side running now (adapters read / write the residue through it) */
 
@@ -183,6 +184,10 @@ void rh_res_set(int off, uint32_t v) { res_put(off, v, 0); }
 static void ctx_retail(void *c)
 {
     port_ctx_t *x = c;
+    if (x->nretail++) {   /* a rerun (rh_state.c's commit path): the arguments retail may have reused, the residue */
+        memcpy((void *)(uintptr_t)(x->e0 + 4), x->a, sizeof x->a);
+        memcpy((void *)(uintptr_t)(x->e0 - 4 * RES_N), x->res, sizeof x->res);
+    }
     x->ret_r = rh_call_at(x->h->entry, x->e0, x->ebp0);
 }
 static void ctx_port(void *c)

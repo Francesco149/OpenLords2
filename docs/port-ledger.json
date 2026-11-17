@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 788,
-  "ported": 1172,
-  "unported": 487,
+  "ported": 1190,
+  "unported": 469,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 1960,
-  "pct_touched": 80.1,
+  "touched": 1978,
+  "pct_touched": 80.8,
   "pct_tested": 32.2,
   "bytes_total": 838629,
-  "bytes_touched": 717933,
-  "pct_bytes_touched": 85.6
+  "bytes_touched": 724602,
+  "pct_bytes_touched": 86.4
  },
  "orphan_refs": [
   "0x004148",
@@ -13048,8 +13048,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/blit_table_452820.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13059,8 +13058,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/blit_table_45337b.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13070,8 +13068,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/blit_table_4538f6.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13081,8 +13078,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_table_453e71.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13092,8 +13088,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_455f04.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13103,8 +13098,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_456fd8.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13114,8 +13108,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_4580a9.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13125,8 +13118,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_459258.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13296,8 +13288,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/blit_table_463b42.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13307,8 +13298,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/blit_table_463c06.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13318,8 +13308,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/blit_table_463c62.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13329,8 +13318,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_table_463cbe.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13340,8 +13328,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_table_463e91.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13351,8 +13338,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_table_463fa5.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13362,8 +13348,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_4640b6.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -13373,8 +13358,7 @@
    "is_thunk": false,
    "status": "ported",
    "src": [
-    "src/engine_map_terrain.c",
-    "src/gen/drawb_stripb_464209.h"
+    "src/engine_map_terrain.c"
    ]
   },
   {
@@ -18272,7 +18256,6 @@
     "src/engine_pl8.h",
     "src/game_init.c",
     "src/game_init.h",
-    "src/gen/pl8_table.h",
     "src/main.c",
     "src/rl_turn.c"
    ]
@@ -23450,16 +23433,20 @@
    "name": "__realloc_dbg",
    "size": 55,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4bff80",
    "name": "realloc_help",
    "size": 1409,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c0510",
@@ -23554,8 +23541,10 @@
    "name": "__CrtCheckMemory",
    "size": 873,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c1070",
@@ -23616,8 +23605,10 @@
    "name": "__CrtMemCheckpoint",
    "size": 316,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c14b0",
@@ -23632,24 +23623,30 @@
    "name": "__CrtMemDumpAllObjectsSince",
    "size": 704,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c18b0",
    "name": "__printMemBlockData",
    "size": 252,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c19b0",
    "name": "__CrtDumpMemoryLeaks",
    "size": 132,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c1a40",
@@ -24018,8 +24015,10 @@
    "name": "FID_conflict:_memcpy",
    "size": 285,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c3370",
@@ -24060,24 +24059,30 @@
    "name": "__callnewh",
    "size": 62,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c3690",
    "name": "__malloc_base",
    "size": 34,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c36c0",
    "name": "__nh_malloc_base",
    "size": 150,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c3760",
@@ -24152,16 +24157,20 @@
    "name": "__expand_base",
    "size": 195,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c4160",
    "name": "__realloc_base",
    "size": 518,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c4370",
@@ -24178,8 +24187,10 @@
    "name": "__heapchk",
    "size": 120,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c4460",
@@ -24238,16 +24249,20 @@
    "name": "___sbh_release_region",
    "size": 132,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c4850",
    "name": "___sbh_decommit_pages",
    "size": 376,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c49d0",
@@ -24294,16 +24309,20 @@
    "name": "___sbh_resize_block",
    "size": 439,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c54a0",
    "name": "___sbh_heap_check",
    "size": 617,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c5710",
