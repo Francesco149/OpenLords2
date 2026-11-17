@@ -7,8 +7,11 @@
 #   C:\ol2-rhost\play\sessions\<stamp>\      trace.jsonl  start\ (the carry it began with)  meta.json  rhost.log  state_end.rhs
 # rhost.py play-status / play-fetch (maximus) list the sessions and import them as scenarios (tests/scenarios/hp-<stamp>),
 # each replayed headless as a self-check (same frame count + state hash as the recording).
+# -Standalone (shortcut "OpenLords2 (standalone)", play-standalone.cmd): the PORT plays instead (rhost --standalone: retail's
+# data image, no retail code); same sessions / carry. play-fetch replays its trace in PURE retail: equal frame / RNG /
+# state hash = the port matched retail on the owner's own play.
 # Test mode (rhost.py play-test): -Root another dir, -TestArgs extra rhost flags (e.g. "--frames 600"); no pause.
-param([string]$Bin = '', [string]$Root = 'C:\ol2-rhost\play', [string]$TestArgs = '')
+param([string]$Bin = '', [string]$Root = 'C:\ol2-rhost\play', [string]$TestArgs = '', [switch]$Standalone)
 $ErrorActionPreference = 'Stop'
 $P = $Root
 $game = 'C:\ol2-rhost\game'
@@ -32,11 +35,13 @@ if (Test-Path $carry) {
         $startFiles += $f.Name
     }
 }
-Write-Host "Lords II capture session $session (rhost $Bin)"
+$mode = $(if ($Standalone) { 'standalone' } else { 'retail' })
+Write-Host "Lords II capture session $session (rhost $Bin, $(if ($Standalone) { 'OpenLords2 standalone: the port, no retail code' } else { 'retail' }))"
 Write-Host "  $(if ($startFiles.Count) { 'carried over from the last session: ' + ($startFiles -join ', ') } else { 'fresh start (no saves yet)' })"
 Write-Host "  play as long as you like; close the game window (or quit the game) to end the recording."
 
 $argv = @('--exe', "$game\Lords2.exe", '--game', $game, '--run', $d, '--record', 'trace.jsonl', '--movies', '--dump-at', 'end')
+if ($Standalone) { $argv += '--standalone' }
 if ($TestArgs) { $argv += ($TestArgs -split ' ' | Where-Object { $_ }) }
 $t0 = Get-Date
 $proc = Start-Process -FilePath $exe -ArgumentList $argv -PassThru -NoNewWindow `
@@ -53,7 +58,7 @@ if (Test-Path "$d\rhost.log") {
     if ($l) { foreach ($kv in ($l.Line -split ' ')) { $i = $kv.IndexOf('='); if ($i -gt 0) { $res[$kv.Substring(0, $i)] = $kv.Substring($i + 1) } } }
 }
 # what the game wrote this session (the run dir minus rhost's output and retail's log status.txt) becomes the carry
-$ours = @('trace.jsonl', 'status.txt', 'rhost.log', 'stdout.txt', 'stderr.txt', 'volatile.txt', 'meta.json', 'hooks.txt')
+$ours = @('trace.jsonl', 'status.txt', 'rhost.log', 'stdout.txt', 'stderr.txt', 'volatile.txt', 'meta.json', 'hooks.txt', 'standalone_audit.txt')
 $wrote = @(Get-ChildItem $d -File | Where-Object { $ours -notcontains $_.Name -and $_.Name -notlike 'state_*.rhs' -and $_.Name -notlike 'shot_*' })
 $adopted = $false
 if ($res.Count -gt 0 -and (Test-Path "$d\trace.jsonl")) {
@@ -65,7 +70,7 @@ if ($res.Count -gt 0 -and (Test-Path "$d\trace.jsonl")) {
     Move-Item $tmp $carry
     $adopted = $true
 }
-$meta = [ordered]@{ session = $session; bin = $Bin; exit = $code; started = $t0.ToString('s'); ended = $t1.ToString('s');
+$meta = [ordered]@{ session = $session; bin = $Bin; mode = $mode; exit = $code; started = $t0.ToString('s'); ended = $t1.ToString('s');
                     wall_s = [int]($t1 - $t0).TotalSeconds; start_files = $startFiles; wrote = @($wrote | ForEach-Object { $_.Name });
                     carry_adopted = $adopted; result = $res }
 $meta | ConvertTo-Json -Depth 4 | Set-Content "$d\meta.json"

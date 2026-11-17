@@ -366,7 +366,8 @@ static void real_window(void)
         RECT r = { 0, 0, SCR_W * O.scale, SCR_H * O.scale };
         DWORD st = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
         AdjustWindowRect(&r, st, FALSE);
-        g_real = CreateWindowExA(0, wc.lpszClassName, O.record ? "Lords of the Realm II — rhost (recording)" : "Lords of the Realm II — rhost",
+        g_real = CreateWindowExA(0, wc.lpszClassName, O.standalone ? (O.record ? "Lords of the Realm II — OpenLords2 standalone (recording)" : "Lords of the Realm II — OpenLords2 standalone")
+                                 : O.record ? "Lords of the Realm II — rhost (recording)" : "Lords of the Realm II — rhost",
                                  st | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, r.right - r.left, r.bottom - r.top, NULL, NULL, wc.hInstance, NULL);
     } else {
         g_real = CreateWindowExA(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, wc.lpszClassName, "ol2-rhost", WS_POPUP,

@@ -145,6 +145,13 @@
    Next: the standalone joins `corpus --check` (the pre-commit gate); 21 unreached CRT seams (`_CrtDbgReport`,
    `_amsg_exit`, locale / TZ paths …) are standalone gaps (★4); then **`--live`**: a product exe on the real platform
    (real window / DirectDraw / DirectSound behind the same IAT slots).
+   **2026-11-17: the standalone is playable** — Desktop shortcut **"OpenLords2 (standalone)"** (`win/play-standalone.cmd` →
+   `play.ps1 -Standalone`): the free-play launcher with `--standalone` (realtime, visible window, sound, movies, input
+   recorded; same carry / sessions as "Lords II capture"). `play-fetch` replays each standalone session in PURE retail
+   (wine) and compares frame / RNG / state_sem: human play = parity evidence. `play-test --standalone` (Windows, 2 ×
+   1500 frames): audit OK (2000 thunks, other 0, identical 0), both = pure retail. Still rhost's software platform
+   (GDI window, waveOut mixer, virtual clock paced to wall time), not real DirectDraw / DirectSound — the real-API
+   product (OpenSummoners' `-DRH_PRODUCT`) only if the owner wants fullscreen / a single exe.
 4. ~~**The standalone's static gaps**~~ — **0 left (2026-11-17)**: the last 23 (all CRT) + their unported closure, 67
    functions, ported (src/rl_crt_{dbg,dbgheap,env}.c; crt-port.md §Gap ports) and verified by **synthetic carriers**
    (`rhost.py probe`, `tests/probes/*.probe`, rhost README: a row's wrapper called with chosen arguments at a frame
@@ -205,6 +212,9 @@
 0. **Free play, whenever you have a moment:** double-click **"Lords II capture"** on cutestation's desktop and play
    (close the window to finish; the next session can Load your save). Nothing else to do — agents import the sessions
    (`rhost.py play-fetch`).
+   **New (2026-11-17): "OpenLords2 (standalone)"** beside it = the same, played by the PORT (no retail code). Every
+   standalone session is checked against pure retail at import — the most valuable play now. Look for: anything that
+   behaves differently from the original game (it should not), or a "GAP retail VA" stop (the console window says it).
 1. **Record human traces** for what the bot can't reproduce — `docs/human-traces.md` §A first: real
    battlefield tactics (formations, archers held back, castle walls, siege engines on the field, defending your
    castle; the lord captured), a late-game campaign to a victory, natural mouse dynamics:

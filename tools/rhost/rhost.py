@@ -957,8 +957,9 @@ def cmd_record(a):
 # The owner plays on the Windows desktop through C:\ol2-rhost\play\play.cmd (win/play.ps1): pure retail in rhost,
 # --record --movies, one session per launch, the game's own writes (saves) carried to the next session.
 PLAY = WROOT + "\\play"
-PLAY_FILES = [os.path.join(HERE, "win", f) for f in ("play.ps1", "play.cmd")] + [f for f in (VOLATILE,) if os.path.exists(f)]
+PLAY_FILES = [os.path.join(HERE, "win", f) for f in ("play.ps1", "play.cmd", "play-standalone.cmd")] + [f for f in (VOLATILE,) if os.path.exists(f)]
 SHORTCUT = "Lords II capture"
+SHORTCUT_SA = "OpenLords2 (standalone)"
 PLAY_LOCAL = os.path.join(LOCAL_RUNS, "play")
 
 
@@ -993,12 +994,17 @@ def play_install(root):
 def cmd_play_install(a):
     """freeze this rhost build as the launcher's, upload the scripts, (re)create the Desktop shortcut"""
     sha = play_install(PLAY)
+    lnk = ("$l = $w.CreateShortcut((Join-Path $d '{n}.lnk')); $l.TargetPath = '{t}'; $l.WorkingDirectory = '{r}'; "
+           "$l.IconLocation = '{g}\\game\\Lords2.exe,0'; $l.Description = '{desc}'; $l.Save(); ")
     ssh_win(f"Set-Content '{PLAY}\\current.txt' '{sha}'; "
             "$d = [Environment]::GetFolderPath('Desktop'); $w = New-Object -ComObject WScript.Shell; "
-            f"$l = $w.CreateShortcut((Join-Path $d '{SHORTCUT}.lnk')); $l.TargetPath = '{PLAY}\\play.cmd'; "
-            f"$l.WorkingDirectory = '{PLAY}'; $l.IconLocation = '{WROOT}\\game\\Lords2.exe,0'; "
-            "$l.Description = 'Lords of the Realm II: play and record (OpenLords2 rhost)'; $l.Save(); exit 0")
-    print(f"play-install: rhost {sha} frozen in {PLAY}\\bin\\{sha}; Desktop shortcut '{SHORTCUT}' → {PLAY}\\play.cmd")
+            + lnk.format(n=SHORTCUT, t=PLAY + "\\play.cmd", r=PLAY, g=WROOT,
+                         desc="Lords of the Realm II: play and record (OpenLords2 rhost, retail)")
+            + lnk.format(n=SHORTCUT_SA, t=PLAY + "\\play-standalone.cmd", r=PLAY, g=WROOT,
+                         desc="Lords of the Realm II played by the OpenLords2 port (no retail code), recorded")
+            + "exit 0")
+    print(f"play-install: rhost {sha} frozen in {PLAY}\\bin\\{sha}; Desktop shortcuts '{SHORTCUT}' → {PLAY}\\play.cmd, "
+          f"'{SHORTCUT_SA}' → {PLAY}\\play-standalone.cmd")
     return 0
 
 
@@ -1025,7 +1031,7 @@ def cmd_play_status(a):
         m = s.get("meta") or {}
         r = m.get("result") or {}
         have = os.path.exists(os.path.join(SCEN, play_scen(s["session"]), "trace.jsonl"))
-        print(f"{s['session']}  {'done' if s['done'] else 'in progress / killed':20s} f={r.get('frame', '-'):>8} "
+        print(f"{s['session']}  {m.get('mode', 'retail'):10s} {'done' if s['done'] else 'in progress / killed':20s} f={r.get('frame', '-'):>8} "
               f"{m.get('wall_s', '-')!s:>6}s  {r.get('reason', '-'):14s} start={','.join(m.get('start_files') or []) or '-'}"
               f"  {'imported' if have else ''}")
     return 0
@@ -1046,7 +1052,7 @@ def cmd_play_fetch(a):
         loc = os.path.join(PLAY_LOCAL, st)
         os.makedirs(loc, exist_ok=True)
         wd = f"{a.root}\\sessions\\{st}".replace(chr(92), "/")
-        for f in ("trace.jsonl", "meta.json", "rhost.log"):
+        for f in ("trace.jsonl", "meta.json", "rhost.log") + (("standalone_audit.txt",) if m.get("mode") == "standalone" else ()):
             scp(f"{WIN}:{wd}/{f}", os.path.join(loc, f))
         name = play_scen(st)
         d = os.path.join(SCEN, name)
@@ -1057,15 +1063,18 @@ def cmd_play_fetch(a):
             scp(f"{WIN}:{wd}/start/{f}", os.path.join(d, "_saves", f))
             saves.append(f"_saves/{f}")
         lines = open(os.path.join(loc, "trace.jsonl")).read().splitlines()
-        hdr = [f"# {name}: free play recorded {m.get('started')} by a human in rhost (Desktop '{SHORTCUT}', build {m.get('bin')}), "
-               f"{m.get('wall_s')} s wall"]
+        sa = m.get("mode") == "standalone"
+        hdr = [f"# {name}: free play recorded {m.get('started')} by a human in rhost "
+               f"(Desktop '{SHORTCUT_SA if sa else SHORTCUT}', build {m.get('bin')}), {m.get('wall_s')} s wall"]
+        if sa:
+            hdr.append("# played on the STANDALONE (the port, no retail code); the replay check runs pure retail")
         if saves:
             hdr.append("# starts with the files the previous session's game wrote (its saves): _saves/ (user data, gitignored)")
             hdr.append(json.dumps({"meta": {"saves": saves}}))
         open(os.path.join(d, "trace.jsonl"), "w").write("\n".join(hdr + lines) + "\n")
         print(f"wrote {d}/trace.jsonl ({len(lines)} lines)")
         runs.append((name, os.path.join(d, "trace.jsonl"), trace_meta(os.path.join(d, "trace.jsonl"))))
-        recorded[name] = m["result"]
+        recorded[name] = dict(m["result"], mode=m.get("mode", "retail"))
     if a.no_check:
         return 0
     a.target, a.frames = "wine", None
@@ -1079,8 +1088,8 @@ def cmd_play_fetch(a):
         r, rec = res.get(name, {}), recorded[name]
         ok = r.get("frame") == rec.get("frame") and r.get("state_sem") == rec.get("state_sem") and r.get("rng") == rec.get("rng")
         bad += not ok
-        print(f"{name}: recorded f={rec.get('frame')} sem={rec.get('state_sem')} | replay f={r.get('frame')} "
-              f"sem={r.get('state_sem')} → {'PASS' if ok else 'FAIL'}")
+        print(f"{name}: recorded ({rec['mode']}) f={rec.get('frame')} sem={rec.get('state_sem')} rng={rec.get('rng')} | "
+              f"pure-retail replay f={r.get('frame')} sem={r.get('state_sem')} rng={r.get('rng')} → {'PASS' if ok else 'FAIL'}")
     return 1 if bad else 0
 
 
@@ -1092,7 +1101,7 @@ def cmd_play_test(a):
     ssh_win(f"Remove-Item '{root}\\sessions\\*','{root}\\carry' -Recurse -Force -ErrorAction SilentlyContinue; exit 0")
     for i in range(2):
         print(ssh_win(f"powershell -NoProfile -ExecutionPolicy Bypass -File {root}\\play.ps1 -Root '{root}' -Bin '{sha}' "
-                      f"-TestArgs '--frames {a.frames or 1500}'", check=False))
+                      f"-TestArgs '--frames {a.frames or 1500}'" + (" -Standalone" if a.standalone else ""), check=False))
         time.sleep(1.1)   # distinct session stamps
     a.root = root
     return cmd_play_status(a)
@@ -1223,7 +1232,8 @@ def main():
     sp = sub.add_parser("play-fetch"); sp.add_argument("--root", default=PLAY); sp.add_argument("session", nargs="*")
     sp.add_argument("--force", action="store_true"); sp.add_argument("--no-check", dest="no_check", action="store_true")
     sp.add_argument("-j", "--jobs", type=int, default=None); sp.set_defaults(fn=cmd_play_fetch)
-    sp = sub.add_parser("play-test"); sp.add_argument("--frames", type=int); sp.set_defaults(fn=cmd_play_test)
+    sp = sub.add_parser("play-test"); sp.add_argument("--frames", type=int); sp.add_argument("--standalone", action="store_true")
+    sp.set_defaults(fn=cmd_play_test)
     a = p.parse_args()
     if getattr(a, "jobs", 0) is None:
         a.jobs = int(os.environ.get("RHOST_JOBS", "0") or 0) or (3 if getattr(a, "target", "win") == "win" else 8)   # RHOST_JOBS: parallel agents

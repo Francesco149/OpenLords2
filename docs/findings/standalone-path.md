@@ -96,3 +96,7 @@ heap pointers shifted by the CRT's allocations (retail's CRT allocates before Wi
    pointers in data keep retail's VAs and land on thunks). Next: ~~the CRT port~~ (done 2026-11-08: state = pure
    retail); the standalone joins `corpus --check`; a real-platform product exe (`--live`: real window / DirectDraw / DirectSound behind the same
    IAT slots, as OpenSummoners' `opensummoners-standalone.exe`); the static prover (`tools/standalone/`).
+3. **Playable (2026-11-17)**: Desktop "OpenLords2 (standalone)" = `play.ps1 -Standalone` (rhost `--standalone --record
+   --movies`: realtime, visible window, audible mixer). `rhost.py play-fetch` imports a session as `hp-<stamp>` and
+   replays it in pure retail (frame / RNG / state_sem must equal the standalone's recording); `play-status` shows the
+   mode; `play-test --standalone` = the launcher end to end, headless (Windows: 2/2 = pure retail, audit OK).
