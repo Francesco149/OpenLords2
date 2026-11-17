@@ -59,6 +59,12 @@ dirs older than `RHOST_PRUNE_HOURS`=48) deletes only `C:\ol2-rhost\runs\*` (reco
 default to `-j 3`; bot games and the pre-commit gate run on wine. `rhbot` sessions forward a port with
 `ssh -R … -o ExitOnForwardFailure=yes`, so a port a sibling holds makes our session fail, not theirs.
 
+**Disk guard** (`diskguard.py`, 2026-11-17): a full C: on this box wedged its sshd sessions. Every stage point
+(`ensure_staged`, `wine_stage`, `bunker.stage`, rd's `staged_exe`) checks free disk first; below the floor (win C: 20 GB,
+maximus 15 GB, bunker 10 GB: `RHOST_DISK_FLOOR_{WIN,LOCAL,BUNKER}`) nothing starts and the command exits **75** with a
+`DISK LOW — REFUSING TO START` block. An agent then stops, frees nothing, moves nothing to another host, and tells the
+orchestrator; it re-runs once space is back. `RHOST_DISK_GUARD=0` only on the orchestrator's word.
+
 ## Targets
 
 - **`win`** (default): `ssh win`, `C:\ol2-rhost\{bin,game,runs,queue}`. rhost's DirectDraw is software, so

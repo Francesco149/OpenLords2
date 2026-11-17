@@ -102,6 +102,9 @@ capture (the **viewer** stays for human eyes).
   or delete outside ours, never kill by name (only a PID we started), never touch their tasks / queues.
   Keep Windows batches small (`-j 3` default) — overlapping jobs stall their gates; heavy batches and the
   pre-commit gate run on wine (identical results).
+- **`DISK LOW — REFUSING TO START` / exit 75** (any rhost / rd / bunker command; `tools/rhost/diskguard.py`): a host's
+  disk is under its floor (a full Windows C: wedged sshd, 2026-11-17). Stop; don't free space or switch hosts yourself;
+  tell the orchestrator (subagents: report it as the result) and wait. Override `RHOST_DISK_GUARD=0` only on its word.
 - Never `pkill -f` broad patterns (other projects run their own daemons / rhost / IDA jobs in parallel).
   The legacy Frida probe daemon stops only via `nix develop -c python3 tools/stop_probe.py`; legacy
   `tools/kill_retail.py` kills `Lords2.exe` by name — never pass it `--name`.

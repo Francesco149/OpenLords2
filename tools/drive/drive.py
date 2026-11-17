@@ -724,6 +724,7 @@ def staged_exe(host):
         if host == "bunker":
             return BK.staged_exe(BK.stage())
         if host == "win":
+            RH.diskguard.need("win")
             stamp = os.path.join(RH.BUILD, f".staged-win-{sha}")
             if not os.path.exists(stamp):
                 RH.ssh_win(f"New-Item -ItemType Directory -Force '{RH.WROOT}\\bin\\{sha}' | Out-Null; exit 0")
@@ -1982,7 +1983,7 @@ def search_body(r, lv, a, P, st):
         if Live.kv(res).get("applied") == "1":
             st["applied"] = True
     else:
-        workers, errs, passed = [], [], {}
+        workers, errs, passed, disk = [], [], {}, []
         main = r.sess.get("host", "wine")
         order = [main] + ([h for h in HOSTS if h != main] if RD_HOST == "auto" else [])
 
@@ -1993,6 +1994,9 @@ def search_body(r, lv, a, P, st):
                     continue
                 try:
                     workers.append((i, spawn_live(f"{r.name}-w{i}", r.movie, idle=600, wait=0, host=h)))
+                    return
+                except RH.diskguard.DiskLow as e:   # never routed around: the search stops, the orchestrator frees space
+                    disk.append(e)
                     return
                 except BaseException as e:      # noqa: B902
                     last = e
@@ -2015,6 +2019,9 @@ def search_body(r, lv, a, P, st):
             results.append((Live.kv(res) if res.startswith("ok") else {"found": "0", "err": res}, tag))
         try:
             [t.join() for t in ts]
+            if disk:
+                print(disk[0].msg, flush=True)
+                raise disk[0]
             if errs:
                 print(f"[{len(errs)} worker(s) did not start: {errs[0][:160]}]")
             workers.sort()

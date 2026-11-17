@@ -243,3 +243,5 @@ the other hosts.
   be your own. Reading the scenario HEADERS (what a start is), findings docs and the decompile is the point.
 - Do not kill processes; `rd stop R` ends your session. Do not touch other projects' files on the shared machines.
 - Do not commit; report instead.
+- `DISK LOW — REFUSING TO START` (exit 75): stop the task. Do not delete anything and do not force another host
+  (`RD_HOST`); report the message's line to the orchestrator and wait.

@@ -32,6 +32,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 sys.path.insert(0, os.path.join(ROOT, "tools", "rhost"))
 import rhost  # noqa: E402
+import diskguard  # noqa: E402
 
 HOST = os.environ.get("RHOST_BUNKER", "root@10.0.10.58")
 W = "/var/lib/ol2-bunker"
@@ -207,6 +208,7 @@ def stage_exe(path):
 def stage(build=True):
     """rhost build (if stale) + bin\\<sha> + game + scripts on the bunker, each only when its stamp differs (one round
     trip when all are current) → sha12; the exe is C:\\ol2-rhost\\bin\\<sha12>\\ol2-rhost.exe (staged_exe())"""
+    diskguard.need("bunker")
     with _stage_lock:
         if build and rhost.rhost_stale():
             rhost.cmd_build(None)

@@ -46,6 +46,7 @@ WEXE = "ol2-rhost.exe"          # distinct name: sibling projects kill their own
 VOLATILE = os.path.join(HERE, "volatile.txt")
 SSH_NOISE = re.compile(r"post-quantum|pq\.html|may need to be upgraded|store now, decrypt later")
 sys.path.insert(0, HERE)
+import diskguard  # noqa: E402  (refuses to start on a host with low disk)
 
 
 def sh(cmd, check=True):
@@ -119,6 +120,7 @@ def rhost_stale():
 
 
 def ensure_staged():
+    diskguard.need("win")
     exe = os.path.join(BUILD, "rhost.exe")
     stamp = os.path.join(BUILD, ".staged")
     if rhost_stale():
@@ -274,6 +276,7 @@ def stage_save(s, base, dest_dir):
 
 def wine_stage():
     """C:\\ol2-rhost → WINE_ROOT inside the prefix; game\\ = a pristine copy like stage-game.ps1's"""
+    diskguard.need("wine")
     for d in ("bin", "runs"):
         os.makedirs(os.path.join(WINE_ROOT, d), exist_ok=True)
     src, dst = os.path.join(BUILD, "rhost.exe"), os.path.join(WINE_ROOT, "bin", WEXE)
