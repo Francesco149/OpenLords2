@@ -125,3 +125,25 @@ malloc inside the army-economy evaluator replaced its live `g_eval_revenue` (0x5
 port (`rl_crt_alloc_hook`); another hook still goes by address. The general hazard remains for any call by address
 from port code into a row whose wrapper syncs (stored callbacks): when a state difference appears only once a new
 row exists, suspect it first.
+
+## Gap ports (2026-11-17) — the CRT complete
+The 23 bare-VA seams above (the standalone's last static gaps) and their unported closure — **67 functions / ~20.8 KB**
+— ported in three partitions, each verified by **synthetic carriers** (`rhost.py probe`, tests/probes/, rhost README):
+no scenario reaches them, so a probe file calls each row's wrapper at f1700 of newgame-playnow with chosen arguments,
+shadowed (state + return vs retail).
+- `src/rl_crt_dbg.c` (crt-gap-dbg.md): _CrtDbgReport + window / message box, _itoa / xtoa, _snprintf / _vsnprintf,
+  _flsbuf / _getbuf / _isatty, _NMSG_WRITE / _FF_MSGBANNER, raise / siglookup, the C++ UEF + _ValidateExecute; 22 rows,
+  18 probed (97 lines + 46 pokes); _amsg_exit / _exit / abort / terminate never return → RH_SH_HOST (hybrid only);
+  __alloca_probe is not a C function (callers' C locals).
+- `src/rl_crt_dbgheap.c` (crt-gap-dbgheap.md): _realloc_dbg / realloc_help, _CrtCheckMemory, _CrtMemCheckpoint /
+  DumpAllObjectsSince / printMemBlockData / DumpMemoryLeaks, memcpy, _callnewh, _malloc_base / _nh_malloc_base,
+  _expand_base / _realloc_base, _heapchk, the sbh release / decommit / resize / heap_check; 18 rows, 186 lines.
+- `src/rl_crt_env.c` (crt-gap-env.md): _isctype / GetStringTypeA / LCMapStringA / CompareStringA, CPtoLCID / setSBCS,
+  atol, wcstombs / wctomb / wcslen, _mbsnbicoll / _mbschr / strchr, __crtsetenv / findenv / copy_environ, fclose /
+  _fcloseall / _freebuf, _commit, _chsize / _setmode, _validdrive; 27 rows, 26 probed (198 lines; __wtomb_environ
+  faults on _wenviron = NULL in both).
+Harness on the way: GetProcAddress(user32, MessageBoxA / GetActiveWindow / GetLastActivePopup) → rhost's fakes (a
+real modal box blocks a headless run); the shadow restores a file's size (rh_handles: _chsize) and commit changes
+(rh_state / rh_heap: decommit / new region no longer skipped), HeapCreate's handle counter rolls back, an
+over-arena HeapAlloc returns NULL. Integration: rl_crt.c / rl_io_plat.c call the ports directly (no engine_retail_call
+left in the CRT); `prove_no_retail_code.py --gaps-only`: **0 gaps** (1542 entries, all thunked).

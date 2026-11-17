@@ -3,6 +3,8 @@
 #include "rl_io.h"
 
 #include "rl_crt.h"
+#include "rl_crt_dbg.h"
+#include "rl_crt_dbgheap.h"
 #include "engine_retail_call.h"
 
 #include <stdlib.h>
@@ -229,13 +231,13 @@ void *rl_plat_localtime(const int32_t *t) { return (void *)(uintptr_t)rl_crt_4c2
 char *rl_plat_asctime(const void *tm) { return (char *)(uintptr_t)rl_crt_4c2340(PV(tm)); }
 void rl_plat_exit(int code) { rl_crt_4bf6f0(code); }
 void *rl_plat_malloc(uint32_t n) { return (void *)(uintptr_t)rl_crt_4bfa00(n); }
-/* the debug heap's helpers (_free_dbg 0x4c05a0's callees): _CrtCheckMemory / _CrtDbgReport are unported (never
- * reached: _CRTDBG_CHECK_ALWAYS_DF is off and every report is an error path) — retail under rhost, a gap standalone */
-int rl_plat_CrtCheckMemory(void) { return (int)engine_retail_call(0x4c0cf0u, 0); }
+/* the debug heap's helpers (_free_dbg 0x4c05a0's callees; _CrtCheckMemory / _CrtDbgReport: never reached by the corpus —
+ * _CRTDBG_CHECK_ALWAYS_DF is off and every report is an error path — rl_crt_dbgheap.c / rl_crt_dbg.c) */
+int rl_plat_CrtCheckMemory(void) { return rl_crt_4c0cf0(); }
 int rl_plat_CrtIsValidHeapPointer(const void *p) { return rl_crt_4c1170(PV(p)); }
 int rl_plat_CrtDbgReport(int type, const char *file, int line, const char *mod, const char *fmt, uint32_t a5, uint32_t a6, uint32_t a7)
 {
-    return (int)engine_retail_call(0x4c3950u, 8, (uint32_t)type, PV(file), (uint32_t)line, PV(mod), PV(fmt), a5, a6, a7);
+    return rl_crt_dbgreport(type, PV(file), line, PV(mod), PV(fmt), a5, a6, a7);
 }
 int rl_plat_CheckBytes(const void *p, int c, int n) { return rl_crt_4c0c60(PV(p), c, n); }
 void rl_plat_free_base(void *block) { rl_crt_4c4370(PV(block)); }

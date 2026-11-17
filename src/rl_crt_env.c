@@ -1,12 +1,13 @@
 /* rl_crt_env.c — retail's statically linked MSVC 4.x DEBUG CRT: the locale / environment / wide-char / file paths (_isctype, __crtLCMapStringA, CPtoLCID / setSBCS, atol, wcstombs / wctomb, __crtsetenv / __wtomb_environ, _fcloseall / fclose, _commit, _chsize / _setmode, _validdrive).
  * No scenario reaches these (error / dead paths): each is ported from retail's code (IDA pseudocode + disassembly) and
  * verified by synthetic carriers (tests/probes/crt-env.probe, `rhost.py probe`). Conventions as rl_crt.c: retail's
- * globals by VA, every OS call through retail's IAT slot, an unported callee by bare VA (engine_retail_call).
+ * globals by VA, every OS call through retail's IAT slot.
  * Notes per function: docs/findings/crt-gap-env.md. */
 #include "rl_crt_env.h"
 #include "rl_crt.h"
+#include "rl_crt_dbgheap.h"
+#include "rl_crt_dbg.h"
 #include "rl_io.h"   /* rl_4c05a0 = _free_dbg */
-#include "engine_retail_call.h"
 
 #include <string.h>
 #include <windows.h>
@@ -16,7 +17,6 @@
 #define U16(va) (*(volatile uint16_t *)(uintptr_t)(va))
 #define U8(va)  (*(volatile uint8_t *)(uintptr_t)(va))
 #define IAT(T, slot) ((T)(uintptr_t)*(volatile uint32_t *)(uintptr_t)(slot))
-#define RETAIL(va, ...) engine_retail_call((va), __VA_ARGS__)
 #define PTR(va) ((void *)(uintptr_t)(uint32_t)(va))
 
 /* ---------------------------------------------------------------- retail's globals */
@@ -60,9 +60,6 @@
 #define S_SIZE0      0x4d10c4u   /* "size >= 0" */
 
 /* callees in other partitions (bare VAs: linked by the integrator) */
-#define VA_CRTDBGREPORT 0x4c3950u   /* _CrtDbgReport (partition dbg) */
-#define VA_AMSG_EXIT    0x4c35c0u   /* _amsg_exit (partition dbg) */
-#define VA_REALLOC_DBG  0x4bff40u   /* _realloc_dbg (partition dbgheap) */
 
 /* the IAT slots */
 #define I_SetEndOfFile           0x5cf3f8u
@@ -86,7 +83,7 @@ typedef int (WINAPI *wc2mb_t)(UINT, DWORD, LPCWSTR, int, LPSTR, int, LPCSTR, LPB
 #define WC2MB IAT(wc2mb_t, I_WideCharToMultiByte)
 
 static void int3(void) { __asm__ volatile("int3"); }
-#define REPORT(...) (RETAIL(VA_CRTDBGREPORT, __VA_ARGS__) == 1)
+#define REPORT(n_, ...) (rl_crt_dbgreport(__VA_ARGS__) == 1)   /* n_: the argument count */
 #define FREE_CRT(p) rl_4c05a0((int)(p), 2)   /* _free_dbg(p, _CRT_BLOCK) */
 
 static uint32_t pio(uint32_t fd) { return U32(G_PIOINFO + ((uint32_t)((int32_t)(fd & 0xffffffe0u) >> 3))) + 8 * (fd & 0x1f); }
@@ -469,7 +466,7 @@ uint32_t rl_crt_4ce280(uint32_t env)
     int n = 0;
     for (uint32_t p = env; U32(p) != 0; p += 4) n++;
     uint32_t a = rl_crt_4bfa30(4u * (uint32_t)n + 4, 2, S_SETENV_C, 326), q = a;
-    if (a == 0) RETAIL(VA_AMSG_EXIT, 1, 9);
+    if (a == 0) rl_crt_4c35c0(9);
     for (uint32_t p = env; U32(p) != 0; p += 4, q += 4) {
         U32(q) = rl_crt_4bfa30(rl_crt_4bf620(U32(p)) + 1, 2, S_SETENV_C, 335);
         if (U32(q) != 0) rl_crt_4c2080(U32(q), U32(p));
@@ -528,14 +525,14 @@ int rl_crt_4cde70(uint32_t str, int primary)
                 U32(env + 4u * (uint32_t)ix) = U32(env + 4u * (uint32_t)ix + 4);
                 ix++;
             }
-            uint32_t r = RETAIL(VA_REALLOC_DBG, 5, env, 4u * (uint32_t)ix, 2, S_SETENV_C, 185);
+            uint32_t r = rl_crt_4bff40(env, 4u * (uint32_t)ix, 2, S_SETENV_C, 185);
             if (r != 0) U32(G_ENVIRON) = r;
         } else
             U32(env + 4u * (uint32_t)ix) = str;
     } else {
         if (remove) return 0;
         if (ix < 0) ix = -ix;
-        uint32_t r = RETAIL(VA_REALLOC_DBG, 5, env, 4u * (uint32_t)ix + 8, 2, S_SETENV_C, 206);
+        uint32_t r = rl_crt_4bff40(env, 4u * (uint32_t)ix + 8, 2, S_SETENV_C, 206);
         if (r == 0) return -1;
         U32(r + 4u * (uint32_t)ix) = str;
         U32(r + 4u * (uint32_t)ix + 4) = 0;

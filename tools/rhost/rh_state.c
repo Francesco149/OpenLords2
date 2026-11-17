@@ -177,6 +177,94 @@ static void meta_restore(const meta_t *m)
 }
 static void meta_free(meta_t *m) { rh_heap_meta_free(m->heap); free(m->media); free(m->ds); free(m->dd); free(m->hnd); free(m->win); rh_files_meta_free(m->files); rh_net_meta_free(m->net); free(m); }
 
+/* ---- a call that changes the arena's COMMIT PATTERN (an sbh region reserved / decommitted / released, the arena
+ * grown): the state's committed pages differ before and after. The full-copy path then puts the pre-state's pattern
+ * back before the port side (pages retail committed decommitted, pages it decommitted recommitted with their
+ * pre-contents) and compares the port's pattern + contents with retail's. The page-tracked path hands such a call
+ * over: the pre-state back (rh_heap.c's VirtualFree keeps a decommitted page's pre-contents through
+ * rh_shadow_prewrite), retail rerun on the copy path. */
+static uint8_t g_cm_want[(1u << 20) / 8], g_cm_have[(1u << 20) / 8];
+static void cm_map(uint8_t *m, uint32_t (*r)[2], int n)
+{
+    memset(m, 0, (1u << 20) / 8);
+    for (int i = 0; i < n; i++)
+        for (uint32_t pg = r[i][0] >> 12; pg < (r[i][1] + 0xfffu) >> 12; pg++)
+            if (rh_heap_in_arena(pg << 12)) m[pg >> 3] |= (uint8_t)(1u << (pg & 7));
+}
+/* the arena's committed pages from `have` to `want` (a recommitted page reads 0) */
+static void set_commit(uint32_t (*want)[2], int nw, uint32_t (*have)[2], int nh)
+{
+    cm_map(g_cm_want, want, nw); cm_map(g_cm_have, have, nh);
+    #define CM(m, pg) ((m)[(pg) >> 3] >> ((pg) & 7) & 1)
+    for (int i = 0; i < nh; i++)
+        for (uint32_t pg = have[i][0] >> 12; pg < (have[i][1] + 0xfffu) >> 12; pg++)
+            if (CM(g_cm_have, pg) && !CM(g_cm_want, pg)) VirtualFree((void *)(uintptr_t)(pg << 12), 4096, MEM_DECOMMIT);
+    for (int i = 0; i < nw; i++)
+        for (uint32_t pg = want[i][0] >> 12; pg < (want[i][1] + 0xfffu) >> 12; pg++)
+            if (CM(g_cm_want, pg) && !CM(g_cm_have, pg) &&
+                !VirtualAlloc((void *)(uintptr_t)(pg << 12), 4096, MEM_COMMIT, PAGE_READWRITE))
+                rh_fatal("shadow: cannot recommit %08x (%lu)", pg << 12, GetLastError());
+    #undef CM
+}
+static size_t ranges_total(uint32_t (*r)[2], int n) { size_t t = 0; for (int i = 0; i < n; i++) t += r[i][1] - r[i][0]; return t; }
+static void copy_out(uint8_t *buf, uint32_t (*r)[2], int n)
+{ size_t o = 0; for (int i = 0; i < n; i++) { size_t l = r[i][1] - r[i][0]; memcpy(buf + o, (void *)(uintptr_t)r[i][0], l); o += l; } }
+static void copy_in(const uint8_t *buf, uint32_t (*r)[2], int n)
+{ size_t o = 0; for (int i = 0; i < n; i++) { size_t l = r[i][1] - r[i][0]; memcpy((void *)(uintptr_t)r[i][0], buf + o, l); o += l; } }
+/* shadow_copy's tail once retail changed the commit pattern (pre = r / g_pre, retail's post = r2) */
+static int copy_commit_tail(const char *name, void (*port)(void *), void *ctx, char *why, size_t whyn, int media,
+                            uint32_t (*r)[2], int n, uint32_t (*r2)[2], int n2, meta_t *meta, uint32_t *clk0, uint16_t cw)
+{
+    static uint8_t *ret2; static size_t cap2;
+    static uint32_t r3[MAXR][2];
+    size_t tot2 = ranges_total(r2, n2);
+    if (tot2 > cap2) { free(ret2); cap2 = tot2 + (16u << 20); ret2 = malloc(cap2); if (!ret2) rh_fatal("shadow: out of memory"); }
+    copy_out(ret2, r2, n2);
+    meta_t *meta_ret = meta_save();
+    uint32_t clk1[3]; rh_clock_save(clk1);
+    set_commit(r, n, r2, n2);
+    copy_in(g_pre, r, n);
+    meta_restore(meta); rh_heap_meta_restore_snap(meta->heap);
+    rh_clock_restore(clk0);
+    __asm__ volatile("fldcw %0" : : "m"(cw));
+    g_shadow_depth++;
+    port(ctx);
+    g_shadow_depth--;
+    poison(media);
+    int n3 = add_media(r3, state_ranges(r3), media);
+    long diff = 0, px = 0; int k = 0;
+    int w = snprintf(why, whyn, "%s:", name);
+    if (n3 != n2 || memcmp(r3, r2, (size_t)n2 * 8)) {   /* the port committed other pages than retail */
+        int i = 0;
+        while (i < n2 && i < n3 && r2[i][0] == r3[i][0] && r2[i][1] == r3[i][1]) i++;
+        snprintf(why + w, whyn - w, " commit pattern differs: %d / %d ranges, first r%08x-%08x/p%08x-%08x", n2, n3,
+                 i < n2 ? r2[i][0] : 0, i < n2 ? r2[i][1] : 0, i < n3 ? r3[i][0] : 0, i < n3 ? r3[i][1] : 0);
+        diff = 1;
+        set_commit(r2, n2, r3, n3);
+        copy_in(ret2, r2, n2);
+    } else {
+        size_t o = 0;
+        for (int i = 0; i < n2; i++) {
+            size_t l = r2[i][1] - r2[i][0];
+            const uint32_t *a = (const uint32_t *)(ret2 + o), *b = (const uint32_t *)(uintptr_t)r2[i][0];
+            if (memcmp(a, b, l))
+                for (size_t q = 0; q < l / 4; q++)
+                    if (a[q] != b[q]) {
+                        int u = diff_note(why, whyn, &w, &k, r2[i][0] + (uint32_t)q * 4, a[q], b[q]);
+                        if (u > 0) diff += u; else px -= u;
+                    }
+            o += l;
+        }
+        if (diff || px) { copy_in(ret2, r2, n2); diff_total(why, whyn, w, diff, px); }
+    }
+    meta_restore(meta_ret); rh_heap_meta_restore_snap(meta_ret->heap);
+    rh_clock_restore(clk1);
+    __asm__ volatile("fldcw %0" : : "m"(cw));
+    meta_free(meta); meta_free(meta_ret);
+    sp_mark(SP_DONE);
+    return diff || px ? 1 : 0;
+}
+
 static int shadow_copy(const char *name, void (*retail)(void *), void (*port)(void *), void *ctx, char *why, size_t whyn, int media)
 {
     static uint32_t r[MAXR][2], r2[MAXR][2];
@@ -198,11 +286,8 @@ static int shadow_copy(const char *name, void (*retail)(void *), void (*port)(vo
     g_shadow_depth--;
     sp_mark(SP_RETAIL);
     int n2 = add_media(r2, state_ranges(r2), media);
-    if (n2 != n || memcmp(r, r2, n * 8)) {
-        snprintf(why, whyn, "%s: arena commit changed during call (ranges %d->%d); not compared", name, n, n2);
-        meta_free(meta);
-        return -1;
-    }
+    if (n2 != n || memcmp(r, r2, n * 8))
+        return copy_commit_tail(name, port, ctx, why, whyn, media, r, n, r2, n2, meta, clk0, cw);
     COPY_OUT(g_ret);
     meta_t *meta_ret = meta_save();
     rh_clock_save(clk1);
@@ -376,11 +461,15 @@ static int shadow_paged(const char *name, void (*retail)(void *), void (*port)(v
     g_shadow_depth--;
     sp_mark(SP_RETAIL);
     int n2 = add_media(r2, state_ranges(r2), media);
-    if (n2 != n || memcmp(r, r2, n * 8)) {
+    if (n2 != n || memcmp(r, r2, n * 8)) {   /* the commit path: the pre-state back, retail rerun on the copy path */
+        set_commit(r, n, r2, n2);
+        for (int i = 0; i < g_nsp; i++) memcpy((void *)(uintptr_t)(g_spg[i] << 12), g_spre + (size_t)i * 4096, 4096);
         disarm(r, n);
-        snprintf(why, whyn, "%s: arena commit changed during call (ranges %d->%d); not compared", name, n, n2);
+        meta_restore(meta); rh_heap_meta_restore_snap(meta->heap);
+        rh_clock_restore(clk0);
+        __asm__ volatile("fldcw %0" : : "m"(cw));
         meta_free(meta);
-        return -1;
+        return shadow_copy(name, retail, port, ctx, why, whyn, media);
     }
     int n1 = g_nsp;   /* the pages retail wrote: keep its post-state, put the pre-state back */
     for (int i = 0; i < n1; i++) {
@@ -407,6 +496,10 @@ static int shadow_paged(const char *name, void (*retail)(void *), void (*port)(v
     poison(media);
     sp_mark(SP_PORT);
     g_armed = 0;
+    static uint32_t r3[MAXR][2];
+    int n3 = add_media(r3, state_ranges(r3), media);
+    int cdiff = n3 != n || memcmp(r, r3, (size_t)n * 8);   /* the port changed the commit pattern, retail did not */
+    if (cdiff) set_commit(r, n, r3, n3);
     protect_ranges(r, n, 0);
     g_sppages += g_nsp;
     for (int i = 0; i < g_nsp; i++) ord[i] = i;
@@ -414,6 +507,7 @@ static int shadow_paged(const char *name, void (*retail)(void *), void (*port)(v
     uint32_t data_end = RT_DATA_HI & ~3u;
     long diff = 0, px = 0; int k = 0;
     int w = snprintf(why, whyn, "%s:", name);
+    if (cdiff) { w += snprintf(why + w, whyn - w, " commit pattern differs (port: %d ranges, retail %d)", n3, n); diff++; }
     for (int j = 0; j < g_nsp; j++) {
         int i = ord[j];
         uint32_t base = g_spg[i] << 12, len = 4096;

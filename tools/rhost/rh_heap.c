@@ -150,6 +150,7 @@ static void *arena_alloc(uint32_t n, int zero)
             h->cap = cap; h->cls = cls;
         }
     } else {
+        if (n > LARGE_SZ) return NULL;   /* never fits (and the chunk size would wrap: a huge request got a small block) */
         uint32_t chunk = (n + sizeof(hdr_t) + 0xfffu) & ~0xfffu;
         uint32_t p = span_alloc(&R_LARGE, chunk);
         if (!p) return NULL;
@@ -296,6 +297,7 @@ static BOOL WINAPI my_VirtualFree(LPVOID a, SIZE_T n, DWORD type)
         span_t *s = vlive_find(addr);
         BOOL ok = FALSE;
         if (s) {
+            rh_shadow_prewrite(a, s->sz);   /* a shadowed call: keep the pre-state of what goes (rh_state.c commit path) */
             VirtualFree(a, s->sz, MEM_DECOMMIT);
             span_free(&R_VREG, s->lo, s->sz);
             *s = g_vlive[--g_nvlive];
@@ -304,8 +306,10 @@ static BOOL WINAPI my_VirtualFree(LPVOID a, SIZE_T n, DWORD type)
         unlock();
         return ok;
     }
+    rh_shadow_prewrite(a, n);
     return VirtualFree(a, n, MEM_DECOMMIT);
 }
+int rh_heap_in_arena(uint32_t a) { return g_active && a >= ARENA_LO && a < ARENA_HI; }
 
 static int reserve(region_t *r)
 {
@@ -401,6 +405,7 @@ int rh_heap_ranges(uint32_t (*out)[2], int max)
 typedef struct {
     region_t s, l, v; span_t *sf, *lf, *vf, *vl; int nvl;
     uint32_t fl[N_CLS]; uint64_t na, nf, iu, ium;
+    uint32_t nheaps;   /* HeapCreate's handle sequence (a shadowed _heap_init: both sides get the same handle) */
 } heap_meta_t;
 static span_t *dup_spans(const span_t *s, int n) { span_t *d = malloc((n ? n : 1) * sizeof *d); memcpy(d, s, n * sizeof *d); return d; }
 void *rh_heap_meta_save(void)
@@ -412,6 +417,7 @@ void *rh_heap_meta_save(void)
     m->vf = dup_spans(R_VREG.free, R_VREG.nfree); m->vl = dup_spans(g_vlive, g_nvlive); m->nvl = g_nvlive;
     memcpy(m->fl, g_freelist, sizeof g_freelist);
     m->na = g_nalloc; m->nf = g_nfree; m->iu = g_inuse; m->ium = g_inuse_max;
+    m->nheaps = g_nheaps;
     unlock();
     return m;
 }
@@ -430,6 +436,7 @@ void rh_heap_meta_restore(void *p)
     memcpy(g_vlive, m->vl, m->nvl * sizeof(span_t)); g_nvlive = m->nvl;
     memcpy(g_freelist, m->fl, sizeof g_freelist);
     g_nalloc = m->na; g_nfree = m->nf; g_inuse = m->iu; g_inuse_max = m->ium;
+    g_nheaps = m->nheaps;
     unlock();
 }
 /* a savestate restore (rh_snap.c): the arena's pages were committed / decommitted to the savestate's set, so the

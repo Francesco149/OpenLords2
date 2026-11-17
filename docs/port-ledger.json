@@ -5,15 +5,15 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 788,
-  "ported": 1221,
-  "unported": 438,
+  "ported": 1239,
+  "unported": 420,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 2009,
-  "pct_touched": 82.1,
+  "touched": 2027,
+  "pct_touched": 82.8,
   "pct_tested": 32.2,
   "bytes_total": 838629,
-  "bytes_touched": 731750,
-  "pct_bytes_touched": 87.3
+  "bytes_touched": 738419,
+  "pct_bytes_touched": 88.1
  },
  "orphan_refs": [
   "0x004148",
@@ -23452,16 +23452,20 @@
    "name": "__realloc_dbg",
    "size": 55,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4bff80",
    "name": "realloc_help",
    "size": 1409,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c0510",
@@ -23556,8 +23560,10 @@
    "name": "__CrtCheckMemory",
    "size": 873,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c1070",
@@ -23618,8 +23624,10 @@
    "name": "__CrtMemCheckpoint",
    "size": 316,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c14b0",
@@ -23634,24 +23642,30 @@
    "name": "__CrtMemDumpAllObjectsSince",
    "size": 704,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c18b0",
    "name": "__printMemBlockData",
    "size": 252,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c19b0",
    "name": "__CrtDumpMemoryLeaks",
    "size": 132,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c1a40",
@@ -24026,8 +24040,10 @@
    "name": "FID_conflict:_memcpy",
    "size": 285,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c3370",
@@ -24070,24 +24086,30 @@
    "name": "__callnewh",
    "size": 62,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c3690",
    "name": "__malloc_base",
    "size": 34,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c36c0",
    "name": "__nh_malloc_base",
    "size": 150,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c3760",
@@ -24168,16 +24190,20 @@
    "name": "__expand_base",
    "size": 195,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c4160",
    "name": "__realloc_base",
    "size": 518,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c4370",
@@ -24194,8 +24220,10 @@
    "name": "__heapchk",
    "size": 120,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c4460",
@@ -24254,16 +24282,20 @@
    "name": "___sbh_release_region",
    "size": 132,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c4850",
    "name": "___sbh_decommit_pages",
    "size": 376,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c49d0",
@@ -24310,16 +24342,20 @@
    "name": "___sbh_resize_block",
    "size": 439,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c54a0",
    "name": "___sbh_heap_check",
    "size": 617,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbgheap.c"
+   ]
   },
   {
    "va": "0x4c5710",

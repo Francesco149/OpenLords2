@@ -1,13 +1,12 @@
 /* rl_crt_dbg.c — retail's statically linked MSVC 4.x DEBUG CRT: the report / message / exit / signal path: _CrtDbgReport and its window, _amsg_exit / _NMSG_WRITE, _exit / abort / raise, _flsbuf / _getbuf, the C++ unhandled-exception filter.
  * No scenario reaches these (error / dead paths): each is ported from retail's code (IDA pseudocode + disassembly) and
  * verified by synthetic carriers (tests/probes/crt-dbg.probe, `rhost.py probe`). Conventions as rl_crt.c: retail's
- * globals by VA, every OS call through retail's IAT slot, an unported callee by bare VA (engine_retail_call).
+ * globals by VA, every OS call through retail's IAT slot.
  * docs/findings/crt-gap-dbg.md has the per-function notes (quirks, probe coverage).
  *
  * __alloca_probe 0x4caae0 (eax = size, moves esp: not a C function) has no port: its callers' big frames are C locals. */
 #include "rl_crt_dbg.h"
 #include "rl_crt.h"
-#include "engine_retail_call.h"
 
 #include <stdarg.h>
 #include <string.h>

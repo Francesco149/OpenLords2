@@ -180,10 +180,12 @@ void rh_hooks_install(void)
  * the identical pre-state, state + return value compared (hook-result). Arguments: an integer (0x.. / decimal /
  * negative), "text" (C escapes \n \t \\ \" \xHH; NUL-terminated on retail's stack above the call), w"text" (the same,
  * UTF-16), buf:N (N bytes 0xcc on the stack: an output — a HOOK_SO row compares it), buf:N="text" (the same, starting
- * with the text: a destination with room — strcat), va:VA (a retail address as is), $N / $N+K / $N-K (the value probe
- * call N returned — retail's EAX, N counting CALL lines from 1, poke lines not counted — plus K: a heap block, an fd, a
- * FILE* an earlier line set up, passed along); a call line ending in ` @name` is `$name` / `$name+K` too. `F poke VA D0 D1 ...` lines write dwords at VA (prior state a carrier
- * needs: a FILE in a free _iob slot, a report mode, a signal handler; kept).
+ * with the text: a destination with room — strcat), va:VA (a retail address as is), $N (the value probe call line N
+ * returned — retail's EAX; N counts CALL lines from 1, poke lines not counted; an earlier line that ran), $name (the
+ * call line ending in ` @name`), [X] (the dword at address X when the line runs); a number / va: / $N / $name / [X]
+ * may be followed by +K / -K terms (`[$3+0x810]-8`: a chain of heap blocks and the structures inside them, without
+ * fixed addresses). `F poke VA D0 D1 ...` lines write dwords at VA (prior state a carrier needs: a FILE in a free _iob
+ * slot, a report mode, a signal handler; kept).
  * Stack data sits above the wrapper's e0, so retail's own frames never overwrite it. Lines: '#' comments; `scenario`
  * lines are rhost.py's (ignored here). The run is no longer a pure replay: rhost.py probe compares hook results only. */
 #define PROBE_MAX 512
@@ -218,6 +220,52 @@ static void probe_load(void)
     }
     fclose(f);
     rh_log("probe: %d synthetic call(s) from %s\n", g_npr, O.probe);
+}
+/* an integer argument: a number, va:VA, $N or [X], then +K / -K terms */
+static uint32_t probe_expr(int i, const char **pp)
+{
+    const char *p = *pp;
+    char *e;
+    uint32_t v;
+    if (*p == '[') {
+        p++;
+        uint32_t at = probe_expr(i, &p);
+        if (*p != ']') rh_fatal("--probe: line %d: missing ']'", i);
+        p++;
+        v = G32(at);
+    } else if (*p == '$') {
+        int j = -1;   /* the k-th CALL line (poke lines are not counted), or the line labelled `@name` */
+        long k = 0;
+        if (isalpha((uint8_t)p[1]) || p[1] == '_') {
+            char nm[32]; int w = 0;
+            for (e = (char *)p + 1; (isalnum((uint8_t)*e) || *e == '_') && w < 31; e++) nm[w++] = *e;
+            nm[w] = 0;
+            for (int q = 0; q < g_npr && j < 0; q++) if (!strcmp(g_pr[q].label, nm)) j = q;
+        } else {
+            k = strtol(p + 1, &e, 10);
+            for (int q = 0, c = 0; q < g_npr && j < 0 && e != p + 1; q++) if (strcmp(g_pr[q].name, "poke") && ++c == k) j = q;
+        }
+        if (j < 0 || j >= i || !g_pr[j].ran)
+            rh_fatal("--probe: line %d: '%.24s' is not an earlier call line that ran", i + 1, p);
+        v = g_pr[j].ret;
+        p = e;
+    } else if (!strncmp(p, "va:", 3)) {
+        v = (uint32_t)strtoul(p + 3, &e, 0);
+        p = e;
+    } else {
+        v = (uint32_t)strtoll(p, &e, 0);
+        if (e == p) rh_fatal("--probe: line %d: bad argument '%s'", i + 1, p);
+        p = e;
+    }
+    while (*p == '+' || *p == '-') {
+        int neg = *p == '-';
+        uint32_t k = (uint32_t)strtoul(p + 1, &e, 0);
+        if (e == p + 1) rh_fatal("--probe: line %d: bad term '%s'", i + 1, p);
+        v = neg ? v - k : v + k;
+        p = e;
+    }
+    *pp = p;
+    return v;
 }
 /* call `fn` with n dwords (cdecl or stdcall: esp is restored from esi either way) */
 static uint32_t probe_call(void *fn, const uint32_t *a, int n)
@@ -286,35 +334,16 @@ static __attribute__((noinline)) void probe_one(int i)
             }
             a[n++] = (uint32_t)(uintptr_t)(buf + used);
             used = (used + k + 3) & ~(size_t)3;
-        } else if (!strncmp(p, "va:", 3)) {
-            a[n++] = (uint32_t)strtoul(p + 3, (char **)&p, 0);
-        } else if (*p == '$') {
-            char *e; long k = strtol(p + 1, &e, 10);
-            int j = -1;   /* the k-th CALL line (poke lines are not counted), or the line labelled `@name` */
-            if (isalpha((uint8_t)p[1]) || p[1] == '_') {
-                char nm[32]; int w = 0;
-                for (e = (char *)p + 1; (isalnum((uint8_t)*e) || *e == '_') && w < 31; e++) nm[w++] = *e;
-                nm[w] = 0; k = 1;
-                for (int q = 0; q < g_npr && j < 0; q++) if (!strcmp(g_pr[q].label, nm)) j = q;
-            } else
-                for (int q = 0, c = 0; q < g_npr && j < 0; q++) if (strcmp(g_pr[q].name, "poke") && ++c == k) j = q;
-            if (e == p + 1 || k < 1 || j < 0) rh_fatal("--probe: line %d: bad reference '%s'", i, p);
-            if (!g_pr[j].ran) rh_fatal("--probe: line %d: $%ld has not run yet", i, k);
-            p = e;
-            uint32_t v = g_pr[j].ret;
-            if (*p == '+' || *p == '-') v += (uint32_t)strtol(p, (char **)&p, 0);
-            a[n++] = v;
-        } else {
-            char *e; a[n++] = (uint32_t)strtoll(p, &e, 0);
-            if (e == p) rh_fatal("--probe: line %d: bad argument '%s'", i, p);
-            p = e;
-        }
+        } else
+            a[n++] = probe_expr(i, &p);
     }
     hook_t *h = find_hook(g_pr[i].name);
     if (h->mode == H_OFF) rh_fatal("--probe: row %s is not hooked (--hook shadow:%s)", h->name, h->name);
     uint32_t r = probe_call(h->wrapper, a, n);
     g_pr[i].ret = r; g_pr[i].ran = 1;
-    rh_log("probe %s f%u args=%d ret=%08x\n", h->name, g_frame, n, r);
+    char av[16 * 9 + 1] = "";
+    for (int k = 0; k < n; k++) snprintf(av + 9 * k, sizeof av - 9 * k, " %08x", a[k]);
+    rh_log("probe %s f%u args=%d ret=%08x line=%d a=%s\n", h->name, g_frame, n, r, i + 1, av);
 }
 void rh_probe_frame(void)
 {

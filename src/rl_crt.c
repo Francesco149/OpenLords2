@@ -9,13 +9,15 @@
  * VAs in .data / .bss (under rhost and the standalone retail's data image is mapped there), every OS call THROUGH
  * RETAIL'S IAT SLOT (rhost's virtual layers: the fixed-address heap arena, the file overlay, fake handles, the
  * virtual clock). So the port's allocations land where retail's do and the state is retail's byte for byte.
- * Callees the corpus never reaches (_CrtDbgReport, _CrtCheckMemory, _amsg_exit, _callnewh, the locale paths,
- * _chsize, _commit, _fcloseall, _realloc_dbg, __sbh_decommit_pages, atol / wcstombs on the TZ paths, _flsbuf, _wctomb …) are
- * seams by bare VA (engine_retail_call: retail under rhost, a GAP in the standalone). */
+ * Callees the corpus never reaches (_CrtDbgReport, _CrtCheckMemory, _amsg_exit, _callnewh, the locale paths, _chsize,
+ * _commit, _fcloseall, _realloc_dbg, __sbh_decommit_pages, atol / wcstombs on the TZ paths, _flsbuf, _wctomb …) are
+ * ported in rl_crt_dbg.c / rl_crt_dbgheap.c / rl_crt_env.c (2026-11-17, verified by synthetic carriers: tests/probes/). */
 #include "rl_crt.h"
+#include "rl_crt_dbg.h"
+#include "rl_crt_dbgheap.h"
+#include "rl_crt_env.h"
 #include "rl_main.h"
 #include "rl_io.h"
-#include "engine_retail_call.h"
 
 #include <string.h>
 #include <windows.h>
@@ -27,7 +29,6 @@
 #define P8(va)  ((uint8_t *)(uintptr_t)(uint32_t)(va))
 /* a Win32 import through retail's IAT slot */
 #define IAT(T, slot) ((T)(uintptr_t)*(volatile uint32_t *)(uintptr_t)(slot))
-#define RETAIL(va, ...) engine_retail_call((va), __VA_ARGS__)   /* an unported callee (never reached by the corpus) */
 
 /* ---------------------------------------------------------------- retail's CRT globals */
 #define G_ERRNO      0x4e4530u   /* errno */
@@ -124,6 +125,7 @@
 #define S_VALIDHEAP  0x4d0314u   /* "_CrtIsValidHeapPointer(pUserData)" */
 #define S_BLOCKUSE   0x4d03f4u   /* "pHead->nBlockUse == nBlockUse" */
 #define S_BLOCKTYPE  0x4d04acu   /* "_BLOCK_TYPE_IS_VALID(pHead->nBlockUse)" */
+#define S_DBGDEL_CPP 0x4d0854u   /* "dbgdel.cpp" (operator delete's report) */
 #define S_BADTYPE    0x4d014cu   /* "Error: memory allocation: bad memory block type.\n" */
 #define S_BADSIZE    0x4d0180u   /* "Invalid allocation size: %u bytes.\n" */
 #define S_PCT_S      0x4d01a4u   /* "%s" */
@@ -166,29 +168,6 @@
 /* retail functions by address: called through pointers retail stores (data-driven, as retail does) */
 #define VA_CXX_RESTORE_UEF 0x4cca20u   /* __CxxRestoreUnhandledExceptionFilter */
 #define VA_CXX_UEF         0x4cc980u   /* __CxxUnhandledExceptionFilter */
-/* unported callees (bare VAs: the ledger counts FUN_ tokens) */
-#define VA_CRTDBGREPORT    0x4c3950u
-#define VA_CRTCHECKMEMORY  0x4c0cf0u
-#define VA_CALLNEWH        0x4c3650u
-#define VA_AMSG_EXIT       0x4c35c0u
-#define VA_SBH_DECOMMIT    0x4c4850u
-#define VA_ISCTYPE         0x4c5710u
-#define VA_LCMAPSTRINGA    0x4cb860u
-#define VA_VALIDDRIVE      0x4c1c80u
-#define VA_CPTOLCID        0x4c8d50u
-#define VA_SETSBCS         0x4c8df0u
-#define VA_MEMCPY          0x4c3220u
-#define VA_MBSNBICOLL      0x4ccb80u
-#define VA_WTOMB_ENVIRON   0x4ccbf0u
-#define VA_FCLOSEALL       0x4cd1b0u
-#define VA_COMMIT          0x4ce470u
-#define VA_REALLOC_DBG     0x4bff40u
-#define VA_CHSIZE          0x4cf640u
-#define VA_CRTDUMPLEAKS    0x4c19b0u
-#define VA_ATOL            0x4c1df0u
-#define VA_WCSTOMBS        0x4cbbf0u
-#define VA_WCTOMB          0x4cc770u   /* _wctomb (%C / %S / %lc / %ls: the locale path) */
-#define VA_FLSBUF          0x4c6650u   /* _flsbuf (a string stream never fills: _cnt 0x7fffffff) */
 
 /* the IAT slots the CRT calls through */
 #define I_CloseHandle            0x5cf3a0u
@@ -241,8 +220,8 @@
 static DWORD last_error(void) { return IAT(DWORD (WINAPI *)(void), I_GetLastError)(); }
 static void int3(void) { __asm__ volatile("int3"); }
 /* _CrtDbgReport (unported: never reached — every report is an error path) */
-#define REPORT(...) (RETAIL(VA_CRTDBGREPORT, __VA_ARGS__) == 1)
-#define CHECKMEM() ((int)RETAIL(VA_CRTCHECKMEMORY, 0))
+#define REPORT(n_, ...) (rl_crt_dbgreport(__VA_ARGS__) == 1)   /* n_: the argument count (the old seam's) */
+#define CHECKMEM() rl_crt_4c0cf0()
 
 /* ================================================================ string / memory leaves */
 
@@ -376,7 +355,7 @@ void rl_crt_4c4a80(uint32_t hdr, uint32_t page, uint32_t map)
     U8(map) = 0;
     HDR_FAIL(hdr, i) = 0xf1;
     if (HDR_FREE(hdr, i) == 240 && ++V32(G_SBH_FREEPG) == 32)
-        RETAIL(VA_SBH_DECOMMIT, 1, 16);
+        rl_crt_4c4850(16);
 }
 
 /* Port of FUN_004c4fe0 (763 B) — __sbh_alloc_block_from_page: first fit of `paras` paragraphs in one page, from
@@ -651,7 +630,7 @@ uint32_t rl_crt_4bfa90(uint32_t size, int nh, int use, uint32_t file, int line)
     for (;;) {
         uint32_t p = rl_crt_4bfb30(size, use, file, line);
         if (p != 0 || nh == 0) return p;
-        if (RETAIL(VA_CALLNEWH, 1, size) == 0) return 0;
+        if (rl_crt_4c3650(size) == 0) return 0;
     }
 }
 
@@ -764,8 +743,7 @@ void rl_crt_4c29d0(uint32_t p)
         return;
     uint32_t use = U32(p - 0x20 + 0x14);
     if ((use & 0xffff) != 4 && use != 1 && (use & 0xffff) != 2 && use != 3 &&
-        engine_retail_call(VA_CRTDBGREPORT, 5, 2u, (uint32_t)(uintptr_t)"dbgdel.cpp", 47u, 0u,
-                           (uint32_t)(uintptr_t)"_BLOCK_TYPE_IS_VALID(pHead->nBlockUse)") == 1)
+        rl_crt_dbgreport(2, S_DBGDEL_CPP, 47, 0, S_BLOCKTYPE) == 1)
         __asm__ volatile("int3");
     rl_4c05a0((int)p, (int)use);
 }
@@ -881,7 +859,7 @@ uint32_t rl_crt_4c7680(int ch, uint32_t f, uint32_t pcount)
 {
     int r;
     if (--V32(f + 4) < 0)
-        r = (int)RETAIL(VA_FLSBUF, 2, (uint32_t)ch, f);
+        r = (int)rl_crt_4c6650((uint32_t)ch, f);
     else {
         U8(U32(f)) = (uint8_t)ch;
         r = U8(U32(f));
@@ -1037,7 +1015,7 @@ int rl_crt_4c68f0(uint32_t f, uint32_t fmt, uint32_t argp)
             case 'c':
                 if (flags & 0x810) {
                     uint16_t wch = get_short_arg(&argp);
-                    textlen = (int)RETAIL(VA_WCTOMB, 2, (uint32_t)(uintptr_t)buf, (uint32_t)wch);
+                    textlen = (int)rl_crt_4cc770((uint32_t)(uintptr_t)buf, (uint32_t)wch);
                     if (textlen < 0) no_output = 1;
                 } else {
                     buf[0] = (uint8_t)rl_crt_4c77b0(pargp);
@@ -1187,7 +1165,7 @@ int rl_crt_4c68f0(uint32_t f, uint32_t fmt, uint32_t argp)
                     for (int left = textlen; left-- != 0; ) {
                         uint16_t wc = U16(w);
                         w += 2;
-                        int n = (int)RETAIL(VA_WCTOMB, 2, (uint32_t)(uintptr_t)mb, (uint32_t)wc);
+                        int n = (int)rl_crt_4cc770((uint32_t)(uintptr_t)mb, (uint32_t)wc);
                         if (n <= 0) break;
                         rl_crt_4c7750((uint32_t)(uintptr_t)mb, n, f, pcount);
                     }
@@ -1215,7 +1193,7 @@ int rl_crt_4c2a80(uint32_t buf, uint32_t fmt, uint32_t argp)
     file[1] = 0x7fffffff;
     int r = rl_crt_4c68f0(f, fmt, argp);
     if (--V32(f + 4) < 0)
-        RETAIL(VA_FLSBUF, 2, 0, f);
+        rl_crt_4c6650(0, f);
     else {
         U8(U32(f)) = 0;
         U32(f) += 1;
@@ -1271,7 +1249,7 @@ void rl_crt_4c5930(uint32_t oserr)
 int rl_crt_4c9e50(void)
 {
     uint32_t b = rl_crt_4bfa30(0x100, 2, S_IOINIT_C, 131);
-    if (b == 0) RETAIL(VA_AMSG_EXIT, 1, 27);
+    if (b == 0) rl_crt_4c35c0(27);
     U32(G_PIOINFO) = b;
     U32(G_NHANDLE) = 32;
     init_block(b);
@@ -1525,7 +1503,7 @@ int rl_crt_4cea50(uint32_t path, int oflag, int shflag, int pmode)
         } else {
             uint8_t c = 0;
             if ((rl_crt_4ceff0((uint32_t)fd, (uint32_t)(uintptr_t)&c, 1) == 0 && c == 26 &&
-                 (int)RETAIL(VA_CHSIZE, 2, fd, end) == -1) ||
+                 (int)rl_crt_4cf640(fd, end) == -1) ||
                 rl_crt_4cc3b0((uint32_t)fd, 0, 0) == -1) {
                 rl_crt_4ce640((uint32_t)fd);
                 return -1;
@@ -1705,7 +1683,7 @@ uint32_t rl_crt_4cf8f0(uint32_t c)
     if (c <= 0xff) return ((int)c < 97 || (int)c > 122) ? c : c - 32;
     uint8_t src[4] = { (uint8_t)(c >> 8), (uint8_t)c, 0, 0 }, dst[4];
     if ((U8(G_MBCTYPE + 1 + ((c >> 8) & 0xff)) & 4) == 0) return c;
-    if (RETAIL(VA_LCMAPSTRINGA, 7, U32(G_MBLCID), 0x200, (uint32_t)(uintptr_t)src, 2, (uint32_t)(uintptr_t)dst, 2,
+    if (rl_crt_4cb860(U32(G_MBLCID), 0x200, (uint32_t)(uintptr_t)src, 2, (uint32_t)(uintptr_t)dst, 2,
                U32(G_MBCP)) != 0)
         return ((uint32_t)dst[0] << 8) + dst[1];
     return c;
@@ -1737,7 +1715,7 @@ uint32_t rl_crt_4c1b40(int drive, uint32_t buf, int n)
     char path[260];
     DWORD len;
     if (drive != 0) {
-        if (RETAIL(VA_VALIDDRIVE, 1, drive) == 0) {
+        if (rl_crt_4c1c80(drive) == 0) {
             V32(G_DOSERRNO) = 15;
             V32(G_ERRNO) = 13;
             return 0;
@@ -1782,7 +1760,7 @@ int rl_crt_4c57f0(int c)
     else if (V32(G_MBCURMAX) <= 1)
         lower = U16(U32(G_PCTYPE) + 2u * (uint32_t)c) & 2;
     else
-        lower = (int)RETAIL(VA_ISCTYPE, 2, c, 2);
+        lower = (int)rl_crt_4c5710(c, 2);
     if (!lower) return c;
     uint8_t src[3], dst[4];
     int n;
@@ -1791,7 +1769,7 @@ int rl_crt_4c57f0(int c)
     } else {
         src[0] = (uint8_t)(c >> 8); src[1] = (uint8_t)c; src[2] = 0; n = 2;
     }
-    n = (int)RETAIL(VA_LCMAPSTRINGA, 7, U32(G_LCCTYPE), 0x200, (uint32_t)(uintptr_t)src, n, (uint32_t)(uintptr_t)dst, 3, 0);
+    n = (int)rl_crt_4cb860(U32(G_LCCTYPE), 0x200, (uint32_t)(uintptr_t)src, n, (uint32_t)(uintptr_t)dst, 3, 0);
     if (n == 0) return c;
     return n == 1 ? dst[0] : *(uint16_t *)dst;
 }
@@ -1911,14 +1889,14 @@ uint32_t rl_crt_4cbfc0(uint32_t name)
 {
     uint32_t e = U32(G_ENVIRON);
     if (e == 0 && U32(G_WENVIRON) != 0) {
-        if (RETAIL(VA_WTOMB_ENVIRON, 0) != 0) return 0;
+        if (rl_crt_4ccbf0() != 0) return 0;
         e = U32(G_ENVIRON);
     }
     if (e == 0 || name == 0) return 0;
     uint32_t n = rl_crt_4bf620(name);
     for (; U32(e) != 0; e += 4) {
         uint32_t s = U32(e);
-        if (rl_crt_4bf620(s) > n && U8(s + n) == '=' && RETAIL(VA_MBSNBICOLL, 3, s, name, n) == 0)
+        if (rl_crt_4bf620(s) > n && U8(s + n) == '=' && rl_crt_4ccb80(s, name, n) == 0)
             return s + n + 1;
     }
     return 0;
@@ -1946,13 +1924,13 @@ void rl_crt_4c5a60(void)
         U8(n0 + 3) = 0;
         uint32_t s = tz + 3;
         if (U8(s) == '-') { neg = 1; s++; }
-        V32(G_TIMEZONE) = 3600 * (int32_t)RETAIL(VA_ATOL, 1, s);
+        V32(G_TIMEZONE) = 3600 * (int32_t)rl_crt_4c1df0(s);
         while (U8(s) == '+' || (U8(s) >= '0' && U8(s) <= '9')) s++;
         if (U8(s) == ':') {
-            V32(G_TIMEZONE) += 60 * (int32_t)RETAIL(VA_ATOL, 1, ++s);
+            V32(G_TIMEZONE) += 60 * (int32_t)rl_crt_4c1df0(++s);
             while (U8(s) >= '0' && U8(s) <= '9') s++;
             if (U8(s) == ':') {
-                V32(G_TIMEZONE) += (int32_t)RETAIL(VA_ATOL, 1, ++s);
+                V32(G_TIMEZONE) += (int32_t)rl_crt_4c1df0(++s);
                 while (U8(s) >= '0' && U8(s) <= '9') s++;
             }
         }
@@ -1979,8 +1957,8 @@ void rl_crt_4c5a60(void)
             V32(G_DSTBIAS) = 0;
         }
         uint32_t n0 = U32(G_TZNAME0), n1 = U32(G_TZNAME1);
-        RETAIL(VA_WCSTOMBS, 3, n0, G_TZI + 4, 0x40);
-        RETAIL(VA_WCSTOMBS, 3, n1, G_TZI + 88, 0x40);
+        rl_crt_4cbbf0(n0, G_TZI + 4, 0x40);
+        rl_crt_4cbbf0(n1, G_TZI + 88, 0x40);
         U8(n1 + 63) = 0;
         U8(n0 + 63) = U8(n1 + 63);
     }
@@ -2196,7 +2174,7 @@ int rl_crt_4c8990(int cp_in)
     uint32_t cp = rl_crt_4c8cc0(cp_in);
     if (cp == U32(G_MBCP)) return 0;
     if (cp == 0) {
-        RETAIL(VA_SETSBCS, 0);
+        rl_crt_4c8df0();
         return 0;
     }
     for (uint32_t i = 0; i < 5; i++) {
@@ -2206,7 +2184,7 @@ int rl_crt_4c8990(int cp_in)
             for (uint32_t m = G_CPINFO + 48 * i + 16 + 8 * k; U8(m) != 0 && U8(m + 1) != 0; m += 2)
                 for (uint32_t n = U8(m); U8(m + 1) >= n; n++) U8(G_MBCTYPE + 1 + n) |= U8(G_MBMASKS + k);
         U32(G_MBCP) = cp;
-        U32(G_MBLCID) = RETAIL(VA_CPTOLCID, 1, cp);
+        U32(G_MBLCID) = rl_crt_4c8d50(cp);
         for (uint32_t k = 0; k < 6; k++) U16(G_MBULINFO + 2 * k) = U16(G_CPINFO + 4 + 48 * i + 2 * k);
         return 0;
     }
@@ -2221,13 +2199,13 @@ int rl_crt_4c8990(int cp_in)
                 for (uint32_t n = lb[0]; lb[1] >= n; n++) U8(G_MBCTYPE + 1 + n) |= 4;
             for (uint32_t n = 1; n < 0xff; n++) U8(G_MBCTYPE + 1 + n) |= 8;
             U32(G_MBCP) = cp;
-            U32(G_MBLCID) = RETAIL(VA_CPTOLCID, 1, cp);
+            U32(G_MBLCID) = rl_crt_4c8d50(cp);
         }
         for (uint32_t k = 0; k < 6; k++) U16(G_MBULINFO + 2 * k) = 0;
         return 0;
     }
     if (V32(G_CPSYSSET) != 0) {
-        RETAIL(VA_SETSBCS, 0);
+        rl_crt_4c8df0();
         return 0;
     }
     return -1;
@@ -2294,7 +2272,7 @@ uint32_t rl_crt_4c9bf0(void)
             if (*++e == 0) e++;
         uint32_t n = (uint32_t)(e - a) + 1;
         uint32_t m = rl_crt_4bfa30(n, 2, S_AW_ENV_C, 294);
-        if (m != 0) RETAIL(VA_MEMCPY, 3, m, (uint32_t)(uintptr_t)a, n);
+        if (m != 0) rl_crt_4c3220(m, (uint32_t)(uintptr_t)a, n);
         IAT(BOOL (WINAPI *)(LPSTR), I_FreeEnvironmentStringsA)(a);
         return m;
     }
@@ -2403,7 +2381,7 @@ uint32_t rl_crt_4c94a0(void)
     uint32_t cmd = U8(U32(G_ACMDLN)) != 0 ? U32(G_ACMDLN) : U32(G_PGMPTR);
     rl_crt_4c9570(cmd, 0, 0, (uint32_t)(uintptr_t)&argc, (uint32_t)(uintptr_t)&nch);
     uint32_t m = rl_crt_4bfa30(nch + 4 * argc, 2, S_STDARGV_C, 117);
-    if (m == 0) RETAIL(VA_AMSG_EXIT, 1, 8);
+    if (m == 0) rl_crt_4c35c0(8);
     rl_crt_4c9570(cmd, m, m + 4 * argc, (uint32_t)(uintptr_t)&argc, (uint32_t)(uintptr_t)&nch);
     U32(G_ARGC) = argc - 1;
     U32(G_ARGV) = m;
@@ -2420,12 +2398,12 @@ uint32_t rl_crt_4c9360(void)
         if (U8(s) != '=') n++;
     uint32_t v = rl_crt_4bfa30(4u * (uint32_t)n + 4, 2, S_STDENVP_C, 85);
     U32(G_ENVIRON) = v;
-    if (v == 0) RETAIL(VA_AMSG_EXIT, 1, 9);
+    if (v == 0) rl_crt_4c35c0(9);
     for (uint32_t s = U32(G_AENVPTR), l; U8(s) != 0; s += l) {
         l = rl_crt_4bf620(s) + 1;
         if (U8(s) != '=') {
             U32(v) = rl_crt_4bfa30(l, 2, S_STDENVP_C, 97);
-            if (U32(v) == 0) RETAIL(VA_AMSG_EXIT, 1, 9);
+            if (U32(v) == 0) rl_crt_4c35c0(9);
             rl_crt_4c2080(U32(v), s);
             v += 4;
         }
@@ -2451,7 +2429,7 @@ void rl_crt_4cc5e0(void)
     if (U32(G_PIOB) == 0) {
         V32(G_NSTREAM) = 20;
         U32(G_PIOB) = rl_crt_4bfea0(20, 4, 2, S_FILE_C, 135);
-        if (U32(G_PIOB) == 0) RETAIL(VA_AMSG_EXIT, 1, 26);
+        if (U32(G_PIOB) == 0) rl_crt_4c35c0(26);
     }
     for (uint32_t i = 0; i < 20; i++) U32(U32(G_PIOB) + 4 * i) = G_IOB + 32 * i;
     for (uint32_t j = 0; j < 3; j++)
@@ -2487,7 +2465,7 @@ int rl_crt_4cd270(uint32_t f)
     if (f == 0) return rl_crt_4cd3d0(0);
     if (rl_crt_4cd2f0(f) != 0) return -1;
     if ((U32(f + 12) & 0x4000) == 0) return 0;
-    return RETAIL(VA_COMMIT, 1, U32(f + 16)) != 0 ? -1 : 0;
+    return rl_crt_4ce470(U32(f + 16)) != 0 ? -1 : 0;
 }
 
 /* Port of FUN_004cd3d0 (252 B) — flsall: every open stream (_IOREAD | _IOWRT | _IORW) of __piob; FLUSHALL (1) =
@@ -2515,7 +2493,7 @@ int rl_crt_4cc740(void)
 {
     rl_crt_4cd3b0();
     int r = (int)U8(G_EXITFLAG);
-    if (U8(G_EXITFLAG) != 0) return (int)RETAIL(VA_FCLOSEALL, 0);
+    if (U8(G_EXITFLAG) != 0) return (int)rl_crt_4cd1b0();
     return r;
 }
 
@@ -2527,7 +2505,7 @@ uint32_t rl_crt_4cd4f0(uint32_t fn)
 {
     if (rl_crt_4c09f0(U32(G_ONEXITBEG), 2) < U32(G_ONEXITEND) - U32(G_ONEXITBEG) + 4) {
         uint32_t sz = rl_crt_4c09f0(U32(G_ONEXITBEG), 2);
-        uint32_t n = RETAIL(VA_REALLOC_DBG, 5, U32(G_ONEXITBEG), sz + 16, 2, S_ONEXIT_C, 104);
+        uint32_t n = rl_crt_4bff40(U32(G_ONEXITBEG), sz + 16, 2, S_ONEXIT_C, 104);
         if (n == 0) return 0;
         U32(G_ONEXITEND) = n + ((U32(G_ONEXITEND) - U32(G_ONEXITBEG)) & 0xfffffffcu);
         U32(G_ONEXITBEG) = n;
@@ -2545,7 +2523,7 @@ int rl_crt_4cd5b0(uint32_t fn) { return rl_crt_4cd4f0(fn) != 0 ? 0 : -1; }
 uint32_t rl_crt_4cd5e0(void)
 {
     U32(G_ONEXITBEG) = rl_crt_4bfa30(0x80, 2, S_ONEXIT_C, 182);
-    if (U32(G_ONEXITBEG) == 0) RETAIL(VA_AMSG_EXIT, 1, 24);
+    if (U32(G_ONEXITBEG) == 0) rl_crt_4c35c0(24);
     U32(U32(G_ONEXITBEG)) = 0;
     U32(G_ONEXITEND) = U32(G_ONEXITBEG);
     return U32(G_ONEXITBEG);
@@ -2612,7 +2590,7 @@ void rl_crt_4bf770(int code, int quick, int retcaller)
     rl_crt_4bf870(T_XT_A, T_XT_Z);
     if (V32(G_LEAKSDONE) == 0 && (rl_crt_4c1070(-1) & 0x20)) {
         V32(G_LEAKSDONE) = 1;
-        RETAIL(VA_CRTDUMPLEAKS, 0);
+        rl_crt_4c19b0();
     }
     if (retcaller == 0) {
         V32(G_EXITDONE) = 1;
@@ -2636,7 +2614,7 @@ void rl_crt_4c3370(void)
     V32(G_WINMINOR) = v & 0xff;
     V32(G_WINVER) = (int32_t)(((v >> 8) & 0xff) + ((v & 0xff) << 8));
     V32(G_OSVER) = (int32_t)(v >> 16);
-    if (rl_crt_4c4480() == 0) RETAIL(VA_AMSG_EXIT, 1, 28);
+    if (rl_crt_4c4480() == 0) rl_crt_4c35c0(28);
     rl_crt_4c9e50();
     rl_crt_4c8e90();
     U32(G_ACMDLN) = (uint32_t)(uintptr_t)IAT(LPSTR (WINAPI *)(void), I_GetCommandLineA)();

@@ -12,9 +12,9 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 ## Summary
 
 - non-thunk engine functions: **2447** (of 2452 incl. thunks)
-- touched: **2009** (82.1%) — tested 788, ported 1221
-- code bytes touched: **87.3%** (731,750 / 838,629 B)
-- unported: **438**
+- touched: **2027** (82.8%) — tested 788, ported 1239
+- code bytes touched: **88.1%** (738,419 / 838,629 B)
+- unported: **420**
 - orphan refs (in src/, not in function table): 7
 
 ## tested (788) — ported + host unit suite
@@ -810,7 +810,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bf1f9 | FUN_004bf1f9 | 433 | engine_battlefield_render.c, engine_battlefield_render.h |
 | 0x4cfb08 | FUN_004cfb08 | 64 | engine.c, engine_map_scene.c, engine_map_scene.h |
 
-## ported (1221) — reimplemented, no host test yet
+## ported (1239) — reimplemented, no host test yet
 
 | VA | name | size | src |
 |----|------|-----:|-----|
@@ -1903,13 +1903,20 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4bfa90 | __nh_malloc_dbg | 101 | rl_crt.c |
 | 0x4bfb30 | __heap_alloc_dbg | 818 | rl_crt.c |
 | 0x4bfea0 | __calloc_dbg | 110 | rl_crt.c |
+| 0x4bff40 | __realloc_dbg | 55 | rl_crt_dbgheap.c |
+| 0x4bff80 | realloc_help | 1409 | rl_crt_dbgheap.c |
 | 0x4c0580 | FUN_004c0580 | 25 | rl_io.c |
 | 0x4c05a0 | __free_dbg | 1057 | rl_io.c |
 | 0x4c09f0 | __msize_dbg | 358 | rl_crt.c |
 | 0x4c0c60 | _CheckBytes | 140 | rl_crt.c |
+| 0x4c0cf0 | __CrtCheckMemory | 873 | rl_crt_dbgheap.c |
 | 0x4c1070 | __CrtSetDbgFlag | 48 | rl_crt.c |
 | 0x4c1110 | __CrtIsValidPointer | 92 | rl_crt.c |
 | 0x4c1170 | __CrtIsValidHeapPointer | 182 | rl_crt.c |
+| 0x4c1370 | __CrtMemCheckpoint | 316 | rl_crt_dbgheap.c |
+| 0x4c15f0 | __CrtMemDumpAllObjectsSince | 704 | rl_crt_dbgheap.c |
+| 0x4c18b0 | __printMemBlockData | 252 | rl_crt_dbgheap.c |
+| 0x4c19b0 | __CrtDumpMemoryLeaks | 132 | rl_crt_dbgheap.c |
 | 0x4c1b10 | __getcwd | 43 | rl_crt.c |
 | 0x4c1b40 | __getdcwd | 312 | rl_crt.c |
 | 0x4c1c80 | __validdrive | 105 | rl_crt_env.c |
@@ -1930,20 +1937,31 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x4c2a80 | _sprintf | 236 | rl_crt.c |
 | 0x4c2fb0 | __splitpath | 578 | rl_crt.c |
 | 0x4c3200 | operator_new | 30 | rl_crt.c |
+| 0x4c3220 | FID_conflict:_memcpy | 285 | rl_crt_dbgheap.c |
 | 0x4c3370 | entry | 494 | rl_crt.c |
 | 0x4c35c0 | __amsg_exit | 55 | rl_crt_dbg.c |
+| 0x4c3650 | __callnewh | 62 | rl_crt_dbgheap.c |
+| 0x4c3690 | __malloc_base | 34 | rl_crt_dbgheap.c |
+| 0x4c36c0 | __nh_malloc_base | 150 | rl_crt_dbgheap.c |
 | 0x4c3760 | __heap_alloc_base | 99 | rl_crt.c |
 | 0x4c37d0 | __CrtDbgBreak | 17 | rl_crt_dbg.c |
 | 0x4c3950 | __CrtDbgReport | 998 | rl_crt_dbg.c |
 | 0x4c3d40 | _CrtMessageWindow | 813 | rl_crt_dbg.c |
 | 0x4c4070 | FUN_004c4070 | 21 | rl_crt.c |
+| 0x4c4090 | __expand_base | 195 | rl_crt_dbgheap.c |
+| 0x4c4160 | __realloc_base | 518 | rl_crt_dbgheap.c |
 | 0x4c4370 | __free_base | 105 | rl_crt.c |
+| 0x4c43e0 | __heapchk | 120 | rl_crt_dbgheap.c |
 | 0x4c4480 | __heap_init | 93 | rl_crt.c |
 | 0x4c45b0 | ___sbh_new_region | 508 | rl_crt.c |
+| 0x4c47c0 | ___sbh_release_region | 132 | rl_crt_dbgheap.c |
+| 0x4c4850 | ___sbh_decommit_pages | 376 | rl_crt_dbgheap.c |
 | 0x4c49d0 | ___sbh_find_block | 162 | rl_crt.c |
 | 0x4c4a80 | ___sbh_free_block | 136 | rl_crt.c |
 | 0x4c4b10 | ___sbh_alloc_block | 1207 | rl_crt.c |
 | 0x4c4fe0 | ___sbh_alloc_block_from_page | 763 | rl_crt.c |
+| 0x4c52e0 | ___sbh_resize_block | 439 | rl_crt_dbgheap.c |
+| 0x4c54a0 | ___sbh_heap_check | 617 | rl_crt_dbgheap.c |
 | 0x4c5710 | __isctype | 182 | rl_crt_env.c |
 | 0x4c57f0 | _toupper | 313 | rl_crt.c |
 | 0x4c5930 | __dosmaperr | 177 | rl_crt.c |
