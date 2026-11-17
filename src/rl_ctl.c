@@ -2602,13 +2602,10 @@ int rl_4472ce(int now)
  * from this handler they sit 0x20..0x2c below its entry esp. They hold what the previous handler's executor left —
  * or, after a region change, the four locals of 0x4ad6c0 (sub esp, 0x10 at the same depth: its loop counters j = 151
  * and k = 17, army 150's owner (+0, signed) and its county's owner), which overwrite them last. The port models them
- * as rl_46521f_res[] (in and out; rhost moves them: rh_res_get / rh_res_put). s_move_run is the executor with those
- * locals (rhost: the linked engine_army_move_run with its queue; unbound: retail's, which then sees the C stack —
- * the standalone's TODO). */
+ * as rl_46521f_res[] (in and out; the row moves them: rh_res_get / rh_res_put) and hands them to the executor's
+ * link entry rl_465d28_res (rl_link_logic.c). */
 uint32_t rl_46521f_res[4];
 int rl_46521f_moved;                 /* the executor ran this call */
-static void (*s_move_run)(uint32_t *res);
-void rl_ctl_bind_move_run(void (*fn)(uint32_t *res)) { s_move_run = fn; }
 
 /* Port of FUN_0046521f (615 B) — army state 1, marching / occupying (the army DAT_005533e8, a mirror): ticks
  * 15; the sprite by head count (≤ 300 72, ≤ 600 96, else 120, + 3 · ((anim + 1) & 7)) plus the facing's offset
@@ -2641,10 +2638,7 @@ int rl_46521f(void)
         --AR32(a, 0x52f210);
     if ((int8_t)AR8(a, 0x52f1fc) == 2) {
         rl_46521f_moved = 1;
-        if (s_move_run)
-            s_move_run(rl_46521f_res);
-        else
-            engine_retail_call(0x465d28u, 0);   /* rl_link: engine_army_move_run (a port queue; the locals' residue) */
+        rl_465d28_res(rl_46521f_res);
         return 0;
     }
     if (AR8(a, 0x52f0b6) == 0)

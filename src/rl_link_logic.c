@@ -10,8 +10,8 @@
  * open event queue changes hands (rl_link_evq_callout_enter / _leave) — the callee may post into retail's ring.
  *
  * ENTRIES.  An entry runs between rl_link_port_enter / _leave with the queue loaded around the call when the old port
- * takes one (EVQ).  0x465d28 (engine_army_move_run) stays a seam: its waypoint / direction locals are the caller's
- * stack residue (quirks #229 / #232), which only rhost's residue model supplies. */
+ * takes one (EVQ).  0x465d28 (engine_army_move_run) takes its four uninitialized locals (quirks #229 / #232) from the
+ * caller's model: rl_465d28_res(res). */
 #include "rl_link.h"
 #include <stdint.h>
 #include "rl.h"
@@ -158,6 +158,14 @@ int rl_43b622(void) { EVQ(engine_combat_auto_resolve_button(q, MP_ACTIVE)); retu
 int rl_477dfc(void) { EVQ(engine_combat_battlefield_end_tick(q, MP_ACTIVE)); return 0; }
 int rl_4ab383(int a0) { EVQ(engine_combat_aftermath(a0, q, MP_ACTIVE)); return 0; }
 int rl_43be65(void) { EVQ(engine_combat_battlefield_end(q, MP_ACTIVE)); return 0; }
+/* engine_army_move: the executor 0x465d28; res[] = its locals dir / outcome code / waypoint col / row ([ebp-4..-0x10],
+ * never initialized: quirk #229) in and out — the caller's residue model (rl_46521f_res) */
+void rl_465d28_res(uint32_t *res)
+{
+    EVQ(g_army_move_dir = res[0]; g_army_move_code = res[1]; g_army_move_wp_col = res[2]; g_army_move_wp_row = res[3];
+        engine_army_move_run(q, MP_ACTIVE);
+        res[0] = g_army_move_dir; res[1] = g_army_move_code; res[2] = g_army_move_wp_col; res[3] = g_army_move_wp_row);
+}
 /* engine_army_state: FUN_00428007 leaves the matched cell in the shared cursor DAT_00569570/78 (#226) */
 int rl_428007(int realm) { int r, c, w; LG(r = engine_army_state_find_settle_spot(realm, &c, &w)); return r; }
 /* the screens' hit tests over retail's input (cursor DAT_004e65fc / DAT_004e65f4, press DAT_004eafb4) */

@@ -137,15 +137,7 @@ HOOK_V(rl_4472ce, 1, rl_4472ce(I(0)))
  * locals after a region change, or the executor's): rh_res_put. The row shadows with the FULL copy (RH_SH_FULL; a
  * sample of its calls, RH_SH_SAMPLE): the page-tracked shadow's write faults push exception frames over exactly those
  * slots and perturb retail's own run (4 divergences / 3.18 M calls and 2 runs off the corpus, docs/findings/rl-ctl.md). The executor itself = the linked engine_army_move_run with those locals
- * in its globals and the event queue (as rh_hooks_combat.c's move_run row). */
-#include "engine_army_move.h"
-static void ctl_move_run(uint32_t *res)
-{
-    g_army_move_dir = res[0]; g_army_move_code = res[1]; g_army_move_wp_col = res[2]; g_army_move_wp_row = res[3];
-    EVQ(engine_army_move_run(q, MP_ACTIVE));
-    res[0] = g_army_move_dir; res[1] = g_army_move_code; res[2] = g_army_move_wp_col; res[3] = g_army_move_wp_row;
-}
-__attribute__((constructor)) static void rl_ctl_bind(void) { rl_ctl_bind_move_run(ctl_move_run); }
+ * in its globals and the event queue: the link entry rl_465d28_res (rl_link_logic.c). */
 static void res_46521f(void)
 {
     for (int k = 0; k < 4; k++) rl_46521f_res[k] = rh_res_get(0x20 + 4 * k);

@@ -107,4 +107,3 @@ int rl_46521f(void);                             /* 615 B, coverage 53 */
  * them (in) and as it leaves them when it ran (out); the executor seam (rhost binds the linked port with its queue) */
 extern uint32_t rl_46521f_res[4];
 extern int rl_46521f_moved;
-void rl_ctl_bind_move_run(void (*fn)(uint32_t *res));

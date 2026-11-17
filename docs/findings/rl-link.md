@@ -74,8 +74,8 @@ save-schema check, `rh_bf_bind_seams` (engine_retail_call's binder) and the tabl
 _economy_bind_seams` are gone. 18 entries `rl_<va>` (EVQ where the old port takes a queue): 0x448819 0x449889 0x44aa41
 0x44ae3c 0x4508de 0x4acbd4 0x46eddf 0x49a581 0x4ac3c6 0x437535 0x49b2a3 0x4abb36 0x4a8aab 0x43b622 0x477dfc 0x428007
 0x43b412 0x4357a6; their rows and all seam sites call them. `g_rl_4d9278` (the result-movie names) is new.
-**0x465d28 stays a seam**: engine_army_move_run's waypoint / direction locals are its caller's stack residue (quirks
-#229 / #232) — only rhost's residue model (`move_run_res`) supplies them.
+**0x465d28 stayed a seam** (until 2026-11-17, §Left): engine_army_move_run's waypoint / direction locals are its
+caller's stack residue (quirks #229 / #232).
 `rl_link_bind_all` (logic + mapview + screens binds) runs from `rl_crt_start`: the port's start for a build without
 rhost (under rhost: no-ops, rh_port_bind_once ran them).
 **`rl_link_port_leave` now reloads for a live caller** (as `rl_link_retail_leave` does). The first standalone after the
@@ -134,7 +134,11 @@ retail's globals, as the row's helper did), county-action strip 0x43ae30, Send S
 three locals) — their rows model stack residue (rh_res_get / _set) that only rhost's real stack carries.
 
 ## Left (2026-11-17)
-- 0x465d28 (above).
+- ~~0x465d28~~ — done 2026-11-17: the executor's residue was already the caller's model (rl_46521f_res, quirk #238;
+  rl_terr's handlers 2..4 keep it in g_army_move_*); only the binder (rhost's `ctl_move_run` constructor) lived in
+  rhost. Now the link entry `rl_465d28_res(res)` (rl_link_logic.c, EVQ) — rl_46521f calls it. Verify (wine, 8
+  scenarios, rows rl_46521f + move_run): 0 divergences, hybrid PASS; standalone 121/121 = pure retail, 0 rl_va
+  misses. **No literal retail seam left in src but the two CRT debug entries (★4).**
 - ~~0x4479e9 / 0x448339~~ — done 2026-11-17: the dispatcher models the handlers' shared slot (quirk #241, rl_ctl.c
   `da_run`) and calls both directly; standalone `--only '^mp-'` 39/39 = pure retail, 0 rl_va misses.
 - rl_mpnet's CRT helpers (operator new, _splitpath, sprintf: literal VAs, ★4).

@@ -54,6 +54,7 @@ void rl_link_bind_once(void);
 void rl_link_bind_all(void);   /* rl_link_bind_once + the mapview / screens binds: the port's start */
 int rl_448819(void); int rl_449889(void); int rl_44aa41(void); int rl_44ae3c(void); int rl_4508de(void); int rl_4acbd4(void);
 int rl_46eddf(int rec); int rl_49a581(void); int rl_4ac3c6(int realm); int rl_437535(int occ, int region); int rl_49b2a3(void);
+void rl_465d28_res(uint32_t *res);   /* the march executor with its residue locals in / out */
 int rl_4abb36(int army, int region); int rl_4a8aab(int rec); int rl_43b622(void); int rl_477dfc(void);
 int rl_428007(int realm); int rl_43b412(int ox, int oy); int rl_4357a6(void); int rl_4ab383(int a0); int rl_43be65(void);
 /* the economy screens' hot-spot actions (reached by retail VA: rl_va.h) */
