@@ -1,0 +1,8 @@
+# the probe carrier's self-test: already-verified CRT rows called with synthetic arguments (rhost.py probe)
+scenario newgame-playnow
+1700 rl_crt_4c2170 "abc" "abd"
+1700 rl_crt_4c2170 "Lords" "Lords"
+1700 rl_crt_4c57f0 0x61
+1700 rl_crt_4c57f0 -1
+1700 rl_crt_4c2080 buf:32 "realm"
+1700 rl_crt_4c2a80 buf:64 "%s=%d %x|%5.3s" "key" -17 0xbeef "abcdef"

@@ -173,6 +173,101 @@ void rh_hooks_install(void)
     }
 }
 
+/* --probe FILE: SYNTHETIC CARRIERS for rows no scenario reaches (dead or error-path code: the CRT's report / locale /
+ * environment paths). At the end of frame F (frame_wrap, on retail's stack) each probe line `F NAME ARG...` calls the
+ * row's wrapper with those arguments, exactly as a retail call site would: in shadow mode retail runs, then the port on
+ * the identical pre-state, state + return value compared (hook-result). Arguments: an integer (0x.. / decimal /
+ * negative), "text" (C escapes \n \t \\ \" \xHH; NUL-terminated on retail's stack above the call), w"text" (the same,
+ * UTF-16), buf:N (N bytes 0xcc on the stack: an output — a HOOK_SO row compares it), va:VA (a retail address as is).
+ * Stack data sits above the wrapper's e0, so retail's own frames never overwrite it. Lines: '#' comments; `scenario`
+ * lines are rhost.py's (ignored here). The run is no longer a pure replay: rhost.py probe compares hook results only. */
+#define PROBE_MAX 512
+static struct { uint32_t f; char name[64]; char args[400]; } g_pr[PROBE_MAX];
+static int g_npr, g_pr_done;
+static void probe_load(void)
+{
+    FILE *f = fopen(O.probe, "r");
+    if (!f) rh_fatal("--probe: cannot read %s", O.probe);
+    char l[512];
+    while (fgets(l, sizeof l, f)) {
+        char *p = l; while (*p == ' ' || *p == '\t') p++;
+        if (!*p || *p == '#' || *p == '\n' || *p == '\r' || !strncmp(p, "scenario", 8)) continue;
+        if (g_npr == PROBE_MAX) rh_fatal("--probe: more than %d lines", PROBE_MAX);
+        char *e; g_pr[g_npr].f = strtoul(p, &e, 0); p = e; while (*p == ' ') p++;
+        int k = 0; while (*p && *p != ' ' && *p != '\n' && *p != '\r' && k < 63) g_pr[g_npr].name[k++] = *p++;
+        g_pr[g_npr].name[k] = 0; while (*p == ' ') p++;
+        snprintf(g_pr[g_npr].args, sizeof g_pr[g_npr].args, "%s", p);
+        char *nl = strpbrk(g_pr[g_npr].args, "\r\n"); if (nl) *nl = 0;
+        if (!find_hook(g_pr[g_npr].name)) rh_fatal("--probe: unknown row '%s'", g_pr[g_npr].name);
+        g_npr++;
+    }
+    fclose(f);
+    rh_log("probe: %d synthetic call(s) from %s\n", g_npr, O.probe);
+}
+/* call `fn` with n dwords (cdecl or stdcall: esp is restored from esi either way) */
+static uint32_t probe_call(void *fn, const uint32_t *a, int n)
+{
+    uint32_t r;
+    __asm__ volatile(
+        "pushl %%esi\n\tmovl %%esp, %%esi\n\t"
+        "1:\ttestl %%ecx, %%ecx\n\tjz 2f\n\tdecl %%ecx\n\tpushl (%%edx,%%ecx,4)\n\tjmp 1b\n"
+        "2:\tcall *%%eax\n\tmovl %%esi, %%esp\n\tpopl %%esi"
+        : "=a"(r), "+c"(n), "+d"(a) : "a"(fn) : "memory", "ebx", "edi");
+    return r;
+}
+static __attribute__((noinline)) void probe_one(int i)
+{
+    char buf[8192];   /* the probe's stack data, above every frame the call makes */
+    uint32_t a[16]; int n = 0; size_t used = 0;
+    const char *p = g_pr[i].args;
+    while (*p && n < 16) {
+        while (*p == ' ') p++;
+        if (!*p) break;
+        int wide = 0;
+        if (p[0] == 'w' && p[1] == '"') { wide = 1; p++; }
+        if (*p == '"') {
+            p++;
+            uint32_t at = (uint32_t)(uintptr_t)(buf + used);
+            while (*p && *p != '"') {
+                unsigned c = (uint8_t)*p++;
+                if (c == '\\') {
+                    c = (uint8_t)*p++;
+                    if (c == 'n') c = '\n'; else if (c == 't') c = '\t'; else if (c == '0') c = 0;
+                    else if (c == 'x') { char h[3] = { p[0], p[1], 0 }; c = (unsigned)strtoul(h, 0, 16); p += 2; }
+                }
+                if (used + 4 > sizeof buf) rh_fatal("--probe: line %d: stack data over %u bytes", i, (unsigned)sizeof buf);
+                buf[used++] = (char)c; if (wide) buf[used++] = 0;
+            }
+            if (*p == '"') p++;
+            buf[used++] = 0; if (wide) buf[used++] = 0;
+            used = (used + 3) & ~(size_t)3;
+            a[n++] = at;
+        } else if (!strncmp(p, "buf:", 4)) {
+            size_t k = strtoul(p + 4, (char **)&p, 0);
+            if (used + k + 4 > sizeof buf) rh_fatal("--probe: line %d: stack data over %u bytes", i, (unsigned)sizeof buf);
+            memset(buf + used, 0xcc, k);
+            a[n++] = (uint32_t)(uintptr_t)(buf + used);
+            used = (used + k + 3) & ~(size_t)3;
+        } else if (!strncmp(p, "va:", 3)) {
+            a[n++] = (uint32_t)strtoul(p + 3, (char **)&p, 0);
+        } else {
+            char *e; a[n++] = (uint32_t)strtoll(p, &e, 0);
+            if (e == p) rh_fatal("--probe: line %d: bad argument '%s'", i, p);
+            p = e;
+        }
+    }
+    hook_t *h = find_hook(g_pr[i].name);
+    if (h->mode == H_OFF) rh_fatal("--probe: row %s is not hooked (--hook shadow:%s)", h->name, h->name);
+    uint32_t r = probe_call(h->wrapper, a, n);
+    rh_log("probe %s f%u args=%d ret=%08x\n", h->name, g_frame, n, r);
+}
+void rh_probe_frame(void)
+{
+    if (!O.probe) return;
+    if (!g_pr_done) { g_pr_done = 1; probe_load(); }
+    for (int i = 0; i < g_npr; i++) if (g_pr[i].f == g_frame) probe_one(i);
+}
+
 void rh_hooks_report(void)
 {
     rh_shadow_report();

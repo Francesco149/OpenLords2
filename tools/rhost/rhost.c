@@ -617,6 +617,7 @@ static void __cdecl frame_wrap(void)
     rh_net_tick();
     if (O.finish_late && g_frame >= O.frames) finish("frames");   /* after the timers + input of the boundary, like a live session */
     rh_bot_frame();
+    rh_probe_frame();
     if (O.live || O.snap_test) { yield_to_host(); return; }
     if (O.realtime) {
         LARGE_INTEGER q; QueryPerformanceCounter(&q);
@@ -714,6 +715,7 @@ static void parse(int argc, char **argv)
         else if (!strcmp(a, "--movies")) O.movies = 1;
         else if (!strcmp(a, "--standalone")) O.standalone = 1;
         else if (!strcmp(a, "--hook")) O.hooks = ARG();
+        else if (!strcmp(a, "--probe")) O.probe = ARG();
         else if (!strcmp(a, "--shadow-full")) O.shadow_full = 1;
         else if (!strcmp(a, "--hook-entry")) O.hook_entry = 1;
         else if (!strcmp(a, "--shadow-poison")) O.shadow_poison = strtoul(ARG(), 0, 0);

@@ -216,6 +216,9 @@ def make_batch(a, runs, tag, root_local=None):
         if getattr(a, "coverage_file", None):
             shutil.copy(a.coverage_file, os.path.join(rdir, "coverage_in.txt"))
         args = rhost_args(a, run_win, trace_win, meta)
+        if meta.get("_probe"):                   # rhost.py probe: the synthetic-call list (rh_hooks.c --probe)
+            shutil.copy(meta["_probe"], os.path.join(rdir, "probe.txt"))
+            args += ["--probe", f"{run_win}\\probe.txt"]
         spec = ""
         if "--hook" in args:
             k = args.index("--hook"); spec = args[k + 1]; del args[k:k + 2]
@@ -232,7 +235,7 @@ def make_batch(a, runs, tag, root_local=None):
     for name, *_ in runs:
         run_win = f"{WROOT}\\runs\\{batch}\\{name}"
         lines.append(f"Write-Output '=== {name}'")
-        lines.append(f"if (Test-Path '{run_win}\\rhost.log') {{ Select-String -Path '{run_win}\\rhost.log' -Pattern 'RESULT|FATAL|DIVERGE|hook-result|MessageBox|UNIMPL|STALL|AV f' | ForEach-Object {{ $_.Line }} }}")
+        lines.append(f"if (Test-Path '{run_win}\\rhost.log') {{ Select-String -Path '{run_win}\\rhost.log' -Pattern 'RESULT|FATAL|DIVERGE|hook-result|probe |MessageBox|UNIMPL|STALL|AV f' | ForEach-Object {{ $_.Line }} }}")
         lines.append(f"if (Test-Path '{run_win}\\stderr.txt') {{ Get-Content '{run_win}\\stderr.txt' -TotalCount 5 }}")
     open(os.path.join(bdir, "go.ps1"), "w").write("\r\n".join(lines) + "\r\n")
     return batch, bdir
@@ -346,7 +349,7 @@ def run_batch_wine(a, runs, tag):
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, a.jobs)) as ex:
         for name, log in ex.map(one, runs):
             out_lines.append(f"=== {name}")
-            out_lines += [l for l in log.splitlines() if re.search(r"RESULT|FATAL|DIVERGE|hook-result|MessageBox|UNIMPL|STALL|AV f", l)]
+            out_lines += [l for l in log.splitlines() if re.search(r"RESULT|FATAL|DIVERGE|hook-result|^probe |MessageBox|UNIMPL|STALL|AV f", l)]
     out = "\n".join(out_lines)
     print(f"[wine batch {batch}: {len(runs)} run(s) in {time.time() - t0:.1f}s (-j{a.jobs}) → {bdir}]")
     return batch, bdir, parse_out(out), out
@@ -696,6 +699,63 @@ def cmd_verify(a):
         print(f"evidence → {os.path.relpath(ep, ROOT)}")
     os.remove(a.exe_pin)
     return 0 if not failed and not hyb and all(t[1] == 0 for t in tot.values()) else 1
+
+
+PROBES = os.path.join(ROOT, "tests", "probes")
+
+
+def cmd_probe(a):
+    """synthetic carriers (tests/probes/*.probe): rows no scenario reaches, called with chosen arguments at a frame
+    boundary of a scenario (rh_hooks.c --probe), each in shadow mode — retail, then the port on the identical
+    pre-state, state + return value compared. One run per probe file (its `scenario NAME` line); every listed row must
+    be called as often as the file says, with 0 divergences. Evidence for dead / error-path code only: a probe run is
+    not a pure replay (its end state is not compared with the corpus)."""
+    files = a.files or sorted(os.path.join(PROBES, f) for f in os.listdir(PROBES) if f.endswith(".probe"))
+    runs, want = [], {}
+    for f in files:
+        scen, n = None, {}
+        for line in open(f):
+            t = line.split()
+            if not t or t[0].startswith("#"):
+                continue
+            if t[0] == "scenario":
+                scen = t[1]
+                continue
+            n[t[1]] = n.get(t[1], 0) + 1
+        if not scen:
+            raise SystemExit(f"{f}: no `scenario NAME` line")
+        name = os.path.splitext(os.path.basename(f))[0]
+        tr, meta = scenario_inputs(scen)
+        meta = dict(meta, _probe=f)
+        runs.append((name, tr, meta))
+        want[name] = n
+    rows = sorted({r for n in want.values() for r in n})
+    a.hook = ",".join("shadow:" + h for h in rows)
+    batch, bdir, res, out = run_batch(a, runs, "probe")
+    print_results(res, [r[0] for r in runs])
+    bad = 0
+    print("\nprobe file           row                            want   ran  calls  diverge  skipped")
+    for name, n in want.items():
+        got, ran = {}, {}
+        for note in res.get(name + "#notes", []):
+            m = re.match(r"hook-result (\S+) mode=\S+ calls=(\d+) diverge=(\d+) skipped=(\d+)", note)
+            if m:
+                got[m.group(1)] = tuple(int(m.group(k)) for k in (2, 3, 4))
+            m = re.match(r"probe (\S+) f\d+ ", note)
+            if m:   # a probe line that ran (its frame came before the run ended)
+                ran[m.group(1)] = ran.get(m.group(1), 0) + 1
+            if note.startswith("DIVERGE"):
+                print("  " + note)
+        if res.get(name, {}).get("status") not in FINISHED:
+            print(f"  {name}: RUN FAILED ({res.get(name, {}).get('status', 'NO RESULT')})")
+            bad += 1
+        for r, k in sorted(n.items()):
+            c, d, sk = got.get(r, (0, 0, 0))
+            ok = ran.get(r, 0) == k and c >= k and d == 0 and sk == 0
+            bad += not ok
+            print(f"{name:20s} {r:28s} {k:5d} {ran.get(r, 0):5d} {c:6d} {d:8d} {sk:8d}{'' if ok else '  FAIL'}")
+    print(f"\nPROBE: {sum(len(n) for n in want.values())} row(s) in {len(want)} file(s), {bad} failing")
+    return 1 if bad else 0
 
 
 def function_table():
@@ -1109,6 +1169,7 @@ def main():
     sp.set_defaults(fn=lambda a: __import__("rhnet").cmd_mp_record(a, sys.modules[__name__]))
     sp = sub.add_parser("snap-check"); common(sp); sp.add_argument("--only"); sp.add_argument("--windows", type=int, default=2)
     sp.set_defaults(fn=cmd_snap_check)
+    sp = sub.add_parser("probe"); common(sp); sp.add_argument("files", nargs="*"); sp.set_defaults(fn=cmd_probe)
     sp = sub.add_parser("standalone"); common(sp); sp.add_argument("--only"); sp.set_defaults(fn=cmd_standalone)
     sub.add_parser("play-install").set_defaults(fn=cmd_play_install)
     sp = sub.add_parser("play-status"); sp.add_argument("--root", default=PLAY); sp.set_defaults(fn=cmd_play_status)

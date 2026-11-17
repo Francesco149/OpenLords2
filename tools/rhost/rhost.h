@@ -51,6 +51,7 @@ typedef struct {
     int log_files, log_heap, log_input, log_dd, log_ds, log_win;
     const char *coverage;
     const char *hooks;
+    const char *probe;          /* --probe FILE: synthetic calls of hooked rows at frame boundaries (rh_hooks.c) */
     int shadow_full;            /* --shadow-full: shadow by copying the whole state (default: page-tracked) */
     int hook_entry;             /* --hook-entry: patch every hooked function's entry, not its call sites (tests) */
     uint32_t shadow_poison;     /* --shadow-poison VA: flip a bit there after every shadowed port call (tests the diff) */
@@ -98,6 +99,7 @@ void *rh_fixed_alloc(size_t n);
 typedef struct { uint32_t va; void *target; const char *name; } rh_thunk_t;
 int  rh_hooks_thunks(const rh_thunk_t **out);
 int  rh_in_shadow(void);
+void rh_probe_frame(void);   /* --probe: the synthetic calls due at this frame boundary (rh_hooks.c) */
 
 /* rh_net.c — multiplayer: the fake SIGS transport, the monitor-thread coroutine, poll-stamped deliveries */
 void rh_net_config(const char *spec);

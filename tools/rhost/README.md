@@ -133,6 +133,14 @@ each) — then the **hybrid pass**: every hook in replace mode at once, `corpus 
 corpus. The whole corpus (no `--only`) writes `docs/rhost-evidence.json` (`depth` = the pass that reached
 the hook), which `tools/gen_port_ledger.py` renders into `docs/STATUS.md`.
 
+**Synthetic carriers** (`rhost.py probe [tests/probes/X.probe …]`, `--probe FILE`, 2026-11-17): for rows no scenario
+reaches (dead or error-path code — the CRT's report / locale / environment paths). A `.probe` file names a scenario
+(`scenario NAME`) and lines `FRAME ROW ARG…`; at the end of that frame rhost calls the row's wrapper on retail's stack
+as a call site would, in shadow mode: retail, then the port on the identical pre-state, state + return compared.
+Arguments: integers, `"text"` / `w"text"` (C escapes; on the stack above the call), `buf:N` (N bytes 0xcc: an output —
+a `HOOK_SO` row compares it), `va:VA`. PASS = every line ran, 0 divergences. Not a pure replay: the end state is not
+compared with the corpus. Self-test `tests/probes/selftest.probe`; `--extra "--shadow-poison VA"` must FAIL it.
+
 ## Control channel (`--bot HOST:PORT`, `rhbot.py`)
 
 A controller steps a live run frame by frame over TCP: `run N`, `post m w l`, `read va n`, `write` (pokes —
