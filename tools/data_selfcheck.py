@@ -186,6 +186,8 @@ def main():
     ap.add_argument('--exe', default=DL.DEF_EXE if os.path.exists(DL.DEF_EXE) else DL.ALT_EXE)
     ap.add_argument('--list', action='store_true', help='print every diff / ptr-diff span')
     ap.add_argument('--jobs', type=int, default=8)
+    ap.add_argument('--nodef-json', metavar='PATH',
+                    help='write the catalog bytes no aliased definition covers, as [va, len, row name] runs (JSON)')
     a = ap.parse_args()
 
     img = DL.Image(a.exe)
@@ -398,6 +400,22 @@ def main():
             if b:
                 nz_tot[status.get(cva + i, 'uncovered')] += 1
 
+    if a.nodef_json:
+        import json
+        runs = []
+        for (cva, csize, cname, _ctype) in catalog:
+            i = 0
+            while i < csize:
+                if status.get(cva + i, 'uncovered') not in ('uncovered', 'own-copy'):
+                    i += 1
+                    continue
+                j = i
+                while j < csize and status.get(cva + j, 'uncovered') in ('uncovered', 'own-copy'):
+                    j += 1
+                runs.append([cva + i, j - i, cname])
+                i = j
+        with open(a.nodef_json, 'w') as f:
+            json.dump(runs, f)
     write_md(img, a.exe, sym_rows, rows, tot, nz_tot, diffs, overlaps, len(aliases), len(objs))
     print('symbols checked %d; catalog bytes %d: %s' % (len(sym_rows), sum(tot.values()),
           ', '.join('%s %d' % kv for kv in tot.most_common())))

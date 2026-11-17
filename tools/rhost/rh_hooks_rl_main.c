@@ -4,6 +4,9 @@
 #include "rh_port.h"
 #include "rl.h"
 #include "rl_main.h"
+#include "rh_rl_img_data_globals_alias.h"
+
+__asm__(RH_RL_IMG_DATA_GLOBALS_ALIASES);   /* src/rl_img_data_globals.h at retail's VAs (the rest of the catalog: ports read these by VA; names for the data image) */
 
 #define RH_TABLE RH_HOOKS_RL_MAIN
 extern hook_t RH_HOOKS_RL_MAIN[];

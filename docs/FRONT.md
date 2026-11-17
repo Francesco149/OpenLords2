@@ -201,9 +201,13 @@
    toward "a port that loads nothing": **2026-11-17: the port's own copies checked** (`tools/data_selfcheck.py` →
    `docs/data-selfcheck.md`, data-catalog.md §The port's own copies): 1768 aliased definitions, 0 differ (10 tables
    without initializers filled, 4 old-port initializers → retail's 0); catalog non-zero bytes 35,252 matched, 3,035 under
-   another port name, **8,299 uncovered** (140 rows, worklist in the doc). Next: definitions for the uncovered rows
-   (CRT tables first: rl_crt*.c read them by VA), then an image built from the port's copies, compared with the exe's
-   (same tool), then the standalone maps no exe section.
+   another port name, **8,299 uncovered** (140 rows). **2026-11-17 later: every catalog byte has a definition** —
+   `tools/gen_data_defs.py` from `data_selfcheck.py --nodef-json` → `src/rl_crt_data_globals.c` (41) +
+   `src/rl_img_data_globals.c` (123) + rhost aliases (rhost.exe code / data unchanged): 1932 definitions, 0 differ,
+   non-zero catalog bytes 46,559 / 46,586 matched (27 = the PE debug directory, never read). Next: an image built
+   from the port's copies (every aliased definition at its VA, the rest zero), compared with the exe's sections
+   (`data_selfcheck.py` composes it) — then the standalone maps that image instead of the exe's data sections (the
+   loader still needs the exe's .idata / resources: those are the next gap).
 9. ~~**Port build `-std=gnu11`**~~ — done 2026-11-17: retail has no x87 code (IDA export: 0 FP mnemonics), the port
    none either; all 213 src modules compile to identical code under c11 / gnu11, rhost.exe byte-identical; src / tests
    Makefiles → gnu11.

@@ -2,13 +2,12 @@
 
 DERIVED by `tools/data_selfcheck.py` — never hand-edit. The port's definitions of aliased globals (initializers in `src/`, never linked under rhost / the standalone) compared with the exe at their VAs, byte by byte, and mapped onto the catalog rows (`docs/data/catalog.tsv`). Statuses: see the tool's docstring.
 
-214 objects compiled, 1768 aliased names, 1768 defined in src/ as data.
+216 objects compiled, 1932 aliased names, 1932 defined in src/ as data.
 
 | catalog bytes | all | non-zero in retail |
 |---|---:|---:|
-| match | 60514 | 35252 |
-| uncovered | 19010 | 8299 |
-| own-copy | 3907 | 3035 |
+| match | 82967 | 46559 |
+| uncovered | 464 | 27 |
 | **total** | 83431 | 46586 |
 
 ## Port definitions that differ from the exe (0)
@@ -220,45 +219,45 @@ DERIVED by `tools/data_selfcheck.py` — never hand-edit. The port's definitions
 | 004d0000 | 84 | k_pe_debug_directory | uncovered 84 |  |  |
 | 004d0058 | 208 | k_dx_iids | match 208 |  |  |
 | 004d0128 | 36 | k_crt_block_use_names | match 36 |  |  |
-| 004d014c | 1800 | k_crt_dbgheap_msgs | match 372, own-copy 122, uncovered 1306 | `gfx:.rdata`, `audio:.rdata`, `main:.rdata` | rl_crt.c rl_crt_dbgheap.c rl_io.c rl_io_globals.h rl_mpnet2_globals.h |
-| 004d0854 | 60 | k_crt_assert_files_a | uncovered 60 |  | rl_crt.c rl_crt_dbg.c |
-| 004d0890 | 12 | k_crt_start_scopetable | uncovered 12 |  |  |
-| 004d089c | 572 | k_crt_dbgrpt_msgs | own-copy 49, uncovered 523 | `main:.rdata`, `dev_hooks:.rdata` | rl_crt_dbg.c |
-| 004d0ad8 | 64 | k_crt_asctime_names | uncovered 64 |  | rl_crt.c |
-| 004d0b18 | 100 | k_crt_misc_asserts | uncovered 100 |  | rl_crt.c rl_crt_dbg.c rl_crt_env.c |
-| 004d0b7c | 148 | k_crt_output_data | uncovered 148 |  | rl_crt.c |
-| 004d0c10 | 120 | k_crt_eh_scopetables | uncovered 120 |  |  |
-| 004d0c88 | 48 | k_crt_assert_files_b | uncovered 48 |  | rl_crt.c |
-| 004d0cb8 | 720 | k_crt_rterr_msgs | own-copy 79, uncovered 641 | `gfx:.rdata`, `engine_retail_call:.rdata`, `dev_hooks:.rdata` | rl_crt_dbg.c |
-| 004d0f88 | 12 | k_crt_assert_file_vsprintf | uncovered 12 |  | rl_crt_dbg.c |
-| 004d0f94 | 48 | k_crt_msgbox_imports | own-copy 13, uncovered 35 | `dev_hooks:.rdata` | rl_crt_dbg.c |
-| 004d0fc4 | 268 | k_crt_assert_files_c | uncovered 268 |  | rl_crt.c rl_crt_dbg.c rl_crt_env.c |
+| 004d014c | 1800 | k_crt_dbgheap_msgs | match 1792, uncovered 8 |  | rl_crt.c rl_crt_data_globals.c rl_crt_data_globals.h rl_crt_dbgheap.c rl_io.c rl_io_globals.h rl_mpnet2_globals.h |
+| 004d0854 | 60 | k_crt_assert_files_a | match 60 |  |  |
+| 004d0890 | 12 | k_crt_start_scopetable | match 12 |  |  |
+| 004d089c | 572 | k_crt_dbgrpt_msgs | match 572 |  |  |
+| 004d0ad8 | 64 | k_crt_asctime_names | match 64 |  |  |
+| 004d0b18 | 100 | k_crt_misc_asserts | match 100 |  |  |
+| 004d0b7c | 148 | k_crt_output_data | match 148 |  |  |
+| 004d0c10 | 120 | k_crt_eh_scopetables | match 120 |  |  |
+| 004d0c88 | 48 | k_crt_assert_files_b | match 48 |  |  |
+| 004d0cb8 | 720 | k_crt_rterr_msgs | match 720 |  |  |
+| 004d0f88 | 12 | k_crt_assert_file_vsprintf | match 12 |  |  |
+| 004d0f94 | 48 | k_crt_msgbox_imports | match 48 |  |  |
+| 004d0fc4 | 268 | k_crt_assert_files_c | match 268 |  |  |
 | 004d10d0 | 40 | k_eh_funcinfo_mp_resume | match 40 |  |  |
-| 004d2000 | 48 | k_crt_init_tables | uncovered 48 |  | rl_crt.c |
+| 004d2000 | 48 | k_crt_init_tables | match 48 |  |  |
 | 004d2030 | 32 | k_pow10 | match 32 |  |  |
-| 004d2050 | 68 | k_log_overlay_army | own-copy 20, uncovered 48 | `engine_rate:.rdata$g_engine_rate_lut` | engine_overlay_render.c rl_ui4_globals.h |
-| 004d2094 | 12 | s_label_space_suffixes | uncovered 12 |  |  |
+| 004d2050 | 68 | k_log_overlay_army | match 68 |  |  |
+| 004d2094 | 12 | s_label_space_suffixes | match 12 |  |  |
 | 004d20a0 | 60 | k_iff_ilbm_header | match 60 |  |  |
-| 004d20dc | 64 | k_dbg_quick_save_names | own-copy 36, uncovered 28 | `main:.rdata` | rl_ui2_globals.h |
+| 004d20dc | 64 | k_dbg_quick_save_names | match 64 |  |  |
 | 004d211c | 52 | k_screenshot_names | match 52 |  |  |
 | 004d216c | 4 | g_bench_repaint_ms | match 4 |  |  |
-| 004d2170 | 64 | k_dir8_offsets | own-copy 38, uncovered 26 | `engine_path_field:.rdata$TRACE_DIR`, `audio:.rdata$zzz` | rl_glue_globals.h rl_render_globals.h |
-| 004d21b0 | 28 | k_dbg_county_marker | uncovered 28 |  |  |
-| 004d21cc | 772 | k_log_gfx_blit_errors | match 24, own-copy 290, uncovered 458 | `engine_rate:.rdata$g_engine_rate_lut`, `main:.rdata` | engine_hud_menubar.c gfx_panel.c gfx_sprite_render.h rl_ui4.c rl_ui4_globals.h |
-| 004d24d0 | 64 | k_lzh_p_len | own-copy 60, uncovered 4 | `engine_labor:.rdata$k_labor_panel_region_grid` |  |
-| 004d2510 | 64 | k_lzh_p_code | uncovered 64 |  |  |
-| 004d2550 | 256 | k_lzh_d_code | own-copy 102, uncovered 154 | `engine_labor:.rdata$k_labor_panel_region_grid`, `main:.rdata$k_country.21` |  |
-| 004d2650 | 256 | k_lzh_d_len | match 8, own-copy 244, uncovered 4 | `engine_labor:.rdata$k_labor_panel_region_grid` | engine_menu_input.c rl_ui4_globals.h |
+| 004d2170 | 64 | k_dir8_offsets | match 64 |  |  |
+| 004d21b0 | 28 | k_dbg_county_marker | match 28 |  |  |
+| 004d21cc | 772 | k_log_gfx_blit_errors | match 768, uncovered 4 |  | engine_hud_menubar.c gfx_panel.c gfx_sprite_render.h rl_img_data_globals.c rl_img_data_globals.h rl_ui4.c rl_ui4_globals.h |
+| 004d24d0 | 64 | k_lzh_p_len | match 64 |  |  |
+| 004d2510 | 64 | k_lzh_p_code | match 64 |  |  |
+| 004d2550 | 256 | k_lzh_d_code | match 256 |  |  |
+| 004d2650 | 256 | k_lzh_d_len | match 256 |  |  |
 | 004d2750 | 40 | k_btn_repeat_gate | match 40 |  |  |
 | 004d2778 | 12 | s_numentry_suffixes | match 12 |  |  |
-| 004d2784 | 7 | s_eng_file | uncovered 7 |  | rl_main.c rl_render_globals.h |
-| 004d278c | 30 | s_log_no_window | uncovered 30 |  | rl_main.c |
-| 004d27ac | 10 | s_setup_wav | uncovered 10 |  | rl_main.c |
-| 004d27b8 | 25 | s_log_partially_set | own-copy 8, uncovered 17 | `main:.rdata` | rl_main.c |
-| 004d27d4 | 31 | s_log_ddraw_fail_a | uncovered 31 |  | rl_main.c |
-| 004d27f4 | 31 | s_log_ddraw_fail_b | uncovered 31 |  | rl_main.c |
-| 004d2814 | 22 | s_log_fully_set | uncovered 22 |  | rl_main.c |
-| 004d282c | 11 | s_help_file | own-copy 11 | `main:.rdata` |  |
+| 004d2784 | 7 | s_eng_file | match 7 |  |  |
+| 004d278c | 30 | s_log_no_window | match 30 |  |  |
+| 004d27ac | 10 | s_setup_wav | match 10 |  |  |
+| 004d27b8 | 25 | s_log_partially_set | match 25 |  |  |
+| 004d27d4 | 31 | s_log_ddraw_fail_a | match 31 |  |  |
+| 004d27f4 | 31 | s_log_ddraw_fail_b | match 31 |  |  |
+| 004d2814 | 22 | s_log_fully_set | match 22 |  |  |
+| 004d282c | 11 | s_help_file | match 11 |  |  |
 | 004d2838 | 192 | k_cfg_ini_keys | match 192 |  |  |
 | 004d28f8 | 56 | k_minimap_colors | match 56 |  |  |
 | 004d2950 | 36 | k_labor_task_cue | match 36 |  |  |
@@ -266,37 +265,37 @@ DERIVED by `tools/data_selfcheck.py` — never hand-edit. The port's definitions
 | 004d29a0 | 40 | k_labor_task_rows | match 40 |  |  |
 | 004d29c8 | 24 | k_smithy_weapon_noun | match 24 |  |  |
 | 004d29e0 | 24 | k_smithy_hearth_yoff | match 24 |  |  |
-| 004d29f8 | 80 | k_county_graph_bucket | uncovered 80 |  | engine_county_panels.c rl_ui4_globals.h |
-| 004d2a48 | 120 | k_county_graph_yscale | uncovered 120 |  | engine_county_panels.c |
-| 004d2ac0 | 96 | k_county_graph_barw | uncovered 96 |  | engine_county_panels.c |
+| 004d29f8 | 80 | k_county_graph_bucket | match 80 |  |  |
+| 004d2a48 | 120 | k_county_graph_yscale | match 120 |  |  |
+| 004d2ac0 | 96 | k_county_graph_barw | match 96 |  |  |
 | 004d2b20 | 32 | k_rank_cat_x | match 32 |  |  |
 | 004d2b40 | 24 | k_rank_slot_x | match 24 |  |  |
 | 004d2b58 | 24 | k_rank_slot_player | match 24 |  |  |
 | 004d2b70 | 280 | k_trade_good_tiles | match 280 |  |  |
 | 004d2c88 | 96 | k_armory_interior_names | match 96 |  |  |
 | 004d2ce8 | 160 | k_armory_tally_slots | match 160 |  |  |
-| 004d2d88 | 72 | k_armory_rack_icons | uncovered 72 |  | engine_armory.c |
+| 004d2d88 | 72 | k_armory_rack_icons | match 72 |  |  |
 | 004d2dd0 | 24 | k_castle_tier_pic | match 24 |  |  |
 | 004d2de8 | 64 | k_castle_tier_sprite_a | match 64 |  |  |
 | 004d2e28 | 60 | k_castle_tier_sprite_b | match 60 |  |  |
 | 004d2e64 | 28 | k_castle_bar_marker_x | match 28 |  |  |
 | 004d2e80 | 72 | k_screen_hide_turn_icon | match 72 |  |  |
 | 004d2ec8 | 464 | k_terrain_feature_text | match 464 |  |  |
-| 004d3098 | 144 | k_setup_tab_geom | uncovered 144 |  |  |
+| 004d3098 | 144 | k_setup_tab_geom | match 144 |  |  |
 | 004d3128 | 48 | k_setup_tab_value_base | match 48 |  |  |
 | 004d3158 | 144 | k_setup_dropdown_geom | match 144 |  |  |
 | 004d31f0 | 2856 | k_bf_roster_slots | match 2856 |  |  |
-| 004d3d18 | 260 | k_lit_county_panels | match 28, uncovered 232 |  | engine_bf_input_globals.h rl_ui4.c rl_ui4_globals.h |
-| 004d3e1c | 212 | k_lit_workforce_screens | match 140, own-copy 51, uncovered 21 | `engine_workforce_hud:.rdata` | rl_ui4.c rl_ui4_globals.h |
-| 004d3ef0 | 240 | k_lit_kingdom_screens | match 100, own-copy 52, uncovered 88 | `engine_trade:.rdata`, `engine_merchant:.rdata`, `gfx:.rdata` | rl_render.c rl_render_globals.h rl_ui4.c rl_ui4_globals.h |
-| 004d3fe0 | 248 | k_lit_armoury_screens | match 136, own-copy 63, uncovered 49 | `engine_armory:.rdata` | rl_ui4.c rl_ui4_globals.h |
+| 004d3d18 | 260 | k_lit_county_panels | match 176, uncovered 84 |  | engine_bf_input_globals.h rl_img_data_globals.c rl_img_data_globals.h rl_ui4.c rl_ui4_globals.h |
+| 004d3e1c | 212 | k_lit_workforce_screens | match 208, uncovered 4 |  | rl_img_data_globals.c rl_img_data_globals.h rl_ui4.c rl_ui4_globals.h |
+| 004d3ef0 | 240 | k_lit_kingdom_screens | match 240 |  |  |
+| 004d3fe0 | 248 | k_lit_armoury_screens | match 204, uncovered 44 |  | rl_img_data_globals.c rl_img_data_globals.h rl_ui4.c rl_ui4_globals.h |
 | 004d40d8 | 140 | k_lit_army_castle_screens | match 140 |  |  |
 | 004d4164 | 104 | k_lit_menubar_debug | match 104 |  |  |
-| 004d41cc | 204 | k_lit_county_boxes | match 140, uncovered 64 |  | rl_link_globals.h rl_link_mapview.c rl_render.c rl_render_globals.h rl_ui2.c rl_ui2_globals.h rl_ui4.c rl_ui4_globals.h |
+| 004d41cc | 204 | k_lit_county_boxes | match 204 |  |  |
 | 004d4298 | 220 | k_lit_title_screens | match 220 |  |  |
 | 004d4374 | 212 | k_lit_battle_setup_screens | match 212 |  |  |
 | 004d4448 | 252 | k_lit_bf_hud_netdebug | match 252 |  |  |
-| 004d4544 | 528 | k_lit_bf_debug_inspectors | match 478, uncovered 50 |  | rl_render.c rl_render_globals.h rl_skirmish.c rl_skirmish_globals.h rl_ui4.c rl_ui4_globals.h |
+| 004d4544 | 528 | k_lit_bf_debug_inspectors | match 526, uncovered 2 |  | rl_img_data_globals.c rl_img_data_globals.h rl_render.c rl_render_globals.h rl_skirmish.c rl_skirmish_globals.h rl_ui4.c rl_ui4_globals.h |
 | 004d4754 | 8 | k_dsound_timer | match 8 |  |  |
 | 004d475c | 4 | k_dsound_stream_chunks | match 4 |  |  |
 | 004d4768 | 592 | k_log_dsound | match 592 |  |  |
@@ -304,7 +303,7 @@ DERIVED by `tools/data_selfcheck.py` — never hand-edit. The port's definitions
 | 004d49c8 | 40 | k_hiscore_default_scores | match 40 |  |  |
 | 004d49f0 | 40 | k_hiscore_default_names | match 40 |  |  |
 | 004d4a18 | 64 | k_siege_battle_flag_57cb48 | match 64 |  |  |
-| 004d4a58 | 64 | k_siege_battle_holds | uncovered 64 |  | engine_bf_globals.h |
+| 004d4a58 | 64 | k_siege_battle_holds | match 64 |  |  |
 | 004d4a98 | 64 | k_siege_battle_flag_55307c | match 64 |  |  |
 | 004d4ad8 | 64 | k_siege_battle_kit | match 64 |  |  |
 | 004d4b18 | 64 | k_siege_battle_gate_breaks | match 64 |  |  |
@@ -314,22 +313,22 @@ DERIVED by `tools/data_selfcheck.py` — never hand-edit. The port's definitions
 | 004d4ca8 | 40 | k_skirmish_lord_banner | match 40 |  |  |
 | 004d4cd0 | 128 | k_skirmish_file_names | match 128 |  |  |
 | 004d4d50 | 8 | k_unref_u16_0123 | match 8 |  |  |
-| 004d4d60 | 640 | k_movie_viewer_names | match 434, own-copy 144, uncovered 62 | `engine_combat:.rdata` | rl_ui2.c rl_ui2_globals.h rl_ui4.c |
+| 004d4d60 | 640 | k_movie_viewer_names | match 638, uncovered 2 |  | rl_img_data_globals.c rl_img_data_globals.h rl_ui2.c rl_ui2_globals.h rl_ui4.c |
 | 004d4fe0 | 272 | k_log_smacker | match 272 |  |  |
 | 004d50f0 | 64 | k_sys_palette_static | match 64 |  |  |
 | 004d5130 | 920 | k_log_ddraw | match 920 |  |  |
 | 004d54c8 | 64 | k_unref_right_panel_rects | match 64 |  |  |
 | 004d5508 | 64 | k_hud_dirty_rects | match 64 |  |  |
-| 004d5548 | 24 | k_title_slot_shield | match 20, uncovered 4 |  | rl_ctl.c rl_glue.c rl_glue_globals.h rl_mpnet.c |
+| 004d5548 | 24 | k_title_slot_shield | match 24 |  |  |
 | 004d5560 | 48 | k_option_tab_value_count | match 48 |  |  |
 | 004d5590 | 80 | k_castle_tier_movies | match 80 |  |  |
-| 004d55e0 | 64 | k_dbg_id_skip_lists | uncovered 64 |  | rl_glue_globals.h |
-| 004d5620 | 448 | k_lit_menu_input | match 388, own-copy 60 | `engine_trade_model:.rdata`, `engine_sendsupplies_model:.rdata` |  |
+| 004d55e0 | 64 | k_dbg_id_skip_lists | match 64 |  |  |
+| 004d5620 | 448 | k_lit_menu_input | match 448 |  |  |
 | 004d57e0 | 16 | k_mp_app_guid | match 16 |  |  |
 | 004d57f0 | 400 | k_mp_send_builders | match 400 |  |  |
 | 004d5980 | 400 | k_mp_recv_handlers | match 400 |  |  |
-| 004d5b10 | 96 | k_mp_sync_ranges | match 48, uncovered 48 |  | rl_mpmsg.c rl_mpmsg3.c rl_mpmsg_globals.h |
-| 004d5b70 | 32 | k_unref_sync_bases | uncovered 32 |  |  |
+| 004d5b10 | 96 | k_mp_sync_ranges | match 80, uncovered 16 |  | rl_img_data_globals.c rl_img_data_globals.h rl_mpmsg.c rl_mpmsg3.c rl_mpmsg_globals.h |
+| 004d5b70 | 32 | k_unref_sync_bases | match 32 |  |  |
 | 004d5b90 | 256 | k_mp_packet_size | match 256 |  |  |
 | 004d5c98 | 200 | k_delayed_action_handlers | match 200 |  |  |
 | 004d5d60 | 456 | k_log_net_transport | match 453, uncovered 3 |  | rl_ctl_globals.h rl_glue_globals.h rl_mpmsg.c rl_mpmsg3.c rl_mpmsg3_globals.h rl_mpmsg_globals.h rl_ui4.c rl_ui4_globals.h |
@@ -337,28 +336,28 @@ DERIVED by `tools/data_selfcheck.py` — never hand-edit. The port's definitions
 | 004d5f68 | 36 | k_lit_mp_checksum | match 36 |  |  |
 | 004d5f8c | 120 | k_log_mp_newgame | match 120 |  |  |
 | 004d6004 | 100 | k_lit_mp_save_msgs | match 100 |  |  |
-| 004d6068 | 160 | k_mp_record_names | match 136, uncovered 24 |  | rl_mpmsg3.c rl_mpmsg3_globals.h rl_ui3.c rl_ui3_globals.h |
-| 004d6108 | 512 | k_realm_event_deck | uncovered 512 |  | engine_realm_events.c engine_realm_events.h rl_mpmsg3_globals.h |
-| 004d6308 | 160 | k_pop_birth_rate | uncovered 160 |  | engine_realm.c engine_realm.h |
-| 004d63a8 | 24 | k_pop_death_health | uncovered 24 |  | engine_realm.c engine_realm.h |
-| 004d63c0 | 24 | k_pop_death_season | uncovered 24 |  | engine_realm.c engine_realm.h |
-| 004d63d8 | 208 | k_taxsetting_tally_modifier | own-copy 131, uncovered 77 | `engine_realm:.rdata$k_taxsetting_tally_modifier`, `engine:.rdata$k_rankings_tabs.1` | engine_realm.c |
-| 004d64a8 | 120 | k_tax_approval_tbl | own-copy 120 | `engine_realm:.rdata$k_tax_approval_tbl` |  |
-| 004d6520 | 40 | k_tax_band_threshold | uncovered 40 |  | engine_realm.c |
-| 004d6548 | 24 | k_tax_band_modifier | uncovered 24 |  | engine_realm.c |
-| 004d6560 | 24 | k_stock_a_rate | own-copy 24 | `engine_army_economy:.rdata$k_stock_a_rate` |  |
-| 004d6578 | 448 | k_unref_pct_curve | uncovered 448 |  |  |
-| 004d6738 | 48 | k_supply_table | uncovered 48 |  |  |
+| 004d6068 | 160 | k_mp_record_names | match 160 |  |  |
+| 004d6108 | 512 | k_realm_event_deck | match 512 |  |  |
+| 004d6308 | 160 | k_pop_birth_rate | match 160 |  |  |
+| 004d63a8 | 24 | k_pop_death_health | match 24 |  |  |
+| 004d63c0 | 24 | k_pop_death_season | match 24 |  |  |
+| 004d63d8 | 208 | k_taxsetting_tally_modifier | match 208 |  |  |
+| 004d64a8 | 120 | k_tax_approval_tbl | match 120 |  |  |
+| 004d6520 | 40 | k_tax_band_threshold | match 40 |  |  |
+| 004d6548 | 24 | k_tax_band_modifier | match 24 |  |  |
+| 004d6560 | 24 | k_stock_a_rate | match 24 |  |  |
+| 004d6578 | 448 | k_unref_pct_curve | match 448 |  |  |
+| 004d6738 | 48 | k_supply_table | match 48 |  |  |
 | 004d6768 | 24 | k_workforce_share_pct | match 24 |  |  |
-| 004d6780 | 32 | k_workforce_row_sprite | uncovered 32 |  | rl_ui2_globals.h |
-| 004d67a0 | 104 | k_workforce_cell_colour | uncovered 104 |  | engine_workforce_hud.c |
-| 004d6808 | 40 | k_workforce_row_fill | uncovered 40 |  | engine_workforce_hud.c |
-| 004d6830 | 32 | k_workforce_cell_order | own-copy 28, uncovered 4 | `engine_workforce_hud:.rdata$k_workforce_cell_threshold` |  |
-| 004d6850 | 16 | k_workforce_dual_order_a | own-copy 16 | `engine_workforce_hud:.rdata$k_workforce_small_pos_threshold` |  |
-| 004d6860 | 16 | k_workforce_dual_order_b | own-copy 16 | `engine_workforce_hud:.rdata$k_workforce_small_mag_threshold` |  |
-| 004d6870 | 480 | k_unref_records16 | uncovered 480 |  |  |
-| 004d6a50 | 24 | k_army_state_handlers | uncovered 24 |  |  |
-| 004d6a68 | 16 | k_army_state_handlers_x | uncovered 16 |  |  |
+| 004d6780 | 32 | k_workforce_row_sprite | match 32 |  |  |
+| 004d67a0 | 104 | k_workforce_cell_colour | match 104 |  |  |
+| 004d6808 | 40 | k_workforce_row_fill | match 40 |  |  |
+| 004d6830 | 32 | k_workforce_cell_order | match 32 |  |  |
+| 004d6850 | 16 | k_workforce_dual_order_a | match 16 |  |  |
+| 004d6860 | 16 | k_workforce_dual_order_b | match 16 |  |  |
+| 004d6870 | 480 | k_unref_records16 | match 480 |  |  |
+| 004d6a50 | 24 | k_army_state_handlers | match 24 |  |  |
+| 004d6a68 | 16 | k_army_state_handlers_x | match 16 |  |  |
 | 004d6a78 | 64 | k_army_step_frame_march | match 64 |  |  |
 | 004d6ab8 | 64 | k_army_step_frame_idle | match 64 |  |  |
 | 004d6af8 | 240 | k_map_sheet_names | match 240 |  |  |
@@ -373,29 +372,29 @@ DERIVED by `tools/data_selfcheck.py` — never hand-edit. The port's definitions
 | 004d6f18 | 24 | k_help_para_count | match 24 |  |  |
 | 004d6f30 | 112 | k_mp_msg_popup_rows | match 112 |  |  |
 | 004d6fa0 | 24 | k_hint_report_panel | match 24 |  |  |
-| 004d6fb8 | 72 | k_tooltip_mode | own-copy 69, uncovered 3 | `engine_tooltip:.rdata$k_tooltip_mode`, `engine_labor:.rdata$k_labor_panel_region_grid` | engine_tooltip.c engine_tooltip.h rl_mpnet_globals.h |
+| 004d6fb8 | 72 | k_tooltip_mode | match 72 |  |  |
 | 004d7000 | 148 | k_lit_event_popup | match 148 |  |  |
 | 004d7094 | 32 | s_log_exited_game_flow | match 32 |  |  |
 | 004d70b4 | 284 | k_unref_after_exit_log | match 284 |  |  |
 | 004d71d0 | 256 | k_font_glyph_map | match 256 |  |  |
 | 004d72d0 | 64 | k_unref_perm16x4 | match 64 |  |  |
 | 004d7310 | 576 | k_terr_feature_rules | match 576 |  |  |
-| 004d7550 | 120 | k_bf_rules_kind4 | match 1, own-copy 40, uncovered 79 | `engine_territory:.rdata$FEATURE_TABLE`, `engine_labor:.rdata$k_labor_panel_region_grid` | engine_bf_globals.h engine_bf_setup.c rl_terr_globals.h |
-| 004d75c8 | 72 | k_bf_rules_kind1 | match 1, uncovered 71 |  | engine_bf_globals.h engine_bf_setup.c |
-| 004d7610 | 588 | k_bf_rules_water | match 1, own-copy 89, uncovered 498 | `engine_rate:.rdata$g_engine_rate_lut`, `engine_territory:.rdata$FEATURE_TABLE`, `engine_tooltip:.rdata$k_tooltip_mode` | engine_bf_globals.h engine_bf_setup.c |
-| 004d7860 | 204 | k_bf_rules_kind12 | match 1, own-copy 64, uncovered 139 | `engine_territory:.rdata$FEATURE_TABLE`, `engine_labor:.rdata$k_labor_panel_region_grid` | engine_bf_globals.h engine_bf_setup.c |
+| 004d7550 | 120 | k_bf_rules_kind4 | match 119, uncovered 1 |  | engine_bf_globals.h engine_bf_setup.c rl_img_data_globals.c rl_img_data_globals.h rl_terr_globals.h |
+| 004d75c8 | 72 | k_bf_rules_kind1 | match 71, uncovered 1 |  | engine_bf_globals.h engine_bf_setup.c rl_img_data_globals.c rl_img_data_globals.h |
+| 004d7610 | 588 | k_bf_rules_water | match 575, uncovered 13 |  | engine_bf_globals.h engine_bf_setup.c rl_img_data_globals.c rl_img_data_globals.h |
+| 004d7860 | 204 | k_bf_rules_kind12 | match 203, uncovered 1 |  | engine_bf_globals.h engine_bf_setup.c rl_img_data_globals.c rl_img_data_globals.h |
 | 004d7930 | 588 | k_bf_rules_rubble | match 588 |  |  |
 | 004d7b80 | 512 | k_bf_castle_tiles_stone | match 512 |  |  |
 | 004d7d80 | 512 | k_bf_castle_tiles_other | match 512 |  |  |
 | 004d7f80 | 352 | k_unref_after_castle_tiles | match 352 |  |  |
 | 004d80e0 | 40 | k_terr_block_fill_order | match 40 |  |  |
 | 004d8108 | 768 | k_map_unit_disp | match 768 |  |  |
-| 004d8408 | 384 | k_unref_unit_disp8 | own-copy 195, uncovered 189 | `engine_map_render:.rdata$g_palette_tables` | engine_map_render.c |
+| 004d8408 | 384 | k_unref_unit_disp8 | match 384 |  |  |
 | 004d8588 | 32 | k_bf_dir8_cell_offset | match 32 |  |  |
 | 004d85a8 | 64 | k_workforce_box_origins | match 64 |  |  |
 | 004d85e8 | 56 | k_workforce_cell_offsets | match 56 |  |  |
 | 004d8620 | 344 | k_unref_ramps20 | match 344 |  |  |
-| 004d8778 | 408 | k_conscript_happy_cost | uncovered 408 |  | engine_combat.c engine_combat.h rl_ui2_globals.h |
+| 004d8778 | 408 | k_conscript_happy_cost | match 408 |  |  |
 | 004d8910 | 64 | k_trade_default_price | match 64 |  |  |
 | 004d8950 | 64 | k_unref_price_tail | match 64 |  |  |
 | 004d8990 | 48 | k_weapon_cost | match 48 |  |  |
@@ -409,11 +408,11 @@ DERIVED by `tools/data_selfcheck.py` — never hand-edit. The port's definitions
 | 004d8f58 | 384 | k_scenario_presets_b | match 384 |  |  |
 | 004d90d8 | 48 | k_unref_after_scenarios | match 48 |  |  |
 | 004d9108 | 56 | k_bf_field_sheet_names | match 56 |  |  |
-| 004d9140 | 48 | k_bf_move_state_handlers | uncovered 48 |  | engine_bf_globals.h |
-| 004d9170 | 72 | k_bf_order_handlers | uncovered 72 |  |  |
-| 004d91b8 | 24 | k_bf_stance_field | uncovered 24 |  |  |
-| 004d91d0 | 40 | k_bf_stance_siege_a | uncovered 40 |  |  |
-| 004d91f8 | 48 | k_bf_stance_siege_d | uncovered 48 |  |  |
+| 004d9140 | 48 | k_bf_move_state_handlers | match 48 |  |  |
+| 004d9170 | 72 | k_bf_order_handlers | match 72 |  |  |
+| 004d91b8 | 24 | k_bf_stance_field | match 24 |  |  |
+| 004d91d0 | 40 | k_bf_stance_siege_a | match 40 |  |  |
+| 004d91f8 | 48 | k_bf_stance_siege_d | match 48 |  |  |
 | 004d9228 | 80 | k_bf_music_names | match 80 |  |  |
 | 004d9278 | 768 | k_bf_end_movie_names | match 768 |  |  |
 | 004d9578 | 96 | k_bf_marker_deploy_offsets | match 96 |  |  |
@@ -434,12 +433,12 @@ DERIVED by `tools/data_selfcheck.py` — never hand-edit. The port's definitions
 | 004d9a00 | 40 | k_bf_walk_phase_a | match 40 |  |  |
 | 004d9a28 | 40 | k_bf_walk_phase_b | match 40 |  |  |
 | 004d9a50 | 40 | k_bf_walk_phase_c | match 40 |  |  |
-| 004d9a78 | 40 | k_bf_walk_phase_alt_a | uncovered 40 |  | engine_bf_globals.h |
-| 004d9aa0 | 40 | k_bf_walk_phase_alt_b | uncovered 40 |  |  |
+| 004d9a78 | 40 | k_bf_walk_phase_alt_a | match 40 |  |  |
+| 004d9aa0 | 40 | k_bf_walk_phase_alt_b | match 40 |  |  |
 | 004d9ac8 | 80 | k_bf_shot_frames_b | match 80 |  |  |
 | 004d9b18 | 80 | k_bf_shot_frames_a | match 80 |  |  |
-| 004d9b68 | 80 | k_bf_shot_frames_alt_b | own-copy 30, uncovered 50 | `engine_labor:.rdata$k_labor_panel_region_grid` | engine_bf_globals.h |
-| 004d9bb8 | 80 | k_bf_shot_frames_alt_a | own-copy 67, uncovered 13 | `engine_labor:.rdata$k_labor_panel_region_grid` |  |
+| 004d9b68 | 80 | k_bf_shot_frames_alt_b | match 80 |  |  |
+| 004d9bb8 | 80 | k_bf_shot_frames_alt_a | match 80 |  |  |
 | 004d9c08 | 40 | k_bf_engine7_overlay | match 40 |  |  |
 | 004d9c30 | 64 | k_bf_facing_frames | match 64 |  |  |
 | 004d9c90 | 96 | k_bf_edge_cells_straight | match 96 |  |  |
@@ -451,8 +450,8 @@ DERIVED by `tools/data_selfcheck.py` — never hand-edit. The port's definitions
 | 004d9e88 | 192 | k_lit_bf_setup | match 192 |  |  |
 | 004d9f48 | 264 | k_sys_file_records | match 264 |  |  |
 | 004da050 | 1280 | k_pl8_bank_table | match 1280 |  |  |
-| 004da550 | 2400 | k_bf_sheet_records | match 360, own-copy 649, uncovered 1391 | `engine_armory:.rdata`, `gfx:.rdata`, `main:.rdata` | engine_bf_extern.c engine_bf_globals.h rl_turn_globals.h rl_ui2_globals.h |
-| 004daeb0 | 80 | k_misc_sheet_records | match 64, uncovered 16 |  | engine_bf_extern_globals.h engine_bf_globals.h rl_turn.c rl_turn_globals.h rl_ui2_globals.h |
+| 004da550 | 2400 | k_bf_sheet_records | match 2400 |  |  |
+| 004daeb0 | 80 | k_misc_sheet_records | match 76, uncovered 4 |  | engine_bf_extern_globals.h engine_bf_globals.h rl_img_data_globals.c rl_img_data_globals.h rl_turn.c rl_turn_globals.h rl_ui2_globals.h |
 | 004daf00 | 192 | k_fx_bank_names | match 192 |  |  |
 | 004dafc0 | 272 | k_bf_fx_bank_names | match 272 |  |  |
 | 004db0d0 | 2816 | k_unit_voice_names | match 2816 |  |  |
@@ -465,21 +464,21 @@ DERIVED by `tools/data_selfcheck.py` — never hand-edit. The port's definitions
 | 004dc110 | 112 | k_cfg_start_army | match 112 |  |  |
 | 004dc180 | 80 | k_realm_personality_pref | match 80 |  |  |
 | 004dc1d0 | 16 | k_realm_colour_pair | match 16 |  |  |
-| 004dc1e0 | 80 | k_ai_crown_grant_hi | uncovered 80 |  | engine_army_ai.c rl_skirmish_globals.h |
-| 004dc230 | 80 | k_ai_crown_grant_lo | uncovered 80 |  | engine_army_ai.c |
-| 004dc280 | 16 | k_unref_4dc280 | uncovered 16 |  |  |
+| 004dc1e0 | 80 | k_ai_crown_grant_hi | match 80 |  |  |
+| 004dc230 | 80 | k_ai_crown_grant_lo | match 80 |  |  |
+| 004dc280 | 16 | k_unref_4dc280 | match 16 |  |  |
 | 004dc290 | 208 | k_turn_save_names | match 208 |  |  |
 | 004dc360 | 48 | k_menu_items_1 | match 48 |  |  |
 | 004dc390 | 60 | k_menu_items_2 | match 60 |  |  |
 | 004dc3d0 | 84 | k_menu_items_3 | match 84 |  |  |
 | 004dc428 | 48 | k_menubar_titles | match 48 |  |  |
-| 004dc458 | 120 | k_menu_items_x | uncovered 120 |  | rl_ctl_globals.h rl_ui4_globals.h |
+| 004dc458 | 120 | k_menu_items_x | match 120 |  |  |
 | 004dc4d0 | 72 | k_hs_county_panel | match 72 |  |  |
 | 004dc518 | 24 | k_hs_county_panel_x | match 24 |  |  |
 | 004dc530 | 48 | k_hs_county_panel_b | match 48 |  |  |
 | 004dc560 | 72 | k_hs_army_panel | match 72 |  |  |
 | 004dc5a8 | 72 | k_hs_army_panel_castle | match 72 |  |  |
-| 004dc5f0 | 48 | k_hs_army_hover | uncovered 48 |  | rl_glue_globals.h |
+| 004dc5f0 | 48 | k_hs_army_hover | match 48 |  |  |
 | 004dc620 | 96 | k_hs_hud_topright | match 96 |  |  |
 | 004dc680 | 144 | k_hs_hud_strip | match 144 |  |  |
 | 004dc710 | 120 | k_hs_hud_bottomright | match 120 |  |  |
@@ -501,47 +500,47 @@ DERIVED by `tools/data_selfcheck.py` — never hand-edit. The port's definitions
 | 004dce30 | 288 | k_hs_title_option_grid | match 288 |  |  |
 | 004dcf50 | 480 | k_hs_skirmish_setup | match 480 |  |  |
 | 004dd130 | 480 | k_hs_skirmish_setup_b | match 480 |  |  |
-| 004dd310 | 48 | k_btn_confirm | match 2, uncovered 46 |  | engine_confirm_dialog.c engine_confirm_dialog.h rl_host.c rl_host_globals.h |
+| 004dd310 | 48 | k_btn_confirm | match 40, uncovered 8 |  | engine_confirm_dialog.c engine_confirm_dialog.h rl_host.c rl_host_globals.h rl_img_data_globals.c rl_img_data_globals.h |
 | 004dd340 | 72 | g_arm_overlay_buttons | match 72 |  |  |
-| 004dd388 | 432 | k_btn_split | match 2, uncovered 430 |  | rl_host.c rl_host_globals.h |
-| 004dd538 | 144 | k_btn_send_supplies | match 2, own-copy 142 | `engine_sendsupplies:.data$k_sendsupplies_buttons` |  |
-| 004dd5c8 | 120 | k_btn_x_4dd5c8 | own-copy 26, uncovered 94 | `engine_sendsupplies:.data$k_sendsupplies_buttons` |  |
+| 004dd388 | 432 | k_btn_split | match 425, uncovered 7 |  | rl_host.c rl_host_globals.h rl_img_data_globals.c rl_img_data_globals.h |
+| 004dd538 | 144 | k_btn_send_supplies | match 137, uncovered 7 |  | rl_host.c rl_host_globals.h rl_img_data_globals.c rl_img_data_globals.h |
+| 004dd5c8 | 120 | k_btn_x_4dd5c8 | match 120 |  |  |
 | 004dd640 | 24 | k_btn_castle_builder | match 24 |  |  |
 | 004dd658 | 312 | k_btn_x_4dd658 | match 312 |  |  |
-| 004dd790 | 48 | k_btn_tax | match 2, own-copy 46 | `engine_county_panels:.data$k_county_tax_buttons` |  |
-| 004dd7c0 | 48 | k_btn_rations | match 2, own-copy 46 | `engine_county_panels:.data$k_county_wanted_buttons` |  |
-| 004dd7f0 | 24 | k_btn_x_4dd7f0 | uncovered 24 |  |  |
-| 004dd808 | 48 | k_btn_merchant | match 2, uncovered 46 |  | rl_host.c rl_host_globals.h |
+| 004dd790 | 48 | k_btn_tax | match 40, uncovered 8 |  | engine_county_panels.h rl_glue_globals.h rl_host.c rl_host_globals.h rl_img_data_globals.c rl_img_data_globals.h |
+| 004dd7c0 | 48 | k_btn_rations | match 40, uncovered 8 |  | engine_county_panels.h rl_host.c rl_host_globals.h rl_img_data_globals.c rl_img_data_globals.h |
+| 004dd7f0 | 24 | k_btn_x_4dd7f0 | match 24 |  |  |
+| 004dd808 | 48 | k_btn_merchant | match 41, uncovered 7 |  | rl_host.c rl_host_globals.h rl_img_data_globals.c rl_img_data_globals.h |
 | 004dd838 | 144 | g_trade_buttons | match 144 |  |  |
-| 004dd8c8 | 96 | k_btn_assign | match 2, own-copy 94 | `engine_armory:.data$k_assign_buttons` |  |
+| 004dd8c8 | 96 | k_btn_assign | match 88, uncovered 8 |  | rl_host.c rl_host_globals.h rl_img_data_globals.c rl_img_data_globals.h |
 | 004dd928 | 24 | g_treasury_buttons | match 24 |  |  |
 | 004dd940 | 144 | g_noble_buttons | match 144 |  |  |
-| 004dd9d0 | 96 | k_btn_gift | match 2, own-copy 94 | `engine_diplomacy_action:.data$k_gift_buttons` |  |
-| 004dda30 | 48 | k_btn_diplo_msg | match 2, own-copy 46 | `engine_diplomacy_action:.data$k_msg_buttons` |  |
-| 004dda60 | 48 | k_btn_diplo_b | match 2, own-copy 40, uncovered 6 | `engine_diplomacy_action:.data$k_msg_buttons` | rl_host.c rl_host_globals.h |
+| 004dd9d0 | 96 | k_btn_gift | match 88, uncovered 8 |  | rl_host.c rl_host_globals.h rl_img_data_globals.c rl_img_data_globals.h |
+| 004dda30 | 48 | k_btn_diplo_msg | match 40, uncovered 8 |  | rl_host.c rl_host_globals.h rl_img_data_globals.c rl_img_data_globals.h |
+| 004dda60 | 48 | k_btn_diplo_b | match 40, uncovered 8 |  | rl_host.c rl_host_globals.h rl_img_data_globals.c rl_img_data_globals.h |
 | 004dda90 | 48 | k_btn_popup_0a | match 48 |  |  |
 | 004ddac0 | 48 | k_btn_popup_0b | match 48 |  |  |
 | 004ddaf0 | 48 | k_btn_popup_fa | match 48 |  |  |
 | 004ddb20 | 48 | k_btn_popup_fb | match 48 |  |  |
 | 004ddb50 | 48 | k_btn_popup_11 | match 48 |  |  |
-| 004ddb80 | 48 | k_btn_castle_seal | match 2, uncovered 46 |  | rl_host.c rl_host_globals.h rl_turn_globals.h |
-| 004ddbb0 | 48 | k_btn_battle_prompt | match 2, uncovered 46 |  | rl_host.c rl_host_globals.h |
-| 004ddbe0 | 48 | k_btn_number_box | match 2, uncovered 46 |  | rl_host.c rl_host_globals.h |
-| 004ddc10 | 96 | k_btn_adv_options | match 2, uncovered 94 |  | rl_host.c rl_host_globals.h |
-| 004ddc70 | 72 | k_btn_sound_options | match 2, uncovered 70 |  | rl_host.c rl_host_globals.h rl_ui3.c |
-| 004ddcb8 | 48 | k_btn_display_options | match 2, uncovered 46 |  | rl_host.c rl_host_globals.h rl_ui3.c |
-| 004ddce8 | 144 | k_btn_help_options | match 2, uncovered 142 |  | rl_host.c rl_host_globals.h |
-| 004ddd78 | 96 | k_btn_filelist | match 2, own-copy 94 | `engine_title_render:.data$g_filelist_buttons` |  |
-| 004dddd8 | 48 | k_btn_page13_scroll | match 2, own-copy 32, uncovered 14 | `engine_title_render:.data$g_filelist_buttons`, `engine_army_economy:.data$g_prod_divisor_hi` | rl_host.c rl_host_globals.h |
-| 004dde08 | 264 | k_btn_x_4dde08 | uncovered 264 |  | rl_ui3.c |
-| 004ddf10 | 144 | k_btn_siege_engines | match 2, uncovered 142 |  | rl_host.c rl_host_globals.h |
-| 004ddfa0 | 96 | k_btn_screen68 | match 2, own-copy 22, uncovered 72 | `engine_diplomacy_action:.data$k_gift_buttons` | rl_host.c rl_host_globals.h |
-| 004de000 | 1056 | k_btn_skirmish_custom | match 2, uncovered 1054 |  | rl_host.c rl_host_globals.h |
-| 004de420 | 32 | k_x_4de420 | uncovered 32 |  |  |
-| 004de440 | 16 | k_siege_engine_work | uncovered 16 |  |  |
+| 004ddb80 | 48 | k_btn_castle_seal | match 40, uncovered 8 |  | rl_host.c rl_host_globals.h rl_img_data_globals.c rl_img_data_globals.h rl_turn_globals.h |
+| 004ddbb0 | 48 | k_btn_battle_prompt | match 40, uncovered 8 |  | rl_host.c rl_host_globals.h rl_img_data_globals.c rl_img_data_globals.h |
+| 004ddbe0 | 48 | k_btn_number_box | match 40, uncovered 8 |  | rl_host.c rl_host_globals.h rl_img_data_globals.c rl_img_data_globals.h |
+| 004ddc10 | 96 | k_btn_adv_options | match 88, uncovered 8 |  | rl_host.c rl_host_globals.h rl_img_data_globals.c rl_img_data_globals.h |
+| 004ddc70 | 72 | k_btn_sound_options | match 64, uncovered 8 |  | rl_host.c rl_host_globals.h rl_img_data_globals.c rl_img_data_globals.h rl_ui3.c |
+| 004ddcb8 | 48 | k_btn_display_options | match 40, uncovered 8 |  | rl_host.c rl_host_globals.h rl_img_data_globals.c rl_img_data_globals.h rl_ui3.c |
+| 004ddce8 | 144 | k_btn_help_options | match 136, uncovered 8 |  | rl_host.c rl_host_globals.h rl_img_data_globals.c rl_img_data_globals.h |
+| 004ddd78 | 96 | k_btn_filelist | match 93, uncovered 3 |  | engine_title_render.c rl_cov3.c rl_host.c rl_host_globals.h rl_img_data_globals.c rl_img_data_globals.h |
+| 004dddd8 | 48 | k_btn_page13_scroll | match 44, uncovered 4 |  | rl_host.c rl_host_globals.h rl_img_data_globals.c rl_img_data_globals.h |
+| 004dde08 | 264 | k_btn_x_4dde08 | match 264 |  |  |
+| 004ddf10 | 144 | k_btn_siege_engines | match 137, uncovered 7 |  | rl_host.c rl_host_globals.h rl_img_data_globals.c rl_img_data_globals.h |
+| 004ddfa0 | 96 | k_btn_screen68 | match 88, uncovered 8 |  | rl_host.c rl_host_globals.h rl_img_data_globals.c rl_img_data_globals.h |
+| 004de000 | 1056 | k_btn_skirmish_custom | match 1049, uncovered 7 |  | rl_host.c rl_host_globals.h rl_img_data_globals.c rl_img_data_globals.h |
+| 004de420 | 32 | k_x_4de420 | match 32 |  |  |
+| 004de440 | 16 | k_siege_engine_work | match 16 |  |  |
 | 004de450 | 672 | k_march_troop_sheets | match 672 |  |  |
 | 004de6f0 | 32 | k_march_target_x | match 32 |  |  |
-| 004de710 | 80 | k_casualty_survivors | match 4, uncovered 76 |  | rl_host.c rl_host_globals.h |
+| 004de710 | 80 | k_casualty_survivors | match 80 |  |  |
 | 004de760 | 48 | k_merc_men | match 48 |  |  |
 | 004de790 | 16 | k_merc_class | match 16 |  |  |
 | 004de7a0 | 15 | k_merc_period | match 15 |  |  |
@@ -549,18 +548,18 @@ DERIVED by `tools/data_selfcheck.py` — never hand-edit. The port's definitions
 | 004de7bc | 52 | k_merc_hire_cost | match 52 |  |  |
 | 004de7f0 | 48 | k_merc_wage | match 48 |  |  |
 | 004de820 | 80 | k_merc_band_count | match 80 |  |  |
-| 004de870 | 160 | k_lit_combat_cues | match 16, own-copy 144 | `engine_combat:.rdata`, `rl_link_logic:.rdata` |  |
+| 004de870 | 160 | k_lit_combat_cues | match 160 |  |  |
 | 004de960 | 1800 | g_save_schema | match 1800 |  |  |
 | 004df068 | 36 | k_lit_load_pump | match 36 |  |  |
 | 004df08c | 148 | k_log_mp_preload_wait | match 148 |  |  |
 | 004df120 | 360 | k_lit_save_files | match 360 |  |  |
 | 004df290 | 16 | g_disp_recreating | match 4, uncovered 12 |  | rl_io_globals.h rl_ui3_globals.h |
 | 004df3ac | 252 | k_io_path_literals | match 252 |  |  |
-| 004df4a8 | 224 | k_lit_debug_dumps | match 56, uncovered 168 |  | io_path.c rl_host_globals.h rl_io.c rl_io_globals.h |
-| 004df588 | 37 | s_log_header | own-copy 8, uncovered 29 | `main:.rdata` | rl_main.c |
-| 004df5b0 | 15 | s_wndclass | own-copy 15 | `main:.rdata` |  |
-| 004df5c0 | 7 | s_wndtitle | uncovered 7 |  | rl_main.c |
-| 004df5c8 | 15 | s_wndclass2 | own-copy 15 | `main:.rdata` |  |
+| 004df4a8 | 224 | k_lit_debug_dumps | match 220, uncovered 4 |  | io_path.c rl_host_globals.h rl_img_data_globals.c rl_img_data_globals.h rl_io.c rl_io_globals.h |
+| 004df588 | 37 | s_log_header | match 37 |  |  |
+| 004df5b0 | 15 | s_wndclass | match 15 |  |  |
+| 004df5c0 | 7 | s_wndtitle | match 7 |  |  |
+| 004df5c8 | 15 | s_wndclass2 | match 15 |  |  |
 | 004df5d8 | 480 | k_log_app_shell | match 475, uncovered 5 |  | gfx.h rl_host.c rl_host_globals.h rl_misc_globals.h rl_quit_globals.h rl_ui4.c rl_ui4_globals.h |
 | 004df7b8 | 256 | k_voice_confirm | match 256 |  |  |
 | 004df8b8 | 256 | k_voice_send_supplies | match 256 |  |  |
@@ -568,7 +567,7 @@ DERIVED by `tools/data_selfcheck.py` — never hand-edit. The port's definitions
 | 004dfe18 | 1600 | k_voice_events_2xx | match 1600 |  |  |
 | 004e0458 | 7168 | k_voice_events_kt | match 7168 |  |  |
 | 004e2058 | 272 | k_voice_cues_misc | match 272 |  |  |
-| 004e2168 | 192 | k_voice_battle_result | match 128, own-copy 24, uncovered 40 | `engine_combat:.rdata` | rl_io_globals.h rl_ui2_globals.h |
+| 004e2168 | 192 | k_voice_battle_result | match 188, uncovered 4 |  | rl_img_data_globals.c rl_img_data_globals.h rl_io_globals.h rl_ui2_globals.h |
 | 004e2228 | 104 | k_event_narration_seq | match 104 |  |  |
 | 004e2290 | 560 | k_voice_event_narration | match 560 |  |  |
 | 004e24c0 | 12 | s_intro_movie | match 12 |  |  |
@@ -588,29 +587,29 @@ DERIVED by `tools/data_selfcheck.py` — never hand-edit. The port's definitions
 | 004e3bf0 | 1088 | k_bf_anim_off_z16 | match 1088 |  |  |
 | 004e4030 | 1088 | k_bf_anim_off_z32 | match 1088 |  |  |
 | 004e4470 | 128 | k_bf_effect_jitter | match 128 |  |  |
-| 004e44f0 | 48 | s_log_tilemap_no_data | uncovered 48 |  | engine_battlefield_render.c |
+| 004e44f0 | 48 | s_log_tilemap_no_data | match 48 |  |  |
 | 004e4520 | 16 | s_bf_debug_cell_label | match 16 |  |  |
-| 004e4580 | 24 | g_crt_dbgheap_vars | match 6, own-copy 8, uncovered 10 | `engine:.rdata$k_armory_tab` | rl_crt.c rl_crt_dbgheap.c rl_io_globals.h |
+| 004e4580 | 24 | g_crt_dbgheap_vars | match 18, uncovered 6 |  | rl_crt.c rl_crt_data_globals.c rl_crt_data_globals.h rl_crt_dbgheap.c rl_io_globals.h |
 | 004e4598 | 24 | k_crt_block_use_name_ptrs | match 24 |  |  |
-| 004e45b0 | 16 | g_crt_nlg_destination | uncovered 16 |  | rl_io_globals.h |
-| 004e45c8 | 12 | g_crt_crt0dat_vars | uncovered 12 |  | rl_crt.c rl_crt_dbg.c |
-| 004e45d8 | 56 | g_crt_dbgrpt_vars | own-copy 15, uncovered 41 | `engine:.rdata$k_rankings_tabs.1` | rl_crt_dbg.c |
+| 004e45b0 | 16 | g_crt_nlg_destination | match 16 |  |  |
+| 004e45c8 | 12 | g_crt_crt0dat_vars | match 12 |  |  |
+| 004e45d8 | 56 | g_crt_dbgrpt_vars | match 56 |  |  |
 | 004e4610 | 8 | g_crt_alloc_hook | match 8 |  |  |
-| 004e4618 | 2068 | g_crt_sbh_region0 | uncovered 2068 |  | rl_crt.c rl_crt_dbgheap.c rl_io_globals.h |
-| 004e4e2c | 12 | g_crt_sbh_vars | uncovered 12 |  | rl_crt.c rl_crt_dbgheap.c |
-| 004e4e38 | 8 | g_crt_pctype | uncovered 8 |  | rl_crt.c rl_crt_dbgheap.c rl_crt_env.c |
-| 004e4e40 | 514 | _ctype | uncovered 514 |  | rl_crt.c |
-| 004e5044 | 12 | g_crt_nls_vars | uncovered 12 |  | rl_crt.c rl_crt_dbgheap.c rl_crt_env.c |
-| 004e5050 | 368 | k_crt_errtable | uncovered 368 |  | rl_crt.c |
-| 004e51c0 | 152 | g_crt_tz_vars | uncovered 152 |  | rl_crt.c |
-| 004e5258 | 36 | g_crt_tz_dst_cache | uncovered 36 |  | rl_crt.c |
-| 004e52a4 | 12 | k_crt_nullstr_ptrs | uncovered 12 |  | rl_crt.c |
-| 004e52c8 | 8 | g_crt_eh_hooks | uncovered 8 |  |  |
-| 004e53f0 | 248 | k_crt_mbctype_tables | uncovered 248 |  | rl_crt.c |
-| 004e54e8 | 140 | g_crt_xcpt_act_tab | uncovered 140 |  | rl_crt_dbg.c |
-| 004e5580 | 8 | k_crt_badioinfo | uncovered 8 |  | rl_crt_dbg.c |
-| 004e5588 | 144 | k_crt_rterrs | uncovered 144 |  | rl_crt_dbg.c |
-| 004e5670 | 52 | k_crt_lpdays | own-copy 8, uncovered 44 | `game_init:.rdata$k_cfg_gold_0x4dbc18` | rl_crt.c |
-| 004e56a8 | 56 | k_crt_days | own-copy 8, uncovered 48 | `game_init:.rdata$k_cfg_gold_0x4dbc18` | rl_crt.c |
-| 004e56e0 | 640 | g_crt_iob | uncovered 640 |  | rl_crt.c rl_crt_dbg.c |
-| 004e5970 | 24 | k_crt_cfltcvt_tab | uncovered 24 |  | rl_crt.c |
+| 004e4618 | 2068 | g_crt_sbh_region0 | match 2068 |  |  |
+| 004e4e2c | 12 | g_crt_sbh_vars | match 12 |  |  |
+| 004e4e38 | 8 | g_crt_pctype | match 8 |  |  |
+| 004e4e40 | 514 | _ctype | match 514 |  |  |
+| 004e5044 | 12 | g_crt_nls_vars | match 12 |  |  |
+| 004e5050 | 368 | k_crt_errtable | match 368 |  |  |
+| 004e51c0 | 152 | g_crt_tz_vars | match 152 |  |  |
+| 004e5258 | 36 | g_crt_tz_dst_cache | match 36 |  |  |
+| 004e52a4 | 12 | k_crt_nullstr_ptrs | match 12 |  |  |
+| 004e52c8 | 8 | g_crt_eh_hooks | match 8 |  |  |
+| 004e53f0 | 248 | k_crt_mbctype_tables | match 248 |  |  |
+| 004e54e8 | 140 | g_crt_xcpt_act_tab | match 140 |  |  |
+| 004e5580 | 8 | k_crt_badioinfo | match 8 |  |  |
+| 004e5588 | 144 | k_crt_rterrs | match 144 |  |  |
+| 004e5670 | 52 | k_crt_lpdays | match 52 |  |  |
+| 004e56a8 | 56 | k_crt_days | match 56 |  |  |
+| 004e56e0 | 640 | g_crt_iob | match 640 |  |  |
+| 004e5970 | 24 | k_crt_cfltcvt_tab | match 24 |  |  |

@@ -70,5 +70,17 @@ column lists source files that spell a VA inside each uncovered row.
   35,252 under a matching aliased definition, 3,035 found under another port name, **8,299 uncovered** (140 rows; 112 of
   them have their VA spelled in `src/` — largest: the CRT's sbh region / iob / ctype / message tables, k_bf_sheet_records,
   the rl_host button tables). 195 VA ranges have two aliased definitions (DUP / NEIGHBOUR blocks).
+- **Definitions for the uncovered rows (2026-11-17, `tools/gen_data_defs.py`):** `data_selfcheck.py --nodef-json` dumps the
+  catalog bytes no aliased definition covers; the generator turns each run into a definition from the exe (a whole row
+  takes its catalog name unless src/ already uses it — then `g_rl_<va>`, as for a partial run; padding at a partial
+  run's ends dropped; `char[]` literals for char rows, `uint32_t` / `uint16_t` / `uint8_t` arrays otherwise; `.rdata` →
+  const) plus the rhost alias rows: `src/rl_crt_data_globals.c` (41: the CRT's message / assert-file strings, sbh
+  region 0, `_iob`, `_ctype`, errtable, tz / mbctype / xcpt tables, init / cfltcvt pointer tables) and
+  `src/rl_img_data_globals.c` (123: k_bf_sheet_records, the gfx blit error log, the rl_host button tables, the LZH
+  tables, battlefield rule / shot-frame tables, debug literals …). Aliases `rh_rl_{crt,img}_data_globals_alias.h`
+  (in rh_hooks_rl_crt.c / rh_hooks_rl_main.c); rhost.exe's .text / .data / .rdata byte-identical (symbols only).
+  **Now: 1932 aliased definitions, 0 differ; catalog non-zero bytes 46,559 / 46,586 matched — the 27 left are
+  k_pe_debug_directory** (linker metadata, never read; left out on purpose). Ports still read most of these by VA
+  (rl_crt.c's G_ macros, rl_host's button tables); the names exist for the image, not yet for the code.
 - Pointer slots in the port's copies are raw retail VAs (the generator copies bytes): valid because the standalone
   places data at retail's VAs and thunks every retail code entry — the criterion is byte equality, as checked.

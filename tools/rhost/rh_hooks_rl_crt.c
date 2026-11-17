@@ -17,6 +17,9 @@
  * SetUnhandledExceptionFilter keeps the filter host-side (not rolled back), so a second run returns the first's. */
 #include "rh_port.h"
 #include "rl_crt.h"
+#include "rh_rl_crt_data_globals_alias.h"
+
+__asm__(RH_RL_CRT_DATA_GLOBALS_ALIASES);   /* src/rl_crt_data_globals.h at retail's VAs (the CRT reads them by VA; the names are for the data image) */
 
 #define RH_TABLE RH_HOOKS_RL_CRT
 extern hook_t RH_HOOKS_RL_CRT[];
