@@ -186,6 +186,12 @@ def main():
     ap.add_argument('--exe', default=DL.DEF_EXE if os.path.exists(DL.DEF_EXE) else DL.ALT_EXE)
     ap.add_argument('--list', action='store_true', help='print every diff / ptr-diff span')
     ap.add_argument('--jobs', type=int, default=8)
+    ap.add_argument('--compose', metavar='PATH',
+                    help='write the data image composed from the port\'s definitions (OL2DATA1: .rdata + .data, each '
+                         'whole mapped range; the rest zero) and compare it with the exe\'s mapped sections')
+    ap.add_argument('--strict', action='store_true',
+                    help='with --compose: exit 1 when the image differs from the exe outside COMPOSE_MAY_DIFFER')
+    ap.add_argument('--no-md', action='store_true', help='do not rewrite docs/data-selfcheck.md')
     ap.add_argument('--nodef-json', metavar='PATH',
                     help='write the catalog bytes no aliased definition covers, as [va, len, row name] runs (JSON)')
     a = ap.parse_args()
@@ -232,6 +238,7 @@ def main():
     overlaps = []
     diffs = []         # (name, va, n, kind)
     sym_rows = []      # (name, va, size, Counter)
+    comp = {}          # VA -> the port's byte (--compose); relocated slots: the resolved retail value (ptr-ok only)
 
     for name, va in sorted(aliases.items(), key=lambda t: t[1]):
         if name not in defs:
@@ -293,6 +300,8 @@ def main():
                         st = 'ptr-code' if (rv is not None and v in relocs and is_code(rv)) else 'ptr-diff'
                 for j in range(4):
                     _mark(status, owner, overlaps, va + k + j, st, name)
+                    if st == 'ptr-ok':
+                        comp[va + k + j] = (want >> (8 * j)) & 0xff
                 cnt[st] += 4
                 if st.endswith('diff'):
                     diffs.append((name, v, 4, st + ' -> ' + tname))
@@ -306,6 +315,9 @@ def main():
             elif img.section_of(v) == '.idata':
                 st = 'import'
             _mark(status, owner, overlaps, v, st, name)
+            if v in comp and comp[v] != mb:
+                sys.exit('compose: two definitions disagree at %08x (%s)' % (v, name))
+            comp[v] = mb
             cnt[st] += 1
             if st == 'diff':
                 if diffs and diffs[-1][0] == name and diffs[-1][3] == 'diff' and diffs[-1][1] + diffs[-1][2] == v:
@@ -416,16 +428,80 @@ def main():
                 i = j
         with open(a.nodef_json, 'w') as f:
             json.dump(runs, f)
-    write_md(img, a.exe, sym_rows, rows, tot, nz_tot, diffs, overlaps, len(aliases), len(objs))
+    compose_res = compose(img, comp, catalog, a.compose) if a.compose else None
+    if not a.no_md:
+        write_md(img, a.exe, sym_rows, rows, tot, nz_tot, diffs, overlaps, len(aliases), len(objs), compose_res)
     print('symbols checked %d; catalog bytes %d: %s' % (len(sym_rows), sum(tot.values()),
           ', '.join('%s %d' % kv for kv in tot.most_common())))
     print('non-zero catalog bytes %d: %s' % (sum(nz_tot.values()), ', '.join('%s %d' % kv for kv in nz_tot.most_common())))
     print('diff spans %d; overlapping definitions %d; names defined twice %d' % (len(diffs), len(overlaps), len(dupdefs)))
+    if a.strict and compose_res:
+        bad = [sp for r in compose_res for sp in r[5] if sp[2] not in COMPOSE_MAY_DIFFER]
+        if bad:
+            sys.exit('compose --strict: %d span(s) differ from the exe outside %s (first %08x +%d %s)'
+                     % (len(bad), sorted(COMPOSE_MAY_DIFFER), *bad[0]))
     if a.list:
         for n, v, ln, k in diffs:
             print('  %08x +%-5d %-14s %s' % (v, ln, n, k))
         for v, n1, n2 in overlaps[:200]:
             print('  overlap %08x %s / %s' % (v, n1, n2))
+
+
+COMPOSE_SECS = ('.rdata', '.data')   # the sections the port image replaces (.idata / .rsrc / headers: still the exe's)
+COMPOSE_MAY_DIFFER = {'k_pe_debug_directory'}   # catalog rows the image leaves zero on purpose (linker metadata, never read)
+
+
+def compose(img, comp, catalog, path):
+    """The port's data image: each COMPOSE_SECS section over its whole mapped range (VirtualSize rounded up to the
+    section alignment, as retail_map maps it), the port's bytes where a definition covers a VA, zero elsewhere. Compared
+    with what retail_map puts there from the exe (the file's raw bytes up to that range, zero past them). Format
+    (little endian): 'OL2DATA1', u32 n, n x (char name[8], u32 va, u32 len, u8 bytes[len])."""
+    al = 0x1000
+    out = [b'OL2DATA1', struct.pack('<I', len(COMPOSE_SECS))]
+    res = []          # (section, va, len, defined bytes, differing bytes, [(va, n, row)])
+    cat_at = sorted((c[0], c[0] + c[1], c[2]) for c in catalog)
+    cat_lo = [c[0] for c in cat_at]
+
+    def row_of(v):
+        i = bisect.bisect_right(cat_lo, v) - 1
+        return cat_at[i][2] if i >= 0 and cat_at[i][0] <= v < cat_at[i][1] else '-'
+    for nm in COMPOSE_SECS:
+        _, va, vs, rs, rp = img.sec[nm]
+        ln = (vs + al - 1) & ~(al - 1)
+        exe = bytearray(ln)
+        raw = min(rs, ln)
+        exe[:raw] = img.raw[rp:rp + raw]
+        mine = bytearray(ln)
+        n_def = 0
+        for i in range(ln):
+            b = comp.get(va + i)
+            if b is not None:
+                mine[i] = b
+                n_def += 1
+        spans = []
+        for i in range(ln):
+            if mine[i] != exe[i]:
+                if spans and spans[-1][0] + spans[-1][1] == va + i:
+                    spans[-1][1] += 1
+                else:
+                    spans.append([va + i, 1, row_of(va + i)])
+        res.append((nm, va, ln, n_def, sum(s[1] for s in spans), spans))
+        out += [nm.encode().ljust(8, b'\0'), struct.pack('<II', va, ln), bytes(mine)]
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    tmp = path + '.%d.tmp' % os.getpid()
+    with open(tmp, 'wb') as f:
+        f.write(b''.join(out))
+    os.replace(tmp, path)
+    for nm, va, ln, n_def, n_diff, spans in res:
+        print('compose %-6s %08x..%08x: %d bytes defined by the port, %d differ from the exe in %d spans'
+              % (nm, va, va + ln, n_def, n_diff, len(spans)))
+        allowed = [sp for sp in spans if sp[2] in COMPOSE_MAY_DIFFER]
+        if allowed:
+            print('  %d byte(s) in %s (left zero on purpose)' % (sum(sp[1] for sp in allowed), sorted({sp[2] for sp in allowed})))
+        for v, n, r in [sp for sp in spans if sp[2] not in COMPOSE_MAY_DIFFER][:20]:
+            print('  %08x +%-5d %s' % (v, n, r))
+    print('compose: wrote %s' % path)
+    return res
 
 
 def _mark(status, owner, overlaps, va, st, name):
@@ -440,7 +516,7 @@ def _mark(status, owner, overlaps, va, st, name):
     status[va] = st
 
 
-def write_md(img, exe, sym_rows, rows, tot, nz_tot, diffs, overlaps, n_alias, n_obj):
+def write_md(img, exe, sym_rows, rows, tot, nz_tot, diffs, overlaps, n_alias, n_obj, compose_res=None):
     L = []
     w = L.append
     w('# Data self-check — the port\'s own copies of retail\'s data vs Lords2.exe')
@@ -458,6 +534,15 @@ def write_md(img, exe, sym_rows, rows, tot, nz_tot, diffs, overlaps, n_alias, n_
         w('| %s | %d | %d |' % (k, tot.get(k, 0), nz_tot.get(k, 0)))
     w('| **total** | %d | %d |' % (sum(tot.values()), sum(nz_tot.values())))
     w('')
+    if compose_res:
+        w('## The composed image (`--compose`) vs the exe\'s mapped sections')
+        w('')
+        w('| section | range | port-defined bytes | differ | differing spans (catalog row) |')
+        w('|---|---|---:|---:|---|')
+        for nm, va, ln, n_def, n_diff, spans in compose_res:
+            w('| %s | %08x..%08x | %d | %d | %s |' % (nm, va, va + ln, n_def, n_diff,
+                                                   ', '.join('%08x +%d %s' % tuple(s) for s in spans[:12])))
+        w('')
     bad = [s for s in sym_rows if any(k.endswith('diff') for k in s[3])]
     w('## Port definitions that differ from the exe (%d)' % len(bad))
     w('')

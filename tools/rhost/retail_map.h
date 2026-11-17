@@ -17,7 +17,7 @@
     __attribute__((aligned(4096))) char g_retail_hole[0x480000];
 
 /* every byte range a map took from the FILE (the standalone's audit: none may be code) */
-typedef struct { char name[9]; uint32_t va, len, ch; int copied; } retail_range_t;
+typedef struct { char name[9]; uint32_t va, len, ch; int copied, port; } retail_range_t;   /* port: from --data-image */
 #define RETAIL_MAX_RANGES 16
 typedef struct {
     uint8_t *base;
@@ -41,8 +41,10 @@ static void __cdecl retail_unresolved_import(void)
 }
 
 /* data_only (--standalone): the PE headers + every NON-code section; each code section (rounded up to whole pages: the
- * GOG patch's code lies past .text's VirtualSize) is 0xCC — never a byte of it read from the file */
-static int retail_map(const char *path, retail_image_t *out, int data_only)
+ * GOG patch's code lies past .text's VirtualSize) is 0xCC — never a byte of it read from the file.
+ * port_va[n_port] (--data-image): sections that start at these VAs are not read from the file either (left zero: the
+ * caller copies the port's image there; .port = 1, .copied = 0) */
+static int retail_map(const char *path, retail_image_t *out, int data_only, const uint32_t *port_va, int n_port)
 {
     FILE *f = fopen(path, "rb");
     if (!f) { fprintf(stderr, "open %s failed\n", path); return -1; }
@@ -67,7 +69,7 @@ static int retail_map(const char *path, retail_image_t *out, int data_only)
     memcpy(base, file, nt->OptionalHeader.SizeOfHeaders);
     out->nr = 0;
     retail_range_t *hr = &out->r[out->nr++];
-    snprintf(hr->name, sizeof hr->name, "(hdr)"); hr->va = ib; hr->len = nt->OptionalHeader.SizeOfHeaders; hr->ch = 0; hr->copied = 1;
+    snprintf(hr->name, sizeof hr->name, "(hdr)"); hr->va = ib; hr->len = nt->OptionalHeader.SizeOfHeaders; hr->ch = 0; hr->copied = 1; hr->port = 0;
     IMAGE_SECTION_HEADER *sec = IMAGE_FIRST_SECTION(nt);
     for (int i = 0; i < nt->FileHeader.NumberOfSections; i++) {
         if (out->nr < RETAIL_MAX_RANGES) {
@@ -77,6 +79,10 @@ static int retail_map(const char *path, retail_image_t *out, int data_only)
             r->va = ib + sec[i].VirtualAddress; r->ch = sec[i].Characteristics;
             r->len = (sec[i].Misc.VirtualSize + al - 1) & ~(al - 1);
             r->copied = !(data_only && RETAIL_SEC_CODE(sec[i].Characteristics));
+            r->port = 0;
+            for (int k = 0; k < n_port; k++)
+                if (port_va[k] == r->va && !RETAIL_SEC_CODE(sec[i].Characteristics)) { r->port = 1; r->copied = 0; }
+            if (r->port) continue;
             if (!r->copied) { memset(base + sec[i].VirtualAddress, 0xCC, r->len); continue; }
         }
         /* the loader maps whole pages: raw bytes past VirtualSize but inside its last page are code too

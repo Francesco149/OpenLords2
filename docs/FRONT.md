@@ -204,10 +204,13 @@
    another port name, **8,299 uncovered** (140 rows). **2026-11-17 later: every catalog byte has a definition** —
    `tools/gen_data_defs.py` from `data_selfcheck.py --nodef-json` → `src/rl_crt_data_globals.c` (41) +
    `src/rl_img_data_globals.c` (123) + rhost aliases (rhost.exe code / data unchanged): 1932 definitions, 0 differ,
-   non-zero catalog bytes 46,559 / 46,586 matched (27 = the PE debug directory, never read). Next: an image built
-   from the port's copies (every aliased definition at its VA, the rest zero), compared with the exe's sections
-   (`data_selfcheck.py` composes it) — then the standalone maps that image instead of the exe's data sections (the
-   loader still needs the exe's .idata / resources: those are the next gap).
+   non-zero catalog bytes 46,559 / 46,586 matched (27 = the PE debug directory, never read). **2026-11-17 later: the
+   standalone runs on the port's own data** — `data_selfcheck.py --compose F --strict` builds .rdata + .data from the
+   port's definitions (rest zero; = the exe but the 27 debug-directory bytes, anything else fails), rhost
+   `--data-image F` maps them instead of the exe's (audit: `range … port-image`, checksum at the seal), `rhost.py
+   --port-data`: **standalone 121/121 = pure retail** (wine); the pre-commit gate's standalone half uses it. Still from
+   the exe: the PE headers, .idata (the loader's import table), .rsrc (the MP dialogs: DialogBoxParamA 0x81 / 0x6c /
+   0x82 / 0x74) and .reloc (copied, unused) — the next gaps toward "loads nothing".
 9. ~~**Port build `-std=gnu11`**~~ — done 2026-11-17: retail has no x87 code (IDA export: 0 FP mnemonics), the port
    none either; all 213 src modules compile to identical code under c11 / gnu11, rhost.exe byte-identical; src / tests
    Makefiles → gnu11.

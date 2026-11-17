@@ -188,6 +188,21 @@ def rhost_args(a, run_win, trace_win, meta):
     return args
 
 
+PORT_DATA = "rl_data.img"
+_PORT_DATA_DONE = None
+
+
+def port_data_image():
+    """build/rl_data.img: the port's .rdata / .data composed from its definitions (once per process)"""
+    global _PORT_DATA_DONE
+    if not _PORT_DATA_DONE:
+        out = os.path.join(BUILD, PORT_DATA)
+        sh([os.path.join(ROOT, "tools", "dev"), "python3", os.path.join(ROOT, "tools", "data_selfcheck.py"),
+            "--compose", out, "--strict", "--no-md", "--jobs", "16"])
+        _PORT_DATA_DONE = out
+    return _PORT_DATA_DONE
+
+
 def make_batch(a, runs, tag, root_local=None):
     """runs: list of (run_name, trace_path|None, meta).  Writes the batch dir + go.ps1 (Windows) / argv.json."""
     stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -202,6 +217,8 @@ def make_batch(a, runs, tag, root_local=None):
     # the batch runs its OWN copy of the exe: a rebuild (another agent, the next pass) never swaps it mid-batch;
     # a multi-batch command (verify) pins one exe for all its batches
     shutil.copy2(getattr(a, "exe_pin", None) or os.path.join(BUILD, "rhost.exe"), os.path.join(bdir, WEXE))
+    if getattr(a, "port_data", False):
+        shutil.copy2(port_data_image(), os.path.join(bdir, PORT_DATA))
     lines = ["$ErrorActionPreference = 'Continue'", f"$J = {max(1, a.jobs)}", "$procs = @()"]
     for name, trace, meta in runs:
         rdir = os.path.join(bdir, name)
@@ -218,6 +235,8 @@ def make_batch(a, runs, tag, root_local=None):
         if getattr(a, "coverage_file", None):
             shutil.copy(a.coverage_file, os.path.join(rdir, "coverage_in.txt"))
         args = rhost_args(a, run_win, trace_win, meta)
+        if getattr(a, "port_data", False) and "--standalone" in args:
+            args += ["--data-image", f"{WROOT}\\runs\\{batch}\\{PORT_DATA}"]
         if meta.get("_probe"):                   # rhost.py probe: the synthetic-call list (rh_hooks.c --probe)
             shutil.copy(meta["_probe"], os.path.join(rdir, "probe.txt"))
             args += ["--probe", f"{run_win}\\probe.txt"]
@@ -1198,6 +1217,9 @@ def main():
         sp.add_argument("--target", choices=("win", "wine", "bunker"), default=os.environ.get("RHOST_TARGET", "win"),
                         help="bunker: headless under wine on the NixOS box (run / snap-check / corpus --check), tools/bunker/README.md")
         sp.add_argument("--extra")
+        sp.add_argument("--port-data", dest="port_data", action="store_true",
+                        help="--standalone runs map .rdata / .data from the port's own composed image (rhost --data-image; "
+                             "tools/data_selfcheck.py --compose), not from the exe")
     sub.add_parser("build").set_defaults(fn=cmd_build)
     sub.add_parser("stage").set_defaults(fn=cmd_stage)
     sub.add_parser("setup").set_defaults(fn=cmd_setup)

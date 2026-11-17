@@ -682,7 +682,7 @@ static void usage(void)
                     "  [--dump-at F,..|end] [--shot-at F,..|end] [--shot-every N] [--fb-hash] [--hash-every N] [--log-every N]\n"
                     "  [--tail N] [--step-ms N] [--vbase MS] [--creep-after N] [--show] [--scale N] [--realtime] [--movies]\n"
                     "  [--hook SPEC] [--shadow-full] [--shadow-media] [--shadow-all] [--shadow-poison VA] [--shadow-poison-px X,Y] [--coverage F] [--watch VA,..] [--trap VA,..] [--watch-write VA[@F],..] [--bot HOST:PORT] [--out-trace F]\n"
-                    "  [--log-files] [--log-heap] [--log-input] [--log-dd] [--log-ds] [--log-win]\n");
+                    "  [--log-files] [--log-heap] [--log-input] [--log-dd] [--log-ds] [--log-win] [--standalone [--data-image F]]\n");
     ExitProcess(2);
 }
 static void parse_list(const char *s, uint32_t *out, int *n, int max)
@@ -726,6 +726,7 @@ static void parse(int argc, char **argv)
         else if (!strcmp(a, "--realtime")) O.realtime = 1;
         else if (!strcmp(a, "--movies")) O.movies = 1;
         else if (!strcmp(a, "--standalone")) O.standalone = 1;
+        else if (!strcmp(a, "--data-image")) O.data_image = ARG();
         else if (!strcmp(a, "--hook")) O.hooks = ARG();
         else if (!strcmp(a, "--probe")) O.probe = ARG();
         else if (!strcmp(a, "--shadow-full")) O.shadow_full = 1;
@@ -840,6 +841,54 @@ static LONG CALLBACK sa_veh(EXCEPTION_POINTERS *e)
         rh_fatal("standalone: execution of mapped game DATA at %08x (DEP) frame %u", at, g_frame);
     return EXCEPTION_CONTINUE_SEARCH;
 }
+/* --data-image: the port's own .rdata / .data (tools/data_selfcheck.py --compose: the bytes of the port's definitions
+ * at their VAs, zero elsewhere). retail_map leaves those sections zero (never read from the exe); di_place copies the
+ * image in; the audit records its size / checksum and that memory = the image at the seal. Format: 'OL2DATA1', u32 n,
+ * n x (char name[8], u32 va, u32 len, bytes[len]). */
+#define DI_MAX 8
+static struct { int n; char name[DI_MAX][9]; uint32_t va[DI_MAX], len[DI_MAX], sum[DI_MAX]; uint8_t *p[DI_MAX]; char path[MAX_PATH]; } g_di;
+static uint32_t di_fnv(const uint8_t *p, uint32_t n)
+{
+    uint32_t h = 2166136261u;
+    for (uint32_t i = 0; i < n; i++) h = (h ^ p[i]) * 16777619u;
+    return h;
+}
+static void di_load(const char *path)
+{
+    GetFullPathNameA(path, sizeof g_di.path, g_di.path, NULL);
+    FILE *f = fopen(g_di.path, "rb");
+    if (!f) rh_fatal("--data-image: cannot open %s", g_di.path);
+    char mg[8]; uint32_t n;
+    if (fread(mg, 1, 8, f) != 8 || memcmp(mg, "OL2DATA1", 8) || fread(&n, 4, 1, f) != 1 || !n || n > DI_MAX)
+        rh_fatal("--data-image: %s is not an OL2DATA1 image", g_di.path);
+    for (uint32_t i = 0; i < n; i++) {
+        uint32_t hd[2];
+        if (fread(g_di.name[i], 1, 8, f) != 8 || fread(hd, 4, 2, f) != 2) rh_fatal("--data-image: %s truncated", g_di.path);
+        g_di.name[i][8] = 0; g_di.va[i] = hd[0]; g_di.len[i] = hd[1];
+        if (hd[0] < RT_IMG_LO || hd[1] > RT_IMG_HI - hd[0]) rh_fatal("--data-image: section %s %08x+%x outside the image", g_di.name[i], hd[0], hd[1]);
+        g_di.p[i] = malloc(hd[1]);
+        if (fread(g_di.p[i], 1, hd[1], f) != hd[1]) rh_fatal("--data-image: %s truncated", g_di.path);
+        g_di.sum[i] = di_fnv(g_di.p[i], hd[1]);
+    }
+    fclose(f);
+    g_di.n = (int)n;
+}
+static void di_place(const retail_image_t *img)
+{
+    for (int i = 0; i < g_di.n; i++) {
+        int ok = 0;
+        for (int r = 0; r < img->nr; r++)
+            if (img->r[r].port && img->r[r].va == g_di.va[i]) {
+                if (img->r[r].len != g_di.len[i] || strcmp(img->r[r].name, g_di.name[i]))
+                    rh_fatal("--data-image: %s %08x+%x does not fit the exe's %s +%x", g_di.name[i], g_di.va[i], g_di.len[i],
+                             img->r[r].name, img->r[r].len);
+                ok = 1;
+            }
+        if (!ok) rh_fatal("--data-image: %s %08x is not a data section of the exe", g_di.name[i], g_di.va[i]);
+        memcpy((void *)(uintptr_t)g_di.va[i], g_di.p[i], g_di.len[i]);
+        rh_log("data-image: %s %08x..%08x from %s (fnv %08x)\n", g_di.name[i], g_di.va[i], g_di.va[i] + g_di.len[i], g_di.path, g_di.sum[i]);
+    }
+}
 /* sealed before the first port instruction runs: the code range (INT3 + the thunks) execute / read, everything taken
  * from the file read / write and never executable; the audit re-derives every claim from memory and from the file and
  * a failed audit refuses to run */
@@ -858,7 +907,16 @@ static void sa_seal(const char *exe_abs, const retail_image_t *img)
     for (int i = 0; i < img->nr; i++) {
         const retail_range_t *r = &img->r[i];
         sa_audit("range %-8s %08x..%08x ch %08x %s\n", r->name, r->va, r->va + r->len, r->ch,
-                 r->copied ? "copied" : "CODE-not-copied");
+                 r->copied ? "copied" : r->port ? "port-image" : "CODE-not-copied");
+        if (r->port) {
+            int k = 0;
+            while (k < g_di.n && g_di.va[k] != r->va) k++;
+            if (k == g_di.n) { sa_audit("FAIL %s has no port image\n", r->name); bad++; continue; }
+            uint32_t now = di_fnv((const uint8_t *)(uintptr_t)r->va, r->len);
+            sa_audit("port_image %-8s %08x..%08x from %s fnv %08x memory %08x%s\n", r->name, r->va, r->va + r->len,
+                     g_di.path, g_di.sum[k], now, now == g_di.sum[k] ? "" : " FAIL");
+            bad += now != g_di.sum[k];
+        }
         if (r->copied && RETAIL_SEC_CODE(r->ch)) { sa_audit("FAIL copied a code section %s\n", r->name); bad++; }
     }
     /* the code range: INT3 everywhere but the thunks */
@@ -873,7 +931,7 @@ static void sa_seal(const char *exe_abs, const retail_image_t *img)
     }
     uint32_t int3 = 0, other = 0, notcopied = 0;
     for (int r = 0; r < img->nr; r++) {
-        if (img->r[r].copied) continue;
+        if (img->r[r].copied || img->r[r].port) continue;
         const uint8_t *code = (const uint8_t *)(uintptr_t)img->r[r].va;
         notcopied += img->r[r].len;
         for (uint32_t i = 0; i < img->r[r].len; i++) {
@@ -970,7 +1028,10 @@ int main(int argc, char **argv)
     if (!SetCurrentDirectoryA(g_gamedir_abs)) rh_fatal("cannot cd to %s", g_gamedir_abs);
     retail_image_t img;
     if (O.standalone && (O.coverage || g_ntrap)) rh_fatal("--standalone maps no retail code: nothing to cover / trap");
-    if (retail_map(exe_abs, &img, O.standalone)) rh_fatal("map %s failed", exe_abs);
+    if (O.data_image && !O.standalone) rh_fatal("--data-image needs --standalone");
+    if (O.data_image) di_load(O.data_image);
+    if (retail_map(exe_abs, &img, O.standalone, g_di.va, g_di.n)) rh_fatal("map %s failed", exe_abs);
+    if (O.data_image) di_place(&img);
     layout_from_pe();
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
     SetUnhandledExceptionFilter(rh_crash_filter);

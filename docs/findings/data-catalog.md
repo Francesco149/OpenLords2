@@ -82,5 +82,12 @@ column lists source files that spell a VA inside each uncovered row.
   **Now: 1932 aliased definitions, 0 differ; catalog non-zero bytes 46,559 / 46,586 matched — the 27 left are
   k_pe_debug_directory** (linker metadata, never read; left out on purpose). Ports still read most of these by VA
   (rl_crt.c's G_ macros, rl_host's button tables); the names exist for the image, not yet for the code.
+- **The composed image (2026-11-17, `data_selfcheck.py --compose F --strict`, OL2DATA1):** .rdata 0x4d0000..0x4d2000 +
+  .data 0x4d2000..0x5cf000 (whole mapped ranges, .bss included) from the port's definitions, zero elsewhere: 4512 + 984,538
+  port-defined bytes; differs from what retail_map maps from the exe only in `k_pe_debug_directory` (27 B,
+  `COMPOSE_MAY_DIFFER`; `--strict` fails on anything else). rhost `--standalone --data-image F` maps it instead of the
+  exe's sections (never read from the file; audit `port_image … fnv` = memory at the seal): **121/121 scenarios = pure
+  retail** (wine, `rhost.py standalone --port-data`) — so no game code reads the debug directory either. Gate:
+  pre-commit's standalone half runs `--port-data`.
 - Pointer slots in the port's copies are raw retail VAs (the generator copies bytes): valid because the standalone
   places data at retail's VAs and thunks every retail code entry — the criterion is byte equality, as checked.

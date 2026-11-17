@@ -11,7 +11,8 @@
 #      gate on wine (local, ~15 s): every TRACKED (or staged) scenario must still
 #      match its blessed expected.wine.json (state hash + every presented frame);
 #      another agent's untracked work-in-progress games are not the commit's.
-#      Port sources changed → also the standalone (corpus --check --standalone: no retail code, = the bless).
+#      Port sources changed → also the standalone (corpus --check --standalone --port-data: no retail code, .rdata /
+#      .data from the port's own definitions (data_selfcheck.py --compose --strict), = the bless).
 #
 # Bypass for an emergency / WIP commit:  git commit --no-verify
 # Installed via core.hooksPath=tools/git-hooks.
@@ -72,7 +73,7 @@ fi
 if echo "$staged" | grep -qE '^(src/.*\.(c|h)|tools/rhost/.*\.(c|h|x|sh)|tools/rhost/rhost\.py|tests/scenarios/.*)$'; then
     echo "pre-commit: rhost corpus --check (wine)..."
     # port sources changed: the standalone (no retail code) must equal the blessed corpus too (--standalone)
-    SA=""; echo "$staged" | grep -qE '^src/.*\.(c|h)$' && SA="--standalone"
+    SA=""; echo "$staged" | grep -qE '^src/.*\.(c|h)$' && SA="--standalone --port-data"
     if ! python3 tools/rhost/rhost.py corpus --check $SA --tracked --target wine >"$LOGD/rhost_gate.log" 2>&1; then
         echo "pre-commit: rhost corpus gate FAILED — commit aborted:" >&2
         grep -E "FAIL|NO expected|NO RESULT|FATAL" "$LOGD/rhost_gate.log" | tail -20 >&2

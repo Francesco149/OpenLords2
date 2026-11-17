@@ -76,6 +76,8 @@ typedef struct {
     int standalone;             /* --standalone: NO retail code — only the data sections are mapped (the code range is
                                    INT3 + a jmp thunk into port code at every hook row's entry); the entry is the port's
                                    rl_crt_start; <rundir>\standalone_audit.txt proves it (docs/findings/standalone-path.md) */
+    const char *data_image;     /* --data-image F (with --standalone): .rdata / .data from the port's composed image
+                                   (tools/data_selfcheck.py --compose, OL2DATA1), not from the exe */
     const char *net_sigs;       /* --net-sigs ME/N[,full|skirmish]: the fake SIGS multiplayer transport (rh_net.c) */
     const char *net_peer;       /* --net-peer HOST:PORT: record a live game through a broker (tools/rhost/rhnet.py) */
 } rh_opts_t;

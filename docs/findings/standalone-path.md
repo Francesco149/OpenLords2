@@ -68,6 +68,9 @@ OpenSummoners does), toward a later fully documented port that loads nothing fro
   `.data`, every OS call through retail's IAT slots); `rl_crt_start` = start 0x4c3370's port (heap, `_ioinit`, the
   mbctable, argv / envp, `_cinit`, WinMain, exit). The shim's CRT (`rl_plat_*`) calls the port under rhost and in the
   standalone alike.
+- **Port data** (2026-11-17, `--data-image F`, `rhost.py --port-data`): .rdata / .data come from the port's composed
+  image (`tools/data_selfcheck.py --compose`, data-catalog.md), not the exe — retail_map leaves them zero, the audit
+  lists them `port-image` with the image's checksum = memory at the seal. Corpus 121/121 = pure retail.
 - **Audit** (`<rundir>\standalone_audit.txt`, written after the seal, before the first port instruction): every range
   taken from the file (`copied` only for non-code sections), every thunk, `code_range … other 0` (every non-thunk code
   byte INT3), `retail_text_windows_compared 1809 identical 0`, the protections (`exec_outside_code_range 0`), smackw32

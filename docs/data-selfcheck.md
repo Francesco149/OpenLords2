@@ -10,6 +10,13 @@ DERIVED by `tools/data_selfcheck.py` — never hand-edit. The port's definitions
 | uncovered | 464 | 27 |
 | **total** | 83431 | 46586 |
 
+## The composed image (`--compose`) vs the exe's mapped sections
+
+| section | range | port-defined bytes | differ | differing spans (catalog row) |
+|---|---|---:|---:|---|
+| .rdata | 004d0000..004d2000 | 4512 | 27 | 004d0004 +4 k_pe_debug_directory, 004d000c +1 k_pe_debug_directory, 004d0010 +2 k_pe_debug_directory, 004d0019 +2 k_pe_debug_directory, 004d0020 +4 k_pe_debug_directory, 004d0028 +1 k_pe_debug_directory, 004d002d +1 k_pe_debug_directory, 004d0034 +3 k_pe_debug_directory, 004d003c +4 k_pe_debug_directory, 004d0044 +1 k_pe_debug_directory, 004d0048 +1 k_pe_debug_directory, 004d0050 +3 k_pe_debug_directory |
+| .data | 004d2000..005cf000 | 984538 | 0 |  |
+
 ## Port definitions that differ from the exe (0)
 
 ## Overlapping definitions (195)
