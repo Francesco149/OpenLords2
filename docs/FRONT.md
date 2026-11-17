@@ -194,7 +194,9 @@
    evidence (the bot exercises what it needs: a scenario that reads the item, a probe of its consumer); largest open:
    the string tables (every unreferenced non-zero byte is a string), 0x4e3260 (2244 B, 0x4bb978), 0x4d3200 (0x43c2a9), the
    draw tables 0x4e3bf4 / 0x4e4034, the menu / button records 0x4dc360..0x4de000. Goal: a port that loads nothing.
-9. **Port build `-std=gnu11`** after an x87 sweep (openrecet's c11 long-double literal finding).
+9. ~~**Port build `-std=gnu11`**~~ — done 2026-11-17: retail has no x87 code (IDA export: 0 FP mnemonics), the port
+   none either; all 213 src modules compile to identical code under c11 / gnu11, rhost.exe byte-identical; src / tests
+   Makefiles → gnu11.
 
 ## Phase 0 checklist
 - [x] rhost core (fake DDraw / DSound / window / heap / handles / files), Windows + wine targets

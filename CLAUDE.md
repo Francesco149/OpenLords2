@@ -66,8 +66,8 @@ capture (the **viewer** stays for human eyes).
 - **Earlier "BYTE-EXACT" / "1:1" claims are UNVERIFIED** until re-checked under rhost.
 - **Attribute a divergence before suspecting logic:** upstream inputs → RNG → phase → logic. rhost pins
   all of these for retail; a shadow compares on identical state, so a divergence there IS logic.
-- **x87:** in-game CW 0x027F (53-bit). The port builds `-std=c11` (float literals evaluate as long double
-  — openrecet found that diverges; prefer `gnu11` after a sweep).
+- **x87: none.** Retail has no floating-point code (0 x87 mnemonics in the IDA export) and neither has the port;
+  it builds `-std=gnu11` (2026-11-17 sweep: every src module's code is identical under c11 / gnu11; rhost.exe byte-identical).
 - Engine quirks (retail ground truth only) → `docs/findings/engine-quirks.md`.
 - **If a tool can't show you something, improve the tool.** Never hand-wave a diff.
 

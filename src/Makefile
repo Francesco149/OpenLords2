@@ -19,7 +19,7 @@
 CC = i686-w64-mingw32-gcc
 
 # WINVER 0x0400 = Windows 95 / NT 4 — same era as Lords II's 1996 ship.
-CFLAGS  ?= -std=c11 -O2 -g \
+CFLAGS  ?= -std=gnu11 -O2 -g \
            -Wall -Wextra -Wno-unused-parameter \
            -DUNICODE=0 -D_UNICODE=0 \
            -DWINVER=0x0500 -D_WIN32_WINNT=0x0500

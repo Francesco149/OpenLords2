@@ -14,7 +14,7 @@
 CC      ?= gcc
 SAN     := -fsanitize=address,undefined -fno-sanitize-recover=all \
            -fno-omit-frame-pointer
-CFLAGS  := -std=c11 -g -O1 -Wall -Wextra -Wno-unused-parameter \
+CFLAGS  := -std=gnu11 -g -O1 -Wall -Wextra -Wno-unused-parameter \
            -I../src \
            -DOPENLORDS2_ROOT=\"$(abspath ..)\" \
            $(SAN) \
@@ -210,7 +210,7 @@ DIFF_SRCS := $(SRCS_UNDER_TEST)
 DIFF_OBJS := $(addprefix build/diff_,$(notdir $(DIFF_SRCS:.c=.o))) \
              build/diff_diff_stubs.o
 DIFF_OUT  := build/libengine_diff.so
-DIFF_CFLAGS := -std=c11 -O2 -fPIC -Wall -Wextra -Wno-unused-parameter -I../src
+DIFF_CFLAGS := -std=gnu11 -O2 -fPIC -Wall -Wextra -Wno-unused-parameter -I../src
 
 # Map-render parity harness — drives engine_map_render with retail's
 # captured live map state into an offscreen canvas (see

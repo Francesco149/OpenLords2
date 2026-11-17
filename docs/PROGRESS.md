@@ -7,6 +7,14 @@ next candidate milestones are.  Engine specifics belong in
 
 ---
 
+## 2026-11-17 — x87 sweep: the game has no floating point; the port builds gnu11
+
+Retail's code has no x87 instruction (IDA export `all_ida.asm`: 0 FP mnemonics; a linear objdump of the exe finds one
+`fldt`, data decoded as code), so the in-game control word and openrecet's c11 long-double-literal hazard cannot reach
+parity. The port has none either: every `src/*.c` compiled with rhost's flags under `-std=c11` and `-std=gnu11` gives
+identical code per function, and rhost.exe links byte-identical. `src/Makefile` / `tests/Makefile` → `-std=gnu11`
+(build.sh reads PORT_STD from src/Makefile); host tests 2312 ran, 0 failed.
+
 ## 2026-11-14 — Multiplayer under rhost: both transports faked, 25 MP sides, 253 MP functions ported; halve_garrison reached
 
 Overnight session (coordinator + 2 MP drivers + 7 porting agents in worktrees + API drivers for siege-knights).
