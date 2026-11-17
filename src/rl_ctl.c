@@ -2493,6 +2493,50 @@ int rl_43de70(void)
     return v + g_rl_4d2160;
 }
 
+/* The handlers' frame slot [e0 - 8] (quirk #241). Every handler runs at the same depth below 0x4472ce, so the dword at
+ * e0 - 8 carries from one handler to the next within a pass; 0x4479e9 (type 1) reads it uninitialized. What each
+ * leaves there: types 1 / 43 their local = the record's realm (+4), 33 / 34 their local = the player +4, 23 its loop
+ * counter (option 2 only: n + 1, else untouched), the 45 others `push ebx` = 0x4472ce's EBX (register residue: a
+ * heap / small value of the host's, never compared). At a pass's start the slot holds the tick head's leftover:
+ * 8 (0x43ef5c, in the every-10th-tick message 10 send 0x43eda0 at 0x4b9b77) or a stack address (0x4bb8c1 / 0x43de71,
+ * sim sub-steps) — no realm index either way (39 MP sides, 495 calls: 8 / 0x58fffdb4 / 6, the rest a carry).
+ * Modelled: DA_RES_TICK at the start, DA_RES_EBX after an ebx handler. Under rhost the type 1 / 43 rows move the
+ * real slot (rh_res_get / rh_res_set); this model serves the dispatcher's port (shadow-compared on DAT_0055403c). */
+#define DA_RES_TICK 8u
+#define DA_RES_EBX  0xffffffffu
+static uint32_t s_da_res;
+extern uint32_t rl_4479e9_res, rl_448339_res[3], rl_447e0b_res;
+int rl_4479e9(void);
+int rl_448339(void);
+static void da_run(uint32_t va)
+{
+    switch (va) {
+    case 0x4479e9u:
+        rl_4479e9_res = s_da_res;
+        rl_4479e9();
+        s_da_res = rl_4479e9_res;
+        return;
+    case 0x448339u:
+        rl_448339();
+        s_da_res = rl_448339_res[0];
+        return;
+    case 0x447e0bu:
+        rl_447e0b_res = s_da_res;
+        rl_va_call(va, 0);
+        s_da_res = rl_447e0b_res;
+        return;
+    case 0x448076u:
+    case 0x448137u:
+        s_da_res = (uint32_t)g_rl_5158e8;   /* written first, before any callee */
+        rl_va_call(va, 0);
+        return;
+    default:
+        rl_va_call(va, 0);
+        s_da_res = DA_RES_EBX;
+        return;
+    }
+}
+
 /* Port of FUN_004472ce (1046 B) — MP only: run the delayed actions due by tick `now` (records with +0x36 == 1
  * and +0 ≤ now, in record order; in the battle with several due, the moves 0x21..0x23 of other realms than
  * DAT_005681ec go last); each loads its ten arguments into DAT_005158e8 … DAT_0050d7bc (DAT_0051590c = the
@@ -2511,6 +2555,7 @@ int rl_4472ce(int now)
             DQ(g_rl_515910++) = j;
     if (g_rl_515910 <= 0)
         return 0;
+    s_da_res = DA_RES_TICK;
     if (g_rl_515910 > 1 && s_slot_0057c8fc == 2) {
         for (int k = 0; g_rl_515910 > k; k++) {
             int r = DQ(k);
@@ -2545,7 +2590,7 @@ int rl_4472ce(int now)
         g_rl_5158c0 = DA32(r, 0x50d7e4);
         g_rl_50d7bc = DA32(r, 0x50d7e8);
         g_rl_51590c = r;
-        rl_va_call((uint32_t)g_rl_4d5c98[DA8(r, 0x50d7f7)], 0);   /* the 50 delayed-action handlers (rl_mpmsg2 / 3) */
+        da_run((uint32_t)g_rl_4d5c98[DA8(r, 0x50d7f7)]);   /* the 50 delayed-action handlers (rl_mpmsg2 / 3) */
         DA8(r, 0x50d7f6) = 0;
         --g_rl_512f6c;
     }

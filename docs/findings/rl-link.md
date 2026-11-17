@@ -135,8 +135,8 @@ three locals) — their rows model stack residue (rh_res_get / _set) that only r
 
 ## Left (2026-11-17)
 - 0x465d28 (above).
-- 0x4479e9 / 0x448339: the delayed-action dispatcher's residue slot (rl_ctl 0x4d5c98 site) would have to be modelled
-  in src for a build without rhost.
+- ~~0x4479e9 / 0x448339~~ — done 2026-11-17: the dispatcher models the handlers' shared slot (quirk #241, rl_ctl.c
+  `da_run`) and calls both directly; standalone `--only '^mp-'` 39/39 = pure retail, 0 rl_va misses.
 - rl_mpnet's CRT helpers (operator new, _splitpath, sprintf: literal VAs, ★4).
 
 Product gap: rhost-only binds left are engine_retail_call's binder and bf's sleep (`rh_bf_bind_seams`) — a build

@@ -93,7 +93,7 @@ TODO(rl-link): 0x4470c4 (in no partition) through engine_retail_call.
 
 1. 0x4479e9 compares an **uninitialized local** ([ebp-4], e0 − 8: what 0x4472ce's previous callee left there) with the
    local player — equal → DAT_0055403c = 2 — and only then stores realm DAT_005158e8 in it. Modelled as
-   rl_4479e9_res.
+   rl_4479e9_res; the dispatcher's port models the slot across a pass (engine-quirks #241).
 2. 0x4462df compares DAT_005c9a74 with 2 and then jumps unconditionally over the arm that would set title page 10
    when DAT_0057a0f0 ≠ 0: dead code.
 3. 0x4462df writes DAT_005533e0[local] with no bound: the array is 2 dwords (0x5533e0..0x5533e8); local player 2

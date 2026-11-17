@@ -1338,6 +1338,7 @@ int rl_447d9d(void)
 /* Port of FUN_00447e0b (313 B) — action 23: toggle option +4: 1 → DAT_0053f25c, 2 → DAT_0053f260 (then every realm
  * 1..DAT_0056d5dc re-provisions 0x44df5f(i, DAT_0057c934) and re-plans 0x4485a5(i, DAT_0057c92c)), 3 →
  * DAT_0053f264 (each "== 1 ? 0 : 1"), 4 → DAT_0053f284 ("== 0 ? 1 : 0"); DAT_0057d340 = 2. */
+uint32_t rl_447e0b_res;   /* its local [ebp-4] = the loop counter (option 2 only): the dispatcher's slot model (rl_ctl.c) */
 int rl_447e0b(void)
 {
     int r = 0;
@@ -1347,10 +1348,12 @@ int rl_447e0b(void)
         break;
     case 2:
         s_slot_0053f260 = s_slot_0053f260 == 1 ? 0 : 1;
-        for (int i = 1; i <= (int)s_slot_0056d5dc; i++) {
+        int i;
+        for (i = 1; i <= (int)s_slot_0056d5dc; i++) {
             engine_army_economy_provision(i, (int)s_slot_0057c934);    /* 0x44df5f */
             engine_army_economy_plan_realm(i, (int)s_slot_0057c92c);   /* 0x4485a5 */
         }
+        rl_447e0b_res = (uint32_t)i;
         r = (int)s_slot_0056d5dc;
         break;
     case 3:

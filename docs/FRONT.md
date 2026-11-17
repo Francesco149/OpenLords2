@@ -88,7 +88,7 @@
    actions 24 / 46, the late-action path 0x4470c4 → 90 reached in retail. **Every MP message id now has a port** (47
    functions, fe9a756 / ec746c4: 10 rows reached, 0 divergences, hybrid PASS; 37 dead-code rows unverified — no carrier);
    standalone 39/39 MP sides = pure retail; static gaps 107 → 66. **2026-11-16: the last 24 delayed-action handlers ported** (table 0x4d5c98 complete,
-   rl-mpmsg3.md; dead but for 25 / 35, reachable by forging 53 / 68): static gaps 66 → 44. Next: ★5's remainder (the residue seams 0x465d28 / 0x4479e9 / 0x448339); ★4 is CRT only.
+   rl-mpmsg3.md; dead but for 25 / 35, reachable by forging 53 / 68): static gaps 66 → 44. Next: ★5's remainder (the residue seam 0x465d28); ★4 is CRT only.
 0b. **rd campaigns** — **campaign 6 (2026-11-14, API drivers):** ai-recall filed (sub_48B7FC 0x48b7fc first time: an Equal
    field skirmish after a Play Now → New Game trip — a cold skirmish leaves byte_553080 zero, so the recall never fires;
    +12 blocks); ai-surrender blocked (probe: no skirmish attacker is knights-only; the battle ends when a side has 0 men
@@ -166,8 +166,10 @@
    `tools/gen_rl_va_map.py`, 1516 VAs; pre-commit regenerates it): the 7 dynamic dispatch sites switched; 13 new link
    entries for the economy screens' hot-spot actions (trade / gift / county action / Send Supplies). Standalone 121/121 =
    pure retail, misses only 0x4479e9 / 0x448339 (stack-residue rows); verify (wine, 8 scenarios): 162/327 reached, 0
-   divergences, hybrid PASS. Left: 0x465d28 and those two (residue only rhost models), rl_mpnet's CRT helpers (★4) —
-   rl-link.md §Left.
+   divergences, hybrid PASS. **2026-11-17 later: 0x4479e9 / 0x448339 done** — the dispatcher models the handlers'
+   shared frame slot (quirk #241: 8 at a pass's start, then each handler's leftover); verify `--only '^mp-'` 6/6 rows,
+   0 divergences, hybrid PASS; standalone 39/39 MP = pure retail, 0 rl_va misses. Left: 0x465d28 (residue only rhost
+   models), rl_mpnet's CRT helpers (★4) — rl-link.md §Left.
 6. **Unreached code**: 939 functions / 172 KB no scenario reaches (`docs/findings/coverage-round3.md`): multiplayer
    (DirectPlay / serial — a fake transport in rhost would open it), dead code (zoom-1 / zoom-16 drawers, unwritten
    orders 0 / 7 / 13 / 15 / 16), AI knight garrisons, DirectDraw errors (a fault-injection switch for 0x42f60e's

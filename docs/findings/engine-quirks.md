@@ -8275,3 +8275,26 @@ scene (the slot then holds the previous popup's box y, never 3 either), render_f
 24/25 = pure retail (mp-trio-p3 fixed; was 23/25).
 
 > 📍 `src/rl_mpnet.c/.h` (rl_475e07, rl_475e07_res_in), `src/rl_turn.c` (rl_47309e), `src/rl_host.c` (rl_4b99c0).
+
+## 241 — the delayed-action handlers share one frame slot: 0x4479e9's uninitialized local is the pass's carry
+
+The dispatcher 0x4472ce (engine_tick 0x4b9bb5) calls every due handler through `call DAT_004d5c98[type]` at the same
+depth, so the dword at the handler's e0 − 8 ([ebp-4], rhost 0x58fffd88) carries from one handler to the next within a
+pass.  Type 1 (0x4479e9, message 30) compares it with the local player BEFORE storing its realm (+4) there: equal →
+DAT_0055403c = 2.  What each handler leaves (prologues of all 50, `all_ida.asm`): types 1 / 43 their local = the
+record's realm +4 (43: e0 − 8 / 0xc / 0x10 = to / amount / from), 33 / 34 their local = the player +4 (written first),
+23 its loop counter (option 2 only: n + 1 over DAT_0056d5dc; other options leave it), the 45 others `push ebx` =
+0x4472ce's EBX (a register value of the host's: 0x14a000 / 1 under rhost).  At a pass's start the slot holds the tick
+head's leftover: 8 (0x43ef5c, inside the every-10th-tick message 10 send 0x43eda0 at 0x4b9b77) or a stack address
+(0x4bb8c1 / 0x43de71, the sim sub-steps) — never a realm index.  Measured (wine, the 39 MP sides, `--trap 4479e9`,
+`--watch-write 58fffd88@10248` on mp-trio-p1): 495 type-1 calls; at entry 238 × 8, 9 × 0x58fffdb4, 1 × 6, 247 × the
+previous handler's realm (message 30 files a realm's pair: the second of the local realm's pair sets DAT_0055403c).
+
+Port: the dispatcher's model `s_da_res` (rl_ctl.c `da_run`): 8 at the start of a pass, then per handler as above
+(EBX → 0xffffffff, no realm).  rl_4472ce calls rl_4479e9 / rl_448339 directly with it (were rl_va_call misses → the
+entry thunk → the row's rh_res_get).  Not modelled: an EBX that equals the local player (never seen) and a pass start
+whose tick head left a realm index (never seen).  Evidence (wine): verify `--only '^mp-'` on rl_4472ce + the five slot
+handlers: 6/6 reached, 0 divergences (4472ce 647,437 calls shadowed at depth 1 = the model against retail's real slot),
+hybrid PASS; standalone `--only '^mp-'` 39/39 = pure retail with 0 rl_va misses (was 29 sides via the thunk).
+
+> 📍 `src/rl_ctl.c` (da_run, s_da_res), `src/rl_mpmsg2.c` (rl_4479e9_res, rl_448339_res), `src/rl_mpmsg3.c` (rl_447e0b_res).
