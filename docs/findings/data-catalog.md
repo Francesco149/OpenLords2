@@ -52,3 +52,23 @@ immediate), `_pwctype`, `__decimal_point(_length)`, `_cfltcvt_tab` 2 / 4 / 5, er
 | G_SBH_HEAPHDR (0x4e4e28) | heap header | field [516] of the static small-block heap header (region pointer) |
 | g_rl_4e4520[0x60] | — | a 16 B string slot; retail's copy runs on into errno / _doserrno |
 | rl_ctl_globals.h g_rl_4d6a78[5] | — | the shared definition is 32 B |
+
+## The port's own copies vs the exe (2026-11-17, `tools/data_selfcheck.py` → `docs/data-selfcheck.md`)
+
+Under rhost / the standalone every port global aliases its retail VA, so the initializers in `src/*_globals.c` are never
+linked there — nothing checked them. The tool compiles `src/` with `-fdata-sections`, takes each aliased name's
+definition (exact size by a `sizeof` probe TU: COFF pads section sizes to the alignment), and compares it with the exe
+at the VA; relocated slots are resolved through the aliases / `rl_va_map.c`. Then a content pass looks for still
+uncovered catalog bytes verbatim (>= 8 B) in the port's other data sections (old ports' `k_` tables, literals), and a
+column lists source files that spell a VA inside each uncovered row.
+- **Found and fixed:** 10 `rl_link_globals.c` tables defined without initializers (2370 non-zero bytes: the zoom-16 / 32
+  anim offsets, the feature palette tables, the terrain feature table, the end-movie / armory names, the minimap colours
+  …; no pointer slots) — now filled from the exe; 4 old-port initializers that pre-applied a runtime value where retail
+  loads 0 (g_bf_591564 = 0x34518632 — create_main_window seeds it; g_tr_selected_button 1, g_tr_p9_bookmark 7,
+  g_tr_fl_selected 999 — set by 0x414819 / 0x42150b) — now 0.
+- **Now:** 1768 aliased definitions, **0 differ from the exe**. Catalog (83,431 B; 46,586 non-zero): non-zero bytes
+  35,252 under a matching aliased definition, 3,035 found under another port name, **8,299 uncovered** (140 rows; 112 of
+  them have their VA spelled in `src/` — largest: the CRT's sbh region / iob / ctype / message tables, k_bf_sheet_records,
+  the rl_host button tables). 195 VA ranges have two aliased definitions (DUP / NEIGHBOUR blocks).
+- Pointer slots in the port's copies are raw retail VAs (the generator copies bytes): valid because the standalone
+  places data at retail's VAs and thunks every retail code entry — the criterion is byte equality, as checked.

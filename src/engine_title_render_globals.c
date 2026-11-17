@@ -7,7 +7,7 @@
  */
 #include "engine_title_render.h"
 
-int32_t g_tr_selected_button = 1;        /* DAT_00553114 */
+int32_t g_tr_selected_button;            /* DAT_00553114 (.bss: 0 at load, as retail) */
 int32_t g_tr_page;                       /* DAT_005530f0 */
 int32_t g_tr_scene_flag_a;               /* DAT_005651ac */
 int32_t g_tr_p4_gate_a;                  /* DAT_00553030 (the multiplayer flag) */
@@ -27,10 +27,10 @@ int32_t g_tr_country_dirty;              /* DAT_0057c948 */
 int32_t g_tr_tabs_dirty;                 /* DAT_0055ce94 */
 int32_t g_tr_p9_tab;                     /* DAT_0055306c */
 int32_t g_tr_p9_count;                   /* DAT_00553fb4 */
-int32_t g_tr_p9_bookmark = 7;            /* DAT_00553e5c */
+int32_t g_tr_p9_bookmark;               /* DAT_00553e5c (.bss: 0 at load, as retail) */
 int32_t g_tr_fl_count;                   /* DAT_004eb25c */
 int32_t g_tr_fl_first;                   /* DAT_004ea1a0 */
-int32_t g_tr_fl_selected = 999;          /* DAT_004e65dc */
+int32_t g_tr_fl_selected;               /* DAT_004e65dc (.data past its raw size: 0 at load; 0x414819 / 0x42150b set 999) */
 uint8_t g_tr_fl_name[0x42];              /* DAT_004ea130 */
 int32_t g_tr_fl_show_status;             /* DAT_0057d3c4 */
 uint8_t g_tr_fl_flag;                    /* DAT_00591548 */

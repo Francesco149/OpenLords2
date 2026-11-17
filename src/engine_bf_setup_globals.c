@@ -5,4 +5,4 @@
 
 /* DAT_00591564: the single-LFSR state 0x404b2c advances (retail seeds it 0x34518632 at InitInstance; the
  * strategic map's terrain passes thread their own copy — engine_territory.c) */
-int32_t g_bf_591564 = 0x34518632;
+int32_t g_bf_591564;   /* 0 at load, as retail (.bss); create_main_window 0x4b2258 seeds 0x34518632 */

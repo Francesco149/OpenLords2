@@ -198,8 +198,12 @@
 8. **Data-image documentation** (`docs/data-ledger.md`, catalog `docs/data/catalog.tsv`): **2026-11-17: .rdata / .data
    100 % of non-zero bytes documented** (397 rows; all sections 85.0 %, the rest PE headers / imports / resources) —
    `docs/findings/data-catalog.md` (a port defect fixed, retail OOB reads, dead data, 17 port names to correct). Next
-   toward "a port that loads nothing": the port's own copies of each catalog item (generated from the exe today:
-   `src/gen/`, `g_rl_*` initializers) checked against the catalog; then the standalone maps no exe section.
+   toward "a port that loads nothing": **2026-11-17: the port's own copies checked** (`tools/data_selfcheck.py` →
+   `docs/data-selfcheck.md`, data-catalog.md §The port's own copies): 1768 aliased definitions, 0 differ (10 tables
+   without initializers filled, 4 old-port initializers → retail's 0); catalog non-zero bytes 35,252 matched, 3,035 under
+   another port name, **8,299 uncovered** (140 rows, worklist in the doc). Next: definitions for the uncovered rows
+   (CRT tables first: rl_crt*.c read them by VA), then an image built from the port's copies, compared with the exe's
+   (same tool), then the standalone maps no exe section.
 9. ~~**Port build `-std=gnu11`**~~ — done 2026-11-17: retail has no x87 code (IDA export: 0 FP mnemonics), the port
    none either; all 213 src modules compile to identical code under c11 / gnu11, rhost.exe byte-identical; src / tests
    Makefiles → gnu11.
