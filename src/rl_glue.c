@@ -1,6 +1,7 @@
 /* rl_glue.c — a retail-layout port, partition 'glue' (tools/bf/parts.py). Retail semantics on retail's
  * layout: rl.h (record accessors, globals). Each function: "Port of FUN_00xxxxxx" + what it does.
  * docs/findings/rl-glue.md: the partition's notes (quirks, seams, evidence). */
+#include "rl_va.h"
 #include "rl.h"
 #include "rl_glue_globals.h"
 #include "engine_bf_input_globals.h"   /* the input partition's globals (the cursor / button edges, the router param) */
@@ -518,7 +519,7 @@ int rl_40dd92(int titles, int n)
             engine_set_current_screen((uint8_t)g_rl_56d894);
             g_rl_522ca8 = *(const int32_t *)(uintptr_t)(g_rl_522cac + 8);   /* the menu record's item table */
             g_rl_522ca8 += 4 * (3 * g_rl_522cb0 - 3);
-            engine_retail_call(*(const uint32_t *)(uintptr_t)(g_rl_522ca8 + 4), 0);   /* the item's action */
+            rl_va_call(*(const uint32_t *)(uintptr_t)(g_rl_522ca8 + 4), 0);   /* the item's action */
             rl_40dfcd();
         } else {
             rl_40df62();   /* close the menu (partition ui3) */
@@ -1487,7 +1488,7 @@ int rl_42a8d1(void)
     if (!tile_header())
         return g_rl_57d3c0;
     uint32_t f = s_slot_0057cb18 == 0 ? 0x45337bu : s_slot_0057cb18 == 1 ? 0x46079du : 0x463c06u;
-    return (int)engine_retail_call(f, 2, (uint32_t)g_bf_568208, 0u);
+    return (int)rl_va_call(f, 2, (uint32_t)g_bf_568208, 0u);
 }
 
 /* Port of FUN_0042a9ab (218 B) — draw the current tile, drawer B (0x4538f6 / 0x4608de / 0x463c62). */
@@ -1496,7 +1497,7 @@ int rl_42a9ab(void)
     if (!tile_header())
         return g_rl_57d3c0;
     uint32_t f = s_slot_0057cb18 == 0 ? 0x4538f6u : s_slot_0057cb18 == 1 ? 0x4608deu : 0x463c62u;
-    return (int)engine_retail_call(f, 2, (uint32_t)g_bf_568208, 0u);
+    return (int)rl_va_call(f, 2, (uint32_t)g_bf_568208, 0u);
 }
 
 /* Port of FUN_0042d179 (157 B) — the high-score table's defaults: 10 scores (DAT_004d49c8 → DAT_0051fd00), the

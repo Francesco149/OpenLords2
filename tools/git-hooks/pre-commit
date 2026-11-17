@@ -35,6 +35,12 @@ else
     exit 1
 fi
 
+# --- 1b. The VA → rl_ map follows rhost's row tables ----------------------
+if ! python3 tools/gen_rl_va_map.py --check 2>/dev/null; then
+    python3 tools/gen_rl_va_map.py >/dev/null && git add src/rl_va_map.c
+    echo "pre-commit: src/rl_va_map.c regenerated from the row tables (staged)" >&2
+fi
+
 # --- 2. Run the host test suite if code changed --------------------------
 staged="$(git diff --cached --name-only)"
 if echo "$staged" | grep -qE '^(src/|tests/).*\.(c|h)$'; then

@@ -500,6 +500,7 @@
    "status": "tested",
    "src": [
     "src/engine_diplomacy_action_model.c",
+    "src/rl_link_logic.c",
     "src/rl_ui4.c",
     "src/save.h",
     "src/text_input.h"

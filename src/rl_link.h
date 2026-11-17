@@ -56,6 +56,10 @@ int rl_448819(void); int rl_449889(void); int rl_44aa41(void); int rl_44ae3c(voi
 int rl_46eddf(int rec); int rl_49a581(void); int rl_4ac3c6(int realm); int rl_437535(int occ, int region); int rl_49b2a3(void);
 int rl_4abb36(int army, int region); int rl_4a8aab(int rec); int rl_43b622(void); int rl_477dfc(void);
 int rl_428007(int realm); int rl_43b412(int ox, int oy); int rl_4357a6(void); int rl_4ab383(int a0); int rl_43be65(void);
+/* the economy screens' hot-spot actions (reached by retail VA: rl_va.h) */
+int rl_435339(void); int rl_43543d(void); int rl_4355db(void); int rl_435541(void); int rl_435286(void); int rl_4352f2(void);
+int rl_436372(void); int rl_436408(void); int rl_43ae30(void); int rl_43b27a(void); int rl_43b1ca(void); int rl_43b32a(void);
+int rl_43530e(void);
 
 /* the mapview family (src/rl_link_mapview.c; rows: tools/rhost/rh_hooks_mapview.c) */
 void rl_link_mapview_bind(void);

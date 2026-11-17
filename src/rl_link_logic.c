@@ -36,6 +36,10 @@
 #include "engine_territory.h"
 #include "engine_trade.h"
 #include "engine_armory.h"     /* g_arm_pct / g_arm_conscripts / g_arm_merc / g_arm_march_active */
+#include "engine_diplomacy_action.h"
+#include "text_input.h"
+#include "gfx_globals.h"       /* g_gfx_first_pos_target / _y: DAT_005bb4a8 / DAT_0058fd54 (the editor's cursor / anchor) */
+#include <string.h>
 
 /* the partitions' globals (their headers conflict when included together: DUP symbols typed per partition) */
 extern int32_t g_rl_55cea0[8385];     /* DAT_0055cea0: the 129 × 65 strategic tile grid */
@@ -161,3 +165,36 @@ int rl_43b412(int ox, int oy)
 { int r; LG(r = engine_sendsupplies_target_select(ox, oy, g_bf_4e65fc, g_bf_4e65f4, g_bf_4eafb4)); return r; }
 int rl_4357a6(void)   /* FUN_004ba9c8 → the merchant scene's rug: the mercgrid payload DAT_00542cf8 */
 { int r; LG(r = engine_merchant_zone_click(g_rl_542cf8, g_bf_4e65fc, g_bf_4e65f4, g_bf_4eafb4)); return r; }
+
+/* the hot-spot actions of the trade grid / gift screen / county-action strip / Send Supplies (router tables
+ * DAT_004dd838 / 004dd9d0 / 004dda30 / 004dc688.. / 004dd538 / 004dc7e8: reached by retail VA, rl_va.h); the arrows /
+ * the all-toggle / the seal read the router's param0 DAT_0059154c */
+extern uint8_t g_bf_59154c[0xc];
+extern uint8_t g_rl_5cd550[2000];     /* the text editor's buffer */
+extern int32_t g_rl_58fe94, g_rl_57d3b0;   /* its length, pixel overflow */
+#define LK_PARAM0 (*(const int32_t *)(const void *)g_bf_59154c)
+int rl_435339(void) { LG(engine_trade_arrow_up()); return 0; }
+int rl_43543d(void) { LG(engine_trade_arrow_down()); return 0; }
+int rl_4355db(void) { LG(engine_trade_buy_all()); return 0; }
+int rl_435541(void) { LG(engine_trade_sell_all()); return 0; }
+int rl_435286(void) { LG(engine_trade_seal_confirm()); return 0; }
+int rl_4352f2(void) { LG(engine_trade_seal_cancel()); return 0; }
+int rl_436372(void) { LG(engine_diplomacy_action_arrow(LK_PARAM0)); return 0; }
+/* the gift / message seal: the port's editor is one struct over retail's scattered globals (FUN_004020ae's set) */
+int rl_436408(void)
+{
+    static text_input_state_t ed;
+    memcpy(ed.buf, g_rl_5cd550, sizeof ed.buf);
+    ed.cursor = g_gfx_first_pos_target; ed.length = g_rl_58fe94;
+    ed.pixel_overflow = g_rl_57d3b0; ed.anchor_offset = g_gfx_first_pos_y;
+    EVQ(engine_diplomacy_action_seal(LK_PARAM0, &ed, q));
+    if (memcmp(g_rl_5cd550, ed.buf, sizeof ed.buf)) memcpy(g_rl_5cd550, ed.buf, sizeof ed.buf);
+    g_gfx_first_pos_target = ed.cursor; g_rl_58fe94 = ed.length;
+    g_rl_57d3b0 = ed.pixel_overflow; g_gfx_first_pos_y = ed.anchor_offset;
+    return 0;
+}
+int rl_43ae30(void) { EVQ(engine_county_action_open(LK_PARAM0, q)); return 0; }
+int rl_43b27a(void) { LG(engine_sendsupplies_arrow_up(LK_PARAM0)); return 0; }
+int rl_43b1ca(void) { LG(engine_sendsupplies_arrow_down(LK_PARAM0)); return 0; }
+int rl_43b32a(void) { LG(engine_sendsupplies_toggle_all(LK_PARAM0)); return 0; }
+int rl_43530e(void) { LG(engine_trade_open()); return 0; }

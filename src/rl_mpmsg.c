@@ -3,6 +3,7 @@
  * docs/findings/rl-mpmsg.md: the MP message layer's first half — the tick minima, the receive dispatcher 0x43eac1,
  * the MP state helpers, the payload copy helpers 0x4401ba / 0x4401f6, the per-player state hash, and the payload
  * builders / receivers of message ids 1..22 (tables 0x4d57f0 / 0x4d5980). */
+#include "rl_va.h"
 #include "rl.h"
 #include "rl_mpmsg_globals.h"
 #include "rl_host_globals.h"      /* DAT_004d2164, the resend buffers 0x515b30, the hash regions 0x565700 / 0x569530 */
@@ -133,7 +134,7 @@ int rl_43e98b(int dpid)
 /* ================================================================ the receive dispatcher, the id tables */
 
 /* the payload builders (table 0x4d57f0) and receivers (0x4d5980) on the port side: a ported or stubbed rl_<va> by name,
- * else retail's function through engine_retail_call (the standalone stops there) */
+ * else the table's VA through rl_va_call (rl_va.h) */
 typedef int (*mp_fn)(void);
 #define MPF(va) rl_##va
 static const mp_fn k_mp_build[100] = {
@@ -193,7 +194,7 @@ int rl_mpmsg_build(int id)
     uint8_t k = (uint8_t)id;
     if (k < 100 && k_mp_build[k])
         return k_mp_build[k]();
-    return (int)engine_retail_call((uint32_t)AT(int32_t, g_rl_4d57f0, 0x4d57f0u, 0x4d57f0 + 4 * k), 0);
+    return (int)rl_va_call((uint32_t)AT(int32_t, g_rl_4d57f0, 0x4d57f0u, 0x4d57f0 + 4 * k), 0);
 }
 
 /* message `id`'s receiver (DAT_00515918 at the payload) */
@@ -202,7 +203,7 @@ int rl_mpmsg_recv(int id)
     uint8_t k = (uint8_t)id;
     if (k < 100 && k_mp_recv[k])
         return k_mp_recv[k]();
-    return (int)engine_retail_call((uint32_t)AT(int32_t, g_rl_4d5980, 0x4d5980u, 0x4d5980 + 4 * k), 0);
+    return (int)rl_va_call((uint32_t)AT(int32_t, g_rl_4d5980, 0x4d5980u, 0x4d5980 + 4 * k), 0);
 }
 
 /* Port of FUN_0043eac1 (735 B) — the receive dispatcher: the message in DAT_00515c50 ({id, size, checksum, seq | flags},

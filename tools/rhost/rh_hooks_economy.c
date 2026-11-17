@@ -13,7 +13,7 @@
  * src/engine_economy_globals.c (not linked): aliased below at their retail VAs.  The trade arrows' press-repeat
  * accel (engine_menu_input.c, cut) is bridged as a read of DAT_00591554; their cue binds to retail's WAV loader. The
  * button actions read the router's param0 (DAT_0059154c); the seal's lords2.inf messages are DAT_0053f1e0 (config.c,
- * cut: bridged) and its editor clear goes through a port text_input_state_t loaded from / stored to retail's globals.
+ * cut: bridged); the hot-spot actions (arrows, seals, the county-action strip) are rl_ entries (src/rl_link_logic.c).
  */
 #include "rh_port.h"
 #include "rl_link.h"
@@ -46,27 +46,6 @@ int engine_menu_button_accel(void) { return (int)G32(0x591554u); }   /* DAT_0059
 const uint8_t *config_player_prefs(size_t *n)                         /* DAT_0053f1e0: lords2.inf, 0x468 B */
 { if (n) *n = 0x468; return (const uint8_t *)(uintptr_t)0x53f1e0u; }
 
-/* the button router's param0 for the action it calls (DAT_0059154c: the seal's yes / no, the arrow's up / down) */
-#define PARAM0 ((int)G32(0x59154cu))
-
-/* text_input: the port's editor is one struct, retail's the scattered globals FUN_004020ae clears (buf DAT_005cd550,
- * cursor DAT_005bb4a8, length DAT_0058fe94, pixel overflow DAT_0057d3b0, anchor DAT_0058fd54) */
-static text_input_state_t s_ed;
-static text_input_state_t *ed_load(void)
-{
-    memcpy(s_ed.buf, (const void *)(uintptr_t)0x5cd550u, sizeof s_ed.buf);
-    s_ed.cursor = (int)G32(0x5bb4a8u); s_ed.length = (int)G32(0x58fe94u);
-    s_ed.pixel_overflow = (int)G32(0x57d3b0u); s_ed.anchor_offset = (int)G32(0x58fd54u);
-    return &s_ed;
-}
-static void ed_store(void)
-{
-    if (memcmp((void *)(uintptr_t)0x5cd550u, s_ed.buf, sizeof s_ed.buf)) memcpy((void *)(uintptr_t)0x5cd550u, s_ed.buf, sizeof s_ed.buf);
-    PUT(0x5bb4a8u, s_ed.cursor); PUT(0x58fe94u, s_ed.length); PUT(0x57d3b0u, s_ed.pixel_overflow); PUT(0x58fd54u, s_ed.anchor_offset);
-}
-static void diplo_seal(void) { text_input_state_t *ed = ed_load(); EVQ(engine_diplomacy_action_seal(PARAM0, ed, q)); ed_store(); }
-static void county_action(void) { EVQ(engine_county_action_open(PARAM0, q)); }
-
 /* the trade / county-action callbacks (wav, the trade render, voice, the armory entry): bound by rl_link_bind_once
  * (src/rl_link_logic.c) to retail-layout ports */
 
@@ -93,22 +72,22 @@ HOOK_V(ai_dispatch_caravan,    3, engine_army_ai_dispatch_caravan(I(0), I(1), (u
 HOOK_V(ai_disband_into_realm,  1, engine_army_ai_disband_into_realm(I(0)))
 /* pointer-table entries (router table DAT_004dd838: no E8 call site, the entry is patched) — the trade grid's
  * arrows and seals (engine_trade_model.c) */
-HOOK_V(trade_arrow_up,         0, engine_trade_arrow_up())
-HOOK_V(trade_arrow_down,       0, engine_trade_arrow_down())
-HOOK_V(trade_buy_all,          0, engine_trade_buy_all())
-HOOK_V(trade_sell_all,         0, engine_trade_sell_all())
-HOOK_V(trade_seal_confirm,     0, engine_trade_seal_confirm())
-HOOK_V(trade_seal_cancel,      0, engine_trade_seal_cancel())
+HOOK_V(trade_arrow_up,         0, rl_435339())
+HOOK_V(trade_arrow_down,       0, rl_43543d())
+HOOK_V(trade_buy_all,          0, rl_4355db())
+HOOK_V(trade_sell_all,         0, rl_435541())
+HOOK_V(trade_seal_confirm,     0, rl_435286())
+HOOK_V(trade_seal_cancel,      0, rl_4352f2())
 /* … the gift screen's amount arrow and the Yes / No seal of every mode (DAT_004dd9d0 / DAT_004dda30;
  * engine_diplomacy_action_model.c) */
-HOOK_V(diplo_arrow,            0, engine_diplomacy_action_arrow(PARAM0))
-HOOK_V(diplo_seal,             0, diplo_seal())
+HOOK_V(diplo_arrow,            0, rl_436372())
+HOOK_V(diplo_seal,             0, rl_436408())
 /* … the county-action tab strip (DAT_004dc688..: FUN_0043ae30) and the Send Supplies screen (DAT_004dd538 /
  * DAT_004dc7e8; engine_sendsupplies_model.c): the arrows / all-toggle read the good index from param0 */
-HOOK_V(county_action,          0, county_action())
-HOOK_V(ss_arrow_up,            0, engine_sendsupplies_arrow_up(PARAM0))
-HOOK_V(ss_arrow_down,          0, engine_sendsupplies_arrow_down(PARAM0))
-HOOK_V(ss_toggle_all,          0, engine_sendsupplies_toggle_all(PARAM0))
+HOOK_V(county_action,          0, rl_43ae30())
+HOOK_V(ss_arrow_up,            0, rl_43b27a())
+HOOK_V(ss_arrow_down,          0, rl_43b1ca())
+HOOK_V(ss_toggle_all,          0, rl_43b32a())
 /* (E8 call sites) the thumbnail retarget (origin args; the cursor DAT_004e65fc / DAT_004e65f4, the press edge
  * DAT_004eafb4) and the commit (FUN_0043b04c, MP 0x447db6) */
 HOOK_R(ss_target_select,       2, rl_43b412(I(0), I(1)))
@@ -116,7 +95,7 @@ HOOK_V(ss_commit,              3, engine_sendsupplies_commit(I(0), I(1), (uint8_
 /* the merchant scene's rug (FUN_004ba9c8 → FUN_004357a6: the mercgrid payload DAT_00542cf8, the cursor, the press
  * edge) and the trade grid's open FUN_0043530e (its open render FUN_00416308 is retail's: the seam) */
 HOOK_R(merchant_zone_click,    0, rl_4357a6())
-HOOK_V(trade_open,             0, engine_trade_open())
+HOOK_V(trade_open,             0, rl_43530e())
 
 hook_t RH_HOOKS_ECONOMY[] = {
     { "trade_compute", 0x428dafu, (void *)w_trade_compute, 0, 0, 0, 0, "" },

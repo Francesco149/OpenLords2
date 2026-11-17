@@ -4,6 +4,7 @@
  * Round 3: every function here had an old port (engine*.c, game_init.c, …). Route (a) = a wrapper over a
  * linked old port that already works on retail's layout; route (b) = a fresh port (the old one a reading aid).
  * Findings: docs/findings/rl-ctl.md. */
+#include "rl_va.h"
 #include "rl.h"
 #include "rl_ctl_globals.h"
 #include "engine.h"                    /* the screen / redraw bridges, g_sim_mp_active */
@@ -1450,7 +1451,7 @@ extern uint8_t g_rl_53f6a0[0x300];   /* DAT_0053f6a0 (rl_glue_globals.h): the mu
 int rl_434e1f(void)
 {
     g_bf_59151c[0] = (uint8_t)PARAM0;
-    int r = (int)engine_retail_call((uint32_t)g_rl_552ff4, 0);   /* TODO(rl-extern): the callback VA (0x43723a, 0x43744f …) */
+    int r = (int)rl_va_call((uint32_t)g_rl_552ff4, 0);   /* the callback VA (0x43723a, 0x43744f …) */
     engine_set_demand_redraw(2);
     return r;
 }
@@ -2544,7 +2545,7 @@ int rl_4472ce(int now)
         g_rl_5158c0 = DA32(r, 0x50d7e4);
         g_rl_50d7bc = DA32(r, 0x50d7e8);
         g_rl_51590c = r;
-        engine_retail_call((uint32_t)g_rl_4d5c98[DA8(r, 0x50d7f7)], 0);   /* TODO(rl-extern): the 50 delayed-action handlers */
+        rl_va_call((uint32_t)g_rl_4d5c98[DA8(r, 0x50d7f7)], 0);   /* the 50 delayed-action handlers (rl_mpmsg2 / 3) */
         DA8(r, 0x50d7f6) = 0;
         --g_rl_512f6c;
     }

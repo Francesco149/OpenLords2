@@ -9,6 +9,7 @@
  * engine_retail_call(va, n, …): bound here to retail's own code at va (cdecl), bracketed by
  * rh_port_retail_enter/leave (the port's file-static mirrors stored before, reloaded after). */
 #include "rh_port.h"
+#include "rl_va.h"
 #include "engine_bf.h"
 #include "rh_bf_alias.h"
 
@@ -49,9 +50,13 @@ static uint32_t retail_call(uint32_t va, int n, const uint32_t *a)
 /* retail's own Sleep import (rhost's virtual clock) */
 static void retail_sleep(uint32_t ms) { ((VOID (WINAPI *)(DWORD))G32(0x5cf4acu))(ms); }
 
+/* a dispatch by retail VA with no rl_ entry (src/rl_va.c): logged once per VA */
+static void va_miss(uint32_t va) { rh_log("rl_va miss %06x (no rl_ entry: retail / the entry thunk)\n", (unsigned)va); }
+
 /* called once from rh_port_bind_once (rh_hooks_ai.c) */
 void rh_bf_bind_seams(void)
 {
+    rl_va_on_miss = va_miss;
     engine_retail_call_bind(retail_call);
     bf_bind_sleep_fn(retail_sleep);
 }

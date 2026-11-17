@@ -88,7 +88,7 @@
    actions 24 / 46, the late-action path 0x4470c4 → 90 reached in retail. **Every MP message id now has a port** (47
    functions, fe9a756 / ec746c4: 10 rows reached, 0 divergences, hybrid PASS; 37 dead-code rows unverified — no carrier);
    standalone 39/39 MP sides = pure retail; static gaps 107 → 66. **2026-11-16: the last 24 delayed-action handlers ported** (table 0x4d5c98 complete,
-   rl-mpmsg3.md; dead but for 25 / 35, reachable by forging 53 / 68): static gaps 66 → 44. Next: ★5's remainder (0x465d28 + the dynamic-VA dispatches); ★4 is CRT only.
+   rl-mpmsg3.md; dead but for 25 / 35, reachable by forging 53 / 68): static gaps 66 → 44. Next: ★5's remainder (the residue seams 0x465d28 / 0x4479e9 / 0x448339); ★4 is CRT only.
 0b. **rd campaigns** — **campaign 6 (2026-11-14, API drivers):** ai-recall filed (sub_48B7FC 0x48b7fc first time: an Equal
    field skirmish after a Play Now → New Game trip — a cold skirmish leaves byte_553080 zero, so the recall never fires;
    +12 blocks); ai-surrender blocked (probe: no skirmish attacker is knights-only; the battle ends when a side has 0 men
@@ -161,9 +161,13 @@
    121/121 = pure retail. **2026-11-16 later:** literal seams 82 → 3 (direct `rl_<va>` calls; 7 new entries: gfx
    0x40a567 / 0x409934 / 0x409c93 / 0x402f64, button list 0x40cfd2, combat 0x4ab383 / 0x43be65 — their rows call them);
    no `TODO(rl-link)` left; the link layer is live from `rl_crt_start` (a mirror write before the first seam was lost:
-   20 MP sides off). Standalone 121/121 = pure retail; verify (wine, 12 scenarios): 1501/1937 reached, 0 divergences after the walker / rl_439b52-EAX fixes, hybrid PASS. Left: 0x465d28 (caller-stack
-   residue) and the dynamic-VA dispatches (rl_glue 0x40dd92 / tile drawers, rl_ctl 0x4d5c98 / DAT_00552ff4, rl_ui4
-   hs_fire, rl_mpmsg 0x4d57f0 / 0x4d5980, rl_mpnet CRT helpers: a VA → rl_ map) — rl-link.md §Left.
+   20 MP sides off). Standalone 121/121 = pure retail; verify (wine, 12 scenarios): 1501/1937 reached, 0 divergences after the walker / rl_439b52-EAX fixes, hybrid PASS.
+   **2026-11-17: calls by retail VA** (`rl_va_call`, map `src/rl_va_map.c` generated from the row tables by
+   `tools/gen_rl_va_map.py`, 1516 VAs; pre-commit regenerates it): the 7 dynamic dispatch sites switched; 13 new link
+   entries for the economy screens' hot-spot actions (trade / gift / county action / Send Supplies). Standalone 121/121 =
+   pure retail, misses only 0x4479e9 / 0x448339 (stack-residue rows); verify (wine, 8 scenarios): 162/327 reached, 0
+   divergences, hybrid PASS. Left: 0x465d28 and those two (residue only rhost models), rl_mpnet's CRT helpers (★4) —
+   rl-link.md §Left.
 6. **Unreached code**: 939 functions / 172 KB no scenario reaches (`docs/findings/coverage-round3.md`): multiplayer
    (DirectPlay / serial — a fake transport in rhost would open it), dead code (zoom-1 / zoom-16 drawers, unwritten
    orders 0 / 7 / 13 / 15 / 16), AI knight garrisons, DirectDraw errors (a fault-injection switch for 0x42f60e's

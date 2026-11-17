@@ -6,6 +6,7 @@
  * not on retail's layout or not linked in rhost. Route (a): rl_<va> forwards to a linked old port that runs on
  * retail's own state (its result / EAX modelled here); route (b): a fresh port on retail's globals, the old port a
  * reading aid. Findings: docs/findings/rl-ui4.md. */
+#include "rl_va.h"
 #include "rl.h"
 #include "rl_ui4_globals.h"
 #include "engine_bf_input_globals.h"   /* g_bf_5af8f0: the default font */
@@ -597,9 +598,9 @@ int rl_404f4c(int x1, int y1, int x2, int y2) { return engine_path_dist_chebyshe
  * +16 / +20 the router's param0 / param1 (DAT_0059154c / DAT_00591550) */
 #define HS16(r, off) (*(const int16_t *)((r) + (off)))
 #define HS32(r, off) (*(const int32_t *)((r) + (off)))
-static void hs_fire(const uint8_t *r)   /* the record's action, through retail (a router action: hooked / retail) */
+static void hs_fire(const uint8_t *r)   /* the record's action: a retail VA (rl_va.h) */
 {
-    engine_retail_call(*(const uint32_t *)(r + 8), 0);
+    rl_va_call(*(const uint32_t *)(r + 8), 0);
 }
 
 /* Port of FUN_00408fcb (96 B) — load a raw .pl8 backdrop straight into the back buffer (h rows at the file's

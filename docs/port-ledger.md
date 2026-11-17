@@ -59,7 +59,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x401f49 | FUN_00401f49 | 70 | engine_menu_input.c, engine_title_render.c, engine_title_render.h (+2) |
 | 0x401f8f | FUN_00401f8f | 122 | font_metrics.c, font_metrics.h, rl_ui4.c (+2) |
 | 0x402009 | FUN_00402009 | 165 | engine_title_render.c, main.c, rl_ui4.c (+1) |
-| 0x4020ae | FUN_004020ae | 94 | engine_diplomacy_action_model.c, rl_ui4.c, save.h (+1) |
+| 0x4020ae | FUN_004020ae | 94 | engine_diplomacy_action_model.c, rl_link_logic.c, rl_ui4.c (+2) |
 | 0x40210c | FUN_0040210c | 90 | engine_menu_input.c, engine_title_render.c, engine_title_render.h (+2) |
 | 0x4022bd | FUN_004022bd | 394 | gfx_text_label.c, gfx_text_label.h |
 | 0x402447 | FUN_00402447 | 400 | gfx_text_label.c, gfx_text_label.h |
