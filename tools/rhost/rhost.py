@@ -41,6 +41,12 @@ BUILD = os.path.join(ROOT, "build", "rhost")
 EPH = os.environ.get("OL2_EPHEMERAL", "/mnt/ephemeral/openlords2")
 LOCAL_RUNS = os.environ.get("RHOST_RUNS", os.path.join(EPH, "rhost-runs"))
 WIN = os.environ.get("RHOST_WIN", "win")
+
+
+def expected_name(tgt):
+    """a target's blessed expectations: Windows expected.json, wine expected.wine.json; bunker runs the same wine
+    engine (headless on the NixOS box) and checks against wine's bless"""
+    return "expected.json" if tgt == "win" else "expected.wine.json" if tgt in ("wine", "bunker") else f"expected.{tgt}.json"
 WROOT = "C:\\ol2-rhost"
 WEXE = "ol2-rhost.exe"          # distinct name: sibling projects kill their own rhost.exe by path
 VOLATILE = os.path.join(HERE, "volatile.txt")
@@ -563,7 +569,7 @@ def cmd_corpus(a):
     tgt = getattr(a, "target", "win")
     if a.bless:
         for n in names:
-            ep = os.path.join(SCEN, n, "expected.json" if tgt == "win" else f"expected.{tgt}.json")
+            ep = os.path.join(SCEN, n, expected_name(tgt))
             r = res.get(n, {})
             if r.get("status") not in FINISHED:
                 print(f"  {n}: not blessed (status {r.get('status')})"); bad += 1; continue
@@ -600,7 +606,7 @@ def corpus_check_standalone(a, names, tgt):
     bad = 0
     t = "wine" if tgt == "bunker" else tgt
     for n in names:
-        ep = os.path.join(SCEN, n, "expected.json" if t == "win" else f"expected.{t}.json")
+        ep = os.path.join(SCEN, n, expected_name(t))
         exp, r = (json.load(open(ep)) if os.path.exists(ep) else {}), res.get(n, {})
         if n in gaps:
             diffs = [f"gap: reached retail code at {gaps[n]}"]
@@ -634,7 +640,7 @@ def cmd_snap_check(a):
     savestate at A; at B hash, restore, replay A..B again, twice) — every pass must equal the first, and the run's end
     the blessed expected (frame / tick / RNG / state_sem / every presented frame)"""
     tgt = "wine" if a.target == "bunker" else a.target       # bunker = the same wine engine: wine's bless
-    names = [n for n in all_scenarios(a.only) if os.path.exists(os.path.join(SCEN, n, "expected.json" if tgt == "win" else f"expected.{tgt}.json"))]
+    names = [n for n in all_scenarios(a.only) if os.path.exists(os.path.join(SCEN, n, expected_name(tgt)))]
     a.fb_hash = True
     runs = []
     for n, tr, meta in resolve_runs(names):
@@ -670,7 +676,7 @@ def expected_diffs(names, res, tgt):
     out = {}
     tgt = "wine" if tgt == "bunker" else tgt                 # bunker = the same wine engine: wine's bless
     for n in names:
-        ep = os.path.join(SCEN, n, "expected.json" if tgt == "win" else f"expected.{tgt}.json")
+        ep = os.path.join(SCEN, n, expected_name(tgt))
         if not os.path.exists(ep):
             out[n] = ["NO expected.json (run --bless)"]
             continue
@@ -1174,7 +1180,7 @@ def cmd_standalone(a):
     full, same, rows = 0, 0, []
     for n in names:
         r = res.get(n, {})
-        ep = os.path.join(SCEN, n, "expected.json" if tgt == "win" else f"expected.{tgt}.json")
+        ep = os.path.join(SCEN, n, expected_name(tgt))
         exp = json.load(open(ep)) if os.path.exists(ep) else {}
         if n in gaps:
             va, ret, f = gaps[n]

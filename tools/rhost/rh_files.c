@@ -132,6 +132,10 @@ static HANDLE WINAPI my_CreateFileA(LPCSTR p, DWORD acc, DWORD share, LPSECURITY
     int keep = disp == OPEN_EXISTING || disp == OPEN_ALWAYS;
     char buf[MAX_PATH];
     const char *q = resolve(p, w, keep, buf, sizeof buf);
+    if (O.data_image) {   /* the port's own image: nothing may read the game's exe */
+        const char *b = strrchr(q, '\\'); b = b ? b + 1 : q;
+        if (!_stricmp(b, "lords2.exe")) rh_fatal("--data-image: the game opened %s (the port reads nothing from the exe)", q);
+    }
     if (w) journal_touch(q);
     HANDLE h = CreateFileA(q, acc, share | FILE_SHARE_READ, sa, disp, fl, tmpl);
     g_nopen++;

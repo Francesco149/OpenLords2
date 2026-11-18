@@ -899,6 +899,9 @@ static void sa_seal(const char *exe_abs, const retail_image_t *img)
     if (!VirtualProtect((void *)(uintptr_t)RT_IMG_LO, RT_IMG_HI - RT_IMG_LO, PAGE_READWRITE, &old) ||
         !VirtualProtect((void *)(uintptr_t)RT_TEXT_LO, code_hi - RT_TEXT_LO, PAGE_EXECUTE_READ, &old))
         rh_fatal("standalone: cannot seal the image (%lu)", GetLastError());
+    for (int i = 0; i < img->nr; i++)   /* absent sections (port_map: .rsrc / .reloc): any read faults */
+        if (img->r[i].synth == 2 && !VirtualProtect((void *)(uintptr_t)img->r[i].va, img->r[i].len, PAGE_NOACCESS, &old))
+            rh_fatal("standalone: cannot seal %s (%lu)", img->r[i].name, GetLastError());
     snprintf(g_audit, sizeof g_audit, "%s\\standalone_audit.txt", O.rundir);
     DeleteFileA(g_audit);
     sa_audit("# OpenLords2 standalone audit: every byte taken from the game's files, and the code range\n");
@@ -907,7 +910,9 @@ static void sa_seal(const char *exe_abs, const retail_image_t *img)
     for (int i = 0; i < img->nr; i++) {
         const retail_range_t *r = &img->r[i];
         sa_audit("range %-8s %08x..%08x ch %08x %s\n", r->name, r->va, r->va + r->len, r->ch,
-                 r->copied ? "copied" : r->port ? "port-image" : "CODE-not-copied");
+                 r->copied ? "copied" : r->port ? "port-image" : r->synth == 1 ? "synthesized" : r->synth == 2 ? "absent"
+                 : "CODE-not-copied");
+        if (!r->copied && !r->port && !r->synth && !RETAIL_SEC_CODE(r->ch)) { sa_audit("FAIL %s neither copied nor the port's\n", r->name); bad++; }
         if (r->port) {
             int k = 0;
             while (k < g_di.n && g_di.va[k] != r->va) k++;
@@ -931,7 +936,7 @@ static void sa_seal(const char *exe_abs, const retail_image_t *img)
     }
     uint32_t int3 = 0, other = 0, notcopied = 0;
     for (int r = 0; r < img->nr; r++) {
-        if (img->r[r].copied || img->r[r].port) continue;
+        if (img->r[r].copied || img->r[r].port || img->r[r].synth) continue;
         const uint8_t *code = (const uint8_t *)(uintptr_t)img->r[r].va;
         notcopied += img->r[r].len;
         for (uint32_t i = 0; i < img->r[r].len; i++) {
@@ -945,7 +950,7 @@ static void sa_seal(const char *exe_abs, const retail_image_t *img)
     bad += other != 0;
     /* against the file: no 16-byte window of retail's code (all-INT3 windows aside) is present in memory */
     uint32_t windows = 0, same = 0;
-    HANDLE f = CreateFileA(exe_abs, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    HANDLE f = O.data_image ? INVALID_HANDLE_VALUE : CreateFileA(exe_abs, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
     HANDLE m = f != INVALID_HANDLE_VALUE ? CreateFileMappingA(f, NULL, PAGE_READONLY, 0, 0, NULL) : NULL;
     const uint8_t *v = m ? MapViewOfFile(m, FILE_MAP_READ, 0, 0, 0) : NULL;
     if (v) {
@@ -963,13 +968,13 @@ static void sa_seal(const char *exe_abs, const retail_image_t *img)
             }
         }
         UnmapViewOfFile(v);
-    } else { sa_audit("FAIL cannot re-read %s\n", exe_abs); bad++; }
+    } else if (!O.data_image) { sa_audit("FAIL cannot re-read %s\n", exe_abs); bad++; }
     if (m) CloseHandle(m);
     if (f != INVALID_HANDLE_VALUE) CloseHandle(f);
     bad += same != 0;
     sa_audit("code_range %08x..%08x bytes %u (all sections not copied: %u) thunks %d (%d bytes) int3 %u other %u\n",
              RT_TEXT_LO, code_hi, code_hi - RT_TEXT_LO, notcopied, nt_, 5 * nt_, int3, other);
-    sa_audit("retail_text_windows_compared %u identical %u\n", windows, same);
+    sa_audit("retail_text_windows_compared %u identical %u%s\n", windows, same, O.data_image ? " exe-not-opened" : "");
     /* the protections: nothing executable in the image but the code range */
     uint32_t a = RT_IMG_LO, xout = 0;
     while (a < RT_IMG_HI) {
@@ -1030,8 +1035,11 @@ int main(int argc, char **argv)
     if (O.standalone && (O.coverage || g_ntrap)) rh_fatal("--standalone maps no retail code: nothing to cover / trap");
     if (O.data_image && !O.standalone) rh_fatal("--data-image needs --standalone");
     if (O.data_image) di_load(O.data_image);
-    if (retail_map(exe_abs, &img, O.standalone, g_di.va, g_di.n)) rh_fatal("map %s failed", exe_abs);
-    if (O.data_image) di_place(&img);
+    if (O.data_image) {   /* the whole image from the port: rl_image.c + the data image; Lords2.exe is never opened */
+        if (port_map(&img, g_di.va, g_di.n)) rh_fatal("port_map failed");
+        di_place(&img);
+        snprintf(exe_abs, sizeof exe_abs, "(not opened: rl_image.c + %s)", g_di.path);
+    } else if (retail_map(exe_abs, &img, O.standalone, g_di.va, g_di.n)) rh_fatal("map %s failed", exe_abs);
     layout_from_pe();
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
     SetUnhandledExceptionFilter(rh_crash_filter);

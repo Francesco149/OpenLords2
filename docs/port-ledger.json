@@ -5,14 +5,14 @@
   "engine_functions_total": 2452,
   "non_thunk_functions": 2447,
   "tested": 788,
-  "ported": 1239,
-  "unported": 420,
+  "ported": 1240,
+  "unported": 419,
   "orphan_refs_not_in_function_table": 7,
-  "touched": 2027,
-  "pct_touched": 82.8,
+  "touched": 2028,
+  "pct_touched": 82.9,
   "pct_tested": 32.2,
   "bytes_total": 838629,
-  "bytes_touched": 738419,
+  "bytes_touched": 738440,
   "pct_bytes_touched": 88.1
  },
  "orphan_refs": [
@@ -25476,8 +25476,10 @@
    "name": "__fptrap",
    "size": 21,
    "is_thunk": false,
-   "status": "unported",
-   "src": []
+   "status": "ported",
+   "src": [
+    "src/rl_crt_dbg.c"
+   ]
   },
   {
    "va": "0x4cd4f0",

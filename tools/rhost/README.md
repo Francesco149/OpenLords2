@@ -22,8 +22,10 @@ python3 tools/rhost/rhost.py corpus --check --hook replace:rng_step       # hybr
 python3 tools/rhost/rhost.py shots endturn-2 --at 1800:3600:300           # PNG + exact .idx index planes
 python3 tools/rhost/rhost.py record my-play [--from endturn-2]            # HUMAN PLAY on the Windows desktop
 python3 tools/rhost/rhost.py standalone [--only RE]                    # the corpus with NO retail code (--standalone): first gap / = pure retail
-python3 tools/rhost/rhost.py standalone --port-data                    # … and .rdata / .data from the PORT's definitions (rhost --data-image;
-                                                                       #   tools/data_selfcheck.py --compose --strict), not the exe
+python3 tools/rhost/rhost.py standalone --port-data                    # … and the whole image from the PORT: Lords2.exe never opened (rhost
+                                                                       #   --data-image: .rdata / .data = tools/data_selfcheck.py --compose --strict;
+                                                                       #   headers + .idata synthesized from src/rl_image.c = tools/gen_image_defs.py;
+                                                                       #   .rsrc / .reloc absent, PAGE_NOACCESS; an open of Lords2.exe is FATAL)
 python3 tools/rhost/rhost.py play-install                                # Desktop shortcut "Lords II capture" (free play, below)
 python3 tools/rhost/rhost.py play-status / play-fetch                     # list the owner's sessions / import + self-check them
 python3 tools/rhost/rhost.py run X --extra "--watch-write 57c934@1800"    # who writes this dword (+ EBP callers)

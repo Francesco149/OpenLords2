@@ -208,9 +208,12 @@
    standalone runs on the port's own data** — `data_selfcheck.py --compose F --strict` builds .rdata + .data from the
    port's definitions (rest zero; = the exe but the 27 debug-directory bytes, anything else fails), rhost
    `--data-image F` maps them instead of the exe's (audit: `range … port-image`, checksum at the seal), `rhost.py
-   --port-data`: **standalone 121/121 = pure retail** (wine); the pre-commit gate's standalone half uses it. Still from
-   the exe: the PE headers, .idata (the loader's import table), .rsrc (the MP dialogs: DialogBoxParamA 0x81 / 0x6c /
-   0x82 / 0x74) and .reloc (copied, unused) — the next gaps toward "loads nothing".
+   --port-data`: **standalone 121/121 = pure retail** (wine); the pre-commit gate's standalone half uses it.
+   **2026-11-18: the standalone opens no Lords2.exe** — layout + import table are port definitions (`src/rl_image.c`,
+   `tools/gen_image_defs.py`), rhost `port_map` synthesizes headers + .idata, .rsrc / .reloc absent (PAGE_NOACCESS), an
+   open of the exe is FATAL (standalone-path.md §No exe at all): 121/121 = pure retail. Left from the game's files: the
+   asset files the game reads at run time (and smackw32.dll with --movies). Static gaps 0 again (`_fptrap` ported; the
+   prover reads pointers in unread data tables as values).
 9. ~~**Port build `-std=gnu11`**~~ — done 2026-11-17: retail has no x87 code (IDA export: 0 FP mnemonics), the port
    none either; all 213 src modules compile to identical code under c11 / gnu11, rhost.exe byte-identical; src / tests
    Makefiles → gnu11.

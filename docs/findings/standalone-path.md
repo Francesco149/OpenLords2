@@ -71,6 +71,21 @@ OpenSummoners does), toward a later fully documented port that loads nothing fro
 - **Port data** (2026-11-17, `--data-image F`, `rhost.py --port-data`): .rdata / .data come from the port's composed
   image (`tools/data_selfcheck.py --compose`, data-catalog.md), not the exe — retail_map leaves them zero, the audit
   lists them `port-image` with the image's checksum = memory at the seal. Corpus 121/121 = pure retail.
+- **No exe at all** (2026-11-18, same flags): the rest of the image comes from the port too — `src/rl_image.c`
+  (`tools/gen_image_defs.py`, `--check` in pre-commit): the layout (6 sections: VA, VirtualSize, SizeOfRawData,
+  characteristics; base / SizeOfImage / entry / the IAT range) and the import table (162 slots in 8 DLLs: slot VA, DLL,
+  name or ordinal, hint). rhost `port_map` (retail_map.h) synthesizes the headers (DOS + NT + section table; data
+  directories import + IAT only) and .idata (descriptors, lookup tables, hint/names in a fresh layout; every IAT slot at
+  its retail VA), fills .text with INT3, leaves .rsrc / .reloc **absent** (zero, PAGE_NOACCESS after the seal: rhost
+  fakes every resource API, the image never relocates) and maps the data image. Lords2.exe is never opened: the audit
+  says `exe (not opened: rl_image.c + …)`, ranges `synthesized` / `port-image` / `absent` / `CODE-not-copied`, and
+  rh_files.c makes any open of Lords2.exe FATAL in this mode. Retail code reads the headers / .idata only through its
+  IAT slots, so the fresh layout is invisible to it (state = .data only). **Corpus 121/121 = pure retail** (bunker).
+- **Static gaps** (`prove_no_retail_code.py`): the generated data definitions (2026-11-17) brought 19 code pointers into
+  src — slots of tables no port code reads (retail's dead button / hotspot / menu tables, the army-state handler tables
+  the port dispatches by switch, the EH hooks): the prover now counts a pointer in a `*_data_globals.c` definition as a
+  code use only if port code reads that definition (name or a VA inside it); 89 slots / 13 definitions are values. The
+  one real call-through, `_cfltcvt_tab` → `_fptrap` 0x4cd4d0, is ported (rl_crt_dbg.c, HOST row): 0 gaps.
 - **Audit** (`<rundir>\standalone_audit.txt`, written after the seal, before the first port instruction): every range
   taken from the file (`copied` only for non-code sections), every thunk, `code_range … other 0` (every non-thunk code
   byte INT3), `retail_text_windows_compared 1809 identical 0`, the protections (`exec_outside_code_range 0`), smackw32

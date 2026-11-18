@@ -326,6 +326,28 @@ def check_source(exe, gaps_only=False):
     data = {s["va"]: s for s in exe["secs"] if not is_code(s)}
     decl = {}          # g_*_<va>[N] declarations: the table bound
     hybrid_only = []   # literals only the hybrid reaches (RL_PLAT_CRT: the standalone binds the host CRT)
+    # the port's data definitions (tools/gen_data_defs.py: *_data_globals.c, `/* .data 0xLO..0xHI */` + a definition):
+    # a code pointer in one is a VALUE unless port code reads that definition (by name, or a VA inside it) — retail's
+    # dead / switch-dispatched tables are copied byte for byte (data_selfcheck) and never called through
+    port_text = {}
+    for p in source_files():
+        b = os.path.basename(p)
+        if not (b.endswith("_globals.c") or b.endswith("_globals.h") or b.endswith("alias.h")):
+            port_text[p] = strip_c(open(p, errors="replace").read())
+    port_idents = set(re.findall(r"\b[A-Za-z_]\w*\b", "\n".join(port_text.values())))
+    port_hex = {int(h, 16) for h in re.findall(r"\b0x([0-9a-fA-F]{6,8})u?\b", "\n".join(port_text.values()))}
+    data_defs = {}     # rel path -> [(line of the definition, name, lo, hi)]
+    unread_vals = []   # (va, where, table name)
+    for p in source_files():
+        if not p.endswith("_data_globals.c"):
+            continue
+        raw = open(p, errors="replace").read()
+        ds = []
+        for m in re.finditer(r"/\*\s*\.\w+\s+0x([0-9a-f]+)\.\.0x([0-9a-f]+)\s*\*/\s*\n(?:const\s+)?\w+\s+(\w+)\s*\[", raw):
+            ds.append((raw.count("\n", 0, m.end()) + 1, m.group(3), int(m.group(1), 16), int(m.group(2), 16)))
+        data_defs[os.path.relpath(p, ROOT)] = ds
+    def table_read(name, tlo, thi):
+        return name in port_idents or any(tlo <= v < thi for v in port_hex)
     for p in source_files():
         rel = os.path.relpath(p, ROOT)
         s = strip_c(open(p, errors="replace").read())
@@ -372,6 +394,10 @@ def check_source(exe, gaps_only=False):
             if va not in names:
                 odd.append(f"{where} 0x{va:x}: {pre.strip()[-50:]}0x{m.group(1)}")
                 continue
+            dd = [d for d in data_defs.get(rel, []) if d[0] <= line_no]
+            if dd and not table_read(dd[-1][1], dd[-1][2], dd[-1][3]):
+                unread_vals.append((va, where, dd[-1][1]))
+                continue
             called = bool(CALL_CTX.search(pre)) or bool(re.match(r"\s*u?\s*\)\s*\(", post))
             uses.setdefault(va, []).append(("call" if called else "addr", where))
     # indirect seams through retail data tables: expand the table from the exe (entries while each is an IDA entry)
@@ -406,6 +432,12 @@ def check_source(exe, gaps_only=False):
             info(f"{len(hybrid_only)} retail CRT entries (RL_PLAT_CRT, src/rl_io_plat.h) are hybrid-only: --standalone binds "
                  "the host CRT (rl_plat_bind_imports: s_crt 0), never CRT(n): " +
                  " ".join(f"{va:x}={names.get(va, '?')}" for va, _ in hybrid_only))
+        if unread_vals:
+            tn = sorted({t for _, _, t in unread_vals})
+            info(f"code pointers in port data no port code reads (values: retail's dead / switch-dispatched tables, "
+                 f"copied byte for byte): {len(unread_vals)} slots in {len(tn)} definitions ({', '.join(tn)}); "
+                 f"{len({v for v, _, _ in unread_vals} - thunked)} of their {len({v for v, _, _ in unread_vals})} entries "
+                 "have no row")
         info("not counted (no use as code): " + "; ".join(f"{va:x} {why}" for va, why in NOT_CODE_USES.items()))
         info("indirect seams not expandable statically (runtime pointers: the corpus decides): "
              "engine_retail_call(*(r + 8)) rl_ui4.c, (g_rl_522ca8 + 4) rl_glue.c, g_rl_552ff4 rl_ctl.c")
@@ -440,12 +472,14 @@ def check_audit(path, exe, thunked):
             kv[f[0]] = f[1:]
     check("audit: verdict OK, no FAIL line", kv.get("verdict") == ["OK"] and not fails,
           " ".join(kv.get("verdict", ["missing"])) + " " + "; ".join(fails[:6]))
-    badr = [r for r in ranges if (r[3] & (SCN_CODE | SCN_EXEC)) and r[4] == "copied"]
-    notc = [r for r in ranges if r[4] != "copied"]
+    # a range is copied (from the exe), port-image (--data-image), synthesized (rl_image.c: headers, .idata), absent
+    # (zero, PAGE_NOACCESS: .rsrc / .reloc) or CODE-not-copied (INT3 + thunks) — only code sections may be the last
+    badr = [r for r in ranges if (r[3] & (SCN_CODE | SCN_EXEC)) and r[4] != "CODE-not-copied"]
+    notc = [r for r in ranges if r[4] == "CODE-not-copied"]
     want = [s["name"] for s in exe["secs"] if is_code(s)]
-    check(f"audit: {len(ranges)} ranges, every copied one non-code; not copied: "
-          f"{', '.join(r[0] for r in notc)} (= the exe's code sections)",
-          not badr and sorted(r[0] for r in notc) == sorted(want), "; ".join(f"{r[0]} copied" for r in badr))
+    kinds = ", ".join(f"{r[0]} {r[4]}" for r in ranges)
+    check(f"audit: {len(ranges)} ranges ({kinds}); code-not-copied = the exe's code sections",
+          not badr and sorted(r[0] for r in notc) == sorted(want), "; ".join(f"{r[0]} {r[4]}" for r in badr))
     cr = kv.get("code_range", [])
     def field(k):
         return int(cr[cr.index(k) + 1]) if k in cr else -1

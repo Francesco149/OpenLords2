@@ -42,6 +42,10 @@ if ! python3 tools/gen_rl_va_map.py --check 2>/dev/null; then
     python3 tools/gen_rl_va_map.py >/dev/null && git add src/rl_va_map.c
     echo "pre-commit: src/rl_va_map.c regenerated from the row tables (staged)" >&2
 fi
+# --- 1c. The port's image description (layout + imports) = the exe's -------
+if [ -e src/rl_image.c ] && ! python3 tools/gen_image_defs.py --check >/dev/null 2>&1; then
+    echo "pre-commit: src/rl_image.{c,h} differ from the exe (tools/gen_image_defs.py --check)" >&2; exit 1
+fi
 
 # --- 2. Run the host test suite if code changed --------------------------
 staged="$(git diff --cached --name-only)"

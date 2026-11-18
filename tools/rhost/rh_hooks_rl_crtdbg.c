@@ -3,7 +3,8 @@
  * `rhost.py probe tests/probes/crt-dbg.probe` (synthetic carriers) + the hybrid pass.
  *
  * HOST rows (RH_SH_HOST: they never return — _exit / _amsg_exit / abort / terminate end the process through doexit's
- * ExitProcess): proven by the hybrid pass only, no probe line. __alloca_probe 0x4caae0 has no row (eax = size, moves
+ * ExitProcess): proven by the hybrid pass only, no probe line (_fptrap 0x4cd4d0 = _amsg_exit(2): no carrier at all, retail
+ * formats no floating point). __alloca_probe 0x4caae0 has no row (eax = size, moves
  * esp: not a C function). __CxxUnhandledExceptionFilter is __stdcall (RH_ENTRY with `ret $4`). */
 #include "rh_port.h"
 #include "rl_crt.h"
@@ -15,7 +16,7 @@ enum {
     X_rl_crt_4c3950, X_rl_crt_4c3d40, X_rl_crt_4c37d0, X_rl_crt_4cb010, X_rl_crt_4c2090, X_rl_crt_4ca5d0,
     X_rl_crt_4ca630, X_rl_crt_4ca900, X_rl_crt_4ca9f0, X_rl_crt_4c6650, X_rl_crt_4cc4d0, X_rl_crt_4cc590,
     X_rl_crt_4ca330, X_rl_crt_4ca2d0, X_rl_crt_4c35c0, X_rl_crt_4bf710, X_rl_crt_4cad80, X_rl_crt_4cafa0,
-    X_rl_crt_4ccb00, X_rl_crt_4c8700, X_rl_crt_4ccac0, X_rl_crt_4cc980,
+    X_rl_crt_4ccb00, X_rl_crt_4c8700, X_rl_crt_4ccac0, X_rl_crt_4cc980, X_rl_crt_4cd4d0,
 };
 #include "rh_crt_so.h"
 
@@ -80,6 +81,7 @@ HOOK_V(rl_crt_4bf710, 1, rl_crt_4bf710(I(0)))
 HOOK_R(rl_crt_4cad80, 1, rl_crt_4cad80(I(0)))
 HOOK_R(rl_crt_4cafa0, 1, rl_crt_4cafa0(I(0)))
 HOOK_V(rl_crt_4ccb00, 0, rl_crt_4ccb00())
+HOOK_V(rl_crt_4cd4d0, 0, rl_crt_4cd4d0())
 HOOK_V(rl_crt_4c8700, 0, rl_crt_4c8700())
 HOOK_R(rl_crt_4ccac0, 1, rl_crt_4ccac0(a[0]))
 HOOK_R_STD4(rl_crt_4cc980, 1, rl_crt_4cc980(a[0]))
@@ -107,5 +109,6 @@ hook_t RH_HOOKS_RL_CRTDBG[] = {
     { "rl_crt_4c8700", 0x4c8700u, (void *)w_rl_crt_4c8700, 0, 0, 0, 0, "", 0, RH_SH_HOST },
     { "rl_crt_4ccac0", 0x4ccac0u, (void *)w_rl_crt_4ccac0, 0, 0, 0, 0, "", 0, 0 },
     { "rl_crt_4cc980", 0x4cc980u, (void *)w_rl_crt_4cc980, 0, 0, 0, 0, "", 0, 0 },
+    { "rl_crt_4cd4d0", 0x4cd4d0u, (void *)w_rl_crt_4cd4d0, 0, 0, 0, 0, "", 0, RH_SH_HOST },
 };
 const int RH_HOOKS_RL_CRTDBG_N = sizeof RH_HOOKS_RL_CRTDBG / sizeof *RH_HOOKS_RL_CRTDBG;

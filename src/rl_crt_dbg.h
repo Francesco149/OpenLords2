@@ -23,6 +23,7 @@ uint32_t rl_crt_4ca330(int num);                                                
 void     rl_crt_4ca2d0(void);                                                       /* _FF_MSGBANNER */
 void     rl_crt_4c35c0(int num);                                                    /* _amsg_exit (never returns) */
 void     rl_crt_4bf710(int code);                                                   /* _exit (never returns) */
+void     rl_crt_4cd4d0(void);                                                       /* _fptrap (never returns) */
 int      rl_crt_4cad80(int sig);                                                    /* raise */
 uint32_t rl_crt_4cafa0(int sig);                                                    /* siglookup */
 void     rl_crt_4ccb00(void);                                                       /* abort (never returns) */

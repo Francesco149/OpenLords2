@@ -1,0 +1,164 @@
+#!/usr/bin/env python3
+"""tools/gen_image_defs.py — the port's description of its own image: layout + import table (src/rl_image.c / .h).
+
+What the standalone still took from Lords2.exe after the data image (2026-11-17): the PE headers (ImageBase,
+SizeOfImage, entry, the section table) and .idata (which DLL function each IAT slot holds). Retail code reads neither
+but through its IAT slots (`call [slot]`); rhost's loader and IAT layer read both. This emits them as port definitions,
+so `rhost --standalone --data-image F` builds the whole image from the port (rhost port_map) and never opens the exe:
+  - rl_image_sections[]: name, VA, VirtualSize, SizeOfRawData (the GOG patch's code lies past .text's VirtualSize),
+    Characteristics — layout only, no file offsets
+  - rl_imports[]: IAT slot VA, DLL, name (or ordinal), hint — in slot order; each DLL's slots contiguous + a zero slot
+Not emitted: .rsrc (rhost fakes every resource API: rh_win.c), .reloc (fixed ImageBase), the debug directory, the
+timestamps / linker fields (nothing reads them).
+
+Usage:  python3 tools/gen_image_defs.py [--exe PATH] [--check]     (--check: exit 1 if src/rl_image.{c,h} differ)
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import struct
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import data_ledger as DL  # noqa: E402
+
+ROOT = DL.ROOT
+OUT_C = os.path.join(ROOT, 'src', 'rl_image.c')
+OUT_H = os.path.join(ROOT, 'src', 'rl_image.h')
+
+
+def parse(exe: bytes):
+    pe = struct.unpack_from('<I', exe, 0x3c)[0]
+    assert exe[pe:pe + 4] == b'PE\0\0'
+    nsec, _, _, _, opt_sz = struct.unpack_from('<HIIIH', exe, pe + 6)
+    opt = pe + 24
+    entry = struct.unpack_from('<I', exe, opt + 16)[0]
+    base = struct.unpack_from('<I', exe, opt + 28)[0]
+    sec_al, file_al = struct.unpack_from('<II', exe, opt + 32)
+    size_img, size_hdr = struct.unpack_from('<II', exe, opt + 56)
+    dd = [struct.unpack_from('<II', exe, opt + 96 + 8 * i) for i in range(16)]
+    secs = []
+    for i in range(nsec):
+        o = opt + opt_sz + 40 * i
+        name = exe[o:o + 8].rstrip(b'\0').decode()
+        vsz, va, raw, praw = struct.unpack_from('<IIII', exe, o + 8)
+        ch = struct.unpack_from('<I', exe, o + 36)[0]
+        secs.append(dict(name=name, va=va, vsz=vsz, raw=raw, praw=praw, ch=ch))
+
+    def rva2off(rva):
+        for s in secs:
+            if s['va'] <= rva < s['va'] + max(s['vsz'], s['raw']):
+                return rva - s['va'] + s['praw']
+        raise ValueError(hex(rva))
+
+    def cstr(rva):
+        o = rva2off(rva)
+        return exe[o:exe.index(b'\0', o)].decode()
+
+    imps = []
+    d = rva2off(dd[1][0])
+    while True:
+        oft, _, _, name, ft = struct.unpack_from('<IIIII', exe, d)
+        if not name:
+            break
+        dll = cstr(name)
+        k = 0
+        while True:
+            v = struct.unpack_from('<I', exe, rva2off((oft or ft) + 4 * k))[0]
+            if not v:
+                break
+            if v & 0x80000000:
+                imps.append(dict(slot=base + ft + 4 * k, dll=dll, name=None, ord=v & 0xffff, hint=0))
+            else:
+                o = rva2off(v)
+                imps.append(dict(slot=base + ft + 4 * k, dll=dll, name=cstr(v + 2), ord=0,
+                                 hint=struct.unpack_from('<H', exe, o)[0]))
+            k += 1
+        d += 20
+    imps.sort(key=lambda r: r['slot'])
+    return dict(base=base, entry=base + entry, size=size_img, sec_al=sec_al, file_al=file_al, size_hdr=size_hdr,
+                secs=secs, imps=imps, iat=(base + dd[12][0], dd[12][1]), idir=dd[1])
+
+
+def emit(p, exe_name: str):
+    h = []
+    h.append('/* rl_image.h — GENERATED (tools/gen_image_defs.py): see rl_image.c. */')
+    h.append('#pragma once')
+    h.append('#include <stdint.h>')
+    h.append('')
+    h.append('typedef struct { const char *name; uint32_t va, vsize, raw, ch; } rl_image_section_t;')
+    h.append('/* name NULL: by ordinal */')
+    h.append('typedef struct { uint32_t slot; const char *dll, *name; uint16_t ord, hint; } rl_import_t;')
+    h.append('')
+    h.append('#define RL_IMAGE_BASE      0x%08xu' % p['base'])
+    h.append('#define RL_IMAGE_SIZE      0x%08xu   /* SizeOfImage */' % p['size'])
+    h.append('#define RL_IMAGE_ENTRY     0x%08xu   /* start: rl_crt_start is its port */' % p['entry'])
+    h.append('#define RL_IMAGE_SEC_ALIGN 0x%xu' % p['sec_al'])
+    h.append('#define RL_IMAGE_IAT_LO    0x%08xu   /* data directory 12: the IAT */' % p['iat'][0])
+    h.append('#define RL_IMAGE_IAT_HI    0x%08xu' % (p['iat'][0] + p['iat'][1]))
+    h.append('#define RL_IMAGE_NSECTIONS %d' % len(p['secs']))
+    h.append('#define RL_NIMPORTS        %d' % len(p['imps']))
+    h.append('')
+    h.append('extern const rl_image_section_t rl_image_sections[RL_IMAGE_NSECTIONS];')
+    h.append('extern const rl_import_t rl_imports[RL_NIMPORTS];')
+    c = []
+    c.append('/* rl_image.c — GENERATED by tools/gen_image_defs.py from %s; do not edit (`--check` compares).' % exe_name)
+    c.append(' * The port\'s own image description: the layout retail\'s code and data assume (sections at fixed VAs) and')
+    c.append(' * the import table (which function each IAT slot holds; retail and the port call through the slots). With')
+    c.append(' * `rhost --standalone --data-image F` the whole image is built from this + the port\'s data (rhost port_map):')
+    c.append(' * Lords2.exe is never opened. .rsrc / .reloc are listed for the layout only: nothing reads them. */')
+    c.append('#include "rl_image.h"')
+    c.append('')
+    c.append('const rl_image_section_t rl_image_sections[RL_IMAGE_NSECTIONS] = {')
+    for s in p['secs']:
+        c.append('    { %-9s 0x%08xu, 0x%06xu, 0x%06xu, 0x%08xu },' % (
+            '"%s",' % s['name'], p['base'] + s['va'], s['vsz'], s['raw'], s['ch']))
+    c.append('};')
+    c.append('')
+    c.append('const rl_import_t rl_imports[RL_NIMPORTS] = {')
+    for r in p['imps']:
+        nm = '"%s"' % r['name'] if r['name'] else 'NULL'
+        c.append('    { 0x%08xu, %-15s %-30s %3d, 0x%04x },' % (r['slot'], '"%s",' % r['dll'], nm + ',', r['ord'], r['hint']))
+    c.append('};')
+    return '\n'.join(c) + '\n', '\n'.join(h) + '\n'
+
+
+def check_contiguous(p):
+    """each DLL: one run of consecutive slots, the slot after it zero (outside any run) — the loader's layout"""
+    runs = {}
+    for r in p['imps']:
+        runs.setdefault(r['dll'], []).append(r['slot'])
+    used = {r['slot'] for r in p['imps']}
+    for dll, ss in runs.items():
+        if ss != list(range(ss[0], ss[0] + 4 * len(ss), 4)):
+            sys.exit('gen_image_defs: %s slots not contiguous' % dll)
+        if ss[-1] + 4 in used:
+            sys.exit('gen_image_defs: %s has no terminating zero slot' % dll)
+        if not (p['iat'][0] <= ss[0] and ss[-1] + 8 <= p['iat'][0] + p['iat'][1]):
+            sys.exit('gen_image_defs: %s outside the IAT directory' % dll)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--exe', default=DL.DEF_EXE if os.path.exists(DL.DEF_EXE) else DL.ALT_EXE)
+    ap.add_argument('--check', action='store_true')
+    a = ap.parse_args()
+    p = parse(open(a.exe, 'rb').read())
+    check_contiguous(p)
+    c, h = emit(p, os.path.basename(a.exe))
+    if a.check:
+        bad = [f for f, t in ((OUT_C, c), (OUT_H, h)) if not os.path.exists(f) or open(f).read() != t]
+        for f in bad:
+            print('gen_image_defs --check: %s differs from the exe' % os.path.relpath(f, ROOT))
+        print('gen_image_defs --check: %d sections, %d imports, %s' % (len(p['secs']), len(p['imps']), 'DIFF' if bad else 'OK'))
+        return 1 if bad else 0
+    open(OUT_C, 'w').write(c)
+    open(OUT_H, 'w').write(h)
+    print('gen_image_defs: %d sections, %d imports (%d DLLs) -> src/rl_image.{c,h}' % (
+        len(p['secs']), len(p['imps']), len({r['dll'] for r in p['imps']})))
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

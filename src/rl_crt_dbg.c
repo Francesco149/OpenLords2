@@ -481,6 +481,13 @@ void rl_crt_4c35c0(int num)
     ((void (__cdecl *)(int))(uintptr_t)U32(G_AEXIT_RTN))(255);
 }
 
+/* Port of FUN_004cd4d0 (13 B) — _fptrap: every slot of _cfltcvt_tab (0x4e5970) in an exe that links no floating
+ * point; a %e / %f / %g conversion lands here → _amsg_exit(_RT_FLOAT = 2) (never returns). */
+void rl_crt_4cd4d0(void)
+{
+    rl_crt_4c35c0(2);
+}
+
 /* Port of FUN_004bf710 (27 B) — _exit: doexit(code, 1, 0) (never returns). */
 void rl_crt_4bf710(int code)
 {

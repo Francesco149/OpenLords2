@@ -1,7 +1,7 @@
 # synthetic carriers for src/rl_crt_dbg.c (partition A "dbg": the debug CRT's report / message / exit / signal path).
 # rhost's fakes: MessageBoxA → IDOK (so no box ever answers Abort / Retry), GetActiveWindow → NULL, DebugBreak logs and
 # returns under --probe; WriteFile to handle -1 / 1 / 2 succeeds. Free _iob slots 5..9 (0x4e5780 + 32 k) hold the
-# FILEs / records the pokes build. Not probed (never return): _exit 4bf710, _amsg_exit 4c35c0, abort 4ccb00,
+# FILEs / records the pokes build. Not probed (never return): _exit 4bf710, _amsg_exit 4c35c0, _fptrap 4cd4d0, abort 4ccb00,
 # terminate 4c8700 (RH_SH_HOST rows; docs/findings/crt-gap-dbg.md).
 scenario newgame-playnow
 
