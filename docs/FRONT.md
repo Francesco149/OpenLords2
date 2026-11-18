@@ -44,7 +44,8 @@
   `rhost --live` (retail as a coroutine on its fixed stack), in-process savestates by full page compare (`rhost.py
   snap-check`: 128/128 PASS, end states = the blessed corpus), exploration search (wine 6.8k frames/s a session,
   Windows 13.7k, bunker 16.1k; `-j 8` across hosts 41k), screen text + hotspot recorders, exact in-session pictures,
-  `rd cov` (corpus baseline 1527/2611 functions, 75.8%). Third host: bunker (`tools/bunker/`). Campaign 1 running.
+  `rd cov`. Third host: bunker (`tools/bunker/`). **Corpus 2026-11-18: 121 scenarios reach 1838/2611 functions, 82.6 % of
+  retail code bytes** (`rhost.py coverage --target wine`).
 - **Top blocker:** none for logic parity. The standalone's state = pure retail's (64/64, state_sem included) since the
   CRT port (2026-11-08, `docs/findings/crt-port.md`). Multiplayer stays unverifiable (DirectPlay / serial: rhost stubs it).
 <!-- status:end -->
@@ -126,6 +127,8 @@
    0x48d9ce arms the flag only when every AI unit left is a knight before any wall breach — a 30–40-season managed game
    (driver report in the 2026-11-13 session; furthest checkpoint run `siegeknights:t27`). Next: `rd seasons` makes long
    setups cheap; lord_move 0x4a599d now has its row (rl_4a599d, 2026-11-14) and 0x48e774 is reached; block gaps by `rd cov --blocks --fn`.
+   **2026-11-14 later: siege-knights filed** (attempts 5–7, $10.72; PROGRESS 2026-11-14): halve_garrison 0x4ad8cc,
+   knight-garrison 0x48e774 and lord_move 0x4a599d are all reached — every named single-player target but 0x485861.
    Recipe: `tools/drive/README.md` §Campaign recipe. Tool work left: savestates cost ~9 % of search time (not worth
    optimizing yet).
 
@@ -183,10 +186,13 @@
    0 divergences, hybrid PASS; standalone 39/39 MP = pure retail, 0 rl_va misses. **0x465d28 done** (its residue was
    already rl_46521f's model; the binder moved into src: `rl_465d28_res`): standalone 121/121 = pure retail, 0 rl_va
    misses. ★5 closed (rl_mpnet's CRT helpers: ★4, done) — rl-link.md §Left.
-6. **Unreached code**: 939 functions / 172 KB no scenario reaches (`docs/findings/coverage-round3.md`): multiplayer
-   (DirectPlay / serial — a fake transport in rhost would open it), dead code (zoom-1 / zoom-16 drawers, unwritten
-   orders 0 / 7 / 13 / 15 / 16), AI knight garrisons, DirectDraw errors (a fault-injection switch for 0x42f60e's
-   HRESULT table), the human queue (below).
+6. **Unreached code** (2026-11-18 census, corpus 121): 773 functions / 146 KB no scenario reaches — 525 transitively
+   dead (no caller, or only dead callers; 97 KB, 51 of them library), 108 library with a live caller (26 KB: CRT error /
+   locale paths), 43 unported app functions with a live caller (2.6 KB: mostly 11-byte address-taken stubs), **95 ported
+   app rows never reached** (20.5 KB): 37 have a synthetic carrier (`tests/probes/`), **58 have no evidence at all**
+   (17 KB: the MP delayed-action handlers 0x447b31..0x448411, the zoom-16 terrain drawers 0x460501..0x461efb /
+   0x4bc8fc / 0x4bcbd1, the DirectDraw error table 0x42f60e and its callers 0x42e3ba / 0x42e45e / 0x42e50d / 0x42f449,
+   gfx_restore 0x4b2730, 0x485861, 0x494e3f, a dozen UI leaves). Next: probe carriers for the 58.
 7. **Tooling** — 2026-11-17: `tools/bf/dedup_globals.py` read no definition with a trailing comment (every hand-edited one —
    how g_rl_4dc428 / 4ea180 / 4d8a58 slipped through): fixed, any g_bf_/g_rl_ definition it can't parse is now an error,
    `--check` = report only. Verify cost: the shadowed calls over every wine verify log (949 M) — 79 rows average ≥ 8k a
@@ -241,10 +247,9 @@
    battlefield tactics (formations, archers held back, castle walls, siege engines on the field, defending your
    castle; the lord captured), a late-game campaign to a victory, natural mouse dynamics:
    `python3 tools/rhost/rhost.py record NAME [--from SCEN]` (normal window, never fullscreen; close it to
-   finish). The bot now covers simple field battles, sieges, events, alliance offers. Most wanted (coverage round 3,
-   `docs/findings/coverage-round3.md`): an AI castle **defended by knights** and assaulted on the field (0x48e774), an
-   AI **besieging you with knights** (halve_garrison 0x4ad8cc), an **ally that raises a new army** and marches its lord
-   (0x4a599d), a long campaign with stone castles.
+   finish). The bot and the rd drivers now cover field battles, sieges, events, alliance offers, AI knight garrisons
+   and besiegers, an AI lord's march (filed 2026-11-13/14). Still most wanted: a long campaign with stone castles to a
+   victory, real battlefield tactics.
 Resolved 2026-11-07 (owner): the standalone loads its DATA from the user's exe with proof no original code runs (as
 OpenSummoners), toward a fully documented port that loads nothing from it; lean on the bot to exercise what the data
 documentation needs; more targeted traces stay deferred (the free-play shortcut instead).

@@ -1640,7 +1640,8 @@ claims are unverified until rhost re-checks them (`docs/audits/2026-10-23-method
   `rhost --live` (retail as a coroutine on its fixed stack), in-process savestates by full page compare (`rhost.py
   snap-check`: 128/128 PASS, end states = the blessed corpus), exploration search (wine 6.8k frames/s a session,
   Windows 13.7k, bunker 16.1k; `-j 8` across hosts 41k), screen text + hotspot recorders, exact in-session pictures,
-  `rd cov` (corpus baseline 1527/2611 functions, 75.8%). Third host: bunker (`tools/bunker/`). Campaign 1 running.
+  `rd cov`. Third host: bunker (`tools/bunker/`). **Corpus 2026-11-18: 121 scenarios reach 1838/2611 functions, 82.6 % of
+  retail code bytes** (`rhost.py coverage --target wine`).
 - **Top blocker:** none for logic parity. The standalone's state = pure retail's (64/64, state_sem included) since the
   CRT port (2026-11-08, `docs/findings/crt-port.md`). Multiplayer stays unverifiable (DirectPlay / serial: rhost stubs it).
 
