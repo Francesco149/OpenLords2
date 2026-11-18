@@ -1,0 +1,362 @@
+# synthetic carriers for the dead zoom-16 drawers (rhost.py probe --target wine tests/probes/zoom16.probe): the
+# strategic map's view-1 blitters / overhang strips (src/engine_map_terrain.c, gen/mapblit_*.h; retail selects them
+# only when DAT_0057cb18 == 1, never set) and the battlefield's zoom-16 passes (hex size DAT_004e656c is always 32;
+# docs/findings/coverage-round3.md). Rows compare state + every surface pixel (RH_SH_MEDIA).
+# Frame 1700 = the strategic map (view mode 0, back buffer [0x4ea1a8] 640x480); frame 15000 = a field battle (14 x 15
+# cells, primary bank [0x4e5d78], alt bank 0). Globals the drawers read: canvas 0x4ea1a8 / width 0x4eb274, cursor
+# 0x591524 / 0x591528, glyph offset 0x58fe04, glyph height 0x5bb478, overhang offset 0x5aeb6c. Source = terrain bank 0
+# [0x568208] at sprite 5's data ([[0x568208]+0x5c]; the overhang +196, as drawer_b stages it in view 1).
+# Scratch: the free _iob slot 0x4e5800 (zero at both frames; +12 _flag / +16 _file left alone), zeroed at the end.
+scenario battles
+1700 poke 0x4e5800 [0x591524] [0x591528] [0x58fe04]
+1700 poke 0x4e5814 [0x5bb478] [0x5aeb6c]
+1700 poke 0x58fe04 [[0x568208]+0x5c]
+1700 poke 0x5aeb6c [[0x568208]+0x5c]+196
+# ---- blitters (blob, part): part 1 = top only, 2 = bottom only, else both; centre, top-left, bottom-right, odd x
+1700 poke 0x591524 200 100
+1700 mv_blit_460501 [0x568208] 0
+1700 mv_blit_460501 [0x568208] 1
+1700 mv_blit_460501 [0x568208] 2
+1700 mv_blit_460501 [0x568208] 3
+1700 poke 0x591524 0 0
+1700 mv_blit_460501 [0x568208] 0
+1700 mv_blit_460501 [0x568208] 1
+1700 mv_blit_460501 [0x568208] 2
+1700 mv_blit_460501 [0x568208] 3
+1700 poke 0x591524 608 466
+1700 mv_blit_460501 [0x568208] 0
+1700 mv_blit_460501 [0x568208] 1
+1700 mv_blit_460501 [0x568208] 2
+1700 mv_blit_460501 [0x568208] 3
+1700 poke 0x591524 333 250
+1700 mv_blit_460501 [0x568208] 0
+1700 mv_blit_460501 [0x568208] 1
+1700 mv_blit_460501 [0x568208] 2
+1700 mv_blit_460501 [0x568208] 3
+1700 poke 0x591524 200 100
+1700 mv_blit_46079d [0x568208] 0
+1700 mv_blit_46079d [0x568208] 1
+1700 mv_blit_46079d [0x568208] 2
+1700 mv_blit_46079d [0x568208] 3
+1700 poke 0x591524 0 0
+1700 mv_blit_46079d [0x568208] 0
+1700 mv_blit_46079d [0x568208] 1
+1700 mv_blit_46079d [0x568208] 2
+1700 mv_blit_46079d [0x568208] 3
+1700 poke 0x591524 608 466
+1700 mv_blit_46079d [0x568208] 0
+1700 mv_blit_46079d [0x568208] 1
+1700 mv_blit_46079d [0x568208] 2
+1700 mv_blit_46079d [0x568208] 3
+1700 poke 0x591524 333 250
+1700 mv_blit_46079d [0x568208] 0
+1700 mv_blit_46079d [0x568208] 1
+1700 mv_blit_46079d [0x568208] 2
+1700 mv_blit_46079d [0x568208] 3
+1700 poke 0x591524 200 100
+1700 mv_blit_4608de [0x568208] 0
+1700 mv_blit_4608de [0x568208] 1
+1700 mv_blit_4608de [0x568208] 2
+1700 mv_blit_4608de [0x568208] 3
+1700 poke 0x591524 0 0
+1700 mv_blit_4608de [0x568208] 0
+1700 mv_blit_4608de [0x568208] 1
+1700 mv_blit_4608de [0x568208] 2
+1700 mv_blit_4608de [0x568208] 3
+1700 poke 0x591524 608 466
+1700 mv_blit_4608de [0x568208] 0
+1700 mv_blit_4608de [0x568208] 1
+1700 mv_blit_4608de [0x568208] 2
+1700 mv_blit_4608de [0x568208] 3
+1700 poke 0x591524 333 250
+1700 mv_blit_4608de [0x568208] 0
+1700 mv_blit_4608de [0x568208] 1
+1700 mv_blit_4608de [0x568208] 2
+1700 mv_blit_4608de [0x568208] 3
+# ---- overhang strips (blob, rows above[, part]): rows >= height (the loop returns), 0 (tail only), 1..6 tail
+# chunks (height - rows), more than the tail has; centre / left edge / right edge / bottom edge
+1700 poke 0x591524 200 100
+1700 poke 0x5bb478 0
+1700 mv_strip_460a1c [0x568208] 0
+1700 poke 0x591524 0 60
+1700 poke 0x5bb478 1
+1700 mv_strip_460a1c [0x568208] 0
+1700 poke 0x591524 616 140
+1700 poke 0x5bb478 2
+1700 mv_strip_460a1c [0x568208] 0
+1700 poke 0x591524 300 466
+1700 poke 0x5bb478 3
+1700 mv_strip_460a1c [0x568208] 0
+1700 poke 0x591524 200 100
+1700 poke 0x5bb478 4
+1700 mv_strip_460a1c [0x568208] 0
+1700 poke 0x591524 0 60
+1700 poke 0x5bb478 5
+1700 mv_strip_460a1c [0x568208] 0
+1700 poke 0x591524 616 140
+1700 poke 0x5bb478 6
+1700 mv_strip_460a1c [0x568208] 0
+1700 poke 0x591524 300 466
+1700 poke 0x5bb478 12
+1700 mv_strip_460a1c [0x568208] 0
+1700 poke 0x591524 200 100
+1700 poke 0x5bb478 4
+1700 mv_strip_460a1c [0x568208] 2
+1700 poke 0x591524 0 60
+1700 poke 0x5bb478 9
+1700 mv_strip_460a1c [0x568208] 3
+1700 poke 0x591524 616 140
+1700 poke 0x5bb478 4
+1700 mv_strip_460a1c [0x568208] 4
+1700 poke 0x591524 300 466
+1700 poke 0x5bb478 2
+1700 mv_strip_460a1c [0x568208] 6
+1700 poke 0x591524 200 100
+1700 poke 0x5bb478 0
+1700 mv_strip_460a1c [0x568208] 3
+1700 poke 0x591524 0 60
+1700 poke 0x5bb478 7
+1700 mv_strip_460a1c [0x568208] 1
+1700 poke 0x591524 200 100
+1700 poke 0x5bb478 0
+1700 mv_strip_4611ef [0x568208] 0
+1700 poke 0x591524 0 60
+1700 poke 0x5bb478 1
+1700 mv_strip_4611ef [0x568208] 0
+1700 poke 0x591524 616 140
+1700 poke 0x5bb478 2
+1700 mv_strip_4611ef [0x568208] 0
+1700 poke 0x591524 300 466
+1700 poke 0x5bb478 3
+1700 mv_strip_4611ef [0x568208] 0
+1700 poke 0x591524 200 100
+1700 poke 0x5bb478 4
+1700 mv_strip_4611ef [0x568208] 0
+1700 poke 0x591524 0 60
+1700 poke 0x5bb478 5
+1700 mv_strip_4611ef [0x568208] 0
+1700 poke 0x591524 616 140
+1700 poke 0x5bb478 6
+1700 mv_strip_4611ef [0x568208] 0
+1700 poke 0x591524 300 466
+1700 poke 0x5bb478 12
+1700 mv_strip_4611ef [0x568208] 0
+1700 poke 0x591524 200 100
+1700 poke 0x5bb478 4
+1700 mv_strip_4611ef [0x568208] 2
+1700 poke 0x591524 0 60
+1700 poke 0x5bb478 9
+1700 mv_strip_4611ef [0x568208] 3
+1700 poke 0x591524 616 140
+1700 poke 0x5bb478 4
+1700 mv_strip_4611ef [0x568208] 4
+1700 poke 0x591524 300 466
+1700 poke 0x5bb478 2
+1700 mv_strip_4611ef [0x568208] 6
+1700 poke 0x591524 200 100
+1700 poke 0x5bb478 0
+1700 mv_strip_4611ef [0x568208] 3
+1700 poke 0x591524 0 60
+1700 poke 0x5bb478 7
+1700 mv_strip_4611ef [0x568208] 1
+1700 poke 0x591524 200 100
+1700 poke 0x5bb478 0
+1700 mv_strip_461623 [0x568208] 0
+1700 poke 0x591524 0 60
+1700 poke 0x5bb478 1
+1700 mv_strip_461623 [0x568208] 0
+1700 poke 0x591524 616 140
+1700 poke 0x5bb478 2
+1700 mv_strip_461623 [0x568208] 0
+1700 poke 0x591524 300 466
+1700 poke 0x5bb478 3
+1700 mv_strip_461623 [0x568208] 0
+1700 poke 0x591524 200 100
+1700 poke 0x5bb478 4
+1700 mv_strip_461623 [0x568208] 0
+1700 poke 0x591524 0 60
+1700 poke 0x5bb478 5
+1700 mv_strip_461623 [0x568208] 0
+1700 poke 0x591524 616 140
+1700 poke 0x5bb478 6
+1700 mv_strip_461623 [0x568208] 0
+1700 poke 0x591524 300 466
+1700 poke 0x5bb478 12
+1700 mv_strip_461623 [0x568208] 0
+1700 poke 0x591524 200 100
+1700 poke 0x5bb478 4
+1700 mv_strip_461623 [0x568208] 2
+1700 poke 0x591524 0 60
+1700 poke 0x5bb478 9
+1700 mv_strip_461623 [0x568208] 3
+1700 poke 0x591524 616 140
+1700 poke 0x5bb478 4
+1700 mv_strip_461623 [0x568208] 4
+1700 poke 0x591524 300 466
+1700 poke 0x5bb478 2
+1700 mv_strip_461623 [0x568208] 6
+1700 poke 0x591524 200 100
+1700 poke 0x5bb478 0
+1700 mv_strip_461623 [0x568208] 3
+1700 poke 0x591524 0 60
+1700 poke 0x5bb478 7
+1700 mv_strip_461623 [0x568208] 1
+1700 poke 0x591524 200 100
+1700 poke 0x5bb478 0
+1700 mv_strip_461a54 [0x568208] 0 0
+1700 mv_strip_461a54 [0x568208] 0 2
+1700 mv_strip_461a54 [0x568208] 0 1
+1700 poke 0x591524 0 60
+1700 poke 0x5bb478 1
+1700 mv_strip_461a54 [0x568208] 0 0
+1700 mv_strip_461a54 [0x568208] 0 2
+1700 mv_strip_461a54 [0x568208] 0 1
+1700 poke 0x591524 616 140
+1700 poke 0x5bb478 2
+1700 mv_strip_461a54 [0x568208] 0 0
+1700 mv_strip_461a54 [0x568208] 0 2
+1700 mv_strip_461a54 [0x568208] 0 1
+1700 poke 0x591524 300 466
+1700 poke 0x5bb478 3
+1700 mv_strip_461a54 [0x568208] 0 0
+1700 mv_strip_461a54 [0x568208] 0 2
+1700 mv_strip_461a54 [0x568208] 0 1
+1700 poke 0x591524 200 100
+1700 poke 0x5bb478 4
+1700 mv_strip_461a54 [0x568208] 0 0
+1700 mv_strip_461a54 [0x568208] 0 2
+1700 mv_strip_461a54 [0x568208] 0 1
+1700 poke 0x591524 0 60
+1700 poke 0x5bb478 5
+1700 mv_strip_461a54 [0x568208] 0 0
+1700 mv_strip_461a54 [0x568208] 0 2
+1700 mv_strip_461a54 [0x568208] 0 1
+1700 poke 0x591524 616 140
+1700 poke 0x5bb478 6
+1700 mv_strip_461a54 [0x568208] 0 0
+1700 mv_strip_461a54 [0x568208] 0 2
+1700 mv_strip_461a54 [0x568208] 0 1
+1700 poke 0x591524 300 466
+1700 poke 0x5bb478 12
+1700 mv_strip_461a54 [0x568208] 0 0
+1700 mv_strip_461a54 [0x568208] 0 2
+1700 mv_strip_461a54 [0x568208] 0 1
+1700 poke 0x591524 200 100
+1700 poke 0x5bb478 4
+1700 mv_strip_461a54 [0x568208] 2 0
+1700 mv_strip_461a54 [0x568208] 2 2
+1700 mv_strip_461a54 [0x568208] 2 1
+1700 poke 0x591524 0 60
+1700 poke 0x5bb478 9
+1700 mv_strip_461a54 [0x568208] 3 0
+1700 mv_strip_461a54 [0x568208] 3 2
+1700 mv_strip_461a54 [0x568208] 3 1
+1700 poke 0x591524 616 140
+1700 poke 0x5bb478 4
+1700 mv_strip_461a54 [0x568208] 4 0
+1700 mv_strip_461a54 [0x568208] 4 2
+1700 mv_strip_461a54 [0x568208] 4 1
+1700 poke 0x591524 300 466
+1700 poke 0x5bb478 2
+1700 mv_strip_461a54 [0x568208] 6 0
+1700 mv_strip_461a54 [0x568208] 6 2
+1700 mv_strip_461a54 [0x568208] 6 1
+1700 poke 0x591524 200 100
+1700 poke 0x5bb478 0
+1700 mv_strip_461a54 [0x568208] 3 0
+1700 mv_strip_461a54 [0x568208] 3 2
+1700 mv_strip_461a54 [0x568208] 3 1
+1700 poke 0x591524 0 60
+1700 poke 0x5bb478 7
+1700 mv_strip_461a54 [0x568208] 1 0
+1700 mv_strip_461a54 [0x568208] 1 2
+1700 mv_strip_461a54 [0x568208] 1 1
+1700 poke 0x591524 200 100
+1700 poke 0x5bb478 0
+1700 mv_strip_461efb [0x568208] 0 0
+1700 mv_strip_461efb [0x568208] 0 2
+1700 mv_strip_461efb [0x568208] 0 1
+1700 poke 0x591524 0 60
+1700 poke 0x5bb478 1
+1700 mv_strip_461efb [0x568208] 0 0
+1700 mv_strip_461efb [0x568208] 0 2
+1700 mv_strip_461efb [0x568208] 0 1
+1700 poke 0x591524 616 140
+1700 poke 0x5bb478 2
+1700 mv_strip_461efb [0x568208] 0 0
+1700 mv_strip_461efb [0x568208] 0 2
+1700 mv_strip_461efb [0x568208] 0 1
+1700 poke 0x591524 300 466
+1700 poke 0x5bb478 3
+1700 mv_strip_461efb [0x568208] 0 0
+1700 mv_strip_461efb [0x568208] 0 2
+1700 mv_strip_461efb [0x568208] 0 1
+1700 poke 0x591524 200 100
+1700 poke 0x5bb478 4
+1700 mv_strip_461efb [0x568208] 0 0
+1700 mv_strip_461efb [0x568208] 0 2
+1700 mv_strip_461efb [0x568208] 0 1
+1700 poke 0x591524 0 60
+1700 poke 0x5bb478 5
+1700 mv_strip_461efb [0x568208] 0 0
+1700 mv_strip_461efb [0x568208] 0 2
+1700 mv_strip_461efb [0x568208] 0 1
+1700 poke 0x591524 616 140
+1700 poke 0x5bb478 6
+1700 mv_strip_461efb [0x568208] 0 0
+1700 mv_strip_461efb [0x568208] 0 2
+1700 mv_strip_461efb [0x568208] 0 1
+1700 poke 0x591524 300 466
+1700 poke 0x5bb478 12
+1700 mv_strip_461efb [0x568208] 0 0
+1700 mv_strip_461efb [0x568208] 0 2
+1700 mv_strip_461efb [0x568208] 0 1
+1700 poke 0x591524 200 100
+1700 poke 0x5bb478 4
+1700 mv_strip_461efb [0x568208] 2 0
+1700 mv_strip_461efb [0x568208] 2 2
+1700 mv_strip_461efb [0x568208] 2 1
+1700 poke 0x591524 0 60
+1700 poke 0x5bb478 9
+1700 mv_strip_461efb [0x568208] 3 0
+1700 mv_strip_461efb [0x568208] 3 2
+1700 mv_strip_461efb [0x568208] 3 1
+1700 poke 0x591524 616 140
+1700 poke 0x5bb478 4
+1700 mv_strip_461efb [0x568208] 4 0
+1700 mv_strip_461efb [0x568208] 4 2
+1700 mv_strip_461efb [0x568208] 4 1
+1700 poke 0x591524 300 466
+1700 poke 0x5bb478 2
+1700 mv_strip_461efb [0x568208] 6 0
+1700 mv_strip_461efb [0x568208] 6 2
+1700 mv_strip_461efb [0x568208] 6 1
+1700 poke 0x591524 200 100
+1700 poke 0x5bb478 0
+1700 mv_strip_461efb [0x568208] 3 0
+1700 mv_strip_461efb [0x568208] 3 2
+1700 mv_strip_461efb [0x568208] 3 1
+1700 poke 0x591524 0 60
+1700 poke 0x5bb478 7
+1700 mv_strip_461efb [0x568208] 1 0
+1700 mv_strip_461efb [0x568208] 1 2
+1700 mv_strip_461efb [0x568208] 1 1
+1700 poke 0x591524 [0x4e5800] [0x4e5804]
+1700 poke 0x58fe04 [0x4e5808]
+1700 poke 0x5bb478 [0x4e5814]
+1700 poke 0x5aeb6c [0x4e5818]
+1700 poke 0x4e5800 0 0 0
+1700 poke 0x4e5814 0 0
+# ---- battlefield: the empty zoom-16 overlay pass; the zoom-16 terrain pass on the live grid without / with the
+# force-redraw gate DAT_0053e9ac (with: every cell drawn, flags & 0x1c 0 → primary bank, 4 → alt bank: the alt bank is
+# 0 on a field map, so it is pointed at the primary bank for the call; boundary bits on the first / last row / column)
+15000 scr_bf_overlay16
+15000 poke 0x4e5800 [0x53e9ac] [0x4e6560]
+15000 poke 0x53e9ac 0
+15000 scr_bf_terrain16
+15000 poke 0x53e9ac 1
+15000 poke 0x4e6560 [0x4e5d78]
+15000 scr_bf_terrain16
+15000 poke 0x53e9ac [0x4e5800]
+15000 poke 0x4e6560 [0x4e5804]
+15000 poke 0x4e5800 0 0
