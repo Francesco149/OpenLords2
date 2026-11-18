@@ -14,7 +14,7 @@ __asm__(RH_BF_INPUT_ALIASES);
 extern hook_t RH_HOOKS_BF_INPUT[];
 /* row indices (must follow the table's order) */
 enum {
-    X_bf_4238b8, X_bf_4239d5, X_bf_43b9a1, X_bf_43ba29, X_bf_43bb68, X_bf_43bbd7, X_bf_43bd02, X_bf_43bd67, X_bf_43bdcd, X_bf_43bf07, X_bf_43c247, X_bf_43c2a9, X_bf_43c4c6, X_bf_43c55c, X_bf_43c57d, X_bf_43c634, X_bf_4784ca, X_bf_478987, X_bf_478f0b, X_bf_479a71, X_bf_479b58, X_bf_479cf7, X_bf_47a76d, X_bf_47f76d, X_bf_499cb1,
+    X_bf_4238b8, X_bf_4239d5, X_bf_43b9a1, X_bf_43ba29, X_bf_43bb68, X_bf_43bbd7, X_bf_43bd02, X_bf_43bd67, X_bf_43bdcd, X_bf_43bf07, X_bf_43c247, X_bf_43c2a9, X_bf_43c4c6, X_bf_43c55c, X_bf_43c57d, X_bf_43c634, X_bf_4784ca, X_bf_478987, X_bf_478f0b, X_bf_479a71, X_bf_479b58, X_bf_479cf7, X_bf_47a76d, X_bf_47f76d, X_bf_47fe0b, X_bf_499cb1,
 };
 
 HOOK_V(bf_4238b8, 0, bf_4238b8())
@@ -41,6 +41,7 @@ HOOK_V(bf_479b58, 7, bf_479b58(I(0), I(1), I(2), I(3), I(4), I(5), I(6)))
 HOOK_R(bf_479cf7, 0, bf_479cf7())
 HOOK_V(bf_47a76d, 1, bf_47a76d(I(0)))
 HOOK_V(bf_47f76d, 0, bf_47f76d())
+HOOK_V(bf_47fe0b, 1, bf_47fe0b(I(0)))   /* its one caller 0x49cf20 drops the return */
 HOOK_V(bf_499cb1, 1, bf_499cb1(I(0)))
 
 hook_t RH_HOOKS_BF_INPUT[] = {
@@ -68,6 +69,7 @@ hook_t RH_HOOKS_BF_INPUT[] = {
     { "bf_479cf7", 0x479cf7u, (void *)w_bf_479cf7, 0, 0, 0, 0, "" },
     { "bf_47a76d", 0x47a76du, (void *)w_bf_47a76d, 0, 0, 0, 0, "" },
     { "bf_47f76d", 0x47f76du, (void *)w_bf_47f76d, 0, 0, 0, 0, "" },
+    { "bf_47fe0b", 0x47fe0bu, (void *)w_bf_47fe0b, 0, 0, 0, 0, "" },
     { "bf_499cb1", 0x499cb1u, (void *)w_bf_499cb1, 0, 0, 0, 0, "" },
 };
 const int RH_HOOKS_BF_INPUT_N = sizeof RH_HOOKS_BF_INPUT / sizeof *RH_HOOKS_BF_INPUT;

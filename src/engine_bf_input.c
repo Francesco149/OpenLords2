@@ -2,6 +2,7 @@
  * layout: engine_bf.h (record accessors, globals). Each function: "Port of FUN_00xxxxxx" + what it does. */
 #include "engine_bf.h"
 #include "engine_bf_input_globals.h"
+#include "engine_bf_strike.h"
 #include "rl.h"
 #include "engine_battlefield_render.h"
 #include "engine.h"
@@ -16,6 +17,25 @@ static int px_col_right(int px) { return engine_battlefield_render_pixel_to_col_
 static int px_col_left(int px)  { return engine_battlefield_render_pixel_to_col_left_biased(px); }    /* 0x4bc346 */
 static int px_row_bottom(int py) { return engine_battlefield_render_pixel_to_row_bottom_biased(py); } /* 0x4bc3ac */
 static int px_row_top(int py)    { return engine_battlefield_render_pixel_to_row_top_biased(py); }    /* 0x4bc40d */
+
+/* Port of FUN_0047fe0b (156 B) — a resigning player's battlefield units die (engine_combat_resign_player 0x49cf20 calls
+ * it when DAT_0057c8fc == 2, a field battle running): every unit record 1..80 whose owner (+0, DAT_005544ac) is `p`
+ * gets men +0x174 = 0, state +5 = 2, and DAT_00554489 = 0, with cue 13 each (0x4262cf). The loop index is retail's
+ * global DAT_0053e8f8 (left at 81). Returns the last 432 * index or the cue's result (retail's EAX). */
+int bf_47fe0b(int p)
+{
+    int r = 0;
+    for (g_bf_53e8f8 = 1; g_bf_53e8f8 < 81; g_bf_53e8f8++) {
+        r = 432 * g_bf_53e8f8;
+        if ((int)BU8(g_bf_53e8f8, 0x5544ac) == p) {   /* zero-extended byte vs the whole int (retail) */
+            BS16(g_bf_53e8f8, 0x554620) = 0;
+            BU8(g_bf_53e8f8, 0x5544b1) = 2;
+            BU8(g_bf_53e8f8, 0x554489) = 0;
+            r = bf_4262cf(13);
+        }
+    }
+    return r;
+}
 
 /* Port of FUN_00479a71 (231 B) — deselect everything player `p` holds: every unit selected by p (+9 == p) loses
  * it, every unit's selection bit for p (+0xa, mask realm +0xee) is cleared; the panel redraw gate DAT_0053e9ac = 1

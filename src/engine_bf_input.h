@@ -22,6 +22,7 @@ int bf_43c634(int a0, int a1);                   /* 326 B, coverage 0 */
 int bf_4784ca(void);                             /* 730 B, coverage 10 */
 int bf_478987(int a0);                           /* 1412 B, coverage 10 */
 int bf_478f0b(int a0);                           /* 392 B, coverage 10 */
+int bf_47fe0b(int p);                            /* 156 B — a resigning player's battlefield units die */
 int bf_479a71(int a0);                           /* 231 B, coverage 10 */
 int bf_479b58(int a0, int a1, int a2, int a3, int a4, int a5, int a6); /* 415 B, coverage 10 */
 int bf_479cf7(void);                             /* 277 B, coverage 10 */

@@ -1107,6 +1107,7 @@ static uint32_t m_47f474(const uint32_t *a) { (void)a; rl_47f474(); return 0; }
 static uint32_t m_47f76d(const uint32_t *a) { (void)a; bf_47f76d(); return 0; }
 static uint32_t m_47f937(const uint32_t *a) { (void)a; return (uint32_t)(rl_47f937()); }
 static uint32_t m_47fc01(const uint32_t *a) { (void)a; bf_47fc01(); return 0; }
+static uint32_t m_47fe0b(const uint32_t *a) { (void)a; bf_47fe0b(I(0)); return 0; }
 static uint32_t m_47fea7(const uint32_t *a) { (void)a; bf_47fea7(I(0), I(1), I(2)); return 0; }
 static uint32_t m_4801f8(const uint32_t *a) { (void)a; bf_4801f8(I(0), I(1), I(2)); return 0; }
 static uint32_t m_480599(const uint32_t *a) { (void)a; bf_480599(I(0)); return 0; }
@@ -1525,7 +1526,7 @@ static uint32_t m_4bf1f9(const uint32_t *a) { (void)a; rl_4bf1f9(); return 0; }
 static uint32_t m_4c0580(const uint32_t *a) { (void)a; rl_4c0580(I(0)); return 0; }
 static uint32_t m_4c05a0(const uint32_t *a) { (void)a; rl_4c05a0(I(0), I(1)); return 0; }
 
-const rl_va_entry_t rl_va_map[1516] = {
+const rl_va_entry_t rl_va_map[1517] = {
     { 0x401000u, 3, m_401000 },
     { 0x401085u, 3, m_401085 },
     { 0x4010dau, 3, m_4010da },
@@ -2625,6 +2626,7 @@ const rl_va_entry_t rl_va_map[1516] = {
     { 0x47f76du, 0, m_47f76d },
     { 0x47f937u, 0, m_47f937 },
     { 0x47fc01u, 0, m_47fc01 },
+    { 0x47fe0bu, 1, m_47fe0b },
     { 0x47fea7u, 3, m_47fea7 },
     { 0x4801f8u, 3, m_4801f8 },
     { 0x480599u, 1, m_480599 },
@@ -3043,4 +3045,4 @@ const rl_va_entry_t rl_va_map[1516] = {
     { 0x4c0580u, 1, m_4c0580 },
     { 0x4c05a0u, 2, m_4c05a0 },
 };
-const int rl_va_map_n = 1516;
+const int rl_va_map_n = 1517;

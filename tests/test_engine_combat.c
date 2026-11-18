@@ -1585,13 +1585,17 @@ int test_engine_combat_contest_region_neutral_muster_fails_seizes(void)
  * the per-player aux slot (g_player_aux_44, stride 0x2c).  The economy        *
  * re-plan is held to a no-op by leaving the army-records bind NULL.          */
 
+/* the battlefield partition (engine_bf_input.c, bf_47fe0b) is not linked into the host tests: these never run a field
+ * battle (DAT_0057c8fc != 2), so the resign pass never calls it */
+int bf_47fe0b(int p);
+int bf_47fe0b(int p) { (void)p; return 0; }
+
 static void resign_reset(void)
 {
     scc_reset();
     memset(g_player_aux_44, 0, sizeof g_player_aux_44);
     engine_army_economy_bind_army_records(NULL);
-    s_slot_0057c8fc = 0;       /* game-mode ≠ 2 → UI seam not consulted */
-    engine_combat_bind_resign_ui_fn(NULL);
+    s_slot_0057c8fc = 0;       /* no field battle → 0x47fe0b (bf_47fe0b) not called */
 }
 
 #define AUX(p)  (&g_player_aux_44[(p) * 0x2c])

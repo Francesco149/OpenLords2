@@ -1,0 +1,17 @@
+# Synthetic carrier for 0x47fe0b (bf_47fe0b): a multiplayer player resigning while a field battle runs (0x49cf20 calls it
+# when DAT_0057c8fc == 2) — no scenario resigns mid-battle. field-orders f3000 = the siege battle (48 units; owners on
+# +0x2c, DAT_005544ac). Every call: units of owner p get men +0x174 = 0, state +5 = 2, DAT_00554489 = 0, cue 13; the loop
+# index DAT_0053e8f8 ends at 81 (the return = 432 * 80 unless record 80 matched: the cue's EAX). Owners here: 2 (u1..24)
+# and 1 (u25..48). 0x101 first: retail compares the zero-extended owner byte with the whole int (no match; a byte
+# compare would kill side 1).
+scenario field-orders
+
+3000 bf_47fe0b 0x101
+3000 bf_47fe0b 7
+3000 bf_47fe0b 3
+3000 bf_47fe0b 2
+3000 bf_47fe0b 1
+3000 bf_47fe0b 6
+3000 bf_47fe0b 5
+3000 bf_47fe0b 4
+3000 bf_47fe0b 0

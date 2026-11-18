@@ -19,6 +19,7 @@
 
 #include "engine_path.h"
 #include "engine_combat.h"
+#include "engine_bf_input.h"
 #include "save.h"                 /* g_per_territory_420, g_per_army_768, … */
 #include "save_schema_globals.h"  /* s_slot_* combat / season / player scalars */
 #include "engine_realm_upkeep.h"  /* clear_contract, disband, map link/unlink, … */
@@ -447,14 +448,6 @@ int engine_combat_find_capital_defender(int key)
     return best;
 }
 
-/* Resign-time interactive UI cleanup seam (retail 0x47fe0b, game-mode-gated
- * on s_slot_0057c8fc == 2).  The real function sweeps a 0x50-entry stride-0x1b0
- * on-screen element table (0x5544ac) clearing the resigned player's entries and
- * releasing a UI resource — interactive-only render state, deferred like the
- * other UI/audio seams.  NULL default → no-op (correct for the headless turn
- * driver, which never has game-mode 2). */
-static void (*g_resign_ui_fn)(int player);
-void engine_combat_bind_resign_ui_fn(void (*fn)(int player)) { g_resign_ui_fn = fn; }
 
 /* Runtime globals (render handoff, UI flags, anim clocks, siege latches): defined
  * in engine_combat_globals.c, declared in engine_combat.h.  The screen byte
@@ -1066,9 +1059,9 @@ void engine_combat_resign_player(int player, engine_event_queue_state_t *evq,
 {
     int local = (int)s_slot_0057c8cc;
 
-    /* Interactive on-screen cleanup, game-mode 2 only — deferred UI seam. */
-    if (s_slot_0057c8fc == 2 && g_resign_ui_fn)
-        g_resign_ui_fn(player);                        /* 0x47fe0b (deferred UI seam) */
+    /* A field battle running (DAT_0057c8fc == 2): the player's battlefield units die (0x47fe0b). */
+    if (s_slot_0057c8fc == 2)
+        bf_47fe0b(player);
 
     /* Demolish every realm this player owns (army records 1..16). */
     for (int v = 1; v < 0x11; v++)

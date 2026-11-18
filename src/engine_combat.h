@@ -370,9 +370,6 @@ void engine_combat_army_settle_region(int army, unsigned region,
                                       engine_event_queue_state_t *evq,
                                       int mp_active);
 
-/* Bind the resign-time interactive UI cleanup seam (retail 0x47fe0b,
- * game-mode-gated on s_slot_0057c8fc == 2).  NULL default → no-op. */
-void engine_combat_bind_resign_ui_fn(void (*fn)(int player));
 
 /* Port of FUN_0049cf20 (704 B) — remove player `player` from the game:
  * demolish every realm they own (army records 1..16), disband every live
