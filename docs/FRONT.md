@@ -192,7 +192,15 @@
    app rows never reached** (20.5 KB): 37 have a synthetic carrier (`tests/probes/`), **58 have no evidence at all**
    (17 KB: the MP delayed-action handlers 0x447b31..0x448411, the zoom-16 terrain drawers 0x460501..0x461efb /
    0x4bc8fc / 0x4bcbd1, the DirectDraw error table 0x42f60e and its callers 0x42e3ba / 0x42e45e / 0x42e50d / 0x42f449,
-   gfx_restore 0x4b2730, 0x485861, 0x494e3f, a dozen UI leaves). Next: probe carriers for the 58.
+   gfx_restore 0x4b2730, 0x485861, 0x494e3f, a dozen UI leaves). **2026-11-18: 53 of the 58 carried** — probes
+   zoom16 (10 rows), ui-leaves / ui-leaves-bf (18), mp-delayed-{county,army,battle} (22) + the memset helper; all 12
+   probe files 185 rows, 0 failing (wine). Found: rl_42f60e returned 0 for an unknown DD HRESULT (retail 100; fixed
+   b7c91ae); the copy shadow did not roll back .data's page tail 0x5cee60..0x5cf000 (the map pacer's stamps 0x5ceff8 /
+   0x5ceffc; rl_4788c6 1 divergence on mp-war-p1 — fixed 9152f23, `shadow_ranges`). **Left: the 5 RH_SH_HOST rows**
+   0x42e3ba (movie WM_PAINT) / 0x43e668 (posts WM_CLOSE) / 0x4b26b8 / gfx_restore 0x4b2730 / 0x4b74ce (DebugBreak / MP
+   transport): rh_hook_sample never shadows host rows — a probe-only host shadow (record the Win32 calls on the retail
+   pass, compare + suppress on the port pass) + a fake-DDraw Restore failure switch would carry them. Uncarried arms:
+   447d41's trace-fails, 447f63's other castle classes, pass_terrain_zoom16's null guard (retail faults).
 7. **Tooling** — 2026-11-17: `tools/bf/dedup_globals.py` read no definition with a trailing comment (every hand-edited one —
    how g_rl_4dc428 / 4ea180 / 4d8a58 slipped through): fixed, any g_bf_/g_rl_ definition it can't parse is now an error,
    `--check` = report only. Verify cost: the shadowed calls over every wine verify log (949 M) — 79 rows average ≥ 8k a
