@@ -89,6 +89,13 @@ difficulty 0 → 160 %   1 → 200 %   2 → 250 %   3 → 320 %   else → 400 
 This can flip the outcome (e.g. an even matchup becomes a defender win on the
 hardest setting).
 
+> **Correction (2026-11-18, IDA export):** `DAT_0055401c` is **not** the AI difficulty. Its writers
+> (0x4a8aab before the resolve, and two more sites at the IDA lines near 65556 / 67405) load it from the
+> defending county's record (`byte_53FB71 − 1`, `byte_53FBA9` or `byte_53FB70 − 1` at stride 0x300, chosen
+> by `byte_53FB73`) or from `DAT_0056d590`. So the 160–400 % defender factor scales with a property of the
+> attacked county (by its source fields probably its castle / garrison level), not with the difficulty
+> setting. Not yet re-derived in engine-quirks.md.
+
 **Which entry arms it:** the flag is set to 1 ONLY by the player-attack resolver
 `FUN_004a8aab` (all branches); the AI-turn dispatch `FUN_004a7158` and the siege
 twin `FUN_004a6c68` both CLEAR it to 0. So the buff is a property of the player's
