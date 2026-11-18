@@ -29,11 +29,10 @@
  *   DAT_004e3240[]   in->mp_skip_flag  (indexed by DAT_005440a4)
  *   DAT_004d2164     in->phase / out->new_phase
  *   DAT_004d215c     out->derived_hint               (write-only in retail too)
- *   DAT_004e3260[]   in->rate_lut (pointer; 11×0xa0 = 0x6e0 bytes
- *                                  documented, but the index can
- *                                  reach 14*0xa0+0x9f = 0x8df —
- *                                  481 B past the documented end.
- *                                  See engine-quirks for the OOB note.)
+ *   DAT_004e3260[]   in->rate_lut (pointer; 15 rows × 0xa0 = 0x960
+ *                                  bytes, 0x4e3260..0x4e3bc0; the hint
+ *                                  clamps at 140 → row ≤ 14: every read
+ *                                  in bounds — engine-quirks #3 / #195)
  *
  * Behaviour summary (the case matrix the tests cover):
  *

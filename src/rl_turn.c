@@ -1099,7 +1099,7 @@ int rl_497e65(void)
 }
 
 /* Port of FUN_00497ced (376 B) — start a new game: clear the territories / armies / counties, the NPC seats
- * (0x49caaa), the turn / season / speed settings to their start values (turn 1267, spring 3, …), the overworld
+ * (0x49caaa), the turn / season / speed settings to their start values (turn 1267, season 3 = Autumn, …; 0x448440 then advances to season 4, 1268), the overworld
  * (0x4676e0), the counties' baselines (0x451150), the armies' starts (0x427ed0), 0x4ac904, the seat shuffle, the
  * roster compacted, the realms (0x49bd99), diplomacy (0x4a1c53), 0x42847c, 0x4ae74d, the castles (0x4ae8a9), the
  * first turn advance (0x448440), the path costs (0x46ff43), the first save, the event queue, the rankings, the

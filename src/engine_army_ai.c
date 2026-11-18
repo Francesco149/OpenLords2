@@ -1152,8 +1152,8 @@ int engine_army_ai_first_owned_realm(int owner)
 }
 
 /* Port of FUN_0049e1bf — AI brain step 4 (seed explicit buy requests).  Clears
- * the player's four buy-request ints (+0x70 run), then — for an AI above level
- * 1, or whose first owned realm is prosperous (approval +0xc > 14 AND morale
+ * the player's four buy-request ints (+0x70 run), then — for an AI owning more
+ * than 1 county (+0x29, the county count: engine-quirks #188), or whose first owned realm is prosperous (approval +0xc > 14 AND morale
  * +0xb > 19) — tops the two staple commodities to a floor when their pool runs
  * short (+0x120 < 0x32 → +0x74 = 0x32; +0x130 < 100 → +0x70 = 100) and adds
  * every developed, keep-bearing owned realm's build demand (+0x1d4 → +0x70,

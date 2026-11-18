@@ -208,9 +208,9 @@ int gfx_dispatch_glyph(const uint8_t *font_base,
      *   psVar2[1]    short  → height (consumed by clip_y)
      *   psVar2+4     dword  → source byte offset
      *   psVar2[+0xc] byte   → flag_a (no current consumer)
-     *   psVar2[+0xd] byte   → per-glyph cursor_y advance (also serves
-     *                          as the initial row count, soon
-     *                          overwritten by clip_y)
+     *   psVar2[+0xd] byte   → per-glyph vertical offset (added to
+     *                          cursor_y; also the initial row count,
+     *                          soon overwritten by clip_y)
      *   psVar2[+0xe] byte   → flag_b (no current consumer)
      */
     const uint8_t *slot = font_base + g_gfx_last_glyph_index * 16 + 8;
@@ -237,9 +237,10 @@ int gfx_dispatch_glyph(const uint8_t *font_base,
     int cursor_y = gfx_glyph_cursor_y() + adv_byte;
 
     /* Default-font character-range tweaks — three independent shaves
-     * of one pixel each.  The ranges overlap none of each other but
-     * collectively cover lowercase a-m / s-w / a chunk of high-byte
-     * characters (extended Latin?).  See engine-quirks.md. */
+     * of one pixel each (drawn one pixel HIGHER).  char_code is the
+     * character − 0x20, so the ranges are characters 0x81..0x8d,
+     * 0x93..0x97 and 0xa0..0xa4: the accented lowercase letters of
+     * code page 437.  See engine-quirks.md #30. */
     if (font_base == g_default_font && g_default_font != 0) {
         if (char_code > 0x60 && char_code < 0x6e) cursor_y -= 1;
         if (char_code > 0x72 && char_code < 0x78) cursor_y -= 1;

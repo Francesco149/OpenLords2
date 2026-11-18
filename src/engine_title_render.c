@@ -1474,9 +1474,8 @@ void engine_title_render_setup_screen(int active)
  * 0x41ff75(0), is the multiplayer chat-line ticker; it early-returns
  * when DAT_00553030 == 0 (single-player), so it is elided here.
  *
- * In retail the gate lives inside FUN_0041f98b / FUN_0041f86d themselves;
- * our setup_country_list / setup_tabs render unconditionally (the full-scene
- * path needs that), so the gate is hoisted to this caller instead. */
+ * The gate lives inside the sub-renderers, as in retail's FUN_0041f98b /
+ * FUN_0041f86d (setup_country_list / setup_tabs test their dirty flags). */
 void engine_title_render_refresh_setup(void)
 {
     engine_title_render_setup_country_list();   /* each gates itself (DAT_0057c948 / DAT_0055ce94) */

@@ -457,7 +457,7 @@ int engine_army_state_raid_assign_target(int idx)
 {
     uint8_t *r = AREC(idx);
 
-    /* (Re)pick a target when the global planner is in force-mode 2 or the stack
+    /* (Re)pick a target in Summer (the season DAT_0057c934 == 2) or when the stack
      * has no target yet: step the shared realm cursor (wrapping at the realm
      * count), and if it lands on the stack's own region advance once more. */
     if (s_slot_0057c934 == 2 || r[A_RAID_DEST] == '\0') {

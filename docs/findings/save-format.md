@@ -122,7 +122,8 @@ region).  On save they emit whatever's in that scratch; on load they
 overwrite the scratch nine times before discarding.  These appear to
 be **forward-compatibility reserved slots** — a planned-but-unused
 mechanism for adding fields without bumping a save version.  Entry
-87 (`0x4eafb0`) is similar.
+87 (`0x4eafb0`) is NOT one: it is live — the screen to return to after
+the save dialog (engine-quirks #7, re-checked 2026-11-18).
 
 In our drop-in we'll preserve the layout: write the same 36-40
 "zero" bytes so retail can still load our saves.
