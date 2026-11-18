@@ -1,9 +1,9 @@
 # bunker — rhost headless under wine in ONE bounded pool (temporary NixOS box)
 
-The third rhost host, next to Windows and maximus-wine. Port of openrecet's `tools/bunker` (same design), namespaced
+The third rhost host, next to Windows and agent-host wine. Port of openrecet's `tools/bunker` (same design), namespaced
 `ol2-*`: openrecet's `orc-bunker-pool` runs on the same box — **never touch `/var/lib/orc-bunker/` or `orc-bunker-*`**.
 Host `bunker` (NixOS, i5-10600K 6c/12t, 16 GB incl. ZFS ARC, 16 GB swap, the owner's desktop session).
-`RHOST_BUNKER` = ssh target (default `root@10.0.10.58`). **Temporary: access is lost when it reboots** — then every
+`RHOST_BUNKER` = ssh target (default `bunker`). **Temporary: access is lost when it reboots** — then every
 bunker path fails fast (`up()` is False).
 
 Used by:
@@ -78,11 +78,11 @@ reap` (also run first by `spawn`) ends hung (no CPU for `--live-idle` + 600 s) o
 | `prefix-headless/` (`/prefix` inside, overlaid) | WINEPREFIX (`wineboot -i`, `Graphics=null`); `drive_c/ol2-rhost → /ol2` |
 
 Outside it: only `/nix/var/nix/gcroots/auto/*` links to the gcroots (teardown deletes them) and the transient unit.
-Wine: `/nix/store/zjxh9vbxp2h12a018i0krpswfidbjh1k-wine-wow64-11.19` (maximus: 11.20).
+Wine: `/nix/store/zjxh9vbxp2h12a018i0krpswfidbjh1k-wine-wow64-11.19` (the agent host: 11.20).
 
 ## Measured (2026-11-13, bin `b8b9a4da5784`)
 - `rhost.py run endturn-2 --target bunker`: `ok f=3700 tick=764 rng=16f30ddd/37cfbfdd sem=9519efd095cd9d45` =
-  `--target wine` = `expected.wine.json` (Lords2 state_sem matches maximus wine; openrecet saw one DLL-pointer slot differ).
+  `--target wine` = `expected.wine.json` (Lords2 state_sem matches the agent host wine; openrecet saw one DLL-pointer slot differ).
 - `rhost.py snap-check --only 'endturn|bot-s1-|siege-castles' --target bunker -j 4`: 8/8 PASS, 9 s batch.
 - Batch run peak RSS (rhost + wine loader, plain or `--snap-test`): 53–60 MB.
 - Live session (boot, `--live 0`): pool accounting +56 MB at boot, +70 MB after `run w1500` + 50 savestates (6 MB slabs);

@@ -61,7 +61,7 @@ Knobs (full list in `--help`):
     before firing RPCs (default 10)
 
 Latest verified run: **combat_resolve 72/72 pass** (2026-06-01, retail via
-cutestation.soy — 24 vectors seed 0 + 48 vectors seed 7) on top of
+the Windows box — 24 vectors seed 0 + 48 vectors seed 7) on top of
 **resource_pass 24/24 pass** (8 vectors seed 0 + 16 vectors seed 7) and
 **season_economy 128/128**, **upkeep 64/64** (16 seed 0 + 48 seed 7),
 **realm_income 24/24** and the prior **288/288 across twelve functions** (24
@@ -170,7 +170,7 @@ state and a hard-to-debug subsequent crash.
 Functions that the engine calls every tick (anim_cycle, frame_delta, FPS)
 have a race window between our retail call returning and our agent's
 readback.  With retail running unrate-limited (~200 kHz tick rate on
-cutestation), the engine can squeeze its own call into that window and
+the Windows box), the engine can squeeze its own call into that window and
 overwrite a writeback global before we observe the value our retail call
 left there.
 

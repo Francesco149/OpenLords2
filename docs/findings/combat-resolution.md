@@ -112,7 +112,7 @@ inject g_per_territory_420 + g_unit_table_20 + the four combat scalars, run
 retail `FUN_004aad07`, read back both blocks + the winner/owner scalars.
 
 **72/72 byte-exact vs retail** (24 vectors seed 0 + 48 vectors seed 7,
-2026-06-01, cutestation.soy).  Vectors keep the merc class in 0..6 (it indexes
+2026-06-01, the Windows box).  Vectors keep the merc class in 0..6 (it indexes
 the 7-entry weight table) and the pool slot in 0..12 (g_unit_table_20 has 13
 slots); the resolver touches only the two combatant records, so the other 149
 records stay zero on both sides.
@@ -665,7 +665,7 @@ region)` directly.  All vectors keep owner != region race so the reinforce
 branch's economy re-plan never perturbs the readback — the diff isolates the
 siege chain (links + race-table lane seeds + the `recompute_condition` tail).
 **81/81 byte-exact vs retail** (17 edge seed 0 + 64 seed 7, 2026-06-03,
-cutestation.soy), proving the baked `k_race_siege_unit_type` table.
+the Windows box), proving the baked `k_race_siege_unit_type` table.
 
 ### Frontier (next)
 

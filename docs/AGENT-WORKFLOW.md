@@ -140,7 +140,7 @@ check is the **pure-function diff vs retail**:
 
 ```fish
 nix develop -c python3 tools/diff_test.py --functions <name> \
-    --vectors 64 --remote cutestation.soy:27042
+    --vectors 64 --remote $OPENLORDS2_FRIDA_REMOTE
 ```
 
 It snapshots→injects→calls retail's `FUN_*`→reads-back→restores and diffs

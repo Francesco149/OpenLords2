@@ -4,7 +4,7 @@
 # Load a game → Load lastturn.sav → strategic map.
 #
 # Run (turbo): nix develop -c python3 -u tools/frida_capture.py
-#   --remote cutestation.soy:27042 --skip-intro --turbo --anchor-trace
+#   --remote $OPENLORDS2_FRIDA_REMOTE --skip-intro --turbo --anchor-trace
 #   --input-segtrace tools/traces/load_into_map_seg.jsonl --run-id seg-smoke1
 #
 # Coords GAME space (640x480); lParam=(y<<16)|x.  Within the TITLE segment, t

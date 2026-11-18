@@ -261,7 +261,7 @@
    DirectDraw / DirectSound (`C:\ol2-rhost\product\`, its own saves; not recorded). Play a while; look for: the
    screen mode switch, sound / music, the mouse cursor, alt-tab and back, anything unlike the original. If it stops,
    `C:\ol2-rhost\product\openlords2\rhost.log` says why.
-0. **Free play, whenever you have a moment:** double-click **"Lords II capture"** on cutestation's desktop and play
+0. **Free play, whenever you have a moment:** double-click **"Lords II capture"** on the Windows box's desktop and play
    (close the window to finish; the next session can Load your save). Nothing else to do — agents import the sessions
    (`rhost.py play-fetch`).
    **New (2026-11-17): "OpenLords2 (standalone)"** beside it = the same, played by the PORT (no retail code). Every

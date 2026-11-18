@@ -40,7 +40,7 @@ import trace_ops as ts_ops                            # noqa: E402  (trace compi
 import state_schema as ts_schema                      # noqa: E402  (save-schema slots)
 
 SESS_ROOT = ROOT / "runs" / "olv3"
-DEFAULT_REMOTE = os.environ.get("OPENLORDS2_FRIDA_REMOTE", "cutestation.soy:27042")
+DEFAULT_REMOTE = os.environ.get("OPENLORDS2_FRIDA_REMOTE", "127.0.0.1:27042")
 
 # ── Trace Studio shortcut pointer ───────────────────────────────────────────────
 # The desktop / Start-Menu "OpenLords2 Trace Studio" shortcut (install-studio-

@@ -18,7 +18,7 @@ Pass --name to override, or --pid N (repeatable) to target specific pids.
 Stdout is one JSON line (classifier-clean): {"killed":[...], "failed":[...]}.
 
     nix develop -c python3 tools/kill_retail.py
-    nix develop -c python3 tools/kill_retail.py --remote cutestation.soy:27042
+    nix develop -c python3 tools/kill_retail.py --remote $OPENLORDS2_FRIDA_REMOTE
     nix develop -c python3 tools/kill_retail.py --pid 23048 --pid 24464
 """
 
@@ -32,7 +32,7 @@ import frida
 
 # Keep in sync with frida_capture.DEFAULT_REMOTE — but importing it drags the
 # whole module + frida spawn machinery, so just duplicate the one constant.
-DEFAULT_REMOTE = "cutestation.soy:27042"
+DEFAULT_REMOTE = "127.0.0.1:27042"
 DEFAULT_NAME   = "Lords2.exe"
 
 

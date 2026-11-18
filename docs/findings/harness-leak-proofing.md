@@ -57,7 +57,7 @@ retail via frida until the server returns — then the next run's pre-reap (or
 
 ## Operational notes
 
-- Always pass `--remote cutestation.soy:27042` (WSL2 blocks the 127.0.0.1
+- Always pass `--remote $OPENLORDS2_FRIDA_REMOTE` (WSL2 blocks the 127.0.0.1
   default — [[reference_frida_remote]]).
 - After any suspected leak: `nix develop -c python3 tools/kill_retail.py`.
 - Constants: `WATCHDOG_GRACE_S`, `TEARDOWN_CALL_TIMEOUT_S`,

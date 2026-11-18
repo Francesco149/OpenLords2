@@ -16,7 +16,7 @@ python3 tools/bot/l2state.py endturn-2 --compact | tail -1    # the state the bo
 python3 tools/rhost/rhost.py corpus --bless --only bot-s3     # adopt a game into the corpus (+ --target wine)
 python3 tools/rhost/rhost.py coverage                         # what the corpus exercises in retail
 ```
-(Wrap in `tools/dev`; on maximus one game at a time unless tiny — `-j` runs games in parallel, wine processes.)
+(Wrap in `tools/dev`; on the agent host one game at a time unless tiny — `-j` runs games in parallel, wine processes.)
 Each game writes `tests/scenarios/bot3[tag]-s<seed>-t<turns>[-k]/` (`--prefix`; v1 / v2 games are `bot-*` / `bot2*`; tag `cen` = custom
 England, `x` = played on from another scenario) (never overwritten: Jev's probabilities vary a
 little between calls, so the seed fixes the sampling stream but not the game — the trace is the artifact): `trace.jsonl` (all input; the scenario),

@@ -8,7 +8,7 @@
 # over a Y range (one click per scroll lands on its icon; the rest hit scroll
 # body harmlessly while a scroll is up).  Map is clean by ~round 5.
 #
-#   nix develop -c python3 -u tools/frida_capture.py --remote cutestation.soy:27042
+#   nix develop -c python3 -u tools/frida_capture.py --remote $OPENLORDS2_FRIDA_REMOTE
 #     --skip-intro --turbo --anchor-trace --rng-seed
 #     --input-segtrace tools/traces/new_game_to_map.jsonl --run-id newgame
 #

@@ -13,7 +13,7 @@ Port of openrecet's tools/bunker, namespaced ol2-* (openrecet's orc-bunker pool 
 ssh: ONE multiplexed connection (ControlMaster, ControlPersist 2h, socket CTL) carries every command, rsync and live
 session forward — bunker's sshd refuses connections past `MaxStartups 10:30:100`.
 --check: end state vs the blessed expected.wine.json (bunker runs the same wine engine; rhost.expected_diffs).
-Host: RHOST_BUNKER (default root@10.0.10.58). Local results: RHOST_BUNKER_RUNS (/mnt/ephemeral/openlords2/bunker-runs).
+Host: RHOST_BUNKER (default bunker). Local results: RHOST_BUNKER_RUNS (/mnt/ephemeral/openlords2/bunker-runs).
 """
 import argparse
 import fcntl
@@ -34,7 +34,7 @@ sys.path.insert(0, os.path.join(ROOT, "tools", "rhost"))
 import rhost  # noqa: E402
 import diskguard  # noqa: E402
 
-HOST = os.environ.get("RHOST_BUNKER", "root@10.0.10.58")
+HOST = os.environ.get("RHOST_BUNKER", "bunker")
 W = "/var/lib/ol2-bunker"
 PY = f"{W}/gcroots/python/bin/python3"
 POOL = f"{PY} {W}/bin/pool.py"
@@ -159,7 +159,7 @@ def cmd_setup(a):
     stage_scripts()
     if ssh(f"test -e {W}/prefix-headless/system.reg", check=False):
         print("[creating the headless wine prefix (once)]")
-        # wineboot, then wine's null display driver (as rhost.wine_stage does on maximus): rhost's DirectDraw is software
+        # wineboot, then wine's null display driver (as rhost.wine_stage does on the agent host): rhost's DirectDraw is software
         ssh(f"{POOL} run setup --rw-prefix python3 -c 'import subprocess as s; s.run([\"wineboot\", \"-i\"], capture_output=True); "
             f"s.run([\"wine\", \"reg\", \"add\", \"HKCU\\\\Software\\\\Wine\\\\Drivers\", \"/v\", \"Graphics\", \"/d\", \"null\", \"/f\"], "
             f"capture_output=True); s.run([\"wineserver\", \"-w\"])'")

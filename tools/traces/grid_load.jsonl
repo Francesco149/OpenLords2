@@ -9,7 +9,7 @@
 #
 # Run (retail, turbo):
 #   nix develop -c python3 -u tools/frida_capture.py
-#     --remote cutestation.soy:27042 --skip-intro --turbo --anchor-trace
+#     --remote $OPENLORDS2_FRIDA_REMOTE --skip-intro --turbo --anchor-trace
 #     --input-segtrace tools/traces/grid_load.jsonl --run-id grid-load-retail
 # Run (port):
 #   openlords2.exe --input-segtrace tools/traces/grid_load.jsonl

@@ -143,11 +143,12 @@
             # Same Frida instance the OpenMare / openrecet siblings use.
             # The Windows-side frida-server.exe binds 0.0.0.0:27042, but WSL2's
             # Hyper-V firewall blocks the 127.0.0.1 loopback path to it — reach
-            # it by hostname (cutestation.soy) instead. A 127.0.0.1 default also
+            # it by the Windows box's hostname instead (set OPENLORDS2_FRIDA_REMOTE; a private
+            # .local.env, sourced by tools/dev, is the place for it). A 127.0.0.1 default also
             # makes the harness attempt a spurious elevated frida-server launch
             # (UAC) on connect timeout. See memory reference_frida_remote.
             # Override if you run a separate instance for OpenLords2.
-            export OPENLORDS2_FRIDA_REMOTE="''${OPENLORDS2_FRIDA_REMOTE:-cutestation.soy:27042}"
+            export OPENLORDS2_FRIDA_REMOTE="''${OPENLORDS2_FRIDA_REMOTE:-127.0.0.1:27042}"
 
             # banner on stderr: `nix develop -c CMD` output stays clean for tools
             {

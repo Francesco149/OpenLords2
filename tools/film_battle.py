@@ -31,7 +31,7 @@ bridge chokepoint, and clashes — 120 bright frames → mp4, no crash.
   For an assertion-backed staged ranged proof, prefer `film_unit_behavior.py`.
   `--staged` remains a looser exploratory capture mode.
 
-Usage (daemon up, retail on cutestation):
+Usage (daemon up, retail on the Windows box):
     nix develop -c python3 tools/film_battle.py --out runs/probe/beat2/march.mp4
     nix develop -c python3 tools/film_battle.py --staged --enemy mace --n 16
 """

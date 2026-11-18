@@ -246,7 +246,7 @@ cp build/openlords2-debug.exe /tmp/ol2.exe
 ( cd "$GAMEDIR" && /tmp/ol2.exe --newgame 0 --frames 5 --no-cd --allow-multi )
 
 # retail same-seed new-game save + point-matched live dump
-nix develop -c python3 tools/frida_capture.py --remote cutestation.soy:27042 \
+nix develop -c python3 tools/frida_capture.py --remote $OPENLORDS2_FRIDA_REMOTE \
   --skip-intro --turbo --rng-seed --input-segtrace tools/traces/new_game_to_map.jsonl \
   --run-id rs --dump-regions "0x522f90:32768:descriptors,0x553d50:264:player_aux,\
 0x52f0b0:63420:per_territory,0x57bf00:2112:player_strategic,0x53f9b0:13056:per_army,\

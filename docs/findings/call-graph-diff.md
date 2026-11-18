@@ -2,7 +2,7 @@
 
 > Landed 2026-05-29 (Phase G of `docs/plans/structural-parity-harness.md`).
 > **Validated end-to-end against live retail** (frida-server
-> `cutestation.soy:27042`): 424/424 VAs hooked, a boot-frame retail↔port diff
+> `$OPENLORDS2_FRIDA_REMOTE`): 424/424 VAs hooked, a boot-frame retail↔port diff
 > ran clean — retail 60 unique VAs/tick vs the port's scaffold 1 (engine_tick),
 > 59 named retail-only gap candidates.
 
@@ -67,10 +67,10 @@ nix develop -c python3 tools/gen_call_trace_probes.py --hook-vas runs/hookvas.js
 
 # 2. Capture retail's trace for the target frames (drive to the scene via
 #    --input-trace; pick frames inside the render path you care about).
-#    NB: --remote cutestation.soy:27042 is REQUIRED — WSL2's Hyper-V firewall
+#    NB: --remote $OPENLORDS2_FRIDA_REMOTE is REQUIRED — WSL2's Hyper-V firewall
 #    blocks the 127.0.0.1 default (see memory reference_frida_remote).
 nix develop -c python3 tools/frida_capture.py \
-    --remote cutestation.soy:27042 \
+    --remote $OPENLORDS2_FRIDA_REMOTE \
     --run-id calltrace-retail --turbo \
     --input-trace tests/scenarios/<scene>/trace.jsonl \
     --call-trace --call-trace-vas @runs/hookvas.json \

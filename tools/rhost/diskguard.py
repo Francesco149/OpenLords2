@@ -2,10 +2,10 @@
 
 A full C: on the shared Windows box wedged its sshd sessions (the real cause behind "ssh win collapsed"). Every path that
 starts runs on a host stages first, and staging calls need(host): rhost.ensure_staged (win), rhost.wine_stage (wine /
-maximus), bunker.stage (bunker), drive.staged_exe (rd live sessions), rhost play-install / play-test.
+the agent host), bunker.stage (bunker), drive.staged_exe (rd live sessions), rhost play-install / play-test.
 
 Below the floor → DiskLow (SystemExit, exit code 75): the batch / session does not start. The agent must NOT free space
-itself (the Windows box and bunker are shared; maximus run output goes to cold via `offload park` — the orchestrator's
+itself (the Windows box and bunker are shared; the agent host run output goes to cold via `offload park` — the orchestrator's
 call) and must NOT route around it onto another host: it reports to the orchestrator and waits.
 
 Floors (GB free): RHOST_DISK_FLOOR_WIN (20), RHOST_DISK_FLOOR_LOCAL (15), RHOST_DISK_FLOOR_BUNKER (10).
@@ -49,7 +49,7 @@ def _free_win():
 def _free_wine():
     rhost = _mod("rhost", "EPH")
     p = rhost.EPH if os.path.isdir(rhost.EPH) else os.path.expanduser("~")
-    return shutil.disk_usage(os.path.realpath(p)).free / 2 ** 30, f"maximus {os.path.realpath(p)}"
+    return shutil.disk_usage(os.path.realpath(p)).free / 2 ** 30, f"the agent host {os.path.realpath(p)}"
 
 
 def _free_bunker():
@@ -80,9 +80,9 @@ def need(host):
     if gb < FLOOR[host]:
         raise DiskLow(
             f"\nDISK LOW — REFUSING TO START: {where} has {gb:.1f} GB free (floor {FLOOR[host]:.0f} GB).\n"
-            f"A full disk on the Windows box wedges its sshd sessions; on bunker / maximus it kills runs mid-write.\n"
+            f"A full disk on the Windows box wedges its sshd sessions; on bunker / the agent host it kills runs mid-write.\n"
             f"AGENT: STOP here. Do not delete files to make room and do not move the work to another host.\n"
             f"Tell the orchestrator: \"disk low on {where} — {gb:.1f} GB free < {FLOOR[host]:.0f} GB floor — please free "
             f"space before I continue\", then wait for the go-ahead and re-run the same command.\n"
-            f"(Orchestrator: our share there — win: C:\\ol2-rhost (`rhost.py prune --hours H`), maximus: "
+            f"(Orchestrator: our share there — win: C:\\ol2-rhost (`rhost.py prune --hours H`), the agent host: "
             f"/mnt/ephemeral/openlords2 (`offload park --fast`), bunker: `bunker.py status`.)\n")

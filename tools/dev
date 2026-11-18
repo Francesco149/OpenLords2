@@ -2,7 +2,7 @@
 # tools/dev CMD [ARGS...] — run CMD in the project's dev environment without a resident `nix develop`.
 #
 # `nix develop -c CMD` keeps its evaluator (~370 MB RSS) alive for as long as CMD runs. On 2026-10-23 two
-# agents' long verifies plus nested builds held 22 of them (8 GB) when maximus (31 GB, no swap) ran out of
+# agents' long verifies plus nested builds held 22 of them (8 GB) when the agent host (31 GB, no swap) ran out of
 # memory. This caches `nix print-dev-env` once per flake.nix + flake.lock and sources it: CMD runs under plain
 # bash with the same toolchain, Python and shellHook exports. Already inside the dev shell: runs CMD as is.
 set -o pipefail
@@ -23,6 +23,8 @@ if [ ! -s "$cache" ]; then
     mv -f "$cache.$$" "$cache"
 fi
 here=$PWD
+# private host config (untracked; CLAUDE.local.md): before the dev env, whose defaults are ${VAR:-…}
+[ -f "$ROOT/.local.env" ] && . "$ROOT/.local.env"
 cd "$ROOT" && source "$cache" >/dev/null 2>&1   # the shellHook takes OPENLORDS2_ROOT from $PWD
 cd "$here" || exit 1
 "$@"; rc=$?

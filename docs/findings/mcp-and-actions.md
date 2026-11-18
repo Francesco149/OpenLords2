@@ -31,7 +31,7 @@ JSON-RPC stream (the client reads the banner as garbage and the handshake breaks
 interpreter DIRECTLY instead — the MCP server and `ai_pov` are stdlib-only, so a bare python
 needs none of the dev-shell env. Registered command:
 
-    /home/headpats/.local/state/openlords2/mcp-python/bin/python3 \
+    ~/.local/state/openlords2/mcp-python/bin/python3 \
         /opt/src/OpenLords2/tools/openlords2_mcp.py
 
 `mcp-python` is a GC-root pinning the flake's python3 so `nix-collect-garbage` can't delete it:

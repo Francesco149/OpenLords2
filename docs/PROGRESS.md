@@ -2748,7 +2748,7 @@ cover wage divisors + signed human /4, total-wage filtering, contract
 clear/refund, the occupant-list unlink (head / middle-splice / not-found /
 self-loop guard), disband link-A/link-B paths, absorb (3 flag cases), and the
 affordable + every escalation-state transition.  Added a **pure-function-diff
-target `upkeep`** (FUN_004acbd4) and ran it against retail via cutestation.soy:
+target `upkeep`** (FUN_004acbd4) and ran it against retail via the Windows box:
 **16/16 and 48/48 pass**.  The diff vectors are deliberately constrained to the
 **no-collect region** (unit types <= 0x10, absorb flag 0, escalation state <= 4,
 contracted values large) because the disband/absorb tails call
@@ -11882,7 +11882,7 @@ surface — the engine sees a no-op.
 ### Verified
 
 `nix develop -c python3 tools/diff_test.py --vectors 200 --seed 1
---remote cutestation.soy:27042 --functions sim_sub_steps`:
+--remote $OPENLORDS2_FRIDA_REMOTE --functions sim_sub_steps`:
 
 | target          | result                       |
 |-----------------|------------------------------|
@@ -12047,7 +12047,7 @@ the port.
 ### Verified
 
 `nix develop -c python3 tools/diff_test.py --vectors 200 --seed 1
---remote cutestation.soy:27042`:
+--remote $OPENLORDS2_FRIDA_REMOTE`:
 
 | target        | result                       |
 |---------------|------------------------------|
@@ -12136,7 +12136,7 @@ the supporting fixes to make the visible window actually correct.
 
 ### Verified
 
-Interactive run via `cutestation.soy:27042`:
+Interactive run via `$OPENLORDS2_FRIDA_REMOTE`:
 
 ```
 nix develop -c python3 tools/frida_capture.py \
@@ -12265,7 +12265,7 @@ our turbo / frame-capture / diff-test pipeline.
 ### Verified
 
 `nix develop -c python3 tools/smoke-test.py --duration-ms 7000
---turbo --remote cutestation.soy:27042`:
+--turbo --remote $OPENLORDS2_FRIDA_REMOTE`:
 
 ```
 [agent] gdi_seat: armed (lazy install on first engine_tick after
@@ -12420,7 +12420,7 @@ the port.
 ### Verified
 
 `nix develop -c python3 tools/diff_test.py --vectors 500
---remote cutestation.soy:27042`:
+--remote $OPENLORDS2_FRIDA_REMOTE`:
 
 | target        | result                       |
 |---------------|------------------------------|
@@ -12482,7 +12482,7 @@ diff-test harness around post-call write races.
 ### Race classification (post-call writeback races)
 
 Unrate-limited retail runs the per-tick driver at ~200 kHz on
-cutestation.  Anything inside the per-tick driver's body — frame_delta,
+the Windows box.  Anything inside the per-tick driver's body — frame_delta,
 anim_cycle, FPS — has a race window between our retail call returning
 and our agent's readback.  In that window the engine can fire its own
 call to the same retail function and overwrite a writeback global before
@@ -12541,7 +12541,7 @@ and `retail.frames > port.frames`, classify as race-pass.
 ### Verified
 
 `nix develop -c python3 tools/diff_test.py --vectors 500
---remote cutestation.soy:27042`:
+--remote $OPENLORDS2_FRIDA_REMOTE`:
 
 | target        | result                       |
 |---------------|------------------------------|
@@ -12658,7 +12658,7 @@ the other diff sources).
 ### Verified
 
 `nix develop -c python3 tools/diff_test.py --vectors 200 --remote
-cutestation.soy:27042`:
+$OPENLORDS2_FRIDA_REMOTE`:
 
 | target        | pass     |
 |---------------|----------|
@@ -12781,7 +12781,7 @@ unblocked), so the engine doesn't ambient-call it during diffs.
 
 ### Verified
 
-Two stress runs against retail (via `cutestation.soy:27042`):
+Two stress runs against retail (via `$OPENLORDS2_FRIDA_REMOTE`):
 
 | Run                    | rng_step       | fps_step       | retries (rough)  |
 |------------------------|----------------|----------------|------------------|
@@ -12890,7 +12890,7 @@ recording session is gated on a separate host-display issue (see
 
 ### Verified
 
-Three smokes against retail (via `cutestation.soy:27042`):
+Three smokes against retail (via `$OPENLORDS2_FRIDA_REMOTE`):
 
 1. `--input-record --turbo` (5 s, hidden window): WndProc hook armed,
    `input_trace.jsonl` created (empty — no events fired because
@@ -12924,7 +12924,7 @@ hit one of two walls:
   invisible under DWM (the documented `DDraw NORMAL Blt invisible
   under DWM` quirk).  Can't see what you're clicking.
 - `--no-force-windowed`: engine attempts exclusive fullscreen on
-  cutestation and hangs before DSound init (probably the desktop
+  the Windows box and hangs before DSound init (probably the desktop
   session isn't attached enough for exclusive mode-set).
 
 Synthetic traces hand-authored from `wndproc.md`'s VK/WM table
@@ -14929,7 +14929,7 @@ Initial bootstrap session continued.
 ### Retail harness verified against Lords2.exe
 
 Ran `tools/smoke-test.py --duration-ms 8000` against the real GOG
-`Lords2.exe` via the cutestation.soy frida-server.  Results:
+`Lords2.exe` via the the Windows box frida-server.  Results:
 
 ```
 hwnd_count:        5        (1 game + 4 system: OLE, CIC, MSCTFIME)

@@ -5,7 +5,7 @@
 #   C:\ol2-rhost\play\carry\                 the files the game wrote in the newest finished session (saves, castles.dat
 #                                            ...): the next session starts with them, so "Load game" continues a campaign
 #   C:\ol2-rhost\play\sessions\<stamp>\      trace.jsonl  start\ (the carry it began with)  meta.json  rhost.log  state_end.rhs
-# rhost.py play-status / play-fetch (maximus) list the sessions and import them as scenarios (tests/scenarios/hp-<stamp>),
+# rhost.py play-status / play-fetch (the agent host) list the sessions and import them as scenarios (tests/scenarios/hp-<stamp>),
 # each replayed headless as a self-check (same frame count + state hash as the recording).
 # -Standalone (shortcut "OpenLords2 (standalone)", play-standalone.cmd): the PORT plays instead (rhost --standalone: retail's
 # data image, no retail code); same sessions / carry. play-fetch replays its trace in PURE retail: equal frame / RNG /

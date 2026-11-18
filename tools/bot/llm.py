@@ -7,10 +7,11 @@ Jev (POST /api/alpha/decisions) takes `state` (string / JSON) and named typed qu
 — and answers with probabilities instead of text; output tokens are free (~$0.00002 per small request).
 
 The key is the project's own low-cap OpenRouter key `openlords2-bot` ($3/month, made with the work
-repo's `infra keys`), read per process from nix-work over ssh and never printed or written to disk
+repo's `infra keys`), read per process by OPENLORDS2_KEY_CMD (private .local.env) and never printed or written to disk
 (the retro lab's pattern). Spend shows in `infra keys`.
 """
 import json
+import os
 import subprocess
 import time
 import urllib.error
@@ -19,8 +20,9 @@ import urllib.request
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions"
 DECISIONS_MODEL = "~typesafe/jev-latest"   # Jev: TypeSafe's "System One" decision model (typed answers + probabilities)
-KEY_CMD = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "root@10.0.10.57",
-           "cat /var/lib/secrets/inference-edge/openrouter-openlords2-bot"]
+# the key: OPENROUTER_API_KEY, else the output of OPENLORDS2_KEY_CMD (a shell command; the owner's lives in the private
+# .local.env that tools/dev sources — CLAUDE.local.md). Never printed.
+KEY_CMD = os.environ.get("OPENLORDS2_KEY_CMD", "")
 DEFAULT_MODEL = "typesafe/jev-router"
 _key = None
 
@@ -28,10 +30,15 @@ _key = None
 def key():
     global _key
     if _key is None:
-        out = subprocess.run(KEY_CMD, capture_output=True, text=True, timeout=30)
-        k = out.stdout.strip()
-        if out.returncode != 0 or not k.startswith("sk-or-"):
-            raise RuntimeError("could not read the openlords2-bot OpenRouter key from nix-work")
+        if os.environ.get("OPENROUTER_API_KEY"):
+            k, rc = os.environ["OPENROUTER_API_KEY"].strip(), 0
+        elif KEY_CMD:
+            out = subprocess.run(KEY_CMD, shell=True, capture_output=True, text=True, timeout=30)
+            k, rc = out.stdout.strip(), out.returncode
+        else:
+            raise RuntimeError("no OpenRouter key: set OPENROUTER_API_KEY or OPENLORDS2_KEY_CMD")
+        if rc != 0 or not k.startswith("sk-or-"):
+            raise RuntimeError("could not read the OpenRouter key (OPENLORDS2_KEY_CMD failed)")
         _key = k
     return _key
 
@@ -60,7 +67,7 @@ def chat(messages, model=DEFAULT_MODEL, max_tokens=800, temperature=0.4, json_mo
     for attempt in range(retries):
         req = urllib.request.Request(OPENROUTER_URL, data=data, headers={
             "Authorization": f"Bearer {key()}", "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/headpats/OpenLords2", "X-Title": "OpenLords2 autoplay"})
+            "HTTP-Referer": "https://github.com/Francesco149/OpenLords2", "X-Title": "OpenLords2 autoplay"})
         t0 = time.time()
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -95,7 +102,7 @@ def _post(url, body, timeout, retries):
     for attempt in range(retries):
         req = urllib.request.Request(url, data=data, headers={
             "Authorization": f"Bearer {key()}", "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/headpats/OpenLords2", "X-Title": "OpenLords2 autoplay"})
+            "HTTP-Referer": "https://github.com/Francesco149/OpenLords2", "X-Title": "OpenLords2 autoplay"})
         t0 = time.time()
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:

@@ -13,10 +13,11 @@ holds pointers only.
 2. `docs/FRONT.md` — the active front, ★ next micro-task, human queue.
 3. At session end: report pending human items (FRONT §Human queue).
 
-**Hosts.** **maximus** (this Arch box): agent host; **`tools/dev CMD`** = the pinned devshell (mingw, python
+**Hosts** (roles; names, addresses, ports, storage policy: **`CLAUDE.local.md`**, untracked, auto-loaded). The agent
+host (this Linux box); **`tools/dev CMD`** = the pinned devshell (mingw, python
 deps) — **every build/test command runs inside it**. It sources a cached `nix print-dev-env`; `nix develop -c`
-works too but keeps a ~370 MB evaluator resident per command (22 of them were 8 GB of the 2026-10-23 OOM). **`ssh win`**: the Windows 11 box (OpenSSH
-on cutestation:2222, PowerShell) — rhost's `win` target, IDA 9.4. `ssh wslop` (WSL) is not needed.
+works too but keeps a ~370 MB evaluator resident per command (22 of them were 8 GB of the 2026-10-23 OOM). **`ssh win`**: the Windows 11 box (OpenSSH,
+PowerShell) — rhost's `win` target, IDA 9.4.
 
 ## Methodology (2026-10-23 reset — `docs/audits/2026-10-23-methodology-reset.md`)
 **Product direction = hybrid** (owner, 2026-10-23): port functions replace retail's inside rhost, each
@@ -54,7 +55,7 @@ The Kirby playbook as openrecet runs it: a task = ordered state predicates (`too
 and designs the search, a driver subagent (the parent session's model) runs it; the API driver `tools/drive/agent.sh`
 only when `agent.sh --check-credit` passes AND the owner says credit is available. Gates after touching rhost:
 `rhost.py snap-check --target wine` (savestates ≡ straight replay). Hosts: `RD_HOST=auto` = Windows (`RHOST_WIN=win-wifi`
-when on wifi; rd falls back to it) → bunker (`tools/bunker/`, root@10.0.10.58, pool `ol2-bunker-pool` 4 G) → wine.
+when on wifi; rd falls back to it) → bunker (`tools/bunker/`, ssh alias `bunker`, pool `ol2-bunker-pool` 4 G) → wine.
 **Live probing** (scripted) = `rhbot.py` (control channel) — probes: `--watch-write VA@F`, `--trap VA`, `--coverage`.
 
 **Legacy — superseded, keep for reference, don't extend:** the Frida retail drive (`tools/frida/`,
@@ -78,7 +79,7 @@ capture (the **viewer** stays for human eyes).
 - Windows: `C:\ol2-rhost\` (separate from the siblings' `C:\orc-rhost`, `C:\oss-rhost`, `C:\de-rhost`); kill only
   our own processes by full path / PID, never by name. Interactive jobs (record, --show) go through the
   scheduled task `ol2-rhost-runner`.
-- Game data: maximus `vendor/original` → `/mnt/ephemeral/gog/Lords of the Realm II`; rhost uses pristine copies
+- Game data: the agent host's `vendor/original` → `/mnt/ephemeral/gog/Lords of the Realm II`; rhost uses pristine copies
   (`C:\ol2-rhost\game`, `/mnt/ephemeral/openlords2/rhost-wine/game`) without saves or harness leftovers.
 
 ## Conventions
@@ -92,7 +93,7 @@ capture (the **viewer** stays for human eyes).
 - **Human verification:** never ask the human to reconstruct state; give one command and what to look for.
 
 ## Hard rules
-- **maximus has 31 GB, no swap, shared with the owner's desktop apps.** Wrap commands in `tools/dev`, not
+- **The agent host has 31 GB, no swap, shared with the owner's desktop apps.** Wrap commands in `tools/dev`, not
   `nix develop -c`. At most one whole-corpus `verify` / `corpus` per agent at a time; with two agents
   working, wine `-j 8` each. Leave nothing running when you report (stop your own batches by PID).
 - **The Windows box is shared** with sibling projects running the same architecture right now: openrecet
@@ -109,17 +110,14 @@ capture (the **viewer** stays for human eyes).
   The legacy Frida probe daemon stops only via `nix develop -c python3 tools/stop_probe.py`; legacy
   `tools/kill_retail.py` kills `Lords2.exe` by name — never pass it `--name`.
 - Background waiters poll an output marker, never `pgrep -f` their own pattern.
-- OpenRouter: only the project key `openlords2-bot` (read per process by `tools/bot/llm.py`; never print it).
+- OpenRouter: only the project key `openlords2-bot` (read per process by `tools/bot/llm.py` via `OPENLORDS2_KEY_CMD`,
+  set in `.local.env`; never print it).
 
 ## Where to read next
 `docs/FRONT.md` · `docs/audits/2026-10-23-methodology-reset.md` · `tools/rhost/README.md` ·
 `docs/findings/in-process-retail-host.md` · `docs/findings/INDEX.md` · `docs/STATUS.md` (derived) ·
 `docs/PROGRESS.md`.
 
-## Storage on maximus (2026-11-06)
-
-- **On cold, not local:** `/mnt/ephemeral/openlords2/rhost-runs/` and `rhost-wine/root/runs/` (~62 GB of run
-  output). The rest of `/mnt/ephemeral/openlords2/` (decompiled-ida, rhost-wine bin/game, prefixes) and the
-  GOG install `/mnt/ephemeral/gog/` stay local. `/mnt/ephemeral/lords2-decomp/` is parked whole.
-- **Park run output aggressively:** once a batch is no longer needed day to day (the work it was evidence for is committed), `offload park --fast <batch dirs>` — the copy in and out of cold is cheap (~100–250 MB/s), local disk is not.
-- Before recreating any of it (re-running a batch, re-extracting, re-exporting, re-downloading), check cold: the stub `OFFLOADED.md` at the old path, `offload where <path>`, `offload list`; `offload fetch <path>` brings back the whole thing or any sub-path (the cold copy stays, so re-parking is cheap). `/mnt/ephemeral` is now a symlink to `~/data` on maximus rootfs (the btrfs array is retired); cold mirrors it 1:1 at `cold:/gigavault/staging/maximus-ephemeral/<same path>`. Policy: maximus `/opt/src/maximus/AGENTS.md` "Disk space".
+## Storage
+Run output lives under `/mnt/ephemeral/openlords2/`; the parking policy (cold storage, `offload park` / `fetch`) is in
+`CLAUDE.local.md` — read it before re-running or re-extracting anything big.

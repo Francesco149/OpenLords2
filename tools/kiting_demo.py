@@ -13,7 +13,7 @@ Staging uses the scratch-rec class-word override (DAT_0052f21c + class*2 + rec*0
 between the muster (FUN_0042b7f7) and the deploy (FUN_004778a0). Small counts only —
 big single-class musters overflow the 0x50 unit table and crash the deploy.
 
-Usage (daemon must be up, retail on cutestation):
+Usage (daemon must be up, retail on the Windows box):
     nix develop -c python3 tools/kiting_demo.py [--enemy mace|peasant] [--shot DIR]
 
 STATUS (2026-07-09): mechanic PROVEN live. Staging 16 archers vs 16 melee deploys

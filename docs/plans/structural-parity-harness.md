@@ -277,7 +277,7 @@ both.
   sim_sub_steps freeze; the existing freeze code is the reference).
 - **Per-tick batch** every JSONL emitter's `send()`; per-call saturates.
 - **Schema versioning**: `version: 1` header line on each JSONL emitter.
-- **Frida remote** = `cutestation.soy:27042` (not loopback — WSL2 Hyper-V
+- **Frida remote** = `$OPENLORDS2_FRIDA_REMOTE` (not loopback — WSL2 Hyper-V
   firewall), already the `frida_capture` default.
 - **Always inside `nix develop`** for every command.
 - **No mandatory retail dependency**: the whole harness is opt-in; default CI

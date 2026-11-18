@@ -53,7 +53,7 @@ AGENT_JS   = ROOT / "tools" / "frida" / "openlords2-agent.js"
 RETAIL_EXE = ROOT / "vendor" / "original" / "Lords2.exe"
 ASSET_CWD  = ROOT / "vendor" / "original"
 
-# Default endpoint is cutestation.soy, NOT 127.0.0.1 — WSL2's Hyper-V firewall
+# Default endpoint is the Windows box, NOT 127.0.0.1 — WSL2's Hyper-V firewall
 # blocks the loopback path to the Windows-host frida-server, and a 127.0.0.1
 # default also triggers a spurious elevated frida-server *launch* attempt
 # (UAC prompt) when the loopback connect times out.  Override via env if your
@@ -61,7 +61,7 @@ ASSET_CWD  = ROOT / "vendor" / "original"
 DEFAULT_REMOTE = os.environ.get(
     "OPENLORDS2_FRIDA_REMOTE",
     os.environ.get("OPENMARE_FRIDA_REMOTE",
-                   os.environ.get("OPENRECET_FRIDA_REMOTE", "cutestation.soy:27042")))
+                   os.environ.get("OPENRECET_FRIDA_REMOTE", "127.0.0.1:27042")))
 
 # Where to look for the Windows-side frida-server.exe when auto-starting.
 # Same path layout the siblings use (one install serves all three projects).
@@ -71,7 +71,7 @@ DEFAULT_FRIDA_SERVER_EXE = Path(os.environ.get(
         "OPENMARE_FRIDA_SERVER_EXE",
         os.environ.get(
             "OPENRECET_FRIDA_SERVER_EXE",
-            f"/mnt/c/Users/headpats/Documents/_devtools/"
+            f"/mnt/c/Users/{os.environ.get('WINUSER', os.environ.get('USER', 'user'))}/Documents/_devtools/"
             f"frida-server-{frida.__version__}-windows-x86_64/"
             f"frida-server-{frida.__version__}-windows-x86_64.exe"))))
 

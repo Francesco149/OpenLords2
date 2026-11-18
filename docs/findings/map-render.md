@@ -1087,7 +1087,7 @@ consistency, build correctness) and prints the live gap metrics each run.
 ### RESOLVED (2026-06-01) — the LOAD path is byte-exact; the gap was a wrong ground truth
 
 Drove the structural-parity tools myself over remote frida
-(`cutestation.soy:27042`):
+(`$OPENLORDS2_FRIDA_REMOTE`):
 
 - **Real load path** (call-trace, `--input-segtrace load_into_map_seg.jsonl`):
   `4ad9f0` (load pump, polled 351×) → **`4adfe6` (save_load)** → **`4976a1`**

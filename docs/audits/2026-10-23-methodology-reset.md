@@ -171,7 +171,7 @@ should measure wrapper cost on one subsystem (suggest: the AI brain FSM, already
 | run results | `/mnt/ephemeral/openlords2/rhost-runs/` |
 | IDA export | `/mnt/ephemeral/openlords2/decompiled-ida/` (tools in `tools/ida/`, Windows `C:\ol2-ida\`) |
 | bot | `tools/bot/` (`llm.py`, `l2state.py`, …) |
-| OpenRouter key | slot `openlords2-bot` on nix-work (`infra keys` in `/opt/src/work/infra`), $3/month |
+| OpenRouter key | slot `openlords2-bot` (the owner's key store; see CLAUDE.local.md), $3/month |
 
 ## 8. Checklist for you
 

@@ -30,7 +30,7 @@ suffices, with or without `--turbo`:
 
 ```sh
 nix develop -c python3 tools/frida_capture.py \
-    --remote cutestation.soy:27042 --run-id retail-mm \
+    --remote $OPENLORDS2_FRIDA_REMOTE --run-id retail-mm \
     --turbo --skip-intro --frame-capture --frame-capture-warmup-secs 3 \
     --frame-capture-max 4 --duration-ms 15000
 # Captures the menu in retail's full-color palette (red caps + red hover) —
@@ -100,7 +100,7 @@ The frame-capture cadence is one shot per engine cumulative-second rollover
 
 ```sh
 nix develop -c python3 tools/frida_capture.py \
-    --remote cutestation.soy:27042 --run-id retail-mm \
+    --remote $OPENLORDS2_FRIDA_REMOTE --run-id retail-mm \
     --turbo --frame-capture --frame-capture-warmup-secs 1000 \
     --frame-capture-max 6 --duration-ms 30000
 # tail frame = the main menu ("Lords of the Realm 2 / The siege is on":

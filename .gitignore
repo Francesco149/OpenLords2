@@ -75,3 +75,7 @@ tools/trace_studio_v3/.studio_current
 
 # user data: the saves a scenario starts from (rhost.py meta "saves", play-fetch)
 tests/scenarios/*/_saves/
+
+# ─── Private host config (names, addresses, storage policy) — see CLAUDE.local.md ───
+CLAUDE.local.md
+.local.env
