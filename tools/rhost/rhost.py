@@ -1036,6 +1036,33 @@ def cmd_play_install(a):
     return 0
 
 
+PRODUCT = WROOT + "\\product"
+SHORTCUT_PRODUCT = "OpenLords2"
+
+
+def cmd_product(a):
+    """build openlords2.exe — the product: the port alone on the REAL platform (DirectDraw full-screen 640x480x8,
+    DirectSound, the real window / clock / files), its data image linked in (rhost.c -DRH_PRODUCT, rh_real.c);
+    --install: copy it into C:\\ol2-rhost\\product (its own copy of the pristine game: the product writes real saves)
+    and (re)create the Desktop shortcut 'OpenLords2'"""
+    sh([os.path.join(ROOT, "tools", "dev"), "bash", os.path.join(HERE, "build.sh"), "--product"])
+    exe = os.path.join(BUILD, "openlords2.exe")
+    print(f"product: {exe} ({os.path.getsize(exe)} B)")
+    if not a.install:
+        return 0
+    ssh_win(f"if (!(Test-Path '{PRODUCT}\\Lords2.exe')) {{ New-Item -ItemType Directory -Force '{PRODUCT}' | Out-Null; "
+            f"Copy-Item '{WROOT}\\game\\*' '{PRODUCT}\\' -Recurse }}; exit 0")
+    scp(exe, f"{WIN}:C:/ol2-rhost/product/openlords2.exe")
+    ssh_win("$d = [Environment]::GetFolderPath('Desktop'); $w = New-Object -ComObject WScript.Shell; "
+            f"$l = $w.CreateShortcut((Join-Path $d '{SHORTCUT_PRODUCT}.lnk')); $l.TargetPath = '{PRODUCT}\\openlords2.exe'; "
+            f"$l.WorkingDirectory = '{PRODUCT}'; $l.IconLocation = '{PRODUCT}\\Lords2.exe,0'; "
+            "$l.Description = 'Lords of the Realm II played by the OpenLords2 port: full screen, real DirectDraw / DirectSound'; "
+            "$l.Save(); exit 0")
+    print(f"product: installed {PRODUCT}\\openlords2.exe; Desktop shortcut '{SHORTCUT_PRODUCT}' (log + audit: "
+          f"{PRODUCT}\\openlords2\\)")
+    return 0
+
+
 PS_SESSIONS = ("Get-ChildItem '@ROOT@\\sessions' -Directory -ErrorAction SilentlyContinue | ForEach-Object { "
                "$m = Join-Path $_.FullName 'meta.json'; $o = @{ session = $_.Name; done = (Test-Path $m) }; "
                "if (Test-Path $m) { $o.meta = Get-Content $m -Raw | ConvertFrom-Json }; "
@@ -1259,6 +1286,7 @@ def main():
     sp = sub.add_parser("probe"); common(sp); sp.add_argument("files", nargs="*"); sp.set_defaults(fn=cmd_probe)
     sp = sub.add_parser("standalone"); common(sp); sp.add_argument("--only"); sp.set_defaults(fn=cmd_standalone)
     sub.add_parser("play-install").set_defaults(fn=cmd_play_install)
+    sp = sub.add_parser("product"); sp.add_argument("--install", action="store_true"); sp.set_defaults(fn=cmd_product)
     sp = sub.add_parser("play-status"); sp.add_argument("--root", default=PLAY); sp.set_defaults(fn=cmd_play_status)
     sp = sub.add_parser("play-fetch"); sp.add_argument("--root", default=PLAY); sp.add_argument("session", nargs="*")
     sp.add_argument("--force", action="store_true"); sp.add_argument("--no-check", dest="no_check", action="store_true")

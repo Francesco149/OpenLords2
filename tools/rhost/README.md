@@ -27,6 +27,7 @@ python3 tools/rhost/rhost.py standalone --port-data                    # … and
                                                                        #   headers + .idata synthesized from src/rl_image.c = tools/gen_image_defs.py;
                                                                        #   .rsrc / .reloc absent, PAGE_NOACCESS; an open of Lords2.exe is FATAL)
 python3 tools/rhost/rhost.py play-install                                # Desktop shortcut "Lords II capture" (free play, below)
+python3 tools/rhost/rhost.py product [--install]                        # openlords2.exe: the port on the REAL platform, full screen (below)
 python3 tools/rhost/rhost.py play-status / play-fetch                     # list the owner's sessions / import + self-check them
 python3 tools/rhost/rhost.py run X --extra "--watch-write 57c934@1800"    # who writes this dword (+ EBP callers)
 python3 tools/rhost/rhost.py run X --extra "--trap 404a46"                # registers + stack args at an instruction
@@ -52,6 +53,31 @@ the next session's run dir (and kept as its `start\`), so "Load game" continues 
 `play-fetch` imports finished sessions as `tests/scenarios/hp-<stamp>/` (start files → `_saves/`, gitignored, meta
 `saves`) and replays each on wine: same frame, RNG and state hash as the recording, else FAIL. Imported scenarios are not
 blessed into the corpus automatically. `play-test` runs the launcher twice headless (session 0) in `C:\ol2-rhost\playtest`.
+
+## The product: `openlords2.exe` (real DirectDraw / DirectSound, full screen)
+
+`rhost.py product` (= `build.sh --product`) links rhost.c with `-DRH_PRODUCT` as a GUI exe: always `--standalone
+--real`, the port's composed data image linked in (`rh_product_di.S`, `tools/data_selfcheck.py --compose --strict`),
+no code path that maps Lords2.exe. Dropped into a game folder (or `--game DIR`) it plays from there; log + audit in
+`<game>\openlords2\`. `--install`: `C:\ol2-rhost\product\` (its own copy of the pristine game — the product writes real
+saves) + the Desktop shortcut **"OpenLords2"**. `--real` (rhost.exe, with `--standalone`) is the same platform for tests.
+
+`--real` (`rh_real.c`) installs none of rhost's deterministic layers: every import slot holds the system export
+(DirectDraw, DirectSound, the window + message loop, timeGetTime, files, the heap, smackw32, DPLAYX). Kept / added:
+module identity (0x400000, `<game>\Lords2.exe`, retail's command line); LoadIconA / LoadCursorA / DialogBoxParamA from
+Lords2.exe mapped by the loader **as a datafile** (resources only: the icon, retail's 8 cursors, the 4 MP dialogs); a
+relaunch under `__COMPAT_LAYER=DWM8And16BitMitigation` (Windows 11 has no real 8-bit mode; Lords2.exe gets its shims
+from the system database by name, our exe does not; `--no-compat-layer`); the main window made foreground before
+CreateWindowExA returns (retail faults at its first paint otherwise: quirk #242); retail code pointers the OS calls on
+another thread (the music streamer 0x426dd5 on winmm's timer thread, the MP monitor 0x4b7052) go to host shims that
+call the port on that thread's stack (the row wrappers belong to the game thread); OutputDebugStringA / MessageBoxA
+mirrored into the log; a fatal stop shows a box. Test switches: `--real-exit-ms N`, `--real-shot-ms N,..` (GDI capture
+→ `real_shot_<ms>.bmp`), `--real-click MS:X,Y[,r]` (SendInput; press and release in different frames — retail takes
+click edges per frame, 0x4b191e), `--log-win` (the input messages the game's loop takes).
+Verified 2026-11-18: Windows 11 (job runner, desktop session) and wine (Xvfb + `explorer /desktop=…`: Xvfb alone cannot
+switch to 640x480x8 → retail quits): boot, movies (real smackw32), clicks through the title → Single player → Play Now
+→ Original campaign → shield → Winter 1268 on the map; music timer on its thread; audit OK (2001 thunks, 0 code bytes).
+Retail's main loop spins when active (one core busy), as Lords2.exe does.
 
 ## Sharing the Windows box
 

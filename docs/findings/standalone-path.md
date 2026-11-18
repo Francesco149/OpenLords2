@@ -112,9 +112,17 @@ heap pointers shifted by the CRT's allocations (retail's CRT allocates before Wi
    plain code (no row: host level); rows for the handlers 2..4 (one residue model) and the frame guard.
 2. ~~A `standalone2` build~~ — done as `rhost --standalone` (above; the pointer-slot rewrite is unnecessary: code
    pointers in data keep retail's VAs and land on thunks). Next: ~~the CRT port~~ (done 2026-11-08: state = pure
-   retail); the standalone joins `corpus --check`; a real-platform product exe (`--live`: real window / DirectDraw / DirectSound behind the same
-   IAT slots, as OpenSummoners' `opensummoners-standalone.exe`); the static prover (`tools/standalone/`).
+   retail); the standalone joins `corpus --check` (done 2026-11-17); ~~a real-platform product exe~~ (done 2026-11-18:
+   `openlords2.exe`, below); the static prover (`tools/standalone/`, done).
 3. **Playable (2026-11-17)**: Desktop "OpenLords2 (standalone)" = `play.ps1 -Standalone` (rhost `--standalone --record
    --movies`: realtime, visible window, audible mixer). `rhost.py play-fetch` imports a session as `hp-<stamp>` and
    replays it in pure retail (frame / RNG / state_sem must equal the standalone's recording); `play-status` shows the
    mode; `play-test --standalone` = the launcher end to end, headless (Windows: 2/2 = pure retail, audit OK).
+4. **The product (2026-11-18): `openlords2.exe`** — `rhost.py product [--install]`, tools/rhost/README.md §The product.
+   rhost.c `-DRH_PRODUCT`: the standalone (entry thunks, INT3 code range, the seal + audit) on the REAL platform
+   (`--real`, `tools/rhost/rh_real.c`: system DirectDraw full screen 640x480x8, DirectSound, window, clock, files, heap,
+   smackw32, DPLAYX), the port's composed data image linked in — one exe beside the game's asset files; Lords2.exe only
+   read as a resource datafile (icon / cursors / MP dialogs). Windows 11 under DWM8And16BitMitigation (self-relaunch).
+   Found on the way: retail faults at its first paint unless its window starts foreground (quirk #242; the host makes it
+   foreground); retail callbacks on OS threads (0x426dd5 timer, 0x4b7052 thread) must bypass the game-thread row
+   wrappers (host shims). Not parity evidence (real time, real input): the deterministic standalone stays the gate.

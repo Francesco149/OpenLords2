@@ -153,8 +153,13 @@
    recorded; same carry / sessions as "Lords II capture"). `play-fetch` replays each standalone session in PURE retail
    (wine) and compares frame / RNG / state_sem: human play = parity evidence. `play-test --standalone` (Windows, 2 ×
    1500 frames): audit OK (2000 thunks, other 0, identical 0), both = pure retail. Still rhost's software platform
-   (GDI window, waveOut mixer, virtual clock paced to wall time), not real DirectDraw / DirectSound — the real-API
-   product (OpenSummoners' `-DRH_PRODUCT`) only if the owner wants fullscreen / a single exe.
+   (GDI window, waveOut mixer, virtual clock paced to wall time).
+   **2026-11-18: the product `openlords2.exe`** (owner asked: fullscreen, single exe) — `rhost.py product [--install]`
+   (rhost.c `-DRH_PRODUCT`, `--standalone --real`, `tools/rhost/rh_real.c`; README §The product): the port on real
+   DirectDraw (retail's full-screen 640x480x8 bring-up, under DWM8And16BitMitigation on Windows 11), DirectSound,
+   window, clock, files; the data image linked in; Lords2.exe read only as a resource datafile. Windows 11 + wine:
+   boot → movies → title → new campaign → the map, by real (SendInput) clicks; audit OK. Quirk #242 found (retail
+   faults at its first paint unless foreground). Desktop shortcut "OpenLords2" → `C:\ol2-rhost\product\`.
 4. ~~**The standalone's static gaps**~~ — **0 left (2026-11-17)**: the last 23 (all CRT) + their unported closure, 67
    functions, ported (src/rl_crt_{dbg,dbgheap,env}.c; crt-port.md §Gap ports) and verified by **synthetic carriers**
    (`rhost.py probe`, `tests/probes/*.probe`, rhost README: a row's wrapper called with chosen arguments at a frame

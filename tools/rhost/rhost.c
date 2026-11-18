@@ -44,6 +44,7 @@ void rh_fatal(const char *fmt, ...)
     char b[512]; va_list ap; va_start(ap, fmt); vsnprintf(b, sizeof b, fmt, ap); va_end(ap);
     rh_log("FATAL %s\nRESULT status=fatal frame=%u\n", b, g_frame);
     if (g_logf) fflush(g_logf);
+    if (O.real) MessageBoxA(NULL, b, "OpenLords2", MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
     ExitProcess(3);
 }
 
@@ -425,6 +426,7 @@ static uint32_t WINAPI sm_ToBuffer(void *a, uint32_t b, uint32_t c, uint32_t d, 
 { (void)a; (void)b; (void)c; (void)d; (void)e; (void)f; (void)g; return 0; }
 void *rh_import_policy(const char *dll, const char *name, int ord, int *skip)
 {
+    if (O.real) { *skip = 0; return NULL; }   /* the real platform: every import from the real DLL (rh_real.c) */
     if (!_stricmp(dll, "DDRAW.dll")) { *skip = 1; return name && !strcmp(name, "DirectDrawCreate") ? (void *)rh_DirectDrawCreate : NULL; }
     if (!_stricmp(dll, "DSOUND.dll")) { *skip = 1; return name && !strcmp(name, "DirectSoundCreate") ? (void *)rh_DirectSoundCreate : NULL; }
     if (!_stricmp(dll, "DPLAYX.dll")) { *skip = 1; return ord == 1 ? (void *)dp_Create : ord == 2 ? (void *)dp_Enumerate : NULL; }
@@ -618,6 +620,7 @@ static void __cdecl frame_wrap(void)
     if (g_nw) watch_arm_due();
     { uint32_t sp_; __asm__ volatile("movl %%esp, %0" : "=r"(sp_)); rh_fw_frame = (uint32_t)(uintptr_t)__builtin_dwarf_cfa() - sp_; }
     ((frame_fn_t)(uintptr_t)L2_FRAME_FN)();
+    if (O.real) { g_frame++; rh_real_frame(); return; }   /* the real platform paces itself (timeGetTime) */
     end_of_frame();
     if (g_frame + 1 >= O.frames && !O.finish_late) { g_frame++; finish("frames"); }
     g_frame++;
@@ -642,6 +645,7 @@ static void finish(const char *why)
 {
     if (g_finished) return;
     g_finished = 1;
+    if (O.real) { rh_log("RESULT status=ok reason=%s frame=%u\n", why, g_frame); if (g_logf) fclose(g_logf); ExitProcess(0); }
     rh_net_report();
     rh_trace_finish();
     rh_cap_finish();
@@ -685,6 +689,26 @@ static void usage(void)
                     "  [--log-files] [--log-heap] [--log-input] [--log-dd] [--log-ds] [--log-win] [--standalone [--data-image F]]\n");
     ExitProcess(2);
 }
+#ifdef RH_PRODUCT
+/* the product (openlords2.exe): the port alone on the real platform, from its own folder (= the game folder, or --game
+ * DIR); log + audit in <game>\openlords2\; .rdata / .data = the port's composed data image linked into the exe
+ * (rh_product_di.S: tools/data_selfcheck.py --compose); Lords2.exe is never mapped — only read as a resource datafile */
+extern const uint8_t rh_product_di[], rh_product_di_end[];
+static char g_pd_game[MAX_PATH], g_pd_run[MAX_PATH], g_pd_exe[MAX_PATH];
+static void product_defaults(void)
+{
+    O.standalone = O.real = 1;
+    if (!O.gamedir) {
+        char me[MAX_PATH]; GetModuleFileNameA(NULL, me, sizeof me);
+        char *sl = strrchr(me, '\\'); if (sl) *sl = 0;
+        snprintf(g_pd_game, sizeof g_pd_game, "%s", me);
+        O.gamedir = g_pd_game;
+    }
+    if (!O.rundir) { snprintf(g_pd_run, sizeof g_pd_run, "%s\\openlords2", O.gamedir); O.rundir = g_pd_run; }
+    if (!O.exe) { snprintf(g_pd_exe, sizeof g_pd_exe, "%s\\Lords2.exe", O.gamedir); O.exe = g_pd_exe; }
+    if (!O.data_image) O.data_image = "(embedded)";
+}
+#endif
 static void parse_list(const char *s, uint32_t *out, int *n, int max)
 {
     char b[1024]; snprintf(b, sizeof b, "%s", s);
@@ -727,6 +751,15 @@ static void parse(int argc, char **argv)
         else if (!strcmp(a, "--movies")) O.movies = 1;
         else if (!strcmp(a, "--standalone")) O.standalone = 1;
         else if (!strcmp(a, "--data-image")) O.data_image = ARG();
+        else if (!strcmp(a, "--real")) O.real = 1;
+        else if (!strcmp(a, "--no-compat-layer")) O.no_compat = 1;
+        else if (!strcmp(a, "--real-exit-ms")) O.real_exit_ms = strtoul(ARG(), 0, 0);
+        else if (!strcmp(a, "--real-shot-ms")) parse_list(ARG(), O.real_shot_ms, &O.n_real_shot, 8);
+        else if (!strcmp(a, "--real-click")) {
+            const char *v = ARG(); unsigned ms, x, y; char btn = 'l';
+            if (sscanf(v, "%u:%u,%u,%c", &ms, &x, &y, &btn) < 3 || O.n_real_click >= 24) usage();
+            uint32_t *c = O.real_click[O.n_real_click++]; c[0] = ms; c[1] = x; c[2] = y; c[3] = btn == 'r';
+        }
         else if (!strcmp(a, "--hook")) O.hooks = ARG();
         else if (!strcmp(a, "--probe")) O.probe = ARG();
         else if (!strcmp(a, "--shadow-full")) O.shadow_full = 1;
@@ -770,7 +803,13 @@ static void parse(int argc, char **argv)
         else { fprintf(stderr, "unknown option %s\n", a); usage(); }
         #undef ARG
     }
+#ifdef RH_PRODUCT
+    product_defaults();
+#endif
     if (!O.exe || !O.gamedir || !O.rundir) usage();
+    if (O.real && !O.standalone) { fprintf(stderr, "--real needs --standalone (the real platform runs the port only)\n"); usage(); }
+    if (O.real && (O.trace || O.record || O.bot || O.live || O.snap_test || O.coverage || O.hooks || O.probe)) {
+        fprintf(stderr, "--real plays the real platform: no trace / record / bot / live / snap / coverage / hooks / probe\n"); usage(); }
     if (O.scale < 1) O.scale = 1;
     if (O.audible < 0) O.audible = 0;
     static char rec_abs[MAX_PATH], out_abs[MAX_PATH];
@@ -855,6 +894,26 @@ static uint32_t di_fnv(const uint8_t *p, uint32_t n)
 }
 static void di_load(const char *path)
 {
+#ifdef RH_PRODUCT
+    if (!strcmp(path, "(embedded)")) {   /* linked in: the same OL2DATA1 layout, read in place */
+        const uint8_t *q = rh_product_di, *e = rh_product_di_end;
+        snprintf(g_di.path, sizeof g_di.path, "openlords2.exe (embedded data image)");
+        uint32_t n;
+        if (e - q < 12 || memcmp(q, "OL2DATA1", 8)) rh_fatal("the embedded data image is not OL2DATA1");
+        memcpy(&n, q + 8, 4); q += 12;
+        if (!n || n > DI_MAX) rh_fatal("the embedded data image has %u sections", n);
+        for (uint32_t i = 0; i < n; i++) {
+            uint32_t hd[2];
+            if (e - q < 16) rh_fatal("the embedded data image is truncated");
+            memcpy(g_di.name[i], q, 8); g_di.name[i][8] = 0; memcpy(hd, q + 8, 8); q += 16;
+            if (hd[0] < RT_IMG_LO || hd[1] > RT_IMG_HI - hd[0] || (uint32_t)(e - q) < hd[1]) rh_fatal("embedded data image: bad section %s", g_di.name[i]);
+            g_di.va[i] = hd[0]; g_di.len[i] = hd[1]; g_di.p[i] = (uint8_t *)q; q += hd[1];
+            g_di.sum[i] = di_fnv(g_di.p[i], hd[1]);
+        }
+        g_di.n = (int)n;
+        return;
+    }
+#endif
     GetFullPathNameA(path, sizeof g_di.path, g_di.path, NULL);
     FILE *f = fopen(g_di.path, "rb");
     if (!f) rh_fatal("--data-image: cannot open %s", g_di.path);
@@ -989,6 +1048,11 @@ static void sa_seal(const char *exe_abs, const retail_image_t *img)
     }
     bad += xout != 0;
     sa_audit("exec_outside_code_range %u\n", xout);
+    if (O.real) {
+        sa_audit("platform real (system DirectDraw / DirectSound / window / clock / files; smackw32 + DPLAYX from the system / game dir)\n");
+        sa_audit("resources %s\n", rh_real_res_path() ? "Lords2.exe mapped by the loader AS A DATAFILE (icon / cursors / dialogs; never executable, outside the image)"
+                                                       : "none (Lords2.exe absent: system cursor, no dialogs)");
+    } else
     sa_audit("libraries smackw32=%s (RAD's Smacker DLL from the game dir, not Lords2.exe: only with --movies)\n",
              O.movies ? "loaded" : "not-loaded");
     sa_audit("verdict %s\n", bad ? "FAIL" : "OK");
@@ -1015,6 +1079,8 @@ RETAIL_HOLE_DEFINE
 int main(int argc, char **argv)
 {
     parse(argc, argv);
+    if (O.real && !O.no_compat) rh_real_compat(argc, argv);   /* (relaunches under DWM8And16BitMitigation; returns in the child) */
+    if (O.real) O.no_arena = O.no_overlay = 1;
     QueryPerformanceFrequency(&g_qf); QueryPerformanceCounter(&g_t0);
     CreateDirectoryA(O.rundir, NULL);
     char lp[MAX_PATH]; snprintf(lp, sizeof lp, "%s\\rhost.log", O.rundir);
@@ -1025,7 +1091,7 @@ int main(int argc, char **argv)
     if (GetEnvironmentVariableA("RHOST_TEST_OCCUPY", occ, sizeof occ) && !GetEnvironmentVariableA("RHOST_RELAUNCH", rl, sizeof rl))
         VirtualAlloc((void *)(uintptr_t)strtoul(occ, 0, 0), 0x10000, MEM_RESERVE, PAGE_NOACCESS);
     if (!O.no_arena && rh_heap_init()) fixed_range_taken("heap arena", 0x20000000u, 0x58000000u);
-    if (rh_media_reserve()) fixed_range_taken("media pool", 0x60000000u, 0x70000000u);
+    if (!O.real && rh_media_reserve()) fixed_range_taken("media pool", 0x60000000u, 0x70000000u);
     stacks_init();
     GetFullPathNameA(O.gamedir, sizeof g_gamedir_abs, g_gamedir_abs, NULL);
     for (size_t l = strlen(g_gamedir_abs); l && g_gamedir_abs[l - 1] == '\\'; ) g_gamedir_abs[--l] = 0;
@@ -1039,7 +1105,10 @@ int main(int argc, char **argv)
         if (port_map(&img, g_di.va, g_di.n)) rh_fatal("port_map failed");
         di_place(&img);
         snprintf(exe_abs, sizeof exe_abs, "(not opened: rl_image.c + %s)", g_di.path);
-    } else if (retail_map(exe_abs, &img, O.standalone, g_di.va, g_di.n)) rh_fatal("map %s failed", exe_abs);
+    }
+#ifndef RH_PRODUCT   /* the product never maps the exe (no path that could copy retail code) */
+    else if (retail_map(exe_abs, &img, O.standalone, g_di.va, g_di.n)) rh_fatal("map %s failed", exe_abs);
+#endif
     layout_from_pe();
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
     SetUnhandledExceptionFilter(rh_crash_filter);
@@ -1049,7 +1118,7 @@ int main(int argc, char **argv)
     iat_override("GetModuleHandleA", my_GetModuleHandleA);
     iat_override("GetModuleFileNameA", my_GetModuleFileNameA);
     iat_override("SetUnhandledExceptionFilter", my_SetUnhandledExceptionFilter);
-    iat_override("ExitProcess", my_ExitProcess);
+    if (!O.real) iat_override("ExitProcess", my_ExitProcess);
     iat_override("TerminateProcess", my_TerminateProcess);
     g_cmdline = rh_fixed_alloc(MAX_PATH + 8);
     snprintf(g_cmdline, MAX_PATH + 8, "\"%s\\Lords2.exe\"", g_gamedir_abs);
@@ -1058,6 +1127,18 @@ int main(int argc, char **argv)
     g_envA = rh_fixed_alloc(sizeof envA); memcpy(g_envA, envA, sizeof envA);
     g_envW = rh_fixed_alloc(sizeof envW); memcpy(g_envW, envW, sizeof envW);
     iat_override("GetCommandLineA", my_GetCommandLineA);
+    if (O.real) {   /* the real platform: the rest of the imports stay the system's (rh_real.c) */
+        rh_real_install(g_gamedir_abs);
+        rl_plat_bind_imports();
+        rl_frame_driver = (int (*)(void))frame_wrap;
+        rh_hooks_install();
+        O.frames = 0xfffffff0u;
+        rh_log("rhost: REAL platform, standalone (frames unbounded)\n");
+        AddVectoredExceptionHandler(1, sa_veh); sa_seal(exe_abs, &img);
+        call_on_stack((void *)sa_entry, MAIN_STACK_LO, MAIN_STACK_HI - 192);   /* never returns */
+        finish("entry-returned");
+        return 0;
+    }
     iat_try("GetEnvironmentStrings", my_GetEnvironmentStrings);
     iat_try("GetEnvironmentStringsW", my_GetEnvironmentStringsW);
     iat_try("FreeEnvironmentStringsA", my_FreeEnvironmentStringsA);

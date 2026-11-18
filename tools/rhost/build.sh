@@ -49,7 +49,7 @@ python3 "$H/gen_callsites.py" "$B/rh_callsites.h" >/dev/null   # real call instr
 LINK=($CC -std=gnu11 -O2 -g -Wall -Wno-unused-function -Wno-format-truncation -Wno-cast-function-type -Wno-misleading-indentation
       -I"$S" -I"$H" -I"$B" -include "$H/rh_hostalloc.h" "${LDF[@]}" -o "$OUT"
       "$H"/rhost.c "$H"/rh_heap.c "$H"/rh_media.c "$H"/rh_files.c "$H"/rh_handles.c "$H"/rh_state.c "$H"/rh_shot.c
-      "$H"/rh_ddraw.c "$H"/rh_dsound.c "$H"/rh_win.c "$H"/rh_hooks.c "$H"/rh_bot.c "$H"/rh_smack.c "$H"/rh_snap.c "$H"/rh_live.c "$H"/rh_net.c "${SUB_HOOKS[@]}"
+      "$H"/rh_ddraw.c "$H"/rh_dsound.c "$H"/rh_win.c "$H"/rh_hooks.c "$H"/rh_bot.c "$H"/rh_smack.c "$H"/rh_snap.c "$H"/rh_live.c "$H"/rh_net.c "$H"/rh_real.c "${SUB_HOOKS[@]}"
       "$B/rh_hostalloc.o" "${PORT_OBJS[@]}" -luser32 -lgdi32 -lwinmm -lws2_32)
 "${LINK[@]}"
 # a FIXED SizeOfImage: the system allocations Windows / wine place right after the image must not
@@ -76,3 +76,22 @@ if (( 0x$HOLE > 0x400000 )); then echo "rhost.exe: .bss starts past 0x400000 (ho
 if (( 0x$HOLE + 0x480000 < 0x5e9000 )); then echo "rhost.exe: hole 0x$HOLE+0x480000 does not cover retail's image" >&2; exit 1; fi
 mv -f "$OUT" "$B/rhost.exe"
 echo "built $B/rhost.exe (port std: $PORT_STD, SizeOfImage pinned $IMG_SIZE, retail hole from 0x$HOLE)"
+
+# --product: openlords2.exe — rhost.c -DRH_PRODUCT (always --standalone --real: the port alone on the real platform; no
+# path that maps the exe), a GUI exe with the port's composed data image linked in (build/rl_data.img, regenerated
+# here: tools/data_selfcheck.py --compose --strict). It needs only the game's asset files next to it.
+if [[ " $* " == *" --product "* ]]; then
+    DI=$ROOT/build/rl_data.img
+    python3 "$ROOT/tools/data_selfcheck.py" --compose "$DI" --strict --no-md --jobs 8 >/dev/null
+    $CC -c -DDI_PATH="\"$DI\"" -o "$B/rh_product_di.o" "$H/rh_product_di.S"
+    PROD=("${LINK[@]}")
+    for i in "${!PROD[@]}"; do
+        [[ "${PROD[$i]}" == "$OUT" ]] && PROD[$i]="$B/openlords2.$$.exe"
+    done
+    trap 'rm -f "$OUT" "$B/openlords2.$$.exe"' EXIT
+    "${PROD[@]}" -DRH_PRODUCT "$B/rh_product_di.o" -mwindows   # (rhost.c stays first: its .bss hole lands at 0x202000)
+    PH=$(i686-w64-mingw32-nm "$B/openlords2.$$.exe" | awk '$3=="_g_retail_hole"{print $1}')
+    if (( 0x$PH > 0x400000 || 0x$PH + 0x480000 < 0x5e9000 )); then echo "openlords2.exe: the hole 0x$PH does not cover retail's image" >&2; exit 1; fi
+    mv -f "$B/openlords2.$$.exe" "$B/openlords2.exe"
+    echo "built $B/openlords2.exe (the product: standalone + real platform, data image $(stat -c %s "$DI") B embedded)"
+fi

@@ -80,6 +80,11 @@ typedef struct {
                                    (tools/data_selfcheck.py --compose, OL2DATA1), not from the exe */
     const char *net_sigs;       /* --net-sigs ME/N[,full|skirmish]: the fake SIGS multiplayer transport (rh_net.c) */
     const char *net_peer;       /* --net-peer HOST:PORT: record a live game through a broker (tools/rhost/rhnet.py) */
+    int real;                   /* --real (with --standalone; the product always): the REAL platform — no virtual clock, no
+                                   fake DirectDraw / DirectSound / window / heap / files; rh_real.c */
+    int no_compat;              /* --no-compat-layer: --real does not relaunch under DWM8And16BitMitigation */
+    uint32_t real_exit_ms, real_shot_ms[8]; int n_real_shot;   /* --real-exit-ms N / --real-shot-ms N,..: tests (rh_real.c) */
+    uint32_t real_click[24][4]; int n_real_click;   /* --real-click MS:X,Y[,r] (repeatable): SendInput clicks (r: right), tests */
 } rh_opts_t;
 
 extern rh_opts_t O;
@@ -88,6 +93,10 @@ extern FILE *g_log;
 void rh_log(const char *fmt, ...);
 void rh_fatal(const char *fmt, ...);
 void rh_finish(const char *why);
+void rh_real_compat(int argc, char **argv);   /* rh_real.c */
+void rh_real_install(const char *gamedir);
+void rh_real_frame(void);
+const char *rh_real_res_path(void);
 uint32_t rh_vnow(void);
 void rh_clock_save(uint32_t s[3]);
 void rh_clock_restore(const uint32_t s[3]);
