@@ -649,6 +649,7 @@ static void finish(const char *why)
     rh_net_report();
     rh_trace_finish();
     rh_cap_finish();
+    rh_wav_finish();
     cov_dump();
     rh_hooks_report();
     for (int i = 0; i < g_ntrap; i++) rh_log("trap-count %08x hits=%ld\n", g_tva[i], g_thits[i]);
@@ -737,6 +738,7 @@ static void parse(int argc, char **argv)
         else if (!strcmp(a, "--shot-at")) parse_list(ARG(), O.shot_at, &O.n_shot, 64);
         else if (!strcmp(a, "--shot-every")) O.shot_every = strtoul(ARG(), 0, 0);
         else if (!strcmp(a, "--fb-hash")) O.fb_hash = 1;
+        else if (!strcmp(a, "--cap-wav")) O.cap_wav = 1;
         else if (!strcmp(a, "--cap")) { const char *v = ARG(); O.cap_from = strtoul(v, 0, 0); const char *c = strchr(v, ':'); O.cap_count = c ? strtoul(c + 1, 0, 0) : 1; }
         else if (!strcmp(a, "--hash-every")) O.hash_every = strtoul(ARG(), 0, 0);
         else if (!strcmp(a, "--log-every")) O.log_every = strtoul(ARG(), 0, 0);

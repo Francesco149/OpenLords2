@@ -270,8 +270,36 @@ static int32_t sample(const ds_buf *b, uint32_t frame_idx, int ch)
     if (b->fmt.wBitsPerSample == 16) return ((const int16_t *)p)[c];
     return ((int32_t)p[c] - 128) << 8;
 }
+/* mix every playing secondary buffer over the virtual interval [from, from + n output samples) into acc (n stereo
+ * frames at OUT_HZ, added). Reads only. */
+static void mix_into(int32_t *acc, uint32_t n, uint32_t from)
+{
+    for (int k = 0; k < g_nlive; k++) {
+        const ds_buf *b = g_live[k];
+        if (!b->playing || (b->flags & DSBCAPS_PRIMARYBUFFER) || !b->mem->size) continue;
+        uint32_t ba = b->fmt.nBlockAlign ? b->fmt.nBlockAlign : 1, nframes = b->mem->size / ba;
+        uint32_t freq = b->freq ? b->freq : b->fmt.nSamplesPerSec;
+        if (!freq || !nframes) continue;
+        uint32_t start_t = (int32_t)(b->t0 - from) > 0 ? b->t0 : from;   /* Play inside this interval */
+        uint32_t p0, playing;
+        cur(b, start_t, &p0, &playing);
+        if (!playing) continue;
+        uint32_t first_out = (uint32_t)((uint64_t)(start_t - from) * OUT_HZ / 1000u);
+        uint32_t f0 = p0 / ba;
+        float g = db_gain(b->vol), gl = g * (b->pan > 0 ? db_gain(-b->pan) : 1.0f), gr = g * (b->pan < 0 ? db_gain(b->pan) : 1.0f);
+        for (uint32_t i = first_out; i < n; i++) {
+            uint64_t src = (uint64_t)(i - first_out) * freq / OUT_HZ;     /* frames since start_t */
+            if (!b->looping && f0 + src >= nframes) break;
+            uint32_t fi = (uint32_t)((f0 + src) % nframes);
+            acc[2 * i] += (int32_t)(sample(b, fi, 0) * gl);
+            acc[2 * i + 1] += (int32_t)(sample(b, fi, 1) * gr);
+        }
+    }
+}
+static void wav_frame(void);
 void rh_ds_mix(void)
 {
+    wav_frame();
     if (!O.audible) return;
     uint32_t now = rh_vnow();
     if (!g_wo) {
@@ -290,27 +318,7 @@ void rh_ds_mix(void)
     if (!n || n > 8192) { g_mix_last = now; return; }
     static int32_t acc[8192 * 2];
     memset(acc, 0, n * 8);
-    for (int k = 0; k < g_nlive; k++) {
-        const ds_buf *b = g_live[k];
-        if (!b->playing || (b->flags & DSBCAPS_PRIMARYBUFFER) || !b->mem->size) continue;
-        uint32_t ba = b->fmt.nBlockAlign ? b->fmt.nBlockAlign : 1, nframes = b->mem->size / ba;
-        uint32_t freq = b->freq ? b->freq : b->fmt.nSamplesPerSec;
-        if (!freq || !nframes) continue;
-        uint32_t start_t = (int32_t)(b->t0 - g_mix_last) > 0 ? b->t0 : g_mix_last;   /* Play inside this interval */
-        uint32_t p0, playing;
-        cur(b, start_t, &p0, &playing);
-        if (!playing) continue;
-        uint32_t first_out = (uint32_t)((uint64_t)(start_t - g_mix_last) * OUT_HZ / 1000u);
-        uint32_t f0 = p0 / ba;
-        float g = db_gain(b->vol), gl = g * (b->pan > 0 ? db_gain(-b->pan) : 1.0f), gr = g * (b->pan < 0 ? db_gain(b->pan) : 1.0f);
-        for (uint32_t i = first_out; i < n; i++) {
-            uint64_t src = (uint64_t)(i - first_out) * freq / OUT_HZ;     /* frames since start_t */
-            if (!b->looping && f0 + src >= nframes) break;
-            uint32_t fi = (uint32_t)((f0 + src) % nframes);
-            acc[2 * i] += (int32_t)(sample(b, fi, 0) * gl);
-            acc[2 * i + 1] += (int32_t)(sample(b, fi, 1) * gr);
-        }
-    }
+    mix_into(acc, n, g_mix_last);
     g_mix_last = now;
     WAVEHDR *h = &g_hdr[g_ohead];
     if (h->dwFlags & WHDR_PREPARED) {
@@ -324,6 +332,83 @@ void rh_ds_mix(void)
     waveOutPrepareHeader(g_wo, h, sizeof *h);
     waveOutWrite(g_wo, h, sizeof *h);
     g_ohead = (g_ohead + 1) % NHDR;
+}
+
+/* ---------------------------------------------------------------- --cap-wav: the --cap window's audio to capture.wav
+ * Film soundtrack, host side only (reads buffers, never retail state). Time base = the virtual clock: sample 0 = the
+ * vclock at the first captured frame (rh_wav_start, from rh_cap_frame), so capture.vclk + capture.wav line up with
+ * the olv3 frames. DirectSound buffers are mixed per frame boundary (no stall drop: a Sleep inside a frame is audio
+ * time too); smackw32's waveOut soundtrack is added at each buffer's virtual start (rh_wav_pcm). Written at finish. */
+static uint32_t g_wav_npcm, g_wav_pcm_skip;
+static int32_t *g_wav; static uint64_t g_wav_cap, g_wav_n; static int g_wav_on; static uint32_t g_wav_t0, g_wav_last, g_wav_frac;
+static int32_t *wav_at(uint64_t i, uint64_t n)
+{
+    uint64_t need = i + n;
+    if (need > g_wav_cap) {
+        uint64_t c = g_wav_cap ? g_wav_cap : 1u << 20;
+        while (c < need) c *= 2;
+        g_wav = realloc(g_wav, c * 8);
+        if (!g_wav) rh_fatal("--cap-wav: out of memory");
+        memset(g_wav + 2 * g_wav_cap, 0, (c - g_wav_cap) * 8);
+        g_wav_cap = c;
+    }
+    if (need > g_wav_n) g_wav_n = need;
+    return g_wav + 2 * i;
+}
+void rh_wav_start(void)
+{
+    if (!O.cap_wav || g_wav_on) return;
+    g_wav_on = 1; g_wav_t0 = g_wav_last = rh_vnow(); g_wav_frac = 0;
+}
+static void wav_frame(void)
+{
+    if (!g_wav_on || g_wav_on > 1) return;
+    uint32_t now = rh_vnow(), dt = now - g_wav_last;
+    if (!dt) return;
+    uint64_t at = (uint64_t)(g_wav_last - g_wav_t0) * OUT_HZ / 1000u;
+    uint32_t total = dt * OUT_HZ + g_wav_frac, n = total / 1000;
+    g_wav_frac = total % 1000;
+    for (uint32_t off = 0, from = g_wav_last; off < n; ) {          /* chunks of <= 8192 */
+        uint32_t m = n - off > 8192 ? 8192 : n - off;
+        mix_into(wav_at(at + off, m), m, from);
+        off += m; from = g_wav_last + (uint32_t)((uint64_t)off * 1000u / OUT_HZ);
+    }
+    g_wav_last = now;
+}
+void rh_wav_stop(void) { if (g_wav_on == 1) { wav_frame(); g_wav_on = 2; } }
+void rh_wav_pcm(uint64_t t_us, const void *data, uint32_t len, const struct tWAVEFORMATEX *f)
+{
+    if (g_wav_on != 1 || !f || !f->nSamplesPerSec) { if (g_wav_on == 1) g_wav_pcm_skip++; return; }
+    uint64_t t0_us = (uint64_t)g_wav_t0 * 1000u;
+    if (t_us < t0_us) { g_wav_pcm_skip++; return; }
+    g_wav_npcm++;
+    uint32_t nch = f->nChannels ? f->nChannels : 1, bps = f->wBitsPerSample == 16 ? 2 : 1, ba = nch * bps, nfr = len / ba;
+    uint64_t at = (t_us - t0_us) * OUT_HZ / 1000000u, n = (uint64_t)nfr * OUT_HZ / f->nSamplesPerSec;
+    int32_t *o = wav_at(at, n);
+    const uint8_t *p = data;
+    for (uint64_t i = 0; i < n; i++) {
+        uint32_t fi = (uint32_t)(i * f->nSamplesPerSec / OUT_HZ);
+        for (int c = 0; c < 2; c++) {
+            const uint8_t *q = p + fi * ba + (nch > 1 ? c : 0) * bps;
+            o[2 * i + c] += bps == 2 ? *(const int16_t *)q : ((int32_t)*q - 128) << 8;
+        }
+    }
+}
+void rh_wav_finish(void)
+{
+    if (!g_wav_on) return;
+    rh_wav_stop();
+    char p[MAX_PATH]; snprintf(p, sizeof p, "%s\\capture.wav", O.rundir);
+    FILE *f = fopen(p, "wb");
+    if (!f) { rh_log("cap-wav: cannot write %s\n", p); return; }
+    uint32_t bytes = (uint32_t)(g_wav_n * 4);
+    struct { char riff[4]; uint32_t sz; char wave[4], fmt[4]; uint32_t fsz; uint16_t tag, ch; uint32_t hz, bps; uint16_t al, bits; char data[4]; uint32_t dsz; }
+        __attribute__((packed)) hd = { "RIFF", 36 + bytes, "WAVE", "fmt ", 16, 1, 2, OUT_HZ, OUT_HZ * 4, 4, 16, "data", bytes };
+    fwrite(&hd, sizeof hd, 1, f);
+    for (uint64_t i = 0; i < 2 * g_wav_n; i++) { int32_t v = g_wav[i]; int16_t o = (int16_t)(v > 32767 ? 32767 : v < -32768 ? -32768 : v); fwrite(&o, 2, 1, f); }
+    fclose(f);
+    rh_log("cap-wav: %llu samples (%.1f s, t0 vclock=%u; movie soundtrack buffers %u, skipped %u) -> capture.wav\n",
+           (unsigned long long)g_wav_n, g_wav_n / (double)OUT_HZ, g_wav_t0, g_wav_npcm, g_wav_pcm_skip);
 }
 
 void rh_ds_report(void)

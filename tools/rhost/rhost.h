@@ -65,7 +65,8 @@ typedef struct {
     uint32_t stall_wall_ms;
     uint32_t trap_max;
     uint32_t htrace_f0, htrace_f1;
-    uint32_t cap_from, cap_count;   /* --cap FROM:COUNT */  /* --heap-trace A-B: every HeapAlloc / HeapFree in this frame window */
+    uint32_t cap_from, cap_count;   /* --cap FROM:COUNT */
+    int cap_wav;                /* --cap-wav: the --cap window's audio (DirectSound + movie soundtrack) -> capture.wav */  /* --heap-trace A-B: every HeapAlloc / HeapFree in this frame window */
     const char *bot;           /* host:port of a decision server (bot mode) */
     const char *stop_on;        /* stop condition (e.g. "screen=0x13") */
     int live, live_port;        /* --live PORT: serve commands on 127.0.0.1:PORT (0 = pick one → <run>\\live.port); rh_live.c */
@@ -193,6 +194,10 @@ HRESULT WINAPI rh_DirectSoundCreate(GUID *g, void **out, void *outer);
 void rh_mm_install(void);
 void rh_mm_frame(void);        /* fire due timeSetEvent callbacks (main thread, frame boundary) */
 void rh_ds_report(void);
+void rh_wav_start(void);       /* --cap-wav: rh_dsound.c */
+void rh_wav_stop(void);
+void rh_wav_finish(void);
+void rh_wav_pcm(uint64_t t_us, const void *data, uint32_t len, const struct tWAVEFORMATEX *f);
 void rh_ds_mix(void);          /* --audible: this frame's audio to waveOut (reads only) */
 void *rh_ds_meta_save(void);               /* serials, live registry, timers (free with free()) */
 void rh_ds_meta_restore(const void *m);

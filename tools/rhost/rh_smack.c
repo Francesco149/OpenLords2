@@ -22,7 +22,7 @@ static uint32_t g_size;
  * every waveOut call. ---- */
 #define WQ 64
 static struct { LPWAVEHDR h; uint64_t due_us; } g_wq[WQ]; static int g_nwq;
-static uint32_t g_wo_avg = 11025; static uint64_t g_wo_tail_us;
+static uint32_t g_wo_avg = 11025; static uint64_t g_wo_tail_us; static WAVEFORMATEX g_wo_fmt;
 /* --audible: a copy of every buffer also goes to a real device (side channel; pacing stays virtual) */
 static HWAVEOUT g_real; static WAVEHDR g_rh[32]; static uint8_t *g_rbuf[32]; static int g_rhead;
 static void real_open(LPCWAVEFORMATEX f)
@@ -58,6 +58,8 @@ static MMRESULT WINAPI wo_Open(LPHWAVEOUT h, UINT id, LPCWAVEFORMATEX f, DWORD_P
     if (fl & 0x00070000u) rh_log("movie: waveOutOpen with callback type %08lx (%p): not emulated\n", (unsigned long)fl, (void *)cb);
     if (fl & WAVE_FORMAT_QUERY) return MMSYSERR_NOERROR;
     g_wo_avg = f && f->nAvgBytesPerSec ? f->nAvgBytesPerSec : 11025;
+    if (f) { memcpy(&g_wo_fmt, f, sizeof g_wo_fmt); g_wo_fmt.cbSize = 0; }
+    if (O.log_ds && f) rh_log("movie: waveOutOpen %u Hz %u ch %u bit (f%u)\n", (unsigned)f->nSamplesPerSec, f->nChannels, f->wBitsPerSample, g_frame);
     g_wo_tail_us = now_us(); g_nwq = 0;
     real_open(f);
     if (h) *h = (HWAVEOUT)(uintptr_t)0x0a110001u;
@@ -77,6 +79,8 @@ static MMRESULT WINAPI wo_Write(HWAVEOUT h, LPWAVEHDR w, UINT n)
     w->dwFlags = (w->dwFlags | WHDR_INQUEUE) & ~WHDR_DONE;
     g_wq[g_nwq].h = w; g_wq[g_nwq++].due_us = g_wo_tail_us;
     real_write(w);
+    if (O.log_ds) rh_log("movie: waveOutWrite %lu bytes at %llu us (f%u)\n", (unsigned long)w->dwBufferLength, (unsigned long long)start, g_frame);
+    rh_wav_pcm(start, w->lpData, w->dwBufferLength, &g_wo_fmt);
     return MMSYSERR_NOERROR;
 }
 static MMRESULT WINAPI wo_Reset(HWAVEOUT h) { (void)h; wo_complete(1); if (g_real) waveOutReset(g_real); return MMSYSERR_NOERROR; }

@@ -111,8 +111,10 @@ static uint32_t cap_id(uint64_t *tab, uint32_t *n, uint64_t h, int *fresh)
     return (*n)++;
 }
 static void wu(uint32_t v) { fwrite(&v, 4, 1, g_cap); }
+static FILE *g_vclk;
 void rh_cap_frame(void)
 {
+    if (O.cap_count && g_frame >= O.cap_from + O.cap_count) rh_wav_stop();
     if (!O.cap_count || g_frame < O.cap_from || g_frame >= O.cap_from + O.cap_count) return;
     const uint8_t *pix; int pitch, w, h; const PALETTEENTRY *pal;
     if (rh_dd_present(&pix, &pitch, &w, &h, &pal) != 8) return;
@@ -122,7 +124,13 @@ void rh_cap_frame(void)
         if (!g_cap) rh_fatal("--cap: cannot write %s", p);
         g_cap_pal = malloc(CAP_MAXU * 8); g_cap_pix = malloc(CAP_MAXU * 8);
         wu(0x33564C4Fu); wu(2); wu((uint32_t)w); wu((uint32_t)h);
+        /* capture.vclk: (frame, vclock) per captured frame — the film's time base (rhost/film.py); --cap-wav's
+         * sample 0 = the first record's vclock */
+        snprintf(p, sizeof p, "%s\\capture.vclk", O.rundir);
+        g_vclk = fopen(p, "wb");
+        rh_wav_start();
     }
+    if (g_vclk) { uint32_t r[2] = { g_frame, rh_vnow() }; fwrite(r, 4, 2, g_vclk); }
     static uint8_t plane[640 * 480]; uint8_t pal4[1024];
     if (w * h > (int)sizeof plane) rh_fatal("--cap: frame too large");
     for (int y = 0; y < h; y++) memcpy(plane + y * w, pix + y * pitch, (size_t)w);
@@ -139,5 +147,6 @@ void rh_cap_finish(void)
 {
     if (!g_cap) return;
     wu(99); fclose(g_cap); g_cap = NULL;
+    if (g_vclk) { fclose(g_vclk); g_vclk = NULL; }
     rh_log("cap: %u frames (%u palettes, %u planes) -> capture.olv3\n", g_cap_frames, g_cap_npal, g_cap_npix);
 }

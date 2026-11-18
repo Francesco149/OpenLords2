@@ -35,6 +35,7 @@ python3 tools/rhost/rhbot.py "run 600; click 320 107; run 100; shot m" --montage
 python3 tools/rhost/rhost.py view endturn-2 --b-hook replace:rng_step --cap 1800:300  # Trace Studio v3: pure | hybrid | diff
 python3 tools/rhost/rhost.py view endturn-2 --cap 1800:300 --shot out.bmp --col 150  # … one column, headless
 python3 tools/rhost/rhost.py coverage                                   # first-hit coverage of every retail function
+tools/dev python3 tools/rhost/film.py SPEC.json                          # a captioned gameplay video (MP4 + sound) of a replay (below)
 ```
 Results: `/mnt/ephemeral/openlords2/rhost-runs/<batch>/<run>/` (wine: `…/rhost-wine/root/runs/`) — `rhost.log`
 (last line `RESULT key=value …`), `shot_fNNNNNN.png`, `frame_fNNNNNN.idx` (640×480 index plane + palette),
@@ -203,6 +204,18 @@ palettes + 8 bpp index planes). `rhost.py view A [--b B | --b-hook SPEC]` runs b
 them by frame number (A = the retail column, B = the "port" column) and opens `viewer.exe` on the desktop
 through the runner — or renders one column headless with `--shot`. Pure vs hybrid is the visual check for a
 render port; two scenarios side by side for anything else.
+
+## Films (`film.py`, `--cap-wav`)
+
+`--cap FROM:COUNT` also writes `capture.vclk` (frame, virtual clock per captured frame); `--cap-wav` adds `capture.wav`:
+the window's audio (every playing DirectSound buffer mixed at frame boundaries, as the `--audible` mixer reads them, +
+smackw32's waveOut soundtrack) on the same virtual time base, 22050 Hz stereo. Host side only (reads buffers): state and
+fb hashes are unchanged. `film.py SPEC.json` replays a scenario or trace on wine with both, lays the frames out on the
+virtual clock, scales 2x, draws the mouse from the trace (retail's cursor is a hardware cursor, not in the frame), adds a
+caption band and encodes H.264 + AAC; `"compare": true` puts retail and the same trace under `--standalone` side by side
+with a running count of identical presented frames. Spec format: the script's docstring. Outputs show game assets: never
+commit them. Known gap: the boot movies are silent — smackw32 writes two 4-byte probe buffers to the fake waveOut and then
+plays without sound (probably a position query it makes outside the faked calls), so `--cap-wav` has nothing to take.
 
 ## Probes
 
