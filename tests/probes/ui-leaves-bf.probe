@@ -1,0 +1,229 @@
+# Synthetic carriers for the battlefield leaves no scenario reaches (coverage-round3.md: unit orders 0 / 7 / 16 never
+# written to the order table, stance slot 0x48a9c7, the kind-15 ignite 0x485861, the wall-cell attacker helper 0x48ce1d).
+# field-orders f3000 = the siege battle (screen 0x29; 48 units, cells all kind 0, height 0; the unit / group loop
+# indices DAT_0053e8f8 / DAT_00568458 at 81, DAT_0052eff4 0). The current unit / group is poked and put back; cell
+# occupants (+5), cell kinds (+7) / heights (+4), a unit's +0x12 / order +0x31 are planted with memset (rl_crt_4c2200)
+# and put back. Unit u = 0x554480 + 0x1b0 u; cell off = 8 (x + 80 y), grid 0x5440e0.
+scenario field-orders
+
+# ---- the empty handlers: order 0, order 16, stance 0
+3000 bf_482f86
+3000 bf_484bee
+3000 bf_48a9c7
+
+# ---- 0x494e3f, the adjacent-enemy scan, on the natural melee around (21, 31) (side 2 = u1..24, side 1 = u25..48)
+3000 poke 0x53e8f8 4
+3000 bf_494e3f
+3000 poke 0x53e8f8 39
+3000 bf_494e3f
+3000 poke 0x53e8f8 5
+3000 bf_494e3f
+3000 poke 0x53e8f8 41
+3000 bf_494e3f
+3000 poke 0x53e8f8 24
+3000 bf_494e3f
+3000 poke 0x53e8f8 21
+3000 bf_494e3f
+3000 poke 0x53e8f8 38
+3000 bf_494e3f
+3000 poke 0x53e8f8 44
+3000 bf_494e3f
+3000 poke 0x53e8f8 43
+3000 bf_494e3f
+# u42 (side 1, alone at (42, 41), cell 0x67d0): u11 (side 2) / u43 (side 1) planted around it, one direction at a time
+3000 poke 0x53e8f8 42
+3000 bf_494e3f
+3000 rl_crt_4c2200 va:0x54a635 43 1
+3000 bf_494e3f
+3000 rl_crt_4c2200 va:0x54a635 11 1
+3000 bf_494e3f
+3000 rl_crt_4c2200 va:0x54a635 0 1
+3000 rl_crt_4c2200 va:0x54a62d 11 1
+3000 bf_494e3f
+3000 rl_crt_4c2200 va:0x54a62d 0 1
+3000 rl_crt_4c2200 va:0x54a63d 11 1
+3000 bf_494e3f
+3000 rl_crt_4c2200 va:0x54a63d 0 1
+3000 rl_crt_4c2200 va:0x54a8ad 11 1
+3000 bf_494e3f
+3000 rl_crt_4c2200 va:0x54a8ad 0 1
+3000 rl_crt_4c2200 va:0x54a8bd 11 1
+3000 bf_494e3f
+3000 rl_crt_4c2200 va:0x54a8bd 0 1
+3000 rl_crt_4c2200 va:0x54ab2d 11 1
+3000 bf_494e3f
+3000 rl_crt_4c2200 va:0x54ab2d 0 1
+3000 rl_crt_4c2200 va:0x54ab3d 11 1
+3000 bf_494e3f
+3000 rl_crt_4c2200 va:0x54ab3d 0 1
+3000 rl_crt_4c2200 va:0x54ab35 11 1
+3000 bf_494e3f
+# the planted enemy a siege unit (+0x12 >= 7), then dying (order 2): no enemy
+3000 rl_crt_4c2200 va:0x555722 7 1
+3000 bf_494e3f
+3000 rl_crt_4c2200 va:0x555722 1 1
+3000 rl_crt_4c2200 va:0x555741 2 1
+3000 bf_494e3f
+3000 rl_crt_4c2200 va:0x555741 5 1
+3000 rl_crt_4c2200 va:0x54ab35 0 1
+# the edges (u42's x / y at +0x20 poked; its cell stays): (0, 0) with the enemy down-right, (79, 79) left then down,
+# (79, 10) right
+3000 poke 0x558b80 0
+3000 rl_crt_4c2200 va:0x54ab3d 11 1
+3000 bf_494e3f
+3000 rl_crt_4c2200 va:0x54ab3d 0 1
+3000 poke 0x558b80 0x004f004f
+3000 rl_crt_4c2200 va:0x54a8ad 11 1
+3000 bf_494e3f
+3000 rl_crt_4c2200 va:0x54a8ad 0 1
+3000 rl_crt_4c2200 va:0x54ab35 11 1
+3000 bf_494e3f
+3000 rl_crt_4c2200 va:0x54ab35 0 1
+3000 poke 0x558b80 0x000a004f
+3000 rl_crt_4c2200 va:0x54a8bd 11 1
+3000 bf_494e3f
+3000 rl_crt_4c2200 va:0x54a8bd 0 1
+3000 poke 0x558b80 0x0029002a
+
+# ---- 0x483ce1, order 7 (engage): none adjacent with a target near (u44) / none near (u25); a hit on an enemy already
+# in melee (u3 → u39, order 4); a hit on one that is not (u11 with u42, order 17, planted on its right: it answers)
+3000 poke 0x53e8f8 44
+3000 bf_483ce1
+3000 poke 0x53e8f8 25
+3000 bf_483ce1
+3000 poke 0x53e8f8 3
+3000 bf_483ce1
+3000 poke 0x53e8f8 11
+3000 rl_crt_4c2200 va:0x54a825 42 1
+3000 bf_483ce1
+3000 rl_crt_4c2200 va:0x54a825 0 1
+3000 poke 0x53e8f8 81
+3000 poke 0x52eff4 0
+
+# ---- 0x48ce1d, the nearest kind-4 cell of height <= 4 within 40 of the group's centroid: none (group 2 at (20, 31));
+# a kind-4 cell too high (25, 31) h 9; then h 2 (found); a second one at the same distance (20, 36) (the later wins);
+# group 7 at (8, 5): a clipped window, none, then (2, 2)
+3000 poke 0x568458 2
+3000 bf_48ce1d
+3000 rl_crt_4c2200 va:0x548f2f 4 1
+3000 rl_crt_4c2200 va:0x548f2c 9 1
+3000 bf_48ce1d
+3000 rl_crt_4c2200 va:0x548f2c 2 1
+3000 bf_48ce1d
+3000 rl_crt_4c2200 va:0x549b87 4 1
+3000 bf_48ce1d
+3000 poke 0x568458 7
+3000 bf_48ce1d
+3000 rl_crt_4c2200 va:0x5445f7 4 1
+3000 bf_48ce1d
+3000 rl_crt_4c2200 va:0x5445f7 0 1
+3000 rl_crt_4c2200 va:0x549b87 0 1
+3000 rl_crt_4c2200 va:0x548f2f 0 1
+3000 rl_crt_4c2200 va:0x548f2c 0 1
+3000 poke 0x568458 81
+
+# ---- 0x485861, the impact flash at a cell: a record free (f3000: 6 of 100 used); f16000 (2 used): 100 calls fill the
+# table, the last ones find it full (0)
+3000 bf_485861 30 50
+3000 bf_485861 0 0
+3000 bf_485861 79 79
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70
+16000 bf_485861 70 70

@@ -2491,12 +2491,13 @@ int rl_427d72(int hr)
     return 0;
 }
 
-/* Port of FUN_0042f60e (2298 B) — a DirectDraw HRESULT's index into the error names (1..99; 0 unknown). */
+/* Port of FUN_0042f60e (2298 B) — a DirectDraw HRESULT's index into the error names (1..99; 100 unknown: the switch's
+ * default, unlike 0x427d72's 0 — tests/probes/ui-leaves.probe). */
 int rl_42f60e(int hr)
 {
     for (int i = 0; i < (int)(sizeof k_dd_err / sizeof *k_dd_err); i++)
         if ((uint32_t)hr == k_dd_err[i]) return i + 1;
-    return 0;
+    return 100;
 }
 
 /* Port of FUN_00428078 (113 B) — county k has a cell flagged only bit 1 within radius 1..3 of its (col, row)
