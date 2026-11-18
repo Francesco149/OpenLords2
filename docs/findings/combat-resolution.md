@@ -208,12 +208,13 @@ Ported as the new module `engine_army_state.c` (driver `engine_army_state_run`
 | `FUN_004650b0` | `engine_army_state_run`           | walk records 1..150, count live, dispatch by state / disband 0,≥6 |
 | `FUN_0046521f` | `handler_march` (state 1)         | sprite by head bucket (≤300→0x48, ≤600→0x60, else 0x78) + facing; enter_region reconcile; sub-state advance |
 | `FUN_00465486` | `handler_settle` (state 2)        | head<30 → `engine_unit_remove`; else sprite base 0x90 + settle_region reconcile |
-| `FUN_00465622` / `FUN_00465761` | `handler_idle` (states 3/4, retail byte-identical) | sprite ((anim+1)&7)·6 + idle-facing; region colour set directly |
+| `FUN_00465622` / `FUN_00465761` | `handler_idle` (states 3/4, retail byte-identical) | sprite ((facing+1)&7)·6 + idle step frame; region colour set directly |
 
-Display formula (all states): `sprite[+0x07] = (((anim[+0x09]+1)&7) · K) + base
-+ facing_table[facing[+0x1b]]`, where K=3/base∈{0x48,0x60,0x78} for state 1,
-K=3/base=0x90 for state 2, K=6/base=0 for states 3/4.  Facing tables baked:
-`k_facing_march` = DAT_004d6a78 {0,1,2,1,0,1,2,1}, `k_facing_idle` =
+Display formula (all states): `sprite[+0x07] = (((facing[+0x09]+1)&7) · K) + base
++ step_frame_table[step[+0x1b]]` (+0x1b = the sub-step counter within one cell move),
+where K=3/base∈{0x48,0x60,0x78} for state 1, K=3/base=0x90 for state 2, K=6/base=0
+for states 3/4.  Step-frame tables baked (first 8 of retail's 16 entries):
+`k_step_frame_march` = DAT_004d6a78 {0,1,2,1,0,1,2,1}, `k_step_frame_idle` =
 DAT_004d6ab8 {0,1,2,3,4,5,0,1}.  Every state decrements the +0x160 timer
 (floored 0) and, when sub-state +0x14c == 2, calls the bound movement seam.
 
@@ -519,8 +520,8 @@ after the spawn — the port's spawn_unit returns 1/0, so the index comes from
 current_slot), else 0.  The `cmp 0x78` band edge (not `> 0x77`), the four band
 constants, the 0x1f4=500 reserve seeds, the `+= 0xa / -= 0xa` recruit deltas, the
 slot-7 budget read and the `percent_of` + cost-table indexing all r2-verified
-against `FUN_004a50ae`.  The 102-entry curve is embedded verbatim as
-`k_muster_cost`.  Ported into `engine_combat.c` (+ header), host-tested (4 new
+against `FUN_004a50ae`.  The 102-entry curve (the county happiness cost, 0x4d8778)
+is embedded verbatim as `k_conscript_happy_cost` (named `k_muster_cost` until 2026-11-18).  Ported into `engine_combat.c` (+ header), host-tested (4 new
 tests, 1969 total green): provision-floor bail, the mode-2 360..479 band
 distribution + reserve seeds, the mode-1 four-move recruit drain, and the full
 mode-0 happy path (occupant index == current_slot) over the shared spawn harness.

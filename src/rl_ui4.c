@@ -1789,7 +1789,7 @@ int rl_412e6b(void)
  * DAT_004d29e0[level]; a 30 x 6 chrome panel at (0, 384), the title (74 / 8, tall font) and the centred caption 75;
  * the weapon output (+0x118; advanced mode with its rate %, the signed byte +0x2c4, strings 76 / 4, 5 — else 76 / 8),
  * the stock line (76 / 6, +0x2d8 with the level's noun DAT_004d29c8, 76 / 7); the price box: bevel at (320, 390), the
- * gold / wood icons 44 / 46 and the level's DAT_004d8994 / DAT_004d8990 (8 B a level). All dirty. EAX: 0x45240a's
+ * icons 44 / 46 and the weapon's iron DAT_004d8994 / wood DAT_004d8990 (k_weapon_cost, 8 B a weapon kind). All dirty. EAX: 0x45240a's
  * (0x43a997 discards it). (b). */
 int rl_413155(void)
 {

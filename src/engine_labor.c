@@ -50,9 +50,9 @@ static const int k_labor_weapon_unitsub[6] =  /* DAT_004d29c8 loc-grp-8 sub */
     { 0x18, 0x16, 0x1a, 0x12, 0x14, 0x1c };
 static const int k_labor_hearth_yoff[6] =     /* DAT_004d29e0 hearth y-offset */
     { 0x88, 0x8e, 0x77, 0x7d, 0x7c, 0xb6 };
-static const int k_labor_weapon_rate[6] =     /* DAT_004d8990 (+0, stride 8) */
+static const int k_weapon_wood[6] =           /* DAT_004d8990 (+0, stride 8): wood per weapon */
     { 6, 4, 3, 6, 0x0d, 4 };
-static const int k_labor_weapon_cost[6] =     /* DAT_004d8994 (+4, stride 8) */
+static const int k_weapon_iron[6] =           /* DAT_004d8994 (+4, stride 8): iron per weapon */
     { 0x0a, 4, 0x0a, 3, 0, 0x12 };
 
 /* Indexed by the castle build-kind byte (+0x1c0), 0..6. */
@@ -707,17 +707,17 @@ static void labor_panel_smithy(const engine_labor_ctx_t *ctx, const uint8_t *rec
                             gfx_text_line_x_acc() + 0x10, 0x1b4,
                             menu, ctx->glyph_table, 0x3f);
 
-    /* Cost/rate icons + figures (misc_cty sprites 0x2c / 0x2e). */
+    /* The weapon's iron / wood cost: icons + figures (misc_cty sprites 0x2c / 0x2e). */
     gfx_line_rect_bevel_dark_br(0x140, 0x186, 0x8e, 0x20);
     if (ctx->misc_sheet) {
         gfx_sprite_render_from_blob(ctx->misc_sheet, 0x2c, 0x146, 0x187);
     }
-    gfx_text_label_render_dec(k_labor_weapon_cost[weapon], '@', "",   /* DAT_004d8994 / e9c */
+    gfx_text_label_render_dec(k_weapon_iron[weapon], '@', "",         /* DAT_004d8994 / e9c */
                               0x16a, 0x18e, menu, ctx->glyph_table, 0x3f);
     if (ctx->misc_sheet) {
         gfx_sprite_render_from_blob(ctx->misc_sheet, 0x2e, 0x189, 0x18a);
     }
-    gfx_text_label_render_dec(k_labor_weapon_rate[weapon], '@', "",   /* DAT_004d8990 / ea0 */
+    gfx_text_label_render_dec(k_weapon_wood[weapon], '@', "",         /* DAT_004d8990 / ea0 */
                               0x1b4, 0x18e, menu, ctx->glyph_table, 0x3f);
 
     /* FUN_0045240a() full-screen dirty mark — seam-owned, omitted (see

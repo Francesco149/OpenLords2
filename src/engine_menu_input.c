@@ -225,7 +225,7 @@ static void menu_action_page5(int param)
  * (the flashing slot jumps to it) and asks for a redraw.
  *
  * Deferred — the roster recompute: retail also runs FUN_0049caaa
- * (engine_npc_schedule_init) to re-seat the AI players from the new
+ * (engine_realm_personality_init) to re-seat the AI players from the new
  * shield assignment, and the strategic colour-table write inside
  * FUN_00432fab; both are strategic-roster state the page-4 render does
  * not read (same deferral as the page-9 pick + page-7 defaults).  The

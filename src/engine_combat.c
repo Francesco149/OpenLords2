@@ -52,11 +52,12 @@
 #define C_CON_AMT    0x196   /* merc contingent head-count (u8)               */
 #define C_CON_SLOT   0x197   /* merc contingent pool slot in g_unit_table_20 (u8)*/
 
-/* Post-battle resupply / condition fields (FUN_004a80db). */
-#define C_COND_CNT   0x182   /* 3 supply groups × {count,out%,stock} stride 6 */
-#define C_COND_OUT   0x184   /*   (i16 each); group g at base + g*6           */
-#define C_COND_STOCK 0x186
-#define C_COND_LEVEL 0x19c   /* averaged supply shortfall per head (i8)       */
+/* Siege-engine build slots (FUN_004a80db; as engine_army_state.c's
+ * siege-construction sub-record, 0x4a8507). */
+#define C_SIEGE_CNT  0x182   /* 3 siege-engine slots × {count,pct,progress}   */
+#define C_SIEGE_PCT  0x184   /*   stride 6 (i16 each); slot g at base + g*6   */
+#define C_SIEGE_PROG 0x186
+#define C_SIEGE_LEFT 0x19c   /* unfinished build work per head (i8; 0 = built) */
 
 /* Post-conquest garrison-halve scratch (FUN_004ad8cc). */
 #define C_SCRATCH_1C 0x1c    /* cleared after conquest (u8)                   */
@@ -65,9 +66,9 @@
 /* Per-class combat weight (DAT_004d4b98): peasant .. the heaviest unit. */
 static const int32_t k_unit_strength[7] = { 2, 16, 8, 13, 9, 13, 22 };
 
-/* Per-supply-group "required stock" rate (DAT_004de440, 3 × i32) — the
- * denominator multiplier in the post-battle condition recompute. */
-static const int32_t k_cond_rate[3] = { 200, 200, 400 };
+/* Build work per siege engine by slot type 0..2 (DAT_004de440, 3 × i32): a
+ * slot's target is count × work (engine_army_state.c k_siege_build_target). */
+static const int32_t k_siege_engine_work[3] = { 200, 200, 400 };
 
 /* Strength-ratio (winner/loser × 100) → winner survivor percent
  * (DAT_004de710, walked as 10 {threshold, value} pairs by lookup_threshold;
@@ -271,12 +272,12 @@ int engine_combat_size_battle(int attacker, int defender, int local_player)
  *  Combat-aftermath occupant fix-ups (FUN_004a80db / FUN_004ad8cc).      *
  * ===================================================================== */
 
-/* Port of FUN_004a80db.  Post-battle supply/condition recompute for a surviving
- * occupant: for each of 3 supply groups, express the present stock (+0x186) as a
- * percent of the requirement (rate × count, +0x182) into the out% field (+0x184)
- * clamped to 100, accumulate the shortfall of every under-supplied group, then
- * store the shortfall averaged over the head-count (+0x168, rounded up) into the
- * condition byte (+0x19c).  Groups with no count zero their out%/stock fields.
+/* Port of FUN_004a80db.  Siege-engine build-state recompute for an occupant: for
+ * each of 3 siege-engine slots, express the build progress (+0x186) as a percent
+ * of the target (work × count, +0x182) into the pct field (+0x184) clamped to
+ * 100, accumulate the remaining work of every unfinished slot, then store it
+ * averaged over the head-count (+0x168, rounded up) into the remaining-work byte
+ * (+0x19c).  Slots with no count zero their pct/progress fields.
  *
  * The int the binary returns is dead — both callers (FUN_004ab383) invoke it for
  * effect only, and on a nonzero remainder it is overwritten with rec*0x54
@@ -288,28 +289,28 @@ void engine_combat_recompute_condition(int rec)
     if (head <= 0)
         return;
 
-    int shortfall = 0;
+    int left = 0;
     for (int g = 0; g < 3; g++) {
-        int cnt = rd_i16(r, C_COND_CNT + g * 6);
+        int cnt = rd_i16(r, C_SIEGE_CNT + g * 6);
         if (cnt < 1) {
-            wr_i16(r, C_COND_OUT   + g * 6, 0);
-            wr_i16(r, C_COND_STOCK + g * 6, 0);
+            wr_i16(r, C_SIEGE_PCT  + g * 6, 0);
+            wr_i16(r, C_SIEGE_PROG + g * 6, 0);
         } else {
-            int stock = rd_i16(r, C_COND_STOCK + g * 6);
-            int req   = k_cond_rate[g] * cnt;
-            int pct   = engine_math_percent_div(stock, req);
-            wr_i16(r, C_COND_OUT + g * 6, (int16_t)pct);
+            int prog  = rd_i16(r, C_SIEGE_PROG + g * 6);
+            int req   = k_siege_engine_work[g] * cnt;
+            int pct   = engine_math_percent_div(prog, req);
+            wr_i16(r, C_SIEGE_PCT + g * 6, (int16_t)pct);
             if (pct < 100)
-                shortfall += req - stock;
+                left += req - prog;
             else
-                wr_i16(r, C_COND_OUT + g * 6, 100);
+                wr_i16(r, C_SIEGE_PCT + g * 6, 100);
         }
     }
 
-    int level = shortfall / head;
-    if (shortfall % head != 0)
+    int level = left / head;
+    if (left % head != 0)
         level += 1;
-    r[C_COND_LEVEL] = (uint8_t)level;
+    r[C_SIEGE_LEFT] = (uint8_t)level;
 }
 
 /* Port of FUN_004ad8cc.  Halve a conquered occupant's surviving troops: each of
@@ -482,13 +483,13 @@ void engine_combat_resolve(void)
 /* Port of FUN_004aa181 (1353 B) — merge occupant `src`'s contingent into `dst`.
  * Runs only when the combined head-count stays under 0x5dd (1501) and at most
  * one of the two carries a mercenary contingent.  Sums the head-count (+0x168),
- * the 7 troop-class counts (+0x16c) and the 3 supply-group {count,out,stock}
+ * the 7 troop-class counts (+0x16c) and the 3 siege-engine {count,pct,progress}
  * shorts (+0x182/+0x184/+0x186, stride 6); keeps the larger (signed) battle-
  * presence accumulator (+0x153); folds the survive/move linkage bytes
  * (+0x199/+0x19a, dst preferred), re-homing the survivor back-reference through
  * the region's pending-unit slot (g_per_army_768 +0x1bc); copies src's merc
  * triple (+0x195/+0x196/+0x197) when src is the one carrying it; recomputes
- * dst's supply condition when it now holds the survive flag; and disbands src.
+ * dst's siege-engine build state when it now holds the survive flag; and disbands src.
  * When BOTH carry a merc contingent the merge is refused and dst's owner is
  * notified (event 0xa7).  Reached via the garrison-placement path FUN_004a79a3. */
 void engine_combat_merge_stack(int dst, int src, engine_event_queue_state_t *evq)
@@ -531,20 +532,20 @@ void engine_combat_merge_stack(int dst, int src, engine_event_queue_state_t *evq
         d[C_CON_SLOT]  = s[C_CON_SLOT];
     }
 
-    /* sum head-count, the 7 troop-class counts, the 3 supply-group triples */
+    /* sum head-count, the 7 troop-class counts, the 3 siege-engine triples */
     wr_i32(d, C_VALUE, rd_i32(d, C_VALUE) + rd_i32(s, C_VALUE));
     for (int k = 0; k < 7; k++)
         wr_i16(d, C_COUNTS + k * 2,
                rd_i16(d, C_COUNTS + k * 2) + rd_i16(s, C_COUNTS + k * 2));
     for (int k = 0; k < 3; k++)
-        wr_i16(d, C_COND_CNT + k * 6,
-               rd_i16(d, C_COND_CNT + k * 6) + rd_i16(s, C_COND_CNT + k * 6));
+        wr_i16(d, C_SIEGE_CNT + k * 6,
+               rd_i16(d, C_SIEGE_CNT + k * 6) + rd_i16(s, C_SIEGE_CNT + k * 6));
     for (int k = 0; k < 3; k++)
-        wr_i16(d, C_COND_OUT + k * 6,
-               rd_i16(d, C_COND_OUT + k * 6) + rd_i16(s, C_COND_OUT + k * 6));
+        wr_i16(d, C_SIEGE_PCT + k * 6,
+               rd_i16(d, C_SIEGE_PCT + k * 6) + rd_i16(s, C_SIEGE_PCT + k * 6));
     for (int k = 0; k < 3; k++)
-        wr_i16(d, C_COND_STOCK + k * 6,
-               rd_i16(d, C_COND_STOCK + k * 6) + rd_i16(s, C_COND_STOCK + k * 6));
+        wr_i16(d, C_SIEGE_PROG + k * 6,
+               rd_i16(d, C_SIEGE_PROG + k * 6) + rd_i16(s, C_SIEGE_PROG + k * 6));
 
     if (d[C_F199] != 0)
         engine_combat_recompute_condition(dst);   /* FUN_004a80db */
@@ -1139,7 +1140,7 @@ void engine_combat_mp_resign_sweep(engine_event_queue_state_t *evq, int mp_activ
  * When a realm finishes building a keep upgrade the turn driver spawns a fresh
  * garrison unit into the realm's secondary settlement.  The cluster:
  *   engine_combat_settlement_find_slot  (FUN_004a551b) — size the garrison from
- *       the keep-capacity tables, prime the owner's muster pool, then spawn,
+ *       the castle garrison-grant table, prime the owner's muster pool, then spawn,
  *   engine_combat_spawn_unit            (FUN_004a9a9a) — allocate a fresh
  *       occupant record, copy the muster pool into it, debit the owner, re-plan,
  *   engine_combat_place_garrison        (FUN_004a79a3) — home the new occupant
@@ -1149,10 +1150,10 @@ void engine_combat_mp_resign_sweep(engine_event_queue_state_t *evq, int mp_activ
 
 /* --- army-economy record (g_per_army_768) fields the cluster reads -------- */
 #define A_RACE      0x05    /* owning player / race (u8)                    */
-#define A_F0C       0x0c    /* per-army settlement byte (i8)                */
-#define A_F15       0x15    /* paired settlement byte (i8)                  */
-#define A_PROV24    0x24    /* provision / treasury figure A (i32)          */
-#define A_F38       0x38    /* provision / treasury figure B (i32)          */
+#define A_HAPPY     0x0c    /* county happiness now (i8)                    */
+#define A_HAPPY_ARMY 0x15   /* happiness from the army term (i8)            */
+#define A_POP       0x24    /* county population now (i32)                  */
+#define A_ARMY_CHANGE 0x38  /* army change: -men drafted (i32)              */
 #define A_SEATCOL   0x74    /* seat column (i8)                             */
 #define A_SEATROW   0x75    /* seat row (i8)                                */
 #define A_F1AD      0x1ad   /* mustered-unit scratch index (u8)             */
@@ -1186,14 +1187,18 @@ void engine_combat_mp_resign_sweep(engine_event_queue_state_t *evq, int mp_activ
 #define U_AMT       0x08    /* head-count / value (i32; low byte = count)   */
 #define U_COST      0x0c    /* cashflow cost charged to the owner (i32)     */
 /* Per-turn merc-offer rotation cursor (engine_combat_rotate_merc_offers). */
-#define U_CURSOR    0x04    /* rotating realm cursor 1..realms, wraps (u8)  */
+#define U_CURSOR    0x04    /* rotating county cursor 1..counties, wraps (u8)*/
 #define U_COUNTDOWN 0x06    /* turns until the next offer publishes (u8)    */
 #define U_PERIOD    0x07    /* countdown reload value (u8)                  */
 
-/* Keep-capacity table (retail .rdata 0x4d8a3c, 12 × i32).  FUN_004a551b reads
- * it from base 0x4d8a40 (= &k_keep_tbl[1]) indexed by (keeplvl-1) → k_keep_tbl
- * [keeplvl], and from base 0x4d8a3c indexed by the built level. */
-static const int32_t k_keep_tbl[12] = {
+/* Troops granted to a castle's garrison when it completes, by castle level 0..5
+ * (retail .data 0x4d8a3c, 6 × i32 + a zero pad dword).  FUN_004a551b reads it
+ * from base 0x4d8a40 (= &k_castle_garrison_grant[1]) indexed by (keeplvl-1) →
+ * k_castle_garrison_grant[keeplvl], less the entry of the previous (built)
+ * level.  Only entries 0..5 are meaningful; [7..11] are the first 5 dwords of
+ * the next table (0x4d8a58, k_ai_personality), kept so an out-of-range level
+ * reads what retail reads. */
+static const int32_t k_castle_garrison_grant[12] = {
     0, 50, 150, 150, 200, 300, 0, 1, 2, 100, 500, 5,
 };
 
@@ -1211,26 +1216,26 @@ int engine_combat_garrison_cap(int keeplvl)
     return k_garrison_cap[keeplvl];
 }
 
-/* Value of `k_keep_tbl[level]` (retail base 0x4d8a3c, indexed directly by a
- * keep-level byte — see the table comment above).  Exposed for the event-
+/* Value of `k_castle_garrison_grant[level]` (retail base 0x4d8a3c, indexed
+ * directly by a keep-level byte — see the table comment above).  Exposed for the event-
  * popup type-0x12 render arm (engine.c), which shows the garrison troop-
  * count delta between a realm's target and pre-construction keep levels
  * (r2/visual-verified: renders as "<N> troops assigned/sent to..."). */
 int engine_combat_keep_value(int level)
 {
-    return k_keep_tbl[level];
+    return k_castle_garrison_grant[level];
 }
 
 /* Port of FUN_004a9f18 (90 B) — debit the owner's just-staged garrison size
- * (muster pool row +0x70) from realm `key`'s two provision figures
- * (+0x24 / +0x38).  Pool row selected by the realm's race (+0x05). */
-void spawn_debit_provision(int key)
+ * (muster pool row +0x70) from county `key`'s population (+0x24) and army
+ * change (+0x38).  Pool row selected by the county's owner (+0x05). */
+void spawn_debit_population(int key)
 {
     uint8_t *a = REGREC(key);
     const uint8_t *pool = engine_game_init_troop_pool_row(a[A_RACE]);
     int32_t staged = *(const int32_t *)(pool + M_F70);
-    wr_i32(a, A_PROV24, rd_i32(a, A_PROV24) - staged);
-    wr_i32(a, A_F38,    rd_i32(a, A_F38)    - staged);
+    wr_i32(a, A_POP,         rd_i32(a, A_POP)         - staged);
+    wr_i32(a, A_ARMY_CHANGE, rd_i32(a, A_ARMY_CHANGE) - staged);
 }
 
 /* Port of FUN_004a9f72 (199 B) — pick player `slot`'s least-loaded roster
@@ -1298,9 +1303,10 @@ void spawn_attach_muster_unit(int occ, int unit)
  * `army`'s map seat, populated from owner `owner`'s primed muster pool.  Returns
  * the created occupant index (DAT_0052afe0) on success, else 0.  `attach_unit`
  * non-zero attaches the army's mustered unit (+0x1ad) as a merc contingent;
- * `supply_cost` is debited from the army's settlement byte pair (+0x0c/+0x15).
- * The settlement path passes attach_unit=0, supply_cost=0. */
-int engine_combat_spawn_unit(int owner, int army, int attach_unit, int supply_cost)
+ * `happy_cost` is debited from the county's happiness (+0x0c) and its
+ * happiness-from-army term (+0x15).  The settlement path passes attach_unit=0,
+ * happy_cost=0. */
+int engine_combat_spawn_unit(int owner, int army, int attach_unit, int happy_cost)
 {
     /* Refuse unless a free, plantable map cell lies within radius 1..3 of the
      * army's seat (FUN_00428007 bit0, else FUN_00428078 flag∈{0,2}).  The found
@@ -1323,7 +1329,7 @@ int engine_combat_spawn_unit(int owner, int army, int attach_unit, int supply_co
     c[C_ARMYKEY]  = (uint8_t)army;                /* +0x10 */
     c[C_F11]      = (uint8_t)army;                /* +0x11 */
     wr_i16(c, C_F164, (int16_t)s_slot_00553edc);  /* +0x164 spawn epoch */
-    c[C_F166]     = a[A_F0C];                      /* +0x166 ← army +0x0c */
+    c[C_F166]     = a[A_HAPPY];                    /* +0x166 ← county +0x0c */
 
     if (owner == 0) {
         c[C_COUNT] = 0;                            /* +0x02 */
@@ -1332,7 +1338,7 @@ int engine_combat_spawn_unit(int owner, int army, int attach_unit, int supply_co
         c[C_COUNT] = PREC(owner)[P_F0A];           /* +0x02 ← strat owner +0x0a */
     }
 
-    spawn_debit_provision(army);                   /* FUN_004a9f18 */
+    spawn_debit_population(army);                  /* FUN_004a9f18 */
 
     const uint8_t *pool = engine_game_init_troop_pool_row(owner);
     wr_i32(c, C_VALUE, *(const int32_t *)(pool + M_F70));   /* +0x168 */
@@ -1356,13 +1362,13 @@ int engine_combat_spawn_unit(int owner, int army, int attach_unit, int supply_co
         engine_army_economy_plan_realm(army, (int)s_slot_0057c92c);  /* 4485a5 */
     }
 
-    /* Debit the supply cost from the army's settlement byte pair. */
-    if ((int8_t)a[A_F0C] < supply_cost) {
-        a[A_F15] = (uint8_t)((int8_t)a[A_F15] - (int8_t)a[A_F0C]);
-        a[A_F0C] = 0;
+    /* Debit the happiness cost from the county's happiness and its army term. */
+    if ((int8_t)a[A_HAPPY] < happy_cost) {
+        a[A_HAPPY_ARMY] = (uint8_t)((int8_t)a[A_HAPPY_ARMY] - (int8_t)a[A_HAPPY]);
+        a[A_HAPPY] = 0;
     } else {
-        a[A_F0C] = (uint8_t)((int8_t)a[A_F0C] - (int8_t)supply_cost);
-        a[A_F15] = (uint8_t)((int8_t)a[A_F15] - (int8_t)supply_cost);
+        a[A_HAPPY] = (uint8_t)((int8_t)a[A_HAPPY] - (int8_t)happy_cost);
+        a[A_HAPPY_ARMY] = (uint8_t)((int8_t)a[A_HAPPY_ARMY] - (int8_t)happy_cost);
     }
 
     wr_i32(a, A_F2F4, 0xf);
@@ -1376,24 +1382,24 @@ int engine_combat_spawn_unit(int owner, int army, int attach_unit, int supply_co
 }
 
 /* Port of FUN_004a551b (332 B) — size the garrison for realm `key` from the
- * keep-capacity tables, prime the owner's muster pool, and spawn the unit.
+ * castle garrison-grant table, prime the owner's muster pool, and spawn the unit.
  * Returns the new occupant index, or 0 when no garrison is due (capacity used
- * up, or the staged size exceeds half the realm's provision +0x24). */
+ * up, or the staged size exceeds half the county's population +0x24). */
 int engine_combat_settlement_find_slot(int key)
 {
     PREC(0)[P_ACTIVE] = 0;          /* reserved slot 0 guard (DAT_0057bf05) */
 
     uint8_t *a = REGREC(key);
     int race = a[A_RACE];
-    int size = k_keep_tbl[a[A_KEEPLVL]];           /* 0x4d8a40[keeplvl-1] */
+    int size = k_castle_garrison_grant[a[A_KEEPLVL]];           /* 0x4d8a40[keeplvl-1] */
 
     if (a[A_BUILTLVL] != 0) {
-        size -= k_keep_tbl[a[A_BUILTLVL]];         /* 0x4d8a3c[builtlvl] */
+        size -= k_castle_garrison_grant[a[A_BUILTLVL]];         /* 0x4d8a3c[builtlvl] */
         if (size <= 0)
             return 0;
     }
 
-    if (rd_i32(a, A_PROV24) / 2 < size)
+    if (rd_i32(a, A_POP) / 2 < size)
         return 0;
 
     uint8_t *pool = engine_game_init_troop_pool_row(race);
@@ -1488,25 +1494,25 @@ void engine_combat_break_siege_link(int occ)
 
 /* Per-race siege unit-category (retail *(i32)(0x4d8af8 + (race-1)*0xf0): the
  * first int of each race's 3-row × 0x50 unit-template block, race = strategic
- * +0x07, 1..7).  Selects which of the besieger's three siege supply lanes are
+ * +0x07, 1..7).  Selects which of the besieger's three siege-engine slots are
  * seeded by engine_combat_siege_build_board. */
 static const int k_race_siege_unit_type[7] = { 8, 9, 7, 7, 3, 1, 3 };
 
-/* Port of FUN_004a7eb5 (550 B) — seed besieger `occ`'s three siege supply lanes
- * from its race's unit category, then recompute the per-head condition.  Always
- * clears the condition level and the three {count,out,stock} lane triples; on
- * the viewer-interactive path (C_CONTROL == 0) it primes lane counts by the
- * owner race's category code and runs the post-battle condition recompute. */
+/* Port of FUN_004a7eb5 (550 B) — seed besieger `occ`'s three siege-engine slots
+ * from its race's unit category, then recompute the per-head remaining work.
+ * Always clears the remaining-work byte and the three {count,pct,progress} slot
+ * triples; on the viewer-interactive path (C_CONTROL == 0) it primes slot counts
+ * by the owner race's category code and runs the build-state recompute. */
 void engine_combat_siege_build_board(int occ)
 {
     uint8_t *c = CREC(occ);
-    c[C_COND_LEVEL] = 0;                              /* +0x19c */
+    c[C_SIEGE_LEFT] = 0;                              /* +0x19c */
     int region = (uint8_t)c[C_F199];                  /* +0x199 besieged region */
 
-    for (int g = 0; g < 3; g++) {                     /* zero all 3 lane triples */
-        wr_i16(c, C_COND_CNT   + g * 6, 0);
-        wr_i16(c, C_COND_OUT   + g * 6, 0);
-        wr_i16(c, C_COND_STOCK + g * 6, 0);
+    for (int g = 0; g < 3; g++) {                     /* zero all 3 slot triples */
+        wr_i16(c, C_SIEGE_CNT  + g * 6, 0);
+        wr_i16(c, C_SIEGE_PCT  + g * 6, 0);
+        wr_i16(c, C_SIEGE_PROG + g * 6, 0);
     }
 
     if (c[C_CONTROL] != 0)                            /* AI/remote — no board */
@@ -1516,16 +1522,16 @@ void engine_combat_siege_build_board(int occ)
     int race  = (uint8_t)PREC(owner)[P_RACE];         /* strategic +0x07 (1..7) */
     int type  = k_race_siege_unit_type[race - 1];
 
-    wr_i16(c, C_COND_CNT + 6, 2);                     /* lane 1 count = 2 */
+    wr_i16(c, C_SIEGE_CNT + 6, 2);                     /* slot 1 count = 2 */
     if (type == 8)
-        wr_i16(c, C_COND_CNT + 6, 4);                 /* lane 1 count = 4 */
+        wr_i16(c, C_SIEGE_CNT + 6, 4);                 /* slot 1 count = 4 */
     if (type == 9)
-        wr_i16(c, C_COND_CNT + 12, 1);                /* lane 2 count = 1 */
+        wr_i16(c, C_SIEGE_CNT + 12, 1);                /* slot 2 count = 1 */
     if (type == 7) {
-        wr_i16(c, C_COND_CNT, 3);                     /* lane 0 count = 3 */
+        wr_i16(c, C_SIEGE_CNT, 3);                     /* slot 0 count = 3 */
         if (REGREC(region)[A_KEEPLVL] > 3 &&          /* +0x1c0 */
             (int)s_slot_0057c934 >= 3)                /* season >= 3 (autumn/winter)*/
-            wr_i16(c, C_COND_CNT + 12, 1);            /* lane 2 count = 1 */
+            wr_i16(c, C_SIEGE_CNT + 12, 1);            /* slot 2 count = 1 */
     }
 
     engine_combat_recompute_condition(occ);           /* FUN_004a80db */
@@ -1655,10 +1661,12 @@ void engine_combat_prime_muster(int region, int32_t count)
     *(int32_t *)(pool + 0x70 + M_RES_B) = count;   /* slot 7 +0x08 (0x53f718) */
 }
 
-/* Percentage→muster-cost curve (retail .rdata 0x4d8778, 102 × i32, indices
- * 0..101).  A clamped diminishing-returns ramp: input percent maps to a supply
- * cost that saturates at 101.  Indexed by the percentage arg below. */
-static const int32_t k_muster_cost[102] = {
+/* Happiness cost by conscription / muster percent (retail .data 0x4d8778,
+ * 102 × i32, indices 0..101; the armory's k_conscript_happy is the same table).
+ * Rising 0 -> 101, flat 101 from 61.  The musters below pass it to
+ * engine_combat_spawn_unit, which subtracts it from the county's happiness
+ * (+0x0c) and its army term (+0x15). */
+static const int32_t k_conscript_happy_cost[102] = {
       0,   1,   1,   1,   2,   2,   3,   3,   4,   4,
       5,   5,   6,   6,   7,   7,   8,   8,   9,   9,
      10,  11,  13,  15,  17,  19,  21,  23,  25,  27,
@@ -1672,34 +1680,34 @@ static const int32_t k_muster_cost[102] = {
     101, 101,
 };
 
-/* Port of FUN_004a50ae (731 B, __cdecl int(int region, int pct, int min_prov,
+/* Port of FUN_004a50ae (731 B, __cdecl int(int region, int pct, int min_pop,
  * int mode)).  Raise a defending garrison unit in region `region`, sized at
- * `pct` percent of the region's provision (+0x24), and spawn it.  Returns the
- * new occupant index (DAT_0052afe0) or 0 when the region's provision is below
- * `min_prov` (or no map cell is free for the spawn).  Three staging modes:
+ * `pct` percent of the county's population (+0x24), and spawn it.  Returns the
+ * new occupant index (DAT_0052afe0) or 0 when the county's population is below
+ * `min_pop` (or no map cell is free for the spawn).  Three staging modes:
  *
- *   mode 2 — fresh garrison: spawn it free (supply cost 0), seat three strat
+ *   mode 2 — fresh garrison: spawn it free (happiness cost 0), seat three strat
  *     reserve cells (+0x144/+0x14c/+0x150) at 500, then distribute the sized
  *     head into troop-class slots 2/4/5 by size band, leaving the remainder in
  *     slot 0.
  *   mode 1 — top-up: recruit from the owner's primed reserves (slot +0x08),
  *     moving 10 head at a time into the class counts (slot +0x00) until the
  *     staged budget (slot 7 +0x00) is spent or 50 sweeps elapse.
- *   mode 0 — plain spawn at the muster-cost supply price.
+ *   mode 0 — plain spawn at the curve's happiness cost.
  *
  * combat_b (FUN_004a6c68) calls it with mode 2/1/0 to materialise a region's
  * auto-defender when no live capital garrison is found. */
-int engine_combat_muster_defender(int region, int pct, int min_prov, int mode)
+int engine_combat_muster_defender(int region, int pct, int min_pop, int mode)
 {
     g_player_strategic_352[5] = 0;                  /* DAT_0057bf05 = 0 */
 
     int owner = REGREC(region)[A_RACE];
-    int prov  = rd_i32(REGREC(region), A_PROV24);   /* region +0x24 */
-    if (prov < min_prov)
+    int pop   = rd_i32(REGREC(region), A_POP);      /* county +0x24 */
+    if (pop < min_pop)
         return 0;
 
-    int32_t supply = k_muster_cost[pct];            /* DAT_004d8778[pct] */
-    int     sized  = engine_math_percent_of(prov, pct);
+    int32_t happy_cost = k_conscript_happy_cost[pct];   /* DAT_004d8778[pct] */
+    int     sized  = engine_math_percent_of(pop, pct);
     engine_combat_prime_muster(region, sized);
 
     uint8_t *pool  = engine_game_init_troop_pool_row(owner);
@@ -1709,7 +1717,7 @@ int engine_combat_muster_defender(int region, int pct, int min_prov, int mode)
         *(int32_t *)(strat + 0x150) = 500;          /* DAT_0057c050 */
         *(int32_t *)(strat + 0x14c) = 500;          /* DAT_0057c04c */
         *(int32_t *)(strat + 0x144) = 500;          /* DAT_0057c044 */
-        supply = 0;
+        happy_cost = 0;
 
         /* Distribute the sized head into class slots by size band; the leftover
          * stays in slot 0 (debited by the staged amount). */
@@ -1758,32 +1766,32 @@ int engine_combat_muster_defender(int region, int pct, int min_prov, int mode)
     }
 
 spawn:
-    if (!engine_combat_spawn_unit(owner, region, 0, supply))
+    if (!engine_combat_spawn_unit(owner, region, 0, happy_cost))
         return 0;
     return engine_territory_current_slot();         /* DAT_0052afe0 */
 }
 
 /* Port of FUN_004a5003 (171 B, __cdecl int(int region)).  Raise a field unit
- * from `region`, sized to ~50 head: percent_div(0x32, provision) gives a
- * percentage index into the muster-cost curve, percent_of converts it back to a
- * head count, then prime the region owner's muster pool and spawn the unit at
- * the curve's supply cost.  Returns the new occupant index (DAT_0052afe0) on
+ * from `region`, sized to ~50 head: percent_div(0x32, population) gives a
+ * percentage index into the happiness-cost curve, percent_of converts it back to
+ * a head count, then prime the county owner's muster pool and spawn the unit at
+ * the curve's happiness cost.  Returns the new occupant index (DAT_0052afe0) on
  * success, else 0.  AI brain step 0xa (FUN_004a0015) raises an offensive force
  * this way before ordering its march; the sibling of muster_defender mode 0 with
- * the size fixed at ~50 head and no minimum-provision gate. */
+ * the size fixed at ~50 head and no minimum-population gate. */
 int engine_combat_raise_region_unit(int region)
 {
     g_player_strategic_352[5] = 0;                  /* DAT_0057bf05 = 0 */
 
     int owner = REGREC(region)[A_RACE];
-    int prov  = rd_i32(REGREC(region), A_PROV24);
+    int pop   = rd_i32(REGREC(region), A_POP);
 
-    int     pct    = engine_math_percent_div(0x32, prov);
-    int32_t supply = k_muster_cost[pct];            /* DAT_004d8778[pct] */
-    int     sized  = engine_math_percent_of(prov, pct);
+    int     pct    = engine_math_percent_div(0x32, pop);
+    int32_t happy_cost = k_conscript_happy_cost[pct];   /* DAT_004d8778[pct] */
+    int     sized  = engine_math_percent_of(pop, pct);
     engine_combat_prime_muster(region, sized);
 
-    if (!engine_combat_spawn_unit(owner, region, 0, supply))
+    if (!engine_combat_spawn_unit(owner, region, 0, happy_cost))
         return 0;
     return engine_territory_current_slot();         /* DAT_0052afe0 */
 }
@@ -1816,8 +1824,8 @@ int engine_combat_muster_garrison(int region, int pct)
     g_player_strategic_352[5] = 0;                  /* DAT_0057bf05 = 0 */
 
     int     owner  = REGREC(region)[A_RACE];
-    int32_t supply = k_muster_cost[pct];            /* DAT_004d8778[pct] */
-    int     sized  = engine_math_percent_of(rd_i32(REGREC(region), A_PROV24), pct);
+    int32_t happy_cost = k_conscript_happy_cost[pct];   /* DAT_004d8778[pct] */
+    int     sized  = engine_math_percent_of(rd_i32(REGREC(region), A_POP), pct);
     engine_combat_prime_muster(region, sized);
 
     /* Fill troop classes from the owner's seeded category reserves, in the
@@ -1828,7 +1836,7 @@ int engine_combat_muster_garrison(int region, int pct)
     engine_combat_pool_commit(owner, 2);
     engine_combat_pool_commit(owner, 6);
 
-    if (!engine_combat_spawn_unit(owner, region, 0, supply))
+    if (!engine_combat_spawn_unit(owner, region, 0, happy_cost))
         return 0;
     return engine_territory_current_slot();         /* DAT_0052afe0 */
 }
@@ -2115,8 +2123,8 @@ int merc_offer_holder(unsigned value)
 
 /* Port of FUN_004aca2b (297 B) — advance the per-turn mercenary-offer rotation
  * (a phase-7 turn-rollover callee).  Each free merc-pool slot (back-ref +0x00 ==
- * 0) clears its published offer, counts down, and steps its realm cursor (+0x04,
- * wrapping at the realm count); the turn its countdown expires it republishes
+ * 0) clears its published offer, counts down, and steps its county cursor (+0x04,
+ * wrapping at the county count DAT_0056d5dc); the turn its countdown expires it republishes
  * the cursor as the offer (+0x03), reloads the countdown from its period (+0x07)
  * and steps the cursor once more.  Then, for every realm 1..realms, record which
  * pool slot is currently offering to it in the realm's mustered-unit scratch
@@ -2199,10 +2207,11 @@ const char *const k_combat_result_movies[2][6][4] = {
       { "sge_los1.smk", "sge_los2.smk", "sge_los1.smk", "sge_los2.smk" } },
 };
 
-/* DAT_004d4a58: per castle class (DAT_0056d590), does a completed siege count
- * as the defender's win when the attacker has not broken in (14 entries; the
- * two after it are the next table's zeros). */
-static const int32_t k_siege_holds[16] = { 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0 };
+/* DAT_004d4a58 (16 entries): per skirmish siege battle DAT_0056d590, in a
+ * standalone skirmish battle (DAT_0057a0f0) — the stand-in for the castle test
+ * DAT_0055401c > 2 — does a siege that runs out unbreached count as the
+ * defender's win. */
+static const int32_t k_siege_battle_holds[16] = { 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0 };
 
 /* Port of FUN_004aa6ca (469 B) — stage a battle side's siege equipment in the
  * result accumulators (+0x17a..+0x180, i16).  Clears all four; side 4 (the
@@ -2215,9 +2224,9 @@ void engine_combat_stage_siege_side(int rec, int side)
     int16_t *acc = (int16_t *)(r + C_RESULT);
     acc[0] = 0; acc[1] = 0; acc[2] = 0; acc[3] = 0;
     if (side == 4) {
-        acc[0] = rd_i16(r, C_COND_CNT + 0);
-        acc[1] = rd_i16(r, C_COND_CNT + 6);
-        acc[2] = rd_i16(r, C_COND_CNT + 12);
+        acc[0] = rd_i16(r, C_SIEGE_CNT + 0);
+        acc[1] = rd_i16(r, C_SIEGE_CNT + 6);
+        acc[2] = rd_i16(r, C_SIEGE_CNT + 12);
     } else if (side == 0) {
         switch ((int)s_slot_0055401c) {
         case 0: acc[3] = 1; break;
@@ -2364,7 +2373,7 @@ void engine_combat_battlefield_end_tick(engine_event_queue_state_t *evq, int mp_
         if (s_slot_00553f3c != 0)
             bf_declare(a);
         if (s_slot_0053e990 == 0 && s_slot_00553ff0 == 0) {
-            int holds = s_slot_0057a0f0 != 0 ? k_siege_holds[s_slot_0056d590]
+            int holds = s_slot_0057a0f0 != 0 ? k_siege_battle_holds[s_slot_0056d590]
                                              : (int)s_slot_0055401c > 2;
             if (holds != 0) {
                 bf_declare(d);
@@ -2422,7 +2431,7 @@ void engine_combat_siege_assault(int occ, engine_event_queue_state_t *evq, int m
 
     int engines = 0;
     for (int i = 0; i < 3; i++)
-        engines += rd_i16(b, C_COND_CNT + i * 6);
+        engines += rd_i16(b, C_SIEGE_CNT + i * 6);
 
     if ((int)s_slot_0055401c >= 3 && engines <= 0) {
         uint8_t hd[7]; build_has_data(hd);

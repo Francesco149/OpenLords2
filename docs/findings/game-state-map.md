@@ -57,7 +57,7 @@ rations-panel food grid, not troops (troops are piece +0x16c).
 | +0x0a | u8 | banner colour 1..5 (1 red, 2 yellow) | port (armory/rankings) + minimap |
 | +0x0c | u8 | avg happiness (recomputed in turn processing) | live (72 → 79 at turn end) |
 | +0x10 / +0x18 | i32 | total population / previous (turn-processing snapshot) | live |
-| +0x29 | u8 | counties owned (stale within a turn) | port (rankings cat 0) |
+| +0x29 | u8 | counties owned (stale within a turn) | port (rankings cat 0); IDA 0x49d1e0 recount, 0x4a72fe +1 per conquest |
 | +0x2b | u8 | rank | port (rankings) |
 | +0x2c | u8 | armies owned (stale) | port (FUN_0049d1e0) |
 | +0x4c | u8 | castles (stale) | port (rankings cat 1) |

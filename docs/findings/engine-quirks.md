@@ -3734,7 +3734,7 @@ non-convergence verbatim.
 
 ## 107. NPC schedule reads the global localization walker mid-routine
 
-The AI-realm seating routine `0x49caaa` (`engine_npc_schedule_init` /
+The AI-realm seating routine `0x49caaa` (`engine_realm_personality_init` /
 `rl_49caaa`) gives each non-human realm within the AI count
 `DAT_0053f268` a free slot (`+0x0a`) and the first free personality
 (`+0x07`) from its slot's row of `0x4dc17c` (MP or `DAT_0055302c == 1`)
@@ -3755,14 +3755,14 @@ others reuse it for unrelated regions.  Retail copies unconditionally
 
 **Port:** the retail-layout port `rl_49caaa` (`src/rl_turn.c`) seeks and
 copies through the global walker exactly like retail.  The older pure
-port `engine_npc_schedule_init` (`src/engine_npc_schedule.c`, still
+port `engine_realm_personality_init` (`src/engine_realm_personality.c`, still
 called from `game_init.c`) runs the seek on a *local*
 `localization_state_t` over an injected blob and skips the copy when
-no blob is wired (`engine_npc_schedule_set_localization(NULL, …)`) — a
+no blob is wired (`engine_realm_personality_set_localization(NULL, …)`) — a
 standalone-only divergence.
 
-> 📍 `src/rl_turn.c` (`rl_49caaa`), `src/engine_npc_schedule.c`
-> (`engine_npc_schedule_init`), test `npc_copies_localized_name`, IDA `0x49caaa`.
+> 📍 `src/rl_turn.c` (`rl_49caaa`), `src/engine_realm_personality.c`
+> (`engine_realm_personality_init`), test `npc_copies_localized_name`, IDA `0x49caaa`.
 
 *Re-checked 2026-11-18 against the IDA export: the name is the personality's (+0x07), copied into aux +4; the direct walker read is the common pattern (13 readers); the rl_ port matches retail, only the legacy pure port skips the copy.*
 
@@ -3786,7 +3786,7 @@ Valid play keeps job ids in `0..5`, so neither fires; the host tests
 stay in range to avoid tripping ASan on the same reads retail makes
 blind.
 
-> 📍 `src/engine_npc_schedule.c` (`engine_npc_schedule_init`),
+> 📍 `src/engine_realm_personality.c` (`engine_realm_personality_init`),
 > Ghidra `FUN_0049caaa` lines 74681 (pre-mark), 74780+ (finalize).
 
 ---
@@ -6101,7 +6101,7 @@ facts (frida ground truth: `newgame-preinit1` at the config screen,
 
 2. **player_strategic `+0x07` is the AI lord's identity (personality 1..4) —
    the "NPC work-location" name the port gave it is wrong.**  `FUN_0049caaa`
-   (`engine_npc_schedule_init`, init step 4) CLEARS `+0x07` for every slot 1..5,
+   (`engine_realm_personality_init`, init step 4) CLEARS `+0x07` for every slot 1..5,
    then, for the first `s_slot_0053f268` non-human (`+0x05 == 0`) slots, first
    gives the slot a free colour/seat index `+0x0a` (1..5, skipping the humans'),
    then picks `+0x07` from the 4-entry candidate row `DAT_004dc17c[+0x0a*4]` (MP /
@@ -7365,10 +7365,10 @@ left at 0, when there was no previous keep at all).  The income functions'
 progress, income is computed off the OLD (still-functional) level instead of
 the new target you haven't finished building yet — the identical "keep
 level" concept, just consumed as a tax-rate-by-level lookup key in one
-formula and a population/garrison-by-level lookup key (`k_keep_tbl`,
+formula and a population/garrison-by-level lookup key (`k_castle_garrison_grant`,
 `engine_combat.c`) in another.  `engine_combat_settlement_find_slot`
 (already-ported `FUN_004a551b`) computes the EXACT same
-`k_keep_tbl[target] − k_keep_tbl[old]` delta for a different purpose
+`k_castle_garrison_grant[target] − k_castle_garrison_grant[old]` delta for a different purpose
 (sizing the new garrison), confirming the reading independently.
 
 The real tell that should have killed the "dual-use" worry immediately: the
@@ -7382,9 +7382,9 @@ genuine aliasing — most "dual-use" scares are a vocabulary mismatch between
 two porting sessions' comments, not a byte doing two jobs.  See
 `project_event_popup_arms` memory for the resulting type-0x12 port
 (commit history same day) — visually verified via `--force-popup`: a
-brand-new keep shows "50 troops assigned as a garrison" (`k_keep_tbl[1]`),
+brand-new keep shows "50 troops assigned as a garrison" (`k_castle_garrison_grant[1]`),
 an upgrade shows "50 extra troops sent to castle"
-(`k_keep_tbl[4]-k_keep_tbl[2]`), confirming `k_keep_tbl` is a garrison
+(`k_castle_garrison_grant[4]-k_castle_garrison_grant[2]`), confirming `k_castle_garrison_grant` is a garrison
 troop-count table, not population or gold as its old name guesses suggested.
 
 ## 211 — screen 0x10/0x1e's per-frame refresh was nested inside the demand-redraw gate, freezing the handoff cooldown under idle-mouse play

@@ -431,7 +431,7 @@ int test_game_init_seat_shuffle_deterministic(void)
 static const int32_t  exp_count_by_config[20] = {     /* DAT_004de820 */
     0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 12, 12, 12, 12, 12,
 };
-static const uint8_t  exp_col_a[13] =                 /* DAT_004de79f → +0x2,+0x4 */
+static const uint8_t  exp_col_a[13] =                 /* DAT_004de79f → +0x2,+0x4 (start county, county cursor) */
     { 0x00,0x01,0x02,0x04,0x05,0x07,0x08,0x0a,0x0b,0x0d,0x0e,0x10,0x11 };
 static const uint8_t  exp_col_b[13] =                 /* DAT_004de78f → +0x5 */
     { 0x00,0x04,0x04,0x05,0x05,0x03,0x03,0x01,0x01,0x02,0x02,0x06,0x06 };
@@ -1266,7 +1266,7 @@ int test_game_init_seed_army_baseline_tiers_and_parity(void)
 #include <sys/stat.h>
 #include <stdlib.h>
 #include "engine_map_init.h"
-#include "engine_npc_schedule.h"   /* loc-blob bind isolation */
+#include "engine_realm_personality.h"   /* loc-blob bind isolation */
 #include "engine_event_queue.h"    /* turn-driver shim's event queue */
 #include "io_path.h"               /* io_path_set_base — CD-probe revert */
 #include "config.h"                /* g_config.cd_drive — CD-probe input */
@@ -1323,7 +1323,7 @@ int test_game_init_orchestrator_builds_map(void)
     /* No NPC-name localization needed for the descriptor-build check (and it
      * isolates us from any blob a prior test left bound — engine-quirks #107
      * skips the loc walk when none is set).  Phase C binds real l2.eng. */
-    engine_npc_schedule_set_localization(NULL, 0);
+    engine_realm_personality_set_localization(NULL, 0);
 
     gi_reset_global_rng();                          /* fresh InitInstance seed */
     engine_game_init();                             /* FUN_00497ced */
@@ -1403,7 +1403,7 @@ int test_game_init_turn_driver_advances_to_turn_1(void)
         T_FAIL("build_cells failed (L2_maps.dat read)");
     engine_map_init_set_camera(0);
     engine_territory_bind_strat_map_record(maprec);
-    engine_npc_schedule_set_localization(NULL, 0);
+    engine_realm_personality_set_localization(NULL, 0);
 
     /* Wire the assembled driver into step 17, then run a fresh game. */
     gi_reset_global_rng();                          /* fresh InitInstance seed */
@@ -1439,7 +1439,7 @@ int test_game_init_turn_driver_advances_to_turn_1(void)
  * #1); this gate locks in the fix.  Ground truth = runs/capture/newgame-
  * statedump1 (retail dump at the first MAP_FREEROAM frame, canonical RNG seed):
  *   slot 1 = HUMAN, slots 2..5 = AI; cur_player = 1; AI count = 4
- *   work-locations (+0x07, the npc-scheduler field Phase 2 reads): 0,1,2,4,3
+ *   personalities (+0x07, the personality-setup field Phase 2 reads): 0,1,2,4,3
  *   per-slot army (+0xe4, the map-built + shuffled roster):        0d,0b,04,08,01
  * Mirrors the orchestrator test's preconditions, then adds the player config. */
 /* engine_game_init_apply_custom_config (port of FUN_00499dc3) reproduces the
@@ -1567,7 +1567,7 @@ int test_game_init_player_config_activates_realms(void)
         T_FAIL("build_cells failed (L2_maps.dat read)");
     engine_map_init_set_camera(0);
     engine_territory_bind_strat_map_record(maprec);
-    engine_npc_schedule_set_localization(NULL, 0);
+    engine_realm_personality_set_localization(NULL, 0);
 
     /* The config-screen output for a default custom game on map 0.  The
      * prefs buffer mirrors lords2.inf: name at +0x00, title at +0x18. */
@@ -1660,7 +1660,7 @@ int test_game_init_ai_brain_converges_full_turn(void)
         T_FAIL("build_cells failed (L2_maps.dat read)");
     engine_map_init_set_camera(0);
     engine_territory_bind_strat_map_record(maprec);
-    engine_npc_schedule_set_localization(NULL, 0);
+    engine_realm_personality_set_localization(NULL, 0);
 
     static uint8_t prefs[0x1f] = {0};
     memcpy(&prefs[0x00], "aaaaaa    ", 10);

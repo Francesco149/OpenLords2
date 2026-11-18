@@ -166,28 +166,28 @@ int engine_combat_find_capital_defender(int key);
 void engine_combat_prime_muster(int region, int32_t count);
 
 /* Port of FUN_004a50ae @ 0x4a50ae (731 B) — raise a defending garrison in
- * region `region` sized at `pct` percent of its provision (+0x24) and spawn it.
- * Returns the new occupant index (DAT_0052afe0) or 0 when provision < `min_prov`
+ * county `region` sized at `pct` percent of its population (+0x24) and spawn it.
+ * Returns the new occupant index (DAT_0052afe0) or 0 when population < `min_pop`
  * or no free spawn cell exists.  `mode` selects the staging: 2 = fresh garrison
  * (free spawn, strat reserves seeded, sized head distributed into troop classes
  * by size band), 1 = top-up (recruit 10-at-a-time from the primed reserves up to
- * the staged budget), 0 = plain spawn at the muster-cost supply price.  Reads
- * the percentage→cost curve (retail .rdata 0x4d8778).  Its callees
+ * the staged budget), 0 = plain spawn at the curve's happiness cost.  Reads
+ * the percentage→happiness-cost curve (retail .data 0x4d8778).  Its callees
  * engine_combat_prime_muster / engine_combat_spawn_unit are ported; combat_b
  * (FUN_004a6c68) drives it to materialise a region's auto-defender. */
-int engine_combat_muster_defender(int region, int pct, int min_prov, int mode);
+int engine_combat_muster_defender(int region, int pct, int min_pop, int mode);
 
 /* Port of FUN_004a5003 (171 B).  Raise a ~50-head field unit from `region` at
- * the muster-cost supply price (the sibling of muster_defender mode 0 with a
- * fixed size and no min-provision gate).  Returns the new occupant index
+ * the curve's happiness cost (the sibling of muster_defender mode 0 with a
+ * fixed size and no min-population gate).  Returns the new occupant index
  * (DAT_0052afe0) on success, else 0.  AI brain step 0xa raises its offensive
  * force this way. */
 int engine_combat_raise_region_unit(int region);
 
 /* Port of FUN_004a5389 (214 B).  Raise a keep-garrison unit from `region` sized
- * at `pct` percent of its provision (+0x24), distributing the head across troop
+ * at `pct` percent of its population (+0x24), distributing the head across troop
  * classes 5/1/3/2/6 from the owner's primed category reserves, then spawn it at
- * the muster-cost supply price.  The sibling of raise_region_unit with the size
+ * the curve's happiness cost.  The sibling of raise_region_unit with the size
  * passed in (not fixed at ~50) and the class-distribution pool sweep that
  * muster_defender mode 1 also uses.  Returns the new occupant index
  * (DAT_0052afe0) on success, else 0.  AI brain step 7 (FUN_0049f12f) garrisons
@@ -211,7 +211,8 @@ int engine_combat_pick_best_unit(int owner, int region, int min_head);
  * Exposed for the AI movement planner (brain step 0xb, FUN_004a6270). */
 int engine_combat_garrison_cap(int keeplvl);
 
-/* Keep-capacity table value for `level` (k_keep_tbl[level], retail 0x4d8a3c).
+/* Troops granted to a castle's garrison at `level` (k_castle_garrison_grant
+ * [level], retail 0x4d8a3c).
  * Exposed for the event-popup type-0x12 render arm (engine.c). */
 int engine_combat_keep_value(int level);
 
@@ -220,11 +221,11 @@ int engine_combat_keep_value(int level);
  * to hold occupant `unit`.  Returns the realm index, or 0 if none. */
 int engine_combat_find_garrison_realm(int owner, int unit);
 
-/* Port of FUN_004a80db @ 0x4a80db (478 B) — post-battle supply/condition
- * recompute for a surviving occupant.  For each of 3 supply groups, express the
- * present stock as a percent of (rate × count) clamped to 100, and store the
- * shortfall averaged over the head-count (rounded up) into the condition byte
- * (+0x19c).  Run by the aftermath FUN_004ab383 on the battle winner. */
+/* Port of FUN_004a80db @ 0x4a80db (478 B) — siege-engine build-state recompute
+ * for an occupant.  For each of 3 siege-engine slots, express the build progress
+ * as a percent of (work × count, DAT_004de440) clamped to 100, and store the
+ * remaining work averaged over the head-count (rounded up) into the
+ * remaining-work byte (+0x19c).  Run by the aftermath FUN_004ab383 on the battle winner. */
 void engine_combat_recompute_condition(int rec);
 
 /* Port of FUN_004ad8cc @ 0x4ad8cc (277 B) — halve a conquered occupant's
@@ -267,10 +268,10 @@ extern int g_combat_active_terr;
 
 /* Port of FUN_004aa181 @ 0x4aa181 (1353 B, __cdecl void(int dst, uint src)).
  * Merge occupant `src`'s contingent into `dst` (g_per_territory_420): sum the
- * head-count / 7 troop-class counts / 3 supply-group triples, keep the larger
+ * head-count / 7 troop-class counts / 3 siege-engine slot triples, keep the larger
  * battle-presence accumulator, fold the survive/move linkage (re-homing the
  * survivor back-reference through the region pending slot), inherit src's merc
- * triple, recompute dst's condition, and disband src.  No-op when the combined
+ * triple, recompute dst's siege-engine build state, and disband src.  No-op when the combined
  * head-count is >= 0x5dd; refused (owner notified, event 0xa7) when both carry a
  * mercenary contingent.  `evq` carries the refusal notification.  Reached via
  * the garrison-placement path FUN_004a79a3. */
@@ -394,18 +395,19 @@ void engine_combat_mp_resign_sweep(engine_event_queue_state_t *evq, int mp_activ
  * `owner`'s primed muster pool; returns the created occupant index (retail
  * DAT_0052afe0) or 0 when no free cell is reachable.  `attach_unit` non-zero
  * folds the army's mustered g_unit_table_20 unit (+0x1ad) in as a mercenary
- * contingent; `supply_cost` is debited from the army settlement byte pair
- * (+0x0c / +0x15).  Debits the owner's provision / cashflow, re-plans the
+ * contingent; `happy_cost` is debited from the county's happiness (+0x0c) and
+ * its army term (+0x15).  Debits the county's population / the owner's
+ * cashflow, re-plans the
  * realm's economy, and refreshes the map view when the spawn belongs to the
  * viewing player.  The settlement path calls it with attach_unit = 0,
- * supply_cost = 0. */
-int engine_combat_spawn_unit(int owner, int army, int attach_unit, int supply_cost);
+ * happy_cost = 0. */
+int engine_combat_spawn_unit(int owner, int army, int attach_unit, int happy_cost);
 
 /* Port of FUN_004a551b @ 0x4a551b (332 B, __cdecl int(int)).  Size realm
- * `key`'s due garrison from the keep-capacity tables, prime its owner's muster
+ * `key`'s due garrison from the castle garrison-grant table, prime its owner's muster
  * pool, and spawn the unit via engine_combat_spawn_unit.  Returns the new
  * occupant index, or 0 when no garrison is due (capacity used up, or the staged
- * size exceeds half the realm's provision +0x24). */
+ * size exceeds half the county's population +0x24). */
 int engine_combat_settlement_find_slot(int key);
 
 /* Port of FUN_004a79a3 @ 0x4a79a3 (767 B, __cdecl void(uint,int)).  Home

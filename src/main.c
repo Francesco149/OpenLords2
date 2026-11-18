@@ -82,7 +82,7 @@
 #include "engine_load_pump.h"
 #include "engine_roster.h"         /* load-tail session re-arm (0043e9e2/0049ca32) */
 #include "game_init.h"
-#include "engine_npc_schedule.h"   /* engine_npc_schedule_set_localization (l2.eng) */
+#include "engine_realm_personality.h"   /* engine_realm_personality_set_localization (l2.eng) */
 #include "engine_title_render.h"
 #include "input_trace.h"
 #include "state_dump.h"
@@ -2476,11 +2476,11 @@ static int newgame_build_world_and_start(int map_id)
     }
     engine_territory_bind_strat_map_record(maprec);
 
-    /* l2.eng localization blob for the NPC-schedule job names (retail
+    /* l2.eng localization blob for the AI personality names (retail
      * config_localization_data; NULL skips the loc walk — engine-quirks #107). */
     size_t loc_sz = 0;
     const uint8_t *loc = config_localization_data(&loc_sz);
-    engine_npc_schedule_set_localization(loc, loc_sz);
+    engine_realm_personality_set_localization(loc, loc_sz);
 
     /* Minimap political grids (retail FUN_0046a037, run by the scenario
      * apply — NOT inside FUN_00497ced). */
@@ -2676,7 +2676,7 @@ static void bringup_newgame(int map_id)
     /* Players: a default custom game is 1 human (slot 1) + 4 AI (slots 2..5),
      * local player = 1.  set_player_config seeds the few config-screen-owned
      * fields + the AI count (s_slot_0053f268); the ported initialiser derives
-     * the rest (roster from the map, work-locations from the NPC scheduler). */
+     * the rest (roster from the map, personalities from the personality setup). */
     {
         /* Human player's name/title from the lords2.inf prefs (loaded by
          * config_init), matching retail's SP seat (save entry 2). */

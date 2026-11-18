@@ -14,7 +14,7 @@ extern int32_t g_rl_4e59dc;                  /* .data 0x4e59dc: the raider targe
 extern uint8_t g_rl_4e3bf0[0x440];            /* .data 0x4e3bf0: the battlefield anim offsets at zoom 16, (dx, dy) dwords */
 extern uint8_t g_rl_4e4030[0x440];            /* .data 0x4e4030: … at zoom 32 */
 extern uint8_t g_rl_4e4470[0x80];             /* .data 0x4e4470: the effect chain's anim offsets, (dx, dy) × 16 */
-extern uint8_t g_rl_4e4520[0x60];             /* .data 0x4e4520: the debug label's suffix string */
+extern uint8_t g_rl_4e4520[0x60];             /* .data 0x4e4520: the debug label's suffix string (s_bf_debug_cell_label, a 16 B slot " "); the 0x60 copy runs on over errno 0x4e4530 / _doserrno 0x4e4534 .. */
 extern uint8_t g_rl_4d2c88[0x100];            /* .data 0x4d2c88: the armory interiors arm_it_<c>.pl8, 16 B each */
 /* the mapview env's fixed tables (src/rl_link_mapview.c) */
 extern uint8_t g_rl_4d8108[0x300];            /* .data 0x4d8108: the feature renderer's palette tables, [3][2][128] i8 */

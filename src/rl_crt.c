@@ -59,7 +59,7 @@
 #define G_SBH_HEAD   0x4e4618u   /* the first region header (0x814 B, static); [0] next, [1] prev, [2] the page
                                     rover, [3] the first uncommitted page, +16 the 1024 free-para counts, +1040 the
                                     1024 "largest failed request" bytes, [516] the region */
-#define G_SBH_HEAPHDR 0x4e4e28u  /* nonzero: further region headers from the heap */
+#define G_SBH_HEAD_REGION 0x4e4e28u /* the static header's [516] (its region): nonzero = in use, further headers from the heap */
 #define G_SBH_ROVER  0x4e4e2cu   /* the region header the next search starts at */
 #define G_SBH_FREEPG 0x4e4e30u   /* fully free pages (decommit at 32) */
 #define G_SBH_THRESH 0x4e4e34u   /* __sbh_threshold (0x1e0) */
@@ -270,12 +270,12 @@ uint32_t rl_crt_4c2200(uint32_t d, int c, uint32_t n)
 #define HDR_REGION 516
 
 /* Port of FUN_004c45b0 (513 B) — __sbh_new_region: a header (the static one while it is unused, else from the heap
- * when 0x4e4e28 says so), a 4 MB reservation with its first 64 KB committed and zeroed, every page of those 16
- * initialized; the header linked into the ring. 0 = failure (everything released). */
+ * when the static one's region slot [516] 0x4e4e28 is set), a 4 MB reservation with its first 64 KB committed and
+ * zeroed, every page of those 16 initialized; the header linked into the ring. 0 = failure (everything released). */
 uint32_t rl_crt_4c45b0(void)
 {
     uint32_t mem;
-    if (V32(G_SBH_HEAPHDR) != 0) {
+    if (V32(G_SBH_HEAD_REGION) != 0) {
         mem = (uint32_t)(uintptr_t)IAT(LPVOID (WINAPI *)(HANDLE, DWORD, SIZE_T), I_HeapAlloc)(
             (HANDLE)(uintptr_t)U32(G_CRTHEAP), 0, 0x814);
         if (mem == 0) return 0;

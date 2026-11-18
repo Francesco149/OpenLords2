@@ -31,27 +31,32 @@ and the port that reads each item.
 0x488240 have no caller). CRT: 0x4e52ac (a reloc'd `__CxxUnhandledExceptionFilter` pointer; 0x4cc950 uses an
 immediate), `_pwctype`, `__decimal_point(_length)`, `_cfltcvt_tab` 2 / 4 / 5, errtable's second error-6 entry.
 
-## Port names / comments that the catalog contradicts (behaviour equal; rename when touching the file)
+## Port names / comments that the catalog contradicted — done
 
-| port | says | retail |
-|---|---|---|
-| src/rl_render.c rl_41608b | workforce category tooltip | screen 0x0c = the trade grid; DAT_0056d8ac = hovered good |
-| src/engine_bf_stance.c | DAT_0057a0f0 "MP"; DAT_004d4b18 "the realm's" flag | the standalone skirmish-battle flag; 0x4d4a18..0x4d4b58 indexed by battle DAT_0056d590 |
-| src/engine_combat.c k_siege_holds | per castle class, 14 entries | 16 entries per battle |
-| src/engine_combat.c k_keep_tbl[12] | — | runs 5 dwords into 0x4d8a58; entries 0..5 meaningful |
-| src/engine_combat.c k_muster_cost | supply; county +0x24 provision | county happiness cost (0x4a9a9a); +0x24 = population |
-| src/engine_combat.c | 0x4de440 supply-group stock rate | siege-engine build target (as engine_army_state.c) |
-| src/engine_npc_schedule.c | NPC job / work schedule (0x49caaa) | AI personality preferences by banner colour (realm +0x07 / +0x08 / +0x09) |
-| src/rl_turn_globals.h g_rl_4d8a3c | keep tiers' costs | troops granted to the garrison when a castle completes |
-| k_keep_cost[0] | level 0 base | last entry of the 0x4d8990 weapon {wood, iron} table |
-| engine_army_* k_facing_march / FACING_MARCH | facing | army +0x1b sub-step counter (0..7); facing is +0x09; tables are 16 entries |
-| src/engine_realm.c k_pop_deathmod_tbl | region harshness | county +0x09 health (0..4) |
-| 0x4d8990 (three ports) | rate / pool multipliers / AI build cost | {wood, iron} per smithy weapon (0x49ed13) |
-| 0x4de79f bytes | period | starting county + county cursor |
-| src/engine_army_ai.c realm +0x29 | AI level | game-state-map.md: counties owned (unresolved) |
-| G_SBH_HEAPHDR (0x4e4e28) | heap header | field [516] of the static small-block heap header (region pointer) |
-| g_rl_4e4520[0x60] | — | a 16 B string slot; retail's copy runs on into errno / _doserrno |
-| rl_ctl_globals.h g_rl_4d6a78[5] | — | the shared definition is 32 B |
+Renamed 2026-11-18 (commit "rename pass: port names / comments the data catalog contradicts"; each row re-checked
+against the IDA export; objects byte-identical before / after). Old → new:
+- rl_render.c rl_41608b "workforce category tooltip (screen 0xc)" → the merchant grid's hovered-good tooltip — screen
+  **8** (the row's "screen 0x0c" was wrong: 0x41608b runs under DAT_004eac50 == 8, 0x41635f trade_content under 12)
+- engine_bf_stance.c "MP DAT_0057a0f0", "the realm's DAT_004d4b18" → standalone skirmish battle; battle DAT_0056d590
+- engine_combat.c: k_siege_holds → k_siege_battle_holds (16 per battle); k_keep_tbl → k_castle_garrison_grant (0..5;
+  [7..11] = 0x4d8a58's head, size kept); k_muster_cost → k_conscript_happy_cost, `supply(_cost)` → `happy_cost`,
+  A_F0C / A_F15 / A_PROV24 / A_F38 → A_HAPPY / A_HAPPY_ARMY / A_POP / A_ARMY_CHANGE, `min_prov` → `min_pop`,
+  spawn_debit_provision → spawn_debit_population; k_cond_rate → k_siege_engine_work, C_COND_CNT / OUT / STOCK /
+  LEVEL → C_SIEGE_CNT / PCT / PROG / LEFT; U_CURSOR = county cursor
+- engine_npc_schedule.{c,h} → engine_realm_personality.{c,h} (engine_realm_personality_init / _set_localization,
+  s_job_table → s_personality_pref; tests/test_engine_realm_personality.c, test_personality_*)
+- rl_turn_globals.h g_rl_4d8a3c comment → garrison grants; engine_army_ai.c k_keep_cost[0] comment → k_weapon_cost[5]
+- engine_army_state.c k_facing_march / _idle → k_step_frame_march / _idle, A_FACING (+0x1b) → A_STEP, A_ANIM (+0x09)
+  → A_FACING, anim_phase → facing_slot; engine_army_move.c M_FACING → M_STEP; rl_terr.c FACING_MARCH / _IDLE →
+  STEP_FRAME_MARCH / _IDLE (port tables keep 8 of 16 entries, index & 7 — unchanged)
+- engine_realm.c k_pop_deathmod_tbl / K_POP_SEASON_MOD → k_pop_death_health / K_POP_DEATH_SEASON
+- 0x4d8990: engine_labor.c k_labor_weapon_rate / _cost → k_weapon_wood / _iron; engine_army_economy.c k_race_pool_a /
+  _b → k_weapon_wood / _iron, ARMY_RACE → ARMY_WEAPON_KIND, RESPOOL_RACE_ACC → RESPOOL_WEAPON_ACC; engine_army_ai.c
+  g_ai_build_cost → k_weapon_cost, ARMY_BUILD_TAG → ARMY_WEAPON_KIND
+- 0x4de79f: game_init.c k_unit_col_a → k_merc_start_county; catalog k_merc_period → k_merc_start_county
+- engine_army_ai.c STRAT_AI_LEVEL → STRAT_COUNTIES (resolved: 0x49d1e0 recounts it, 0x4a72fe adds 1 per conquest)
+- rl_crt.c / rl_crt_dbgheap.c G_SBH_HEAPHDR → G_SBH_HEAD_REGION
+- g_rl_4e4520[0x60], rl_ctl_globals.h g_rl_4d6a78[5] → comments; the extern now [8] (32 B); the 0x60 definition kept
 
 ## The port's own copies vs the exe (2026-11-17, `tools/data_selfcheck.py` → `docs/data-selfcheck.md`)
 

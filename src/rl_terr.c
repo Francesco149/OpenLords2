@@ -1500,11 +1500,11 @@ static void terr_move_run(void)
     engine_army_move_run(q, g_sim_mp_active);
     rl_evq_store();
 }
-#define FACING_MARCH(f) AT(int32_t, g_rl_4d6a78, 0x4d6a78u, 0x4d6a78 + 4 * (int32_t)(f))
-#define FACING_IDLE(f)  AT(int32_t, g_rl_4d6ab8, 0x4d6ab8u, 0x4d6ab8 + 4 * (int32_t)(f))
+#define STEP_FRAME_MARCH(st) AT(int32_t, g_rl_4d6a78, 0x4d6a78u, 0x4d6a78 + 4 * (int32_t)(st))   /* by the step counter +0x1b */
+#define STEP_FRAME_IDLE(st)  AT(int32_t, g_rl_4d6ab8, 0x4d6ab8u, 0x4d6ab8 + 4 * (int32_t)(st))
 
 /* Port of FUN_00465486 (412 B) — army state 2 (settling), the army DAT_005533e8: fewer than 30 men (+0x168) → removed
- * (0x46f0a9); else +0x154 = 10, the sprite +7 = 3 × ((+9 + 1) & 7) − 112 + the facing table DAT_004d6a78[+0x1b]; a
+ * (0x46f0a9); else +0x154 = 10, the sprite +7 = 3 × ((facing +9 + 1) & 7) − 112 + the step-frame table DAT_004d6a78[step +0x1b]; a
  * county change (cell +7 vs +0x10) re-collects the income (0x4ad6c0); the settle (0x4abd0f); the timer +0x160
  * counts down; sub-state +0x14c == 2 runs the executor (0x465d28). */
 int rl_465486(void)
@@ -1516,7 +1516,7 @@ int rl_465486(void)
     }
     TER8(a, 0x52f204) = 10;
     TER8(a, 0x52f0b7) = (uint8_t)(3 * ((TER8(a, 0x52f0b9) + 1) & 7) - 112);
-    TER8(a, 0x52f0b7) += (uint8_t)FACING_MARCH(TER8(a, 0x52f0cb));
+    TER8(a, 0x52f0b7) += (uint8_t)STEP_FRAME_MARCH(TER8(a, 0x52f0cb));
     int key = CELL8(TER32(a, 0x52f0bc), 0x522f97u);
     if ((int)TER8(a, 0x52f0c0) != key) engine_realm_collect_territory_income();
     engine_event_queue_state_t *q = rl_evq_load();
@@ -1535,7 +1535,7 @@ static void terr_state_idle(void)
     int a = g_army_state_index;
     TER8(a, 0x52f204) = 10;
     TER8(a, 0x52f0b7) = (uint8_t)(6 * ((TER8(a, 0x52f0b9) + 1) & 7));
-    TER8(a, 0x52f0b7) += (uint8_t)FACING_IDLE(TER8(a, 0x52f0cb));
+    TER8(a, 0x52f0b7) += (uint8_t)STEP_FRAME_IDLE(TER8(a, 0x52f0cb));
     TER8(a, 0x52f0c0) = CELL8(TER32(a, 0x52f0bc), 0x522f97u);
     if (TER32(a, 0x52f210) > 0) TER32(a, 0x52f210)--;
     if (TER8(a, 0x52f1fc) == 2) terr_move_run();

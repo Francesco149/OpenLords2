@@ -16,7 +16,8 @@
  * The siege state the handlers read (writers in brackets):
  *   DAT_00553fb0 / DAT_0053e990  the breach counters (siege setup 0x47c4ba from the county; += 4 when the gate gives
  *                                way: 0x496b9f, 0x483a88, 0x484a0c; DAT_00553fb0 = 500 outside a siege)
- *   DAT_00542cd4                 the attackers' kit flag (0x47c4ba: DAT_0055401c == 1, MP DAT_004d4ad8)
+ *   DAT_00542cd4                 the attackers' kit flag (0x47c4ba: DAT_0055401c == 1; in a standalone skirmish
+ *                                battle DAT_0057a0f0 the battle DAT_0056d590's DAT_004d4ad8 entry)
  *   DAT_00569588                 the gate is down
  *   DAT_00553e64                 units on a kind-5 cell in formation slot 4 (0x4822ed's count): at the wall foot
  *   DAT_004eea98 > DAT_00552ff0  the battle clock (0x47fc01) past its limit (0x4983b7)
@@ -247,7 +248,8 @@ int bf_48ebf1(void)
 }
 
 /* Port of FUN_00496b9f (471 B) — the gate gives way: once per battle (DAT_0052af9c), in a siege whose attacker has
- * siege engines (MP DAT_0057a0f0: the realm's DAT_004d4b18 flag; else DAT_0055401c > 2), the first cell flagged
+ * siege engines (a standalone skirmish battle DAT_0057a0f0: battle DAT_0056d590's gate-breaks flag DAT_004d4b18;
+ * else DAT_0055401c > 2), the first cell flagged
  * 0x40 (+1) in a linear scan of the grid and the 4 × 7 block from it become passable kind 3 (+1 = 0, +3 from
  * DAT_004d9e18, +2 |= 1 & 0xe3); DAT_00569588 = 1 (breached), DAT_00553fb0 / DAT_0053e990 += 4, the path / stage
  * scratch rebuilt (0x471c1f, 0x471d30). The scan's loop indices are DAT_00569578 / DAT_00569570: retail breaks

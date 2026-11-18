@@ -71,7 +71,7 @@ coverage (a wrapper around rhost.py's coverage command; retail-only, ~3 min for 
 4788c6 1/1.
 
 **Exploration probes** (rhbot: replay a scenario with the rows in shadow, poke retail memory at a frame, step —
-poked state, NOT a pure replay; evidence for paths the corpus never takes): the workforce tooltip (0x41608b: the
+poked state, NOT a pure replay; evidence for paths the corpus never takes): the merchant grid's good tooltip (0x41608b: the
 500-frame countdown never runs out in the corpus), the MP chat line (0x420316), the MP checksum overlay (0x44098f),
 the debug counters (0x4248a3), the MP network panel + lag light + message flag (0x423ba4 / 0x41a844 / 0x42476b, one
 frame with DAT_00553030 = 1), the unit inspector (0x424992), the battlefield drag box's three clips (0x41298a), the
@@ -110,8 +110,8 @@ alternatives (0x414f68 / 0x41515c / 0x4152ea), parts of the county people box (0
 8. 0x423ba4: the sync colour's first test is a chained boolean compare `((b44 == b3a) == b4e) == b4e` (0/1 results
    compared with a byte), not "all equal"; the realm ticks' colour is the realm's +8 byte only while its +4 byte is set
    (IDA prints these as the unk_57C064.. pairs: realm p's +4 / +8).
-9. 0x41608b: the category tooltip's second number is N + max(1, N x the territory's +0x166 %) — except category 4,
-   which adds 0.
+9. 0x41608b: the merchant grid's (screen 8) hovered-good tooltip's second price is N + max(1, N x the merchant army's
+   +0x166 %) — except good 4, which adds 0.
 10. 0x41b19d: the territory panel's ownership line index is 23 / 24 (own territory) or 25 / 24 (another's); a 26 the
    compiler stores first is always overwritten (dead store).
 11. 0x42e060: its one argument is unused; the return screen is DAT_005169b0's LOW BYTE.

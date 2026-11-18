@@ -962,11 +962,12 @@ static void map_set_camera(int a) { rl_451fcc(a); }   /* 0x451fcc (rl_ctl) */
 static void classify_feature_tiles(void) { rl_46dbf5(); }
 static void randomise_special_tiles(void) { rl_46dd34(); }
 
-/* Port of FUN_0041608b (637 B) — the workforce category tooltip (screen 0xc): every 500th frame (DAT_0053ef54
- * counts down) when the hovered category DAT_0056d8ac changed (DAT_0055cd68 = the shown one): the old box's 32x64
- * backdrop restored (0x4b3ec0), the new one's saved (0x4b3f0a) and an 8x4 panel with the category's name (group 6)
- * and its count "N/M" — M = N + DAT_005532a0's percentage of the territory DAT_00553c64's +0x166 (at least 1; 0
- * for category 4). Positions: the 20-byte records DAT_004d2b70 + 20 (category - 1). */
+/* Port of FUN_0041608b (637 B) — the merchant grid's hovered-good tooltip (screen 8; 0xc is one good's trade
+ * screen): every 500th frame (DAT_0053ef54 counts down) when the hovered good DAT_0056d8ac changed (DAT_0055cd68 =
+ * the shown one): the old box's 32x64 backdrop restored (0x4b3ec0), the new one's saved (0x4b3f0a) and an 8x4 panel
+ * with the good's name (group 6) and its prices "N/M" — N = the good's price DAT_005532a0 (16-B rows), M = N + N's
+ * percentage of the merchant army DAT_00553c64's +0x166 (at least 1; 0 for good 4). Positions: the 20-byte records
+ * DAT_004d2b70 + 20 (good - 1) (k_trade_good_tiles). */
 int rl_41608b(void)
 {
     if (g_rl_53ef54 != 0) {

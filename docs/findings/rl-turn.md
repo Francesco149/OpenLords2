@@ -26,7 +26,7 @@ Eight of these were file-statics (engine_army_ai.c: 0x49f12f, 0x49f431, 0x49f73f
 port matched retail on its first shadow.
 
 **(b) re-port — 37.** The old port is in an unlinked module (engine.c, game_init.c, main.c, gfx.c, save.c,
-engine_turn.c, engine_army_select.c, engine_npc_schedule.c, engine_pl8.c …) or threads a port struct (the event
+engine_turn.c, engine_army_select.c, engine_realm_personality.c, engine_pl8.c …) or threads a port struct (the event
 queue: engine_ranking.c's 0x49aa0e, engine_army_ai.c's inbox handlers 0x4a277d / 0x4a29b2 / 0x4a2cd6 / 0x4a2f61 /
 0x4a30f6 / 0x4a38db post into `engine_event_queue_state_t`): a fresh rl_<va> from the asm, posting through rl_472bc5.
 
@@ -71,7 +71,7 @@ No host-level functions in the partition (0x4997bf's exit(100) is its out-of-mem
 exact under rhost either way): the 20 report-seen flags DAT_004f0360 (generated as 15 scalars), the popup panels' five
 button tables 0x4dda90..0x4ddb80 (generated as one int16 each), the misc_sel.PL8 record 0x4daed8 (+ its size), the
 lastturn name buffer DAT_004ee8d0 (16 B), the AI personality table 0x4d8a58 (4 × 0xf0; engine_army_ai.c's
-g_ai_personality), the keep tiers' costs 0x4d8a3c (7 dwords). The generator's NEIGHBOUR flag on g_rl_4ee8a0
+g_ai_personality), the castle garrison grants 0x4d8a3c (7 dwords: levels 0..5 + a pad). The generator's NEIGHBOUR flag on g_rl_4ee8a0
 (OldFilename / FileName) was wrong. Other partitions' globals are declared locally (their headers conflict in one unit).
 
 ## Rows

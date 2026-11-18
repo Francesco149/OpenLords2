@@ -89,7 +89,7 @@ caller's EAX through untouched — the hook wrapper does not preserve that EAX e
 ## Seams left
 
 - TODO(rl-link) (a port exists, not on retail's layout or not linked in rhost): strutil_ext_save 0x4af54a,
-  io_path_chdir_base 0x4af502, engine_npc_schedule_init 0x49caaa, engine_map_init_set_camera 0x451fcc,
+  io_path_chdir_base 0x4af502, engine_realm_personality_init 0x49caaa, engine_map_init_set_camera 0x451fcc,
   audio_cue_release 0x427d19, gfx_load_system_sheet_select 0x499a1c, engine_minimap_load_grids 0x46a037,
   engine_territory_load_strat_map 0x467770, engine_map_init_build_cells 0x4298c1,
   engine_title_render_setup_clamp_player_count 0x4ae5e2, engine_map_init_strategic 0x498270, gfx_load_misc_sheet

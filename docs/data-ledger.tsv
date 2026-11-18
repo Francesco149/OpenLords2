@@ -378,7 +378,7 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4de710	80	.data	table	documented	25	0	0		2	4aad07,4ac904	0	2	g_rl_4de75c		k_casualty_survivors
 4de760	48	.data	table	documented	12	0	0		1	4ac904	0	1			k_merc_men
 4de790	16	.data	table	documented	12	0	0		1	4ac904	0	1			k_merc_class
-4de7a0	15	.data	table	documented	12	0	0		0		0	0			k_merc_period
+4de7a0	15	.data	table	documented	12	0	0		0		0	0			k_merc_start_county
 4de7af	13	.data	table	documented	12	0	0		1	4ac904	0	1			k_merc_dwell
 4de7bc	52	.data	table	documented	24	0	0		1	4ac904	0	2			k_merc_hire_cost
 4de7f0	48	.data	table	documented	22	0	0		0		0	0			k_merc_wage
@@ -468,7 +468,7 @@ va	size	section	kind	status	nonzero	code_ptrs	data_ptrs	strlen	n_funcs	funcs	n_d
 4e45d4	4	.data	zero	named	0	0	0		4	4bfa00,4bfa30,4c3690,4c4160	0	2	G_NEWMODE		
 4e45d8	56	.data	table	documented	28	0	3		4	4c37f0,4c3870,4c3950,4c3d40	0	1	G_RPTBUSY,G_RPTFILE,G_RPTMODE,G_RPTTYPES,G_WSPRINTF		g_crt_dbgrpt_vars
 4e4610	8	.data	scalar	documented	4	1	0		4	4bfb30,4bff80,4c05a0,4c0c30	0	3	G_ALLOCHOOK,g_rl_4e4610		g_crt_alloc_hook
-4e4618	2068	.data	table	documented	8	0	2		7	4c44e0,4c45b0,4c47c0,4c4850,4c49d0,4c4b10,4c54a0	3	3	G_SBH_HEAD,G_SBH_HEAPHDR		g_crt_sbh_region0
+4e4618	2068	.data	table	documented	8	0	2		7	4c44e0,4c45b0,4c47c0,4c4850,4c49d0,4c4b10,4c54a0	3	3	G_SBH_HEAD,G_SBH_HEAD_REGION		g_crt_sbh_region0
 4e4e2c	12	.data	table	documented	5	0	1		10	4c3760,4c4090,4c4160,4c4540,4c4560,4c47c0,4c4850,4c4a80,…	0	2	G_SBH_FREEPG,G_SBH_ROVER,G_SBH_THRESH		g_crt_sbh_vars
 4e4e38	8	.data	ptr(data)	documented	6	0	2		6	4c18b0,4c1df0,4c1f30,4c5710,4c57f0,4c68f0	0	3	G_PCTYPE		g_crt_pctype
 4e4e40	514	.data	table	documented	128	0	0		1	4c92f0	2	1	G_CTYPE1		_ctype

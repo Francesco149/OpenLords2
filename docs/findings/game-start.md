@@ -96,7 +96,7 @@ live sim:
 fields — but every one already has a **shared `s_slot_<va>` storage
 home** in `src/save_schema_globals.h` (the runtime-global ownership
 model the 2026-05-29 wall was waiting on; it shipped).  Game-init seeds
-them exactly like `engine_npc_schedule.c` already seeds
+them exactly like `engine_realm_personality.c` already seeds
 `s_slot_0053f268` / `s_slot_0055302c` / `s_slot_0053f034`: include the
 header, write the slot.  No desync, no second copy.  (Verified
 2026-05-30: all 17 present as `s_slot_<full-va>` externs.)

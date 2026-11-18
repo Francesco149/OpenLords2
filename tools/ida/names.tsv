@@ -549,7 +549,7 @@ va	name	best_rule	score	cites	defined_at
 0049bc5f	player_roster_compact	doc:strong	19	3	src/engine_roster.c:91
 0049bd99	engine_game_init_setup_realms	proto:strong	9	1	src/game_init.c:951
 0049ca32	player_seed_visibility_bits	doc:strong	22	3	src/engine_roster.c:208
-0049caaa	engine_npc_schedule_init	proto:strong	19	3	src/engine_npc_schedule.c:58
+0049caaa	engine_realm_personality_init	proto:strong	19	3	src/engine_realm_personality.c:61
 0049ce51	engine_turn_advance_phase	doc:strong	25	4	src/engine_turn.c:157
 0049cf20	engine_combat_resign_player	doc:strong	19	2	src/engine_combat.c:1092
 0049d1e0	engine_ranking_recompute_player_aggregate	doc:strong	16	3	src/engine_ranking.c:140
@@ -645,7 +645,7 @@ va	name	best_rule	score	cites	defined_at
 004a983b	sibling_983b	doc:lead	7	1	src/engine_army_move_confirm.c:251
 004a9a9a	engine_combat_spawn_unit	doc:strong	31	5	src/engine_combat.c:1338
 004a9eb1	spawn_debit_cashflow	doc:strong	13	2	src/engine_combat.c:1294
-004a9f18	spawn_debit_provision	doc:strong	13	2	src/engine_combat.c:1262
+004a9f18	spawn_debit_population	doc:strong	13	2	src/engine_combat.c:1262
 004a9f72	spawn_pick_roster_slot	doc:strong	13	2	src/engine_combat.c:1274
 004aa039	engine_unit_disband	doc:strong	31	6	src/engine_realm_upkeep.c:225
 004aa181	engine_combat_merge_stack	doc:strong	22	3	src/engine_combat.c:529

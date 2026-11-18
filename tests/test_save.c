@@ -30,7 +30,7 @@
 
 /* save.c (under test) reads three runtime sim flags that live in
  * engine.c, which the host test build does not link.  g_sim_mp_active
- * is defined in test_engine_npc_schedule.c; define the two save-rotation
+ * is defined in test_engine_realm_personality.c; define the two save-rotation
  * flags here so the link resolves. */
 int g_sim_mp_variant;
 int g_sim_save_rotate_hold;

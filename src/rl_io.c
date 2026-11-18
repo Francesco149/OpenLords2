@@ -18,7 +18,7 @@
 
 /* ---------------------------------------------------------------- seams (callees outside the partition) */
 /* retail-layout ports of other partitions */
-static int npc_schedule_init(void) { return rl_49caaa(); }   /* engine_npc_schedule_init (rl turn) */
+static int realm_personality_init(void) { return rl_49caaa(); }   /* engine_realm_personality_init (rl turn) */
 static void map_init_set_camera(int mode) { rl_451fcc(mode); }   /* 0x451fcc (rl_ctl) */
 
 /* ---------------------------------------------------------------- the game's init / reset stores */
@@ -150,12 +150,12 @@ int rl_499619(void)
     return 0;
 }
 
-/* Port of FUN_00433cc1 (35 B) — the NPC schedule's start (DAT_0053f268 = DAT_0053f288 + 2 - DAT_00553f98), then
+/* Port of FUN_00433cc1 (35 B) — the AI realms' setup (DAT_0053f268 = DAT_0053f288 + 2 - DAT_00553f98), then
  * 0x49caaa. Returns its EAX. */
 int rl_433cc1(void)
 {
     s_slot_0053f268 = g_rl_53f288 + 2 - s_slot_00553f98;
-    return npc_schedule_init();
+    return realm_personality_init();
 }
 
 /* Port of FUN_00451f70 (26 B) — mark the whole screen dirty (0x45240a) and 0x452160(1). Returns its EAX. */
@@ -226,7 +226,7 @@ int rl_4975d3(void)
 }
 
 /* Port of FUN_0049c995 (157 B) — the players' reset: scalar defaults, the realm records' 0x46ea61 pass (0x46f21f),
- * the aux records cleared (0x46f267), the visibility bits (0x49ca32), and each player 1..5's job slot (+0x0a = p)
+ * the aux records cleared (0x46f267), the visibility bits (0x49ca32), and each player 1..5's banner colour (+0x0a = p)
  * and +0x118 = DAT_0053f278. Returns DAT_0053f278 (the last EAX). */
 int rl_49c995(void)
 {
@@ -248,7 +248,7 @@ int rl_49c995(void)
 }
 
 /* Port of FUN_004978ad (129 B) — a new single-player game: DAT_00553f98 = 1, the players' reset (0x49c995), the
- * human is player 1 (DAT_0057c8cc) seated with the name DAT_0053f1e0 (0x49bae9), job slot 1 mirrored into the aux
+ * human is player 1 (DAT_0057c8cc) seated with the name DAT_0053f1e0 (0x49bae9), banner colour 1 mirrored into the aux
  * record, then 0x49caaa. Returns its EAX. */
 int rl_4978ad(void)
 {
@@ -258,7 +258,7 @@ int rl_4978ad(void)
     player_seat_assign(0, (int)s_slot_0057c8cc, g_bf_53f1e0);   /* DAT_0053f1e0: the player name */
     g_player_strategic_352[352 * s_slot_0057c8cc + 0x0a] = 1;
     g_player_aux_44[44 * s_slot_0057c8cc + 0x25] = g_player_strategic_352[352 * s_slot_0057c8cc + 0x0a];
-    return npc_schedule_init();
+    return realm_personality_init();
 }
 
 /* Port of FUN_004ae2bd (83 B) — after reading lords2.inf: the year DAT_0053f204 == 2028 counts DAT_0053f5ec up,
@@ -1831,7 +1831,7 @@ int rl_46a101(void)
 /* Port of FUN_00497a34 (697 B) — enter the new-game setup (`fresh` 0: from the title): every sheet freed; a game in
  * progress (DAT_0057a0f0 == 1) only restarts the setup music (setup3.wav) and 0x42b780. Else the system sheet
  * (0x499a1c), the custom map list (0x46a101), the setup globals reset, the strategic map built (0x46a037 / 0x467770 /
- * 0x4298c1), the player count clamped (0x4ae5e2), the NPC schedule (0x433cc1), the map (0x498270); unless DAT_005aeb68,
+ * 0x4298c1), the player count clamped (0x4ae5e2), the AI realms' setup (0x433cc1), the map (0x498270); unless DAT_005aeb68,
  * setup.wav (its latch off then on), the welcome voice once (DAT_0055ce90: s011_01.wav), the screen marked, engine
  * state 2, the misc sheet (0x499034); multiplayer: screen 0x1f + the name field (0x4b756b, text input over DAT_0053f1e0
  * 16 chars at 192); single: screen 0x3a with startXXX.pl8 present (DAT_0057c920 = 0x1f) else 0x1f; the title scene

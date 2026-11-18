@@ -139,7 +139,7 @@ static uint32_t engine_now_ms(void)
 }
 /* Multiplayer-session active flag.  retail DAT_00553030.  SP only
  * today, so always 0.  Shared (declared extern in engine.h) so the
- * strategic-layer modules that branch on it — e.g. engine_npc_schedule
+ * strategic-layer modules that branch on it — e.g. engine_realm_personality
  * — read the single canonical flag rather than a private mirror. */
 int g_sim_mp_active;
 /* MP session sub-variant (retail DAT_00553248) and turn-save rotation
@@ -3934,7 +3934,7 @@ static void engine_popup_scroll_render(void)
          * build, which is exactly the "+0x1c1 == 0" branch below).  Both
          * are read via the SAME g_popup_flag6 key the settlement pass
          * just finished, so this is the identical "keep level" concept
-         * engine_combat.c's k_keep_tbl consumers (A_KEEPLVL/A_BUILTLVL)
+         * engine_combat.c's k_castle_garrison_grant consumers (A_KEEPLVL/A_BUILTLVL)
          * already use — not a genuine dual-use byte. */
         if (cooldown == 0x7c6)
             engine_popup_speak_event(g_sim_extended_pause, g_popup_payload_a);

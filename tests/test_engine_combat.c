@@ -342,7 +342,7 @@ int test_engine_combat_size_sfx_hook(void)
 #undef C_GARRISON
 #undef C_COUNT
 
-/* --- FUN_004a80db: post-battle condition recompute ------------------------ */
+/* --- FUN_004a80db: siege-engine build-state recompute (slots {count, pct, progress}) */
 
 #define C_COND_CNT   0x182
 #define C_COND_OUT   0x184
@@ -851,7 +851,7 @@ int test_engine_combat_settle_same_colour_noop(void)
 
 /* ---- army-stack merge (FUN_004aa181 / engine_combat_merge_stack) --------- *
  * Merge occupant `src` into `dst`: sum head-count (+0x168) / 7 troop shorts
- * (+0x16c) / 3 supply triples (+0x182/+0x184/+0x186), keep the larger presence
+ * (+0x16c) / 3 siege-engine slot triples (+0x182/+0x184/+0x186), keep the larger presence
  * accumulator (+0x153), inherit src's merc triple, then disband src.  The
  * disband re-plan tail is held to a no-op by leaving the army-records bind
  * NULL (same as the resign tests).                                            */
@@ -863,14 +863,14 @@ static void merge_reset(void)
 }
 
 /* Two merc-free stacks merge: dst gains src's head-count, troop counts and
- * supply triples, keeps the larger presence byte, and src is disbanded. */
+ * siege-engine slot triples, keeps the larger presence byte, and src is disbanded. */
 int test_engine_combat_merge_sums_and_disbands(void)
 {
     merge_reset();
     uint8_t *d = CREC(3), *s = CREC(5);
     d[0x00] = 2; I32(d, C_VALUE) = 100; d[0x153] = 5;
     I16(d, C_COUNTS) = 10; I16(d, C_COUNTS + 2) = 5;
-    I16(d, 0x182) = 4; I16(d, 0x184) = 2; I16(d, 0x186) = 8;   /* supply group 0 */
+    I16(d, 0x182) = 4; I16(d, 0x184) = 2; I16(d, 0x186) = 8;   /* siege-engine slot 0 */
     s[0x00] = 2; s[0x08] = 1; I32(s, C_VALUE) = 50; s[0x153] = 9;
     I16(s, C_COUNTS) = 3; I16(s, C_COUNTS + 2) = 2; I16(s, C_COUNTS + 4) = 1;
     I16(s, 0x182) = 1; I16(s, 0x184) = 1; I16(s, 0x186) = 2;
@@ -884,7 +884,7 @@ int test_engine_combat_merge_sums_and_disbands(void)
     T_ASSERT_EQ_I(I16(d, C_COUNTS + 2), 7);
     T_ASSERT_EQ_I(I16(d, C_COUNTS + 4), 1);
     T_ASSERT_EQ_I(d[0x153], 9);              /* max presence kept */
-    T_ASSERT_EQ_I(I16(d, 0x182), 5);         /* supply group 0 summed */
+    T_ASSERT_EQ_I(I16(d, 0x182), 5);         /* siege-engine slot 0 summed */
     T_ASSERT_EQ_I(I16(d, 0x184), 3);
     T_ASSERT_EQ_I(I16(d, 0x186), 10);
     T_ASSERT_EQ_U(CREC(5)[0x00], 0);         /* src disbanded (record cleared) */
@@ -951,7 +951,7 @@ int test_engine_combat_merge_inherits_src_merc(void)
 
 /* dst holds the survive-linkage byte (+0x199): the merge keeps it, re-homes the
  * survivor's back-reference (region pending slot → +0x19a) onto dst, and runs
- * the supply-condition recompute. */
+ * the siege-engine build-state recompute. */
 int test_engine_combat_merge_rehomes_survivor(void)
 {
     merge_reset();
@@ -974,7 +974,7 @@ int test_engine_combat_merge_rehomes_survivor(void)
  * occupant onto a realm's keep cell, capping the combined head-count against   *
  * the keep-level table {2500,150,200,200,400,600,0,50,75,100}.  The unit-spawn *
  * (engine_combat_spawn_unit) allocates an occupant near the army's seat and    *
- * fills it from the owner's primed muster pool, debiting provision + cashflow. *
+ * fills it from the owner's primed muster pool, debiting population + cashflow. *
  * The economy re-plan tails are held to no-ops with the army-records bind NULL.*/
 
 /* Reset + neuter the economy re-plan tail (collect_territory_income / spawn). */
@@ -1063,7 +1063,7 @@ int test_engine_combat_place_garrison_merges_when_pending(void)
 /* ---- region-event-hi "enter keep" chain (FUN_004686a0 + siege chain) ----- *
  * The dispatcher routes a live placed stack entering a keep region: owner ==   *
  * region race → reinforce (place_garrison); else → begin siege.  The siege path *
- * links besieger↔defender and seeds the besieger's three siege supply lanes by *
+ * links besieger↔defender and seeds the besieger's three siege-engine slots by  *
  * the owner race's unit-category {race1→8, race2→9, race3/4→7, ...}.            */
 
 /* A dead occupant (C_ACTIVE != 1) is ignored entirely. */
@@ -1223,7 +1223,7 @@ enum { SPAWN_GRID = 0x40, SPAWN_STRIDE = 8, SPAWN_COORD_OFF = 0x6c };
 static uint8_t g_spawn_cells[SPAWN_GRID * SPAWN_GRID * SPAWN_STRIDE];
 
 /* Full spawn: occupant created near army `army`'s seat, value/counts copied from
- * the owner's primed muster pool, provision + cashflow debited, roster bumped. */
+ * the owner's primed muster pool, population + cashflow debited, roster bumped. */
 int test_engine_combat_spawn_unit_populates(void)
 {
     spawn_reset();
@@ -1240,8 +1240,8 @@ int test_engine_combat_spawn_unit_populates(void)
     R_REC(army)[SPAWN_COORD_OFF + army * 3 + 1] = 20;   /* army seat row */
     R_REC(army)[0x05] = owner;                          /* race */
     R_REC(army)[0x0c] = 9;                              /* +0x166 source byte  */
-    I32(R_REC(army), 0x24) = 500;                       /* provision A */
-    I32(R_REC(army), 0x38) = 500;                       /* provision B */
+    I32(R_REC(army), 0x24) = 500;                       /* population */
+    I32(R_REC(army), 0x38) = 500;                       /* army change */
 
     P_REC(owner)[0x05] = 1;             /* owner active (→ occupant garrison byte) */
     P_REC(owner)[0x0a] = 4;             /* → occupant count byte */
@@ -1268,7 +1268,7 @@ int test_engine_combat_spawn_unit_populates(void)
     T_ASSERT_EQ_U(c[0x166], 9);
     T_ASSERT_EQ_I(I32(c, C_VALUE), 120);            /* ← pool +0x70 */
     T_ASSERT_EQ_I(I16(c, C_COUNTS + 2), 2);         /* class-1 count */
-    /* provision debited by the staged head-count (pool +0x70). */
+    /* population debited by the staged head-count (pool +0x70). */
     T_ASSERT_EQ_I(I32(R_REC(army), 0x24), 380);
     T_ASSERT_EQ_I(I32(R_REC(army), 0x38), 380);
 
@@ -1279,8 +1279,8 @@ int test_engine_combat_spawn_unit_populates(void)
 }
 
 /* engine_combat_muster_garrison (FUN_004a5389): size a keep garrison at pct% of
- * the region's provision, distribute the head across troop classes 5/1/3/2/6 from
- * the owner's primed category reserves, then spawn.  provision 200 @ pct 50 →
+ * the county's population, distribute the head across troop classes 5/1/3/2/6 from
+ * the owner's primed category reserves, then spawn.  population 200 @ pct 50 →
  * head 100; cats {1:40,2:30,3:20,4:0,5:50,6:10} fill in order 5,1,3,2,6 against
  * the shrinking slot-0 pool: class5←50 (pool 100→50), class1←40 (→10), class3←10
  * (→0), class2/6←0 (pool drained). */
@@ -1297,7 +1297,7 @@ int test_engine_combat_muster_garrison_distributes(void)
     R_REC(region)[SPAWN_COORD_OFF + region * 3]     = 20;   /* region seat col */
     R_REC(region)[SPAWN_COORD_OFF + region * 3 + 1] = 20;   /* region seat row */
     R_REC(region)[0x05] = owner;                            /* region owner */
-    I32(R_REC(region), 0x24) = 200;                         /* provision (+0x24) */
+    I32(R_REC(region), 0x24) = 200;                         /* population (+0x24) */
 
     /* Owner's six cashflow-category reserves (strat +0x140..+0x154 = cats 1..6). */
     const int32_t cats[6] = { 40, 30, 20, 0, 50, 10 };
@@ -1376,8 +1376,8 @@ int test_engine_combat_prime_muster(void)
 }
 
 /* ---- defender muster/spawn (FUN_004a50ae) -------------------------------- *
- * Raise a defending garrison sized at pct% of the region's provision, stage    *
- * its troops in the owner's muster pool, then spawn.  Below the provision floor *
+ * Raise a defending garrison sized at pct% of the county's population, stage    *
+ * its troops in the owner's muster pool, then spawn.  Below the population floor *
  * it returns 0 untouched.  Mode 2 seeds three strat reserve cells and          *
  * distributes the sized head into class slots by band; mode 1 recruits 10-at-  *
  * a-time from the primed reserves.  The staging is observable even when the     *
@@ -1387,9 +1387,9 @@ int test_engine_combat_muster_defender_below_min(void)
     int region = 4, owner = 3;
     memset(R_REC(region), 0, 0x300);
     R_REC(region)[0x05] = owner;
-    I32(R_REC(region), 0x24) = 30;                 /* provision below floor */
+    I32(R_REC(region), 0x24) = 30;                 /* population below floor */
 
-    /* min_prov 40 > provision 30 → bail before any staging or spawn. */
+    /* min_pop 40 > population 30 → bail before any staging or spawn. */
     int ret = engine_combat_muster_defender(region, 40, 40, 2);
     T_ASSERT_EQ_I(ret, 0);
     return 0;
@@ -1400,7 +1400,7 @@ int test_engine_combat_muster_defender_mode2_distributes(void)
     int region = 4, owner = 3;
     memset(R_REC(region), 0, 0x300);
     R_REC(region)[0x05] = owner;
-    I32(R_REC(region), 0x24) = 1000;               /* provision */
+    I32(R_REC(region), 0x24) = 1000;               /* population */
     memset(P_REC(owner), 0, 0x160);
 
     uint8_t *pool = engine_game_init_troop_pool_row(owner);
@@ -1430,7 +1430,7 @@ int test_engine_combat_muster_defender_mode1_recruits(void)
     int region = 4, owner = 3;
     memset(R_REC(region), 0, 0x300);
     R_REC(region)[0x05] = owner;
-    I32(R_REC(region), 0x24) = 100;                /* provision */
+    I32(R_REC(region), 0x24) = 100;                /* population */
     memset(P_REC(owner), 0, 0x160);
     /* Owner reserves cats 1..6 (strat +0x140..+0x154) = 100 each → seeded into
      * muster slots 1..6 +0x08 by prime_muster. */
@@ -1470,11 +1470,11 @@ int test_engine_combat_muster_defender_spawns(void)
     R_REC(army)[SPAWN_COORD_OFF + army * 3]     = 20;
     R_REC(army)[SPAWN_COORD_OFF + army * 3 + 1] = 20;
     R_REC(army)[0x05] = owner;
-    I32(R_REC(army), 0x24) = 500;                  /* provision (≥ min_prov) */
+    I32(R_REC(army), 0x24) = 500;                  /* population (≥ min_pop) */
     I32(R_REC(army), 0x38) = 500;
     P_REC(owner)[0x05] = 1;
 
-    /* mode 0: plain spawn at the muster-cost price; returns the new occupant. */
+    /* mode 0: plain spawn at the happiness-cost price; returns the new occupant. */
     int ret = engine_combat_muster_defender(army, 40, 40, 0);
     T_ASSERT(ret != 0);
     T_ASSERT_EQ_I(ret, engine_territory_current_slot());
@@ -1568,7 +1568,7 @@ int test_engine_combat_contest_region_neutral_muster_fails_seizes(void)
     reg[0x05] = 0;                  /* neutral */
     reg[0x0c] = 20;                 /* reserve ≥ 0x0b → difficulty muster attempted */
     reg[0x17] = 40;
-    I32(reg, 0x24) = 10;            /* provision < muster floor (0x28) → muster 0 */
+    I32(reg, 0x24) = 10;            /* population < muster floor (0x28) → muster 0 */
     s_slot_0053f23c = 1;            /* difficulty 1 → the 0x28 pct branch */
     s_slot_00568218 = 0;
 
@@ -1908,7 +1908,7 @@ int test_engine_combat_merc_rotate_reverse_map(void)
 }
 
 /* ---- raise region unit (FUN_004a5003) ----------------------------------- *
- * A ~50-head field unit mustered from a region: provision 500 → pct = 5000/500
+ * A ~50-head field unit mustered from a region: population 500 → pct = 5000/500
  * = 10 → sized = percent_of(500, 10) = 50 head, primed into the pool and spawned
  * at the muster-cost price.  Same spawn path as muster_defender mode 0. */
 int test_engine_combat_raise_region_unit_spawns(void)
@@ -1924,7 +1924,7 @@ int test_engine_combat_raise_region_unit_spawns(void)
     R_REC(region)[SPAWN_COORD_OFF + region * 3]     = 20;   /* seat col */
     R_REC(region)[SPAWN_COORD_OFF + region * 3 + 1] = 20;   /* seat row */
     R_REC(region)[0x05] = owner;                            /* region owner */
-    I32(R_REC(region), 0x24) = 500;                         /* provision → pct 10 */
+    I32(R_REC(region), 0x24) = 500;                         /* population → pct 10 */
     I32(R_REC(region), 0x38) = 500;
     P_REC(owner)[0x05] = 1;                                 /* owner active */
 
@@ -2161,7 +2161,7 @@ int test_engine_combat_ai_launch_attack(void)
     R_REC(muster)[0x05] = player;
     R_REC(muster)[SPAWN_COORD_OFF + muster * 3]     = 20;   /* spawn seat */
     R_REC(muster)[SPAWN_COORD_OFF + muster * 3 + 1] = 20;
-    I32(R_REC(muster), 0x24) = 500;    /* provision ≥ 400 */
+    I32(R_REC(muster), 0x24) = 500;    /* population ≥ 400 */
     I32(R_REC(muster), 0x38) = 500;
     R_REC(muster)[0x0c] = 30;          /* approval ≥ 25 */
 

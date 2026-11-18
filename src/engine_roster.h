@@ -67,7 +67,7 @@
  * (player_has_data = 1), flag the aux record, copy the 31-byte `name`
  * (no NUL terminator), stamp `player_id` into the aux id field unless it
  * is the 999 "keep existing" sentinel, and — single-player only — mirror
- * the strategic assigned job-slot id (+0x0a) into the aux fixed-job field
+ * the strategic banner colour (+0x0a) into the aux fixed-colour field
  * (+0x25).  Port of FUN_0049bae9.  Used by single-player setup and the
  * network join handlers; no bounds check on `seat` (callers pass 1..6). */
 void player_seat_assign(int player_id, int seat, const void *name);

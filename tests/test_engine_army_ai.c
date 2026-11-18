@@ -638,13 +638,13 @@ int test_army_ai_rations_independent_ladder(void)
 }
 
 /* set_rations_and_grant, AI player with personality 1 → selector 2 ladder.
- * AI level left 0 so the grant pass returns early and only rations are set. */
+ * counties owned left 0 so the grant pass returns early and only rations are set. */
 int test_army_ai_rations_selector2(void)
 {
     ai_setup();
     s_slot_0056d5dc = 6;
     PREC(2)[0x007] = 1;   /* personality 1 → +4 selector == 2 */
-    PREC(2)[0x029] = 0;   /* AI level 0 → grant pass skipped */
+    PREC(2)[0x029] = 0;   /* 0 counties owned → grant pass skipped */
     for (int r = 1; r <= 6; r++) AREC(r)[0x005] = 2;
     AREC(1)[0x0c] = 55;   /* <60 → 0  */
     AREC(2)[0x0c] = 65;   /* <70 → 1  */
@@ -688,7 +688,7 @@ int test_army_ai_rations_selector1(void)
     return 0;
 }
 
-/* Grant pass, AI level 4 (>= 3 → DC1E0 table; 3..4 → level<5 step set).
+/* Grant pass, 4 counties owned (>= 3 → DC1E0 table; 3..4 → level<5 step set).
  * personality 2, difficulty 3: cash += DC1E0[pers2][diff3] = 1400; per-realm
  * steps pop=30, stock=6, prov=60 applied only above the thresholds. */
 int test_army_ai_grant_level4_topups(void)
@@ -699,7 +699,7 @@ int test_army_ai_grant_level4_topups(void)
     uint8_t *s = PREC(3);
     s[0x004] = 1;                       /* active */
     s[0x007] = 2;                       /* personality 2 */
-    s[0x029] = 4;                       /* AI level 4 */
+    s[0x029] = 4;                       /* counties owned 4 */
     AI32(s, 0x118) = 1000;              /* treasury */
 
     uint8_t *a1 = AREC(1);              /* above every threshold → topped up */
@@ -727,7 +727,7 @@ int test_army_ai_grant_level4_topups(void)
     return 0;
 }
 
-/* Grant pass, AI level 2 (< 3 → DC230 table; bigger step set pop=40/stock=10/
+/* Grant pass, 2 counties owned (< 3 → DC230 table; bigger step set pop=40/stock=10/
  * prov=80).  personality 1, difficulty 2: cash += DC230[pers1][diff2] = 250. */
 int test_army_ai_grant_level2_easy(void)
 {
@@ -737,7 +737,7 @@ int test_army_ai_grant_level2_easy(void)
     uint8_t *s = PREC(4);
     s[0x004] = 1;
     s[0x007] = 1;                       /* personality 1 */
-    s[0x029] = 2;                       /* AI level 2 */
+    s[0x029] = 2;                       /* counties owned 2 */
     AI32(s, 0x118) = 0;
 
     uint8_t *a = AREC(1);
@@ -756,7 +756,7 @@ int test_army_ai_grant_level2_easy(void)
     return 0;
 }
 
-/* Grant pass, AI level 5: still draws the DC1E0 cash grant, but every per-realm
+/* Grant pass, 5 counties owned: still draws the DC1E0 cash grant, but every per-realm
  * step is 0 (level >= 5 falls through both step branches). */
 int test_army_ai_grant_level5_cash_only(void)
 {
@@ -766,7 +766,7 @@ int test_army_ai_grant_level5_cash_only(void)
     uint8_t *s = PREC(2);
     s[0x004] = 1;
     s[0x007] = 1;                       /* personality 1 */
-    s[0x029] = 5;                       /* AI level 5 */
+    s[0x029] = 5;                       /* counties owned 5 */
     AI32(s, 0x118) = 0;
 
     uint8_t *a = AREC(1);
@@ -786,7 +786,7 @@ int test_army_ai_grant_level5_cash_only(void)
 }
 
 /* Grant pass is fully gated: an inactive player, an eliminated player, or one
- * with AI level 0 gets no cash and no topups. */
+ * with 0 counties owned gets no cash and no topups. */
 int test_army_ai_grant_gated(void)
 {
     ai_setup();
@@ -1090,7 +1090,7 @@ int test_army_ai_seed_buy_requests_highlevel(void)
     ai_turn_setup();
     s_slot_0056d5dc = 2;
     uint8_t *s = PREC(2);
-    s[0x029] = 2;                       /* AI level > 1 → always seeds */
+    s[0x029] = 2;                       /* counties owned > 1 → always seeds */
     AI32(s, 0x70) = 7; AI32(s, 0x74) = 7; AI32(s, 0x78) = 7; AI32(s, 0x7c) = 7;
     AI32(s, 0x120) = 0;                /* pool short → floor +0x74 = 0x32 */
     AI32(s, 0x130) = 0;                /* pool short → floor +0x70 = 100  */
@@ -2186,7 +2186,7 @@ int test_army_ai_campaign_muster_force_floor_gates(void)
 
     uint8_t *s = PREC(2);
     s[0x007] = 1;                       /* personality 1: not a funding (3/4) cheat → fund=0 */
-    s[0x029] = 5;                       /* AI level ≥ 2 → fund_campaign returns 0 outright */
+    s[0x029] = 5;                       /* counties owned ≥ 2 → fund_campaign returns 0 outright */
     s[0x0e8] = 3;                       /* committed target realm 3 */
     s[0x081] = 5;
     s[0x0e5] = 1;                       /* muster realm 1 */
@@ -2515,7 +2515,7 @@ int test_army_ai_reinforce_marches_ships_caravan(void)
 
     uint8_t *r = AREC(3);                    /* the threatened realm */
     r[0x005] = 2; r[0x00c] = 0x40;
-    AI32(r, 0x024) = 50;                     /* feed < 200 (thresh 0) and < muster min_prov */
+    AI32(r, 0x024) = 50;                     /* feed < 200 (thresh 0) and < muster min_pop */
     AI32(r, 0x224) = 50;                     /* surplus provisions to ship */
     AI32(r, 0x250) = 20;                     /* surplus stock to ship */
     r[0x06c] = 20; r[0x06d] = 20;            /* capital cell (caravan origin probe) */

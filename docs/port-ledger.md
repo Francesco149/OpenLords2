@@ -570,7 +570,7 @@ has a matching `tests/test_<stem>.c`. This is the answer to
 | 0x49bc5f | FUN_0049bc5f | 314 | engine_roster.c, engine_roster.h, rl_turn.c |
 | 0x49bd99 | FUN_0049bd99 | 3063 | game_init.c, game_init.h, rl_turn.c |
 | 0x49ca32 | FUN_0049ca32 | 46 | engine_roster.c, engine_roster.h, main.c (+1) |
-| 0x49caaa | FUN_0049caaa | 935 | engine_menu_input.c, engine_npc_schedule.c, engine_npc_schedule.h (+5) |
+| 0x49caaa | FUN_0049caaa | 935 | engine_menu_input.c, engine_realm_personality.c, engine_realm_personality.h (+5) |
 | 0x49ce51 | FUN_0049ce51 | 109 | engine.c, engine_turn.c, engine_turn.h (+1) |
 | 0x49cf20 | FUN_0049cf20 | 704 | engine_combat.c, engine_combat.h |
 | 0x49d1e0 | FUN_0049d1e0 | 1024 | engine.c, engine_combat.c, engine_ranking.c (+1) |

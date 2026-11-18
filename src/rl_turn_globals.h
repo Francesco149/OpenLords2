@@ -12,7 +12,7 @@ extern int32_t g_rl_4d6a8c[11];              /* .data 0x4d6a8c..0x4d6ab8: dword_
 extern uint8_t g_rl_4d6e88[0xa8];            /* .data 0x4d6e88..0x4d6f30: aCapCty1Smk(o) dword_4D6EB8(r) dword_4D6EBC(r) dword_4D6EC0(r) dword_4D6EC4(r) byte_4D6ED8(r)  DUP 4d6e88 4d6ed8 */
 extern uint8_t g_rl_4d7000[0x58];            /* .data 0x4d7000..0x4d7058: aFfCaptWav(o) asc_4D700C(o) asc_4D7010(o) asc_4D7014(o) asc_4D7018(o) asc_4D701C(o) aFfMsgWav(o) aFfMsgWav_0(o) aFfMsgWav_1(o) aFfMsgWav_2(o) asc_4D7050(o) asc_4D7054(o)  DUP 4d700c 4d7010 */
 extern uint8_t g_rl_4d7094[316];             /* .data 0x4d7094..0x4d71d0: aOkExitedFromGa(o)  DUP 4d7094 */
-extern uint8_t g_rl_4d8a3c[0x1c];            /* .data 0x4d8a3c..0x4d8a58: hand-widened (dword_4D8A3C[tier]: the keep tiers' costs (7 dwords)) */
+extern uint8_t g_rl_4d8a3c[0x1c];            /* .data 0x4d8a3c..0x4d8a58: hand-widened (dword_4D8A3C[level]: troops granted to the garrison when a castle completes, levels 0..5 + a pad dword) */
 extern uint8_t g_rl_4d8a58[0x3c0];           /* .data 0x4d8a58..0x4d8e18: hand-widened (the AI personality table: 4 rows x 0xf0 (engine_army_ai.c's g_ai_personality)) */
 extern uint8_t g_rl_4d8e18[0x140];           /* .data 0x4d8e18..0x4d8f58: dword_4D8E18(r) dword_4D8E1C(r) dword_4D8E20(r) dword_4D8E24(r) dword_4D8E28(r) dword_4D8E2C(r) dword_4D8E30(r) dword_4D8E34(r)  DUP 4d8e18 */
 extern uint8_t g_rl_4d8f58[0x1b0];           /* .data 0x4d8f58..0x4d9108: dword_4D8F58(r) dword_4D8F5C(r) dword_4D8F60(r) dword_4D8F64(r) dword_4D8F68(r) dword_4D8F6C(r) dword_4D8F70(r) dword_4D8F74(r)  DUP 4d8f58 */

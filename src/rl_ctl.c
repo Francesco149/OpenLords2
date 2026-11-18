@@ -2608,21 +2608,21 @@ uint32_t rl_46521f_res[4];
 int rl_46521f_moved;                 /* the executor ran this call */
 
 /* Port of FUN_0046521f (615 B) — army state 1, marching / occupying (the army DAT_005533e8, a mirror): ticks
- * 15; the sprite by head count (≤ 300 72, ≤ 600 96, else 120, + 3 · ((anim + 1) & 7)) plus the facing's offset
- * DAT_004d6a78[+0x1b, signed]; a new region under it entered (0x4abb36) and the income recollected (0x4ad6c0);
+ * 15; the sprite by head count (≤ 300 72, ≤ 600 96, else 120, + 3 · ((facing +9 + 1) & 7)) plus the step-frame
+ * offset DAT_004d6a78[step counter +0x1b, signed]; a new region under it entered (0x4abb36) and the income recollected (0x4ad6c0);
  * the timer +0x160 down; then the executor (substate +0x14c == 2), or substate 2 once not ready (+0x06 == 0). */
 int rl_46521f(void)
 {
     int a = g_army_state_index;
     rl_46521f_moved = 0;
     AR8(a, 0x52f204) = 15;
-    int anim = 3 * (((int8_t)AR8(a, 0x52f0b9) + 1) & 7);
+    int facing = 3 * (((int8_t)AR8(a, 0x52f0b9) + 1) & 7);
     if (AR32(a, 0x52f218) <= 300)
-        AR8(a, 0x52f0b7) = (uint8_t)(anim + 72);
+        AR8(a, 0x52f0b7) = (uint8_t)(facing + 72);
     else if (AR32(a, 0x52f218) <= 600)
-        AR8(a, 0x52f0b7) = (uint8_t)(anim + 96);
+        AR8(a, 0x52f0b7) = (uint8_t)(facing + 96);
     else
-        AR8(a, 0x52f0b7) = (uint8_t)(anim + 120);
+        AR8(a, 0x52f0b7) = (uint8_t)(facing + 120);
     AR8(a, 0x52f0b7) = (uint8_t)(AT(int32_t, g_rl_4d6a78, 0x4d6a78u, 0x4d6a78 + 4 * (int8_t)AR8(a, 0x52f0cb)) + AR8(a, 0x52f0b7));
     int region = AT(uint8_t, g_overworld_map, 0x522f90u, 0x522f97 + AR32(a, 0x52f0bc));
     if (AR8(a, 0x52f0c0) != region) {

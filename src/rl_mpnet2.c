@@ -518,7 +518,7 @@ int rl_4b85b7(int hdlg, unsigned msg, unsigned wp, int lp)
 
 /* Port of FUN_0049792e (262 B) — the MP lobby's game start (and the frame guard's MP save pump): DAT_0053f658 = 0,
  * DAT_0057c944 = 1, DAT_0053f06c = 7, DAT_00569584 = 1, DAT_0053f678 = 4; 0x43fed2; the text field byte_53F1E0 (16,
- * 200); realms 1..5: has-data (+5 of the record) = !aux +0x26 && aux +0x27; then engine_npc_schedule_init (its EAX). */
+ * 200); realms 1..5: has-data (+5 of the record) = !aux +0x26 && aux +0x27; then engine_realm_personality_init (its EAX). */
 int rl_49792e(void)
 {
     s_slot_0053f658 = 0;
@@ -535,7 +535,7 @@ int rl_49792e(void)
         else
             PL8(i, 0x57bf05) = AUX8(i, 0x553d77) != 0;
     }
-    return rl_49caaa();   /* engine_npc_schedule_init (rl turn) */
+    return rl_49caaa();   /* engine_realm_personality_init (rl turn) */
 }
 
 /* Port of FUN_00479e0c (132 B) — the first live battle unit (1..80, +0x2c) whose owner (+0x09) is `owner`: its

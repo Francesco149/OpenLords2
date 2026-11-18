@@ -22,7 +22,7 @@ void player_seat_assign(int player_id, int seat, const void *name)
     /* Port of FUN_0049bae9 @ 0x49bae9 (180 B).  Seats a player: marks the
      * strategic slot occupied, flags the aux record, copies the 31-byte
      * name, optionally stamps the id, and (single-player only) mirrors the
-     * assigned job-slot id into the aux fixed-job field.  Decompile:
+     * banner colour into the aux fixed-colour field.  Decompile:
      *
      *   (&DAT_0057bf05)[param_2 * 0x160] = 1;             // player_has_data
      *   (&DAT_00553d77)[param_2 * 0x2c]  = 1;             // aux in-use flag
@@ -49,8 +49,8 @@ void player_seat_assign(int player_id, int seat, const void *name)
     }
 
     if (g_sim_mp_active == 0) {
-        /* Single-player: aux fixed-job-slot id (0x25) ← strategic assigned
-         * job-slot id (0x0a).  In multiplayer this is left as-is. */
+        /* Single-player: aux fixed banner colour (0x25) ← strategic banner
+         * colour (0x0a).  In multiplayer this is left as-is. */
         g_player_aux_44[seat * 0x2c + 0x25] =
             g_player_strategic_352[seat * 0x160 + 0x0a];
     }

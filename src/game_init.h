@@ -7,7 +7,7 @@
  * 0x4329ec) calls 0x497ced once to wipe and seed every live
  * world-state table before the engine flips to the ingame state.  It is
  * a ~25-call orchestrator: a table-clear phase, a scalar-seed phase,
- * the NPC-schedule seed (FUN_0049caaa, already ported), then a long
+ * the realm-personality seed (FUN_0049caaa, already ported), then a long
  * tail of per-subsystem seeders (army/castle/territory/AI/map).
  *
  * This module grows one phase at a time.  Landed so far:
@@ -50,7 +50,7 @@ void engine_game_init_clear_tables(void);
 extern int g_anim_gate_53f0c4;
 
 /* Scalar-seed phase of 0x497ced — the 20 dword world-state globals
- * written between the NPC-schedule seed and the first heavy seeder
+ * written between the realm-personality seed and the first heavy seeder
  * (17 save-schema scalars + the 2 turn-handshake runtime globals + the
  * anim-gate counter above).  Seeds the calendar block (year + season,
  * each with prev/next mirrors) and zeroes the rest. */
@@ -214,7 +214,7 @@ void engine_game_init_preset_snapshot(int out[5]);
  * the strategic slots stay empty (no ACTIVE players), which makes a saved new
  * game read as an all-AI/auto-advancing turn state (retail spams turns on
  * load).  See the implementation for exactly which fields the config screen
- * owns vs. which the initialiser/NPC-scheduler derive.  Call before
+ * owns vs. which the initialiser/personality setup derive.  Call before
  * engine_game_start / engine_game_init_setup_realms.
  *
  * player_name (optional, may be NULL) is the lords2.inf prefs buffer
@@ -332,8 +332,9 @@ void engine_game_init_bind_save_rotate_fn(void (*fn)(void));
  * via engine_map_init_tile_cells().  The caller must also bind the loaded
  * L2_maps.dat[map_id] record (engine_territory_bind_strat_map_record) — the
  * port's seam for FUN_00467770's file read, which setup_overworld unpacks.
- * The NPC-schedule seed reads the bound l2.eng blob (engine_npc_schedule_
- * set_localization, config_localization_data on the live path) for job names;
+ * The realm-personality seed reads the bound l2.eng blob (engine_realm_
+ * personality_set_localization, config_localization_data on the live path) for
+ * personality names;
  * bind NULL to skip it (engine-quirks #107).
  *
  * Builds the descriptor table from L2_maps.dat[map_id] (engine_territory_

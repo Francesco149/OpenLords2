@@ -31,9 +31,10 @@
  *   FUN_0046f0a9 → engine_unit_remove
  *   FUN_0046ead0 → memset(rec, 0, 0x1a4)
  *
- * The two facing→frame tables are baked verbatim from Lords2.exe:
- *   k_facing_march ← DAT_004d6a78 (8 × i32) — states 1/2 (3-frame walk cycle)
- *   k_facing_idle  ← DAT_004d6ab8 (8 × i32) — states 3/4 (6-frame walk cycle)
+ * The two step→frame tables are baked verbatim from Lords2.exe (the first 8 of
+ * retail's 16 entries each; the index is the step counter +0x1b):
+ *   k_step_frame_march ← DAT_004d6a78 — states 1/2 (3 frames per facing)
+ *   k_step_frame_idle  ← DAT_004d6ab8 — states 3/4 (6 frames per facing)
  */
 
 #include <stdint.h>
@@ -61,10 +62,10 @@
 #define A_READY      0x06     /* march-ready flag: 0 → advance sub-state (u8)   */
 #define A_SPRITE     0x07     /* display sprite frame, recomputed each tick (u8)*/
 #define A_STATE      0x08     /* state byte → handler-table index (u8)          */
-#define A_ANIM       0x09     /* walk-cycle phase selector (u8)                 */
+#define A_FACING     0x09     /* facing 0..7: sprite base 3 (6) x ((f+1)&7) (u8)*/
 #define A_CELL       0x0c     /* byte offset of the occupant's cell (i32)       */
 #define A_REGION     0x10     /* effective-region colour key (u8)               */
-#define A_FACING     0x1b     /* facing 0..7 → facing-frame table index (u8)    */
+#define A_STEP       0x1b     /* sub-step counter 0..7 in one cell move (u8)    */
 #define A_DEST_COL   0x16     /* path-trace goal column (u8) — the raider's dest */
 #define A_DEST_ROW   0x17     /* path-trace goal row (u8)                        */
 #define A_RAID_FLAG  0x150    /* raider path-retry flag, cleared on retarget(u8)*/
@@ -90,10 +91,12 @@
 #define SIEGE_SLOT_PCT   2    /* i16 offset within a slot: percent built (0..100)*/
 #define SIEGE_SLOT_VALUE 4    /* i16 offset within a slot: accumulated build     */
 
-/* Facing-frame deltas (DAT_004d6a78 / DAT_004d6ab8, 8 × i32 each), indexed by
- * the occupant facing byte (+0x1b, a 0..7 compass direction). */
-static const int32_t k_facing_march[8] = { 0, 1, 2, 1, 0, 1, 2, 1 };
-static const int32_t k_facing_idle [8] = { 0, 1, 2, 3, 4, 5, 0, 1 };
+/* Walk-frame offsets by the step counter (+0x1b, 0..7 within one cell move):
+ * DAT_004d6a78 / DAT_004d6ab8, 16 × i32 each in retail (k_army_step_frame_march /
+ * _idle); the port keeps entries 0..7 and masks the index with & 7 (retail does
+ * not mask). */
+static const int32_t k_step_frame_march[8] = { 0, 1, 2, 1, 0, 1, 2, 1 };
+static const int32_t k_step_frame_idle [8] = { 0, 1, 2, 3, 4, 5, 0, 1 };
 
 /* Driver / handler shared state (retail globals). */
 int     g_army_state_index;        /* DAT_005533e8 */
@@ -160,9 +163,9 @@ static int occupant_region_key(const uint8_t *r)
 }
 
 /* The walk-cycle phase index: (anim + 1) mod 8. */
-static int anim_phase(const uint8_t *r)
+static int facing_slot(const uint8_t *r)
 {
-    return (r[A_ANIM] + 1) & 7;
+    return (r[A_FACING] + 1) & 7;
 }
 
 /* --- state 1: marching / occupying (FUN_0046521f) ------------------------- */
@@ -175,8 +178,8 @@ static void handler_march(engine_event_queue_state_t *evq, int mp_active)
     /* Sprite base by army size: <=300 small, <=600 medium, else large. */
     int head = *(int32_t *)(r + A_HEAD);
     int base = (head <= 0x12c) ? 0x48 : (head <= 0x258) ? 0x60 : 0x78;
-    r[A_SPRITE] = (uint8_t)(anim_phase(r) * 3 + base);
-    r[A_SPRITE] = (uint8_t)(r[A_SPRITE] + k_facing_march[r[A_FACING] & 7]);
+    r[A_SPRITE] = (uint8_t)(facing_slot(r) * 3 + base);
+    r[A_SPRITE] = (uint8_t)(r[A_SPRITE] + k_step_frame_march[r[A_STEP] & 7]);
 
     int region = occupant_region_key(r);
     if (r[A_REGION] != (uint8_t)region) {
@@ -216,8 +219,8 @@ static void handler_settle(engine_event_queue_state_t *evq, int mp_active)
     }
 
     r[A_TICKS] = 0xa;
-    r[A_SPRITE] = (uint8_t)(anim_phase(r) * 3 + 0x90);
-    r[A_SPRITE] = (uint8_t)(r[A_SPRITE] + k_facing_march[r[A_FACING] & 7]);
+    r[A_SPRITE] = (uint8_t)(facing_slot(r) * 3 + 0x90);
+    r[A_SPRITE] = (uint8_t)(r[A_SPRITE] + k_step_frame_march[r[A_STEP] & 7]);
 
     int region = occupant_region_key(r);
     if (r[A_REGION] != (uint8_t)region)
@@ -238,8 +241,8 @@ static void handler_idle(engine_event_queue_state_t *evq, int mp_active)
     uint8_t *r = AREC(g_army_state_index);
 
     r[A_TICKS] = 0xa;
-    r[A_SPRITE] = (uint8_t)(anim_phase(r) * 6);
-    r[A_SPRITE] = (uint8_t)(r[A_SPRITE] + k_facing_idle[r[A_FACING] & 7]);
+    r[A_SPRITE] = (uint8_t)(facing_slot(r) * 6);
+    r[A_SPRITE] = (uint8_t)(r[A_SPRITE] + k_step_frame_idle[r[A_STEP] & 7]);
 
     r[A_REGION] = (uint8_t)occupant_region_key(r);  /* set region colour directly */
 

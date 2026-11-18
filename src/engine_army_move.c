@@ -55,8 +55,8 @@
 
 #define M_OWNER      0x00     /* owning player id; 0 = dead record (u8)         */
 #define M_F01        0x01     /* "has a live order" flag (u8)                   */
-#define M_DIR        0x09     /* committed move direction 0..7 (u8; aliases the */
-                              /* army-state anim byte — classifier latches it)  */
+#define M_DIR        0x09     /* committed move direction 0..7 (u8; the army's  */
+                              /* facing — the classifier latches it)            */
 #define M_STATE      0x08     /* state byte (1 march, 2 settle, 3/4 idle) (u8)  */
 #define M_COL        0x0a     /* grid column 0..63 (i8)                         */
 #define M_ROW        0x0b     /* grid row 0..63 (i8)                            */
@@ -83,7 +83,7 @@
 #define M_DEPOSIT_RAW   0x16c  /* provision-raw the settler carries → region +0x224 (i16) */
 #define M_DEPOSIT_STOCK 0x170  /* stock-A the settler carries → region +0x250 (i16)        */
 
-#define M_FACING     0x1b     /* facing/shuffle counter, bumped while stalling (u8)*/
+#define M_STEP       0x1b     /* sub-step counter (walk frame), bumped while stalling (u8)*/
 #define M_STALL_ACC  0x149    /* stall accumulator (+2 SP / +4 MP), latch ≥0x10(i8)*/
 #define M_RETRY      0x14a    /* per-tick retry counter vs the 3/0 budget (i8)   */
 #define M_FLAGS14B   0x14b    /* state flags: bit0 = step-eval armed, bit3 spare(u8)*/
@@ -474,14 +474,14 @@ int engine_army_move_classify_step(int dir, engine_event_queue_state_t *evq,
         r[M_RETRY]++;
         if (budget < (int8_t)r[M_RETRY]) {
             r[M_RETRY] = 0;
-            r[M_FACING]++;
+            r[M_STEP]++;
             r[M_STALL_ACC] += (mp_active == 0) ? 2 : 4;
             if ((int8_t)r[M_STALL_ACC] < 0x10) {
                 result = 1;
             } else {
                 r[M_FLAGS14B] |= 1;     /* arm the step-eval */
                 r[M_STALL_ACC] = 0;
-                r[M_FACING]    = 0;
+                r[M_STEP]      = 0;
                 result = 2;
             }
         } else {

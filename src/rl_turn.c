@@ -2,7 +2,7 @@
  * layout: rl.h (record accessors, globals). Each function: "Port of FUN_00xxxxxx" + what it does.
  *
  * The 0x47309e..0x4a57ab band: the event popup's scroll (render, dismiss, input), the help hints, the load
- * tail, game init (the seat shuffle, the realms setup, the NPC schedule, the custom / scenario configs), the
+ * tail, game init (the seat shuffle, the realms setup, the realm personality setup, the custom / scenario configs), the
  * turn substate 0, the save rotation, the rankings, the roster, the AI's realm passes (garrison / reinforce,
  * the campaign helpers, the diplomacy inbox, the personality dispatchers), diplomacy, the combat pool commit.
  * Route (a) — the old port is linked in rhost and on retail's layout: rl_<va> forwards to it. Route (b) — a
@@ -34,7 +34,7 @@ int rl_47ed34(void)
 }
 
 /* Port of FUN_0049bae9 (180 B) — seat a player: has-data, the aux in-use flag, the 31-byte name, the id
- * (999 = keep), SP: the job slot (player_seat_assign). */
+ * (999 = keep), SP: the banner colour (player_seat_assign). */
 int rl_49bae9(int a0, int a1, int a2)
 {
     player_seat_assign(a0, a1, (const void *)(uintptr_t)(uint32_t)a2);
@@ -159,7 +159,7 @@ extern int32_t g_rl_4ea830;          /* DAT_004ea830 (rl_misc_globals.h) */
 extern int32_t g_rl_53f0e0;          /* DAT_0053f0e0 (rl_skirmish_globals.h) */
 extern int32_t g_rl_57c968;          /* DAT_0057c968 (rl_ui2_globals.h) */
 extern int32_t g_rl_56d8b4;          /* DAT_0056d8b4 (rl_io_globals.h): the MP clock base */
-extern uint8_t g_rl_4dc1ce[0x12];    /* DAT_004dc1ce (rl_skirmish_globals.h): the job slots' (+8, +9) pairs */
+extern uint8_t g_rl_4dc1ce[0x12];    /* DAT_004dc1ce (rl_skirmish_globals.h): the banner colours' (+8, +9) pairs */
 extern int g_sim_turn_progress;      /* DAT_00553fc8 (engine_turn.h) */
 extern int32_t g_rl_53f24c;          /* DAT_0053f24c (rl_ui2_globals.h): the help hints option */
 extern int32_t g_bfr_engine_state;   /* DAT_0052af94 (engine_battlefield_render.h): the engine state (3 = in game) */
@@ -1210,12 +1210,12 @@ int rl_4976a1(void)
     return 0;
 }
 
-/* Port of FUN_0049caaa (935 B) — seat the AI realms for a new game: the job slots the humans hold (aux +0x25 of
+/* Port of FUN_0049caaa (935 B) — seat the AI realms for a new game: the banner colours the humans hold (aux +0x25 of
  * the non-MP-flagged seats) are taken; each non-human realm 1..5 (+5 == 0) within the AI count DAT_0053f268 gets
- * the first free job slot (+0x0a) and the first free personality (+0x07) of its slot's row (MP / DAT_0055302c 1:
+ * the first free banner colour (+0x0a) and the first free personality (+0x07) of its colour's row (MP / DAT_0055302c 1:
  * the table 0x4dc17c, else 0x4dc180 by the map DAT_0053f034 & 3), its name from the localization (section 7, the
  * personality) into aux +4 (16 B); past the count the realm is inactive (+4 = 0). Every realm: +0x2a = +0x29 = 1,
- * +8 / +9 the slot's pair DAT_004dc1ce. EAX: 0x600 | realm 5's +9 byte (the last record offset, AL the last store). */
+ * +8 / +9 the colour's pair DAT_004dc1ce. EAX: 0x600 | realm 5's +9 byte (the last record offset, AL the last store). */
 int rl_49caaa(void)
 {
     uint8_t slot_taken[8], pers_taken[8];

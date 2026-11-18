@@ -1116,9 +1116,9 @@ int engine_army_economy_distribute_stock(int key)
 #define JOBSLOT_CAP         0x08    /* DAT_0053fa7c — best level (slot 2) / 100000 sentinel */
 
 #define ARMY_GROUP          0x05    /* DAT_0053f9b5 — realm group id (resource-pool index) */
-#define ARMY_RACE           0x290   /* DAT_0053fc40 — race id (race-table index) */
-#define ARMY_RES_PROD_A     0x280   /* DAT_0053fc30 — slot-2 race-weighted output A */
-#define ARMY_RES_PROD_B     0x284   /* DAT_0053fc34 — slot-2 race-weighted output B */
+#define ARMY_WEAPON_KIND    0x290   /* DAT_0053fc40 — the smithy's weapon kind 0..5 */
+#define ARMY_RES_PROD_A     0x280   /* DAT_0053fc30 — slot-2 weapons × wood per weapon */
+#define ARMY_RES_PROD_B     0x284   /* DAT_0053fc34 — slot-2 weapons × iron per weapon */
 #define ARMY_RES_CARRY0     0x288   /* DAT_0053fc38 — slot-0 secondary carry (from SEC_VAL2) */
 #define ARMY_RES_CARRY3     0x28c   /* DAT_0053fc3c — slot-3 secondary carry (from SEC_VAL1) */
 #define ARMY_SLOT2_JOBCOUNT 0x118   /* DAT_0053fac8 — job-slot record 7's count (== +0xc4 + 7*0xc) */
@@ -1135,19 +1135,19 @@ int engine_army_economy_distribute_stock(int key)
 #define RESPOOL_C_FLAG1     0x0c    /* DAT_0057c02c — commodity-C demand, flag !=0 */
 #define RESPOOL_A_FLAG0     0x10    /* DAT_0057c030 — commodity-A demand, flag 0 */
 #define RESPOOL_A_FLAG1     0x14    /* DAT_0057c034 — commodity-A demand, flag !=0 */
-#define RESPOOL_RACE_ACC    0x20    /* DAT_0057c040 — slot-2 per-race accumulator (6× i32) */
+#define RESPOOL_WEAPON_ACC  0x20    /* DAT_0057c040 — slot-2 per-weapon-kind accumulator (6× i32) */
 
-/* Baked per-race production multipliers (retail DAT_0057c020's siblings
+/* Wood / iron per smithy weapon, by weapon kind 0..5 (county +0x290) (retail
  * DAT_004d8990 / DAT_004d8994 — a 6-entry initialised-.data table, 8-byte
- * stride: column A at +0, column B at +4).  Column A pairs with supply pool A,
- * column B with pool B. */
-static const int k_race_pool_a[6] = { 6, 4, 3, 6, 13, 4 };
-static const int k_race_pool_b[6] = { 10, 4, 10, 3, 0, 18 };
+ * stride: wood at +0, iron at +4).  Wood pairs with supply pool A, iron with
+ * pool B. */
+static const int k_weapon_wood[6] = { 6, 4, 3, 6, 13, 4 };
+static const int k_weapon_iron[6] = { 10, 4, 10, 3, 0, 18 };
 
 static uint8_t *g_resource_pool;   /* DAT_0057c020 — per-group demand table (resource pass accumulates into it) */
 
-static int g_supply_pool_a;   /* DAT_0057c904 — sum of race column A over the group */
-static int g_supply_pool_b;   /* DAT_0056d628 — sum of race column B over the group */
+static int g_supply_pool_a;   /* DAT_0057c904 — sum of wood per weapon over the group */
+static int g_supply_pool_b;   /* DAT_0056d628 — sum of iron per weapon over the group */
 
 void engine_army_economy_bind_resource_pool(uint8_t *pool)
 {
@@ -1170,9 +1170,9 @@ void engine_army_economy_sum_supply_pools(int group)
             if (r[ARMY_GROUP] == (unsigned)group &&
                 r[ARMY_RES_ACTIVE2] != 0 &&
                 *(const int32_t *)(r + ARMY_SLOT2_JOBCOUNT) > 0) {
-                unsigned race = r[ARMY_RACE];
-                g_supply_pool_a += k_race_pool_a[race];
-                g_supply_pool_b += k_race_pool_b[race];
+                unsigned weapon = r[ARMY_WEAPON_KIND];
+                g_supply_pool_a += k_weapon_wood[weapon];
+                g_supply_pool_b += k_weapon_iron[weapon];
             }
         }
     }
@@ -1212,25 +1212,25 @@ int engine_army_economy_resource_quota(int key, int slot, int group, int flag)
     if (rs[RES_FLAG_C] == 0) return 0;
 
     if (slot == 2) {
-        /* This army's race-weighted share of the group's demand pool, the
-         * smaller of the A- and B-commodity shares (each 999 if its race
-         * multiplier is 0, i.e. the army does not draw that commodity). */
+        /* This county's weapon-weighted share of the group's demand pool, the
+         * smaller of the wood and iron shares (each 999 if its weapon needs
+         * none of that commodity). */
         engine_army_economy_sum_supply_pools(group);
 
-        unsigned race = row[ARMY_RACE];
-        int race_a = k_race_pool_a[race];
-        int race_b = k_race_pool_b[race];
+        unsigned weapon = row[ARMY_WEAPON_KIND];
+        int wood = k_weapon_wood[weapon];
+        int iron = k_weapon_iron[weapon];
 
         int share_a = 999, share_b = 999;
-        if (race_a != 0) {
+        if (wood != 0) {
             int demand = flag == 0 ? respool_demand(group, RESPOOL_A_FLAG0)
                                    : respool_demand(group, RESPOOL_A_FLAG1);
-            share_a = (demand * race_a / g_supply_pool_a) / race_a;
+            share_a = (demand * wood / g_supply_pool_a) / wood;
         }
-        if (race_b != 0) {
+        if (iron != 0) {
             int demand = flag == 0 ? respool_demand(group, RESPOOL_B_FLAG0)
                                    : respool_demand(group, RESPOOL_B_FLAG1);
-            share_b = (demand * race_b / g_supply_pool_b) / race_b;
+            share_b = (demand * iron / g_supply_pool_b) / iron;
         }
         return share_b < share_a ? share_b : share_a;
     }
@@ -1327,9 +1327,9 @@ void engine_army_economy_plan_resource(int key, int slot, int rec_idx,
     *(int32_t *)(rs + RES_QUOTA) = pct;
 
     if (slot == 2) {
-        unsigned race = row[ARMY_RACE];
-        *(int32_t *)(row + ARMY_RES_PROD_A) = k_race_pool_a[race] * pct;
-        *(int32_t *)(row + ARMY_RES_PROD_B) = k_race_pool_b[race] * pct;
+        unsigned weapon = row[ARMY_WEAPON_KIND];
+        *(int32_t *)(row + ARMY_RES_PROD_A) = k_weapon_wood[weapon] * pct;
+        *(int32_t *)(row + ARMY_RES_PROD_B) = k_weapon_iron[weapon] * pct;
         *(int32_t *)(job + JOBSLOT_CAP) = best_level;
     } else {
         *(int32_t *)(job + JOBSLOT_CAP) = 100000;
@@ -1457,15 +1457,15 @@ void engine_army_economy_apply_resource_quota(int key, int slot, int rec_idx,
         int32_t *p = respool_field(group, RESPOOL_A_FLAG0);
         if (p) *p += amount;
     } else if (slot == 2) {
-        unsigned race = row[ARMY_RACE];
-        int race_a = k_race_pool_a[race];
-        int race_b = k_race_pool_b[race];
-        int32_t *acc = respool_field(group, RESPOOL_RACE_ACC + (int)race * 4);
+        unsigned weapon = row[ARMY_WEAPON_KIND];
+        int wood = k_weapon_wood[weapon];
+        int iron = k_weapon_iron[weapon];
+        int32_t *acc = respool_field(group, RESPOOL_WEAPON_ACC + (int)weapon * 4);
         int32_t *pa  = respool_field(group, RESPOOL_A_FLAG0);
         int32_t *pb  = respool_field(group, RESPOOL_B_FLAG0);
         if (acc) *acc += amount;
-        if (pa)  *pa  -= amount * race_a;
-        if (pb)  *pb  -= race_b * amount;
+        if (pa)  *pa  -= amount * wood;
+        if (pb)  *pb  -= iron * amount;
         engine_ranking_recompute_player_total(group);   /* FUN_004487a9 */
     }
 }

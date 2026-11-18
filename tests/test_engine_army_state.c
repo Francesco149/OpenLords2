@@ -5,7 +5,7 @@
  *
  * Operates on the per-territory occupant block (g_per_territory_420, stride
  * 0x1a4, index 1..150) and the shared 8-byte cell descriptor grid (region key
- * at cell +7).  Facing-frame tables baked from the exe:
+ * at cell +7).  Step-frame tables (by the step counter +0x1b) baked from the exe:
  *   march (states 1/2) DAT_004d6a78 = {0,1,2,1,0,1,2,1}
  *   idle  (states 3/4) DAT_004d6ab8 = {0,1,2,3,4,5,0,1}
  */
@@ -29,10 +29,10 @@
 #define A_READY    0x06
 #define A_SPRITE   0x07
 #define A_STATE    0x08
-#define A_ANIM     0x09
+#define A_FACING   0x09
 #define A_CELL     0x0c
 #define A_REGION   0x10
-#define A_FACING   0x1b
+#define A_STEP     0x1b
 #define A_SUBSTATE 0x14c
 #define A_TICKS    0x154
 #define A_TIMER    0x160
@@ -100,7 +100,7 @@ int test_engine_army_state_disband_out_of_range(void)
     return 0;
 }
 
-/* --- state 1 (march): sprite by head bucket + facing delta ---------------- */
+/* --- state 1 (march): sprite by head bucket + step-frame delta ------------ */
 int test_engine_army_state_march_sprite_buckets(void)
 {
     as_reset();
@@ -112,8 +112,8 @@ int test_engine_army_state_march_sprite_buckets(void)
         as_reset();
         uint8_t *r = CREC(4);
         r[A_OWNER] = 1; r[A_STATE] = 1;
-        r[A_ANIM] = 0;            /* phase = (0+1)&7 = 1 */
-        r[A_FACING] = 2;          /* march table[2] = 2 */
+        r[A_FACING] = 0;          /* slot = (0+1)&7 = 1 */
+        r[A_STEP] = 2;            /* march table[2] = 2 */
         I32(r, A_HEAD) = cases[c].head;
         place(4, 16, 9);
         r[A_REGION] = 9;          /* == cell key → skip reconcile */
@@ -201,7 +201,7 @@ int test_engine_army_state_settle_sprite_and_latch(void)
     as_reset();
     uint8_t *r = CREC(4);
     r[A_OWNER] = 1; r[A_STATE] = 2; I32(r, A_HEAD) = 50;
-    r[A_ANIM] = 0; r[A_FACING] = 3;     /* march table[3] = 1 */
+    r[A_FACING] = 0; r[A_STEP] = 3;     /* march table[3] = 1 */
     place(4, 40, 6); r[A_REGION] = 9;   /* differs */
     R_REC(6)[0x05] = 0;                 /* neutral region → settle just latches */
 
@@ -214,14 +214,14 @@ int test_engine_army_state_settle_sprite_and_latch(void)
     return 0;
 }
 
-/* --- states 3 & 4 (idle): sprite ×6 + facing-idle + direct colour set ------ */
+/* --- states 3 & 4 (idle): sprite ×6 + step-frame idle + direct colour set - */
 int test_engine_army_state_idle_sets_region(void)
 {
     for (int st = 3; st <= 4; st++) {
         as_reset();
         uint8_t *r = CREC(4);
         r[A_OWNER] = 1; r[A_STATE] = (uint8_t)st;
-        r[A_ANIM] = 1; r[A_FACING] = 5;     /* phase (1+1)&7=2; idle table[5]=5 */
+        r[A_FACING] = 1; r[A_STEP] = 5;     /* slot (1+1)&7=2; idle table[5]=5 */
         place(4, 48, 7); r[A_REGION] = 0;   /* set directly to cell key */
 
         engine_event_queue_state_t evq; engine_event_queue_init(&evq);

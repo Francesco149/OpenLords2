@@ -386,7 +386,7 @@ int test_engine_army_move_terrain_passable(void)
 }
 
 /* --- FUN_0046634d: stall/retry hysteresis (step-eval disarmed) ----------- */
-#define M_FACING    0x1b
+#define M_STEP    0x1b
 #define M_STALL     0x149
 #define M_RETRY     0x14a
 #define M_FLAGS14B  0x14b
@@ -406,10 +406,10 @@ int test_engine_army_move_classify_hysteresis(void)
 
     /* Wrap (budget 3, retry hits 4): reset retry, bump facing, stall += 2 (SP). */
     mv_reset(); r = MREC(1);
-    r[M_FLAGS14B] = 0; r[M_ROUGH] = 0; r[M_RETRY] = 3; r[M_STALL] = 0; r[M_FACING] = 0;
+    r[M_FLAGS14B] = 0; r[M_ROUGH] = 0; r[M_RETRY] = 3; r[M_STALL] = 0; r[M_STEP] = 0;
     T_ASSERT_EQ_I(engine_army_move_classify_step(0, &evq, 0), 1);
     T_ASSERT_EQ_U(r[M_RETRY], 0);
-    T_ASSERT_EQ_U(r[M_FACING], 1);
+    T_ASSERT_EQ_U(r[M_STEP], 1);
     T_ASSERT_EQ_I((int8_t)r[M_STALL], 2);
 
     /* Multiplayer wrap advances the stall accumulator by 4 instead of 2. */
@@ -427,11 +427,11 @@ int test_engine_army_move_classify_hysteresis(void)
 
     /* Reaching the 0x10 stall ceiling arms the step-eval and returns 2. */
     mv_reset(); r = MREC(1);
-    r[M_FLAGS14B] = 0; r[M_ROUGH] = 0; r[M_RETRY] = 3; r[M_STALL] = 0x0e; r[M_FACING] = 5;
+    r[M_FLAGS14B] = 0; r[M_ROUGH] = 0; r[M_RETRY] = 3; r[M_STALL] = 0x0e; r[M_STEP] = 5;
     T_ASSERT_EQ_I(engine_army_move_classify_step(0, &evq, 0), 2);
     T_ASSERT_EQ_U(r[M_FLAGS14B] & 1, 1);
     T_ASSERT_EQ_I((int8_t)r[M_STALL], 0);
-    T_ASSERT_EQ_U(r[M_FACING], 0);
+    T_ASSERT_EQ_U(r[M_STEP], 0);
     return 0;
 }
 

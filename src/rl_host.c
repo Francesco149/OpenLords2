@@ -77,7 +77,7 @@ int engine_army_ai_order_intercept(int occ);
 int engine_army_ai_order_lord_move(int occ);
 int engine_army_ai_order_garrison(int occ);
 /* engine_combat.c (under combat_spawn_unit 0x4a9a9a, combat_begin_siege 0x4a7ca2, combat_rotate_merc_offers 0x4aca2b) */
-void spawn_debit_provision(int key);
+void spawn_debit_population(int key);
 int  spawn_pick_roster_slot(int slot);
 void spawn_debit_cashflow(int slot);
 void spawn_attach_muster_unit(int occ, int unit);
@@ -196,7 +196,7 @@ int rl_4a9eb1(int slot) { spawn_debit_cashflow(slot); return 0; }
 
 /* Port of FUN_004a9f18 (90 B) — debit the realm's staged garrison (pool +0x70) from county `key`'s +0x24 / +0x38.
  * Wrap. */
-int rl_4a9f18(int key) { spawn_debit_provision(key); return 0; }
+int rl_4a9f18(int key) { spawn_debit_population(key); return 0; }
 
 /* Port of FUN_004a9f72 (199 B) — the least-loaded of realm `slot`'s 24 roster bytes (+0x2d), bumped by 2; its
  * index (0 for a realm outside 1..5). Wrap. */
@@ -1136,7 +1136,8 @@ int rl_4a98fe(int player, int occ, int col, int row, int merge)
 
 /* Port of FUN_004ac904 (295 B) — the mercenary pool: DAT_00554030 = the scenario's count DAT_004de820[DAT_0056d5dc]
  * (out of 0..12: 1), the unit table cleared (0x46f2ae), each slot 1..n seeded from the template rows
- * DAT_004de75c.. (amount, class, the two period bytes, the two rate bytes, cost, upkeep). EAX: the count. */
+ * DAT_004de75c.. (amount, class, the starting county +2 and the county cursor +4 (both 0x4de79f), the two rate bytes,
+ * cost, upkeep). EAX: the count. */
 int rl_4ac904(void)
 {
     s_slot_00554030 = (uint32_t)AT(int32_t, g_rl_4de75c, 0x4de75cu, 0x4de820u + 4 * (int32_t)s_slot_0056d5dc);

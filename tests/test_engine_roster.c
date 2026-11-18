@@ -249,7 +249,7 @@ static void name_field(char dst[32], const char *s)
 int test_seat_assign_single_player_full(void)
 {
     seat_reset();
-    STRAT(2)[0x0a] = 0x37;                 /* assigned job-slot id */
+    STRAT(2)[0x0a] = 0x37;                 /* banner colour */
     char nm[32]; name_field(nm, "Edward");
     player_seat_assign(5, 2, nm);
 
@@ -257,7 +257,7 @@ int test_seat_assign_single_player_full(void)
     T_ASSERT_EQ_I(AUX(2)[0x27], 1);        /* aux in-use flag */
     T_ASSERT_EQ_S((const char *)&AUX(2)[0x04], "Edward");  /* name copied */
     T_ASSERT_EQ_I(*(int32_t *)AUX(2), 5);  /* id stamped */
-    T_ASSERT_EQ_I(AUX(2)[0x25], 0x37);     /* single-player job-slot mirror */
+    T_ASSERT_EQ_I(AUX(2)[0x25], 0x37);     /* single-player banner-colour mirror */
     return 0;
 }
 

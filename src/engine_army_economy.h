@@ -356,8 +356,8 @@ int engine_army_economy_supply_pool_b(void);
 /* Set both pools (retail DAT_0057c904 / DAT_0056d628) — the same host seam. */
 void engine_army_economy_set_supply_pools(int pool_a, int pool_b);
 
-/* Port of FUN_0044f15b (237 B).  Sum the two per-race production multipliers
- * (the baked 6-entry race table, retail DAT_004d8990 / DAT_004d8994) across
+/* Port of FUN_0044f15b (237 B).  Sum the wood and iron per weapon of each
+ * county's smithy weapon kind (+0x290; retail DAT_004d8990 / DAT_004d8994) across
  * every other army (index 1..s_slot_0056d5dc) that shares `group` (record +0x05),
  * has its resource-slot-2 active flag set (record +0x2c7) and a positive slot-2
  * job count (record +0x118 = job-slot record 7's count), into the two supply-pool

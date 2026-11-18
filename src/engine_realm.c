@@ -947,16 +947,17 @@ static const int32_t k_pop_birthrate_tbl[40] = {
     1700,   5,  1800,   4,  1900,   3,  2000,   2,  3000,   1,
 };
 
-/* Death-rate (%) modifier, retail rdata 0x4d63a8 (region, 6 entries) followed
- * back-to-back by 0x4d63c0 (season, indexed 1..4).  The pass sums one entry
- * from each: terrain harshness by realm region byte +0x09, plus the seasonal
- * modifier by the just-ended season (s_slot_0057c934).  Baked contiguous so
- * the season base sits exactly where retail's adjacent array begins (+6). */
-static const int32_t k_pop_deathmod_tbl[12] = {
-    /* region 0..5  */  35, 20,  8,  3,  0,  0,
+/* Death-rate (%) terms, retail .data 0x4d63a8 (by county health, 6 entries)
+ * followed back-to-back by 0x4d63c0 (by season, indexed 1..4).  The pass sums
+ * one entry from each: the county's health byte +0x09 (0 diseased .. 4
+ * perfect), plus the seasonal term by the just-ended season (s_slot_0057c934).
+ * Baked contiguous so the season base sits exactly where retail's adjacent
+ * array begins (+6). */
+static const int32_t k_pop_death_health[12] = {
+    /* health 0..5  */  35, 20,  8,  3,  0,  0,
     /* season 0..5  */   0,  4,  0,  2,  8,  0,
 };
-#define K_POP_SEASON_MOD (&k_pop_deathmod_tbl[6])
+#define K_POP_DEATH_SEASON (&k_pop_death_health[6])
 
 /* Port of FUN_00449ef3 @ 0x449ef3 (1991 B, __stdcall void) — the per-realm
  * population-growth turn pass run by the turn-advance engine (0x448440).  For
@@ -999,8 +1000,8 @@ void engine_realm_advance_population(void)
         int cap = engine_math_percent_of(*pop, 0x14);   /* iVar1 — 20% of pop  */
         int base_rate = engine_math_lookup_threshold(*pop, k_pop_birthrate_tbl,
                                                       0x14, 1);   /* iVar2 */
-        int death_rate = k_pop_deathmod_tbl[(int8_t)r[0x09]] +
-                         K_POP_SEASON_MOD[(int)s_slot_0057c934];  /* iVar3 */
+        int death_rate = k_pop_death_health[(int8_t)r[0x09]] +
+                         K_POP_DEATH_SEASON[(int)s_slot_0057c934];  /* iVar3 */
 
         /* Standing band scales the base birth-rate. */
         int birth_rate;                                  /* local_c */

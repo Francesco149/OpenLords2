@@ -66,7 +66,7 @@ hybrid row nested in a seam): the first run found the title scene's walker one p
 | port | retail callee | why |
 |---|---|---|
 | title scene FUN_0041e7e1 | FUN_0041e61d (background + PL8 load), the page renderers 0x41f3e9 (6) / 41f77a (8) / 41fdd6 (9) / 420428 (10) / 420630 (11) / 42051c (12) / 42150b (13) | pages 1 / 2 / 3 / 4 / 5 / 7 are the ports; the rest are not on retail's layout yet (9 the dropdown) or unported |
-| setup page FUN_0041f98b / 0041fbcb | 0x410c71 (the preview blit), 0x49caaa (the seat setup: ported in engine_npc_schedule.c, not linked) | |
+| setup page FUN_0041f98b / 0041fbcb | 0x410c71 (the preview blit), 0x49caaa (the seat setup: ported in engine_realm_personality.c, not linked) | |
 | county panels | FUN_004050c0 (the map recomposite), the flips 0x43a8f2 / 43a939 / 43a922 / 43a846, 0x43eda0 (MP) | |
 | battlefield selection marker | 0x46c4a3 (the strategic-map mark) | |
 | armory open render | 0x4b11ce, 0x4996c8, 0x452160, 0x4b0ab5 | palette / teardown / input tick |

@@ -32,7 +32,7 @@
 #define G_NEWMODE    0x4e45d4u   /* _newmode */
 #define G_ALLOCHOOK  0x4e4610u   /* _pfnAllocHook */
 #define G_SBH_HEAD   0x4e4618u   /* the first (static) region header; +4 = the ring's last header */
-#define G_SBH_HEAPHDR 0x4e4e28u  /* nonzero: further region headers from the heap */
+#define G_SBH_HEAD_REGION 0x4e4e28u /* the static header's [516] (its region): nonzero = in use, further headers from the heap */
 #define G_SBH_ROVER  0x4e4e2cu   /* the region header the next search starts at */
 #define G_SBH_FREEPG 0x4e4e30u   /* fully free pages */
 #define G_SBH_THRESH 0x4e4e34u   /* __sbh_threshold (0x1e0) */
@@ -233,8 +233,8 @@ int rl_crt_4c43e0(void)
 /* ================================================================ the small-block heap (sbheap.c) */
 
 /* Port of FUN_004c47c0 (132 B) — __sbh_release_region: the 4 MB reservation released; the rover moves to the previous
- * header when it is this one; a heap header is unlinked and HeapFree'd, the static one only clears 0x4e4e28 (quirk:
- * the static header stays linked, its region pointer stale). */
+ * header when it is this one; a heap header is unlinked and HeapFree'd, the static one only clears its region slot
+ * [516] = 0x4e4e28 (quirk: the static header stays linked in the ring, with a null region). */
 void rl_crt_4c47c0(uint32_t h)
 {
     IAT(BOOL (WINAPI *)(LPVOID, SIZE_T, DWORD), I_VirtualFree)((LPVOID)(uintptr_t)HDR32(h, HDR_REGION), 0, MEM_RELEASE);
@@ -244,7 +244,7 @@ void rl_crt_4c47c0(uint32_t h)
         U32(HDR32(h, 0) + 4) = HDR32(h, 1);
         IAT(BOOL (WINAPI *)(HANDLE, DWORD, LPVOID), I_HeapFree)(HEAP(), 0, (LPVOID)(uintptr_t)h);
     } else
-        V32(G_SBH_HEAPHDR) = 0;
+        V32(G_SBH_HEAD_REGION) = 0;
 }
 
 /* Port of FUN_004c4850 (376 B) — __sbh_decommit_pages: from the ring's last header backwards, each committed region's

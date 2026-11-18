@@ -550,7 +550,7 @@ DERIVED by `tools/data_selfcheck.py` — never hand-edit. The port's definitions
 | 004de710 | 80 | k_casualty_survivors | match 80 |  |  |
 | 004de760 | 48 | k_merc_men | match 48 |  |  |
 | 004de790 | 16 | k_merc_class | match 16 |  |  |
-| 004de7a0 | 15 | k_merc_period | match 15 |  |  |
+| 004de7a0 | 15 | k_merc_start_county | match 15 |  |  |
 | 004de7af | 13 | k_merc_dwell | match 13 |  |  |
 | 004de7bc | 52 | k_merc_hire_cost | match 52 |  |  |
 | 004de7f0 | 48 | k_merc_wage | match 48 |  |  |

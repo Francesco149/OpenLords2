@@ -657,7 +657,7 @@ int rl_445f43(void)
 }
 
 /* Port of FUN_00445f80 (190 B) — receiver 77: the shield slots, the LOCAL realm's +0x0a (copied to its aux +0x25);
- * 0x433cc1, the NPC schedule (0x49caaa); the local realm human (+5 = 2), DAT_005530e0[p] = 1, the shield flash on,
+ * 0x433cc1, the realm personality setup (0x49caaa); the local realm human (+5 = 2), DAT_005530e0[p] = 1, the shield flash on,
  * its timer 0, title page 6, DAT_0057d340 = 2. EAX: the local player. */
 int rl_445f80(void)
 {

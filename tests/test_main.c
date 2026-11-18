@@ -1272,13 +1272,13 @@ struct test_case {
     X(first_active_nonlocal_lowest_occupied) \
     X(first_active_nonlocal_none_yields_zero) \
     X(first_active_nonlocal_ignores_slot0) \
-    X(npc_assigns_jobs_locs_and_positions) \
-    X(npc_worker_limit_stops_assignment) \
-    X(npc_prereserved_job_is_skipped) \
-    X(npc_owned_seat_skipped) \
-    X(npc_difficulty_variant_table) \
-    X(npc_mp_active_uses_variant0) \
-    X(npc_copies_localized_name) \
+    X(personality_assigns_colours_personalities_pairs) \
+    X(personality_opponent_limit_stops_assignment) \
+    X(personality_prereserved_colour_is_skipped) \
+    X(personality_in_use_seat_skipped) \
+    X(personality_variant_table) \
+    X(personality_mp_active_uses_variant0) \
+    X(personality_copies_localized_name) \
     X(turn_end_sp_all_done_advances) \
     X(turn_end_someone_mid_turn_waits) \
     X(turn_end_counts_only_active_below_999) \

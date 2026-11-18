@@ -18,7 +18,7 @@
 #include "engine_army_state.h"    /* per-tick army-state machine cell binding   */
 #include "engine_army_move.h"     /* army-movement cell-evaluator binding       */
 #include "engine_combat.h"        /* combat_b seam (engine_combat_contest_region)*/
-#include "engine_npc_schedule.h"  /* engine_npc_schedule_init (FUN_0049caaa)     */
+#include "engine_realm_personality.h"  /* engine_realm_personality_init (FUN_0049caaa)     */
 #include "engine_strat_cost.h"    /* engine_strat_cost_rebuild (FUN_0046ff43)    */
 #include "engine_path_field.h"    /* bind the move-cost grid for the AI pathfinder */
 #include "engine_event_queue.h"   /* engine_event_queue_init_wrapper (FUN_00472ad0) */
@@ -76,7 +76,7 @@ int g_anim_gate_53f0c4;
 
 /*
  * Scalar-seed phase of 0x497ced — the 20 dword world-state globals
- * written between the NPC-schedule seed (FUN_0049caaa, ported) and the
+ * written between the realm-personality seed (FUN_0049caaa, ported) and the
  * first heavy seeder (0x4676e0, unported).  Writes are issued in retail
  * order; all
  * 20 target distinct addresses, so the order is provenance, not a
@@ -287,9 +287,10 @@ void engine_game_init_seat_shuffle(engine_rng_in_t *rng)
  * entry-0 slots below hold the real overlap bytes purely for a faithful
  * copy.  Record 0 stays cleared (the loop is 1-based).
  *
- * Two columns are each written to two adjacent record fields (col_a →
- * +0x2 and +0x4; col_c → +0x6 and +0x7) — retail duplicates the source
- * byte; preserved.  Bytes +0x0/+0x1/+0x3 of every record are left
+ * Two columns are each written to two record fields (k_merc_start_county →
+ * +0x2, the band's starting county, and +0x4, the county cursor that
+ * engine_combat_rotate_merc_offers steps from it; col_c → +0x6 and +0x7) —
+ * retail duplicates the source byte; preserved.  Bytes +0x0/+0x1/+0x3 of every record are left
  * cleared (retail writes only the eight fields below).  All columns
  * extracted byte-for-byte from the PE .rdata.
  */
@@ -297,7 +298,7 @@ static const int32_t k_unit_count_by_config[20] = {   /* DAT_004de820 */
     0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 12, 12, 12, 12, 12,
 };
 /* entry[0] = the real overlap byte/dword; rows used are [1..count]. */
-static const uint8_t  k_unit_col_a[13] = {            /* DAT_004de79f → +0x2,+0x4 */
+static const uint8_t  k_merc_start_county[13] = {     /* DAT_004de79f → +0x2,+0x4 (start county, county cursor) */
     0x00, 0x01, 0x02, 0x04, 0x05, 0x07, 0x08, 0x0a, 0x0b, 0x0d, 0x0e, 0x10, 0x11,
 };
 static const uint8_t  k_unit_col_b[13] = {            /* DAT_004de78f → +0x5 */
@@ -331,8 +332,8 @@ void engine_game_init_seed_unit_table(void)
         uint8_t *rec = &g_unit_table_20[i * 0x14];   /* stride 0x14 */
         *(uint32_t *)(rec + 0x8)  = k_unit_col_d[i];
         rec[0x5]                  = k_unit_col_b[i];
-        rec[0x2]                  = k_unit_col_a[i];
-        rec[0x4]                  = k_unit_col_a[i];  /* dup of +0x2 */
+        rec[0x2]                  = k_merc_start_county[i];
+        rec[0x4]                  = k_merc_start_county[i];  /* the county cursor starts there */
         rec[0x6]                  = k_unit_col_c[i];
         rec[0x7]                  = k_unit_col_c[i];  /* dup of +0x6 */
         *(uint32_t *)(rec + 0xc)  = k_unit_col_e[i];
@@ -769,27 +770,27 @@ void engine_game_init_apply_scenario_config(int campaign_flag, int scenario_idx)
  * ported initialiser lands byte-exact on retail.
  *
  * The config screen sets surprisingly little per slot — almost everything is
- * (re)derived by the ported initialiser from the map + the NPC scheduler:
+ * (re)derived by the ported initialiser from the map + the personality setup:
  *   - the player→army ROSTER (g_player_roster) is rebuilt from the map's
  *     plane-4/5 owner tiles by engine_territory_load_strat_map, so it is NOT
  *     seeded here (seeding it is overwritten);
- *   - the AI "opponent-type" byte +0x07 is actually the NPC scheduler's
- *     work-location field: engine_npc_schedule_init CLEARS +0x07 for every
- *     slot, then assigns a work-location to the first `s_slot_0053f268`
+ *   - the AI "opponent-type" byte +0x07 is the AI personality (1..4):
+ *     engine_realm_personality_init CLEARS +0x07 for every
+ *     slot, then assigns a personality to the first `s_slot_0053f268`
  *     UNOWNED (has_data==0) slots — that count, not a per-slot flag, is what
  *     decides how many AI players exist (and Phase 2 / the inactive-purge read
  *     the resulting +0x07 as the active-or-empty test).  So the AI count is
  *     seeded once via s_slot_0053f268, not per slot;
- *   - the work-position bytes +0x08/+0x09 and the job-slot id +0x0a are set by
- *     the NPC scheduler too — except for owned (human) slots, which it skips,
- *     so the human's +0x0a (its job-slot id) must be pre-seeded.
+ *   - the colour-pair bytes +0x08/+0x09 and the banner colour +0x0a are set by
+ *     the personality setup too — except for owned (human) slots, which it skips,
+ *     so the human's +0x0a (its banner colour) must be pre-seeded.
  *
  * What the config screen genuinely owns, and we seed here, is therefore:
  *   +0x05 has_data   — 1 for the human slot(s), 0 for AI
- *   +0x0a            — the slot index (the human's survives the scheduler)
- *   +0xee            — the player bit 1<<(slot-1) (scheduler never touches it)
+ *   +0x0a            — the slot index as banner colour (the human's survives the setup)
+ *   +0xee            — the player bit 1<<(slot-1) (the setup never touches it)
  * plus the local-player index s_slot_0057c8cc (save entry 72) and the AI count
- * s_slot_0053f268 (read by the NPC scheduler).  ACTIVE (+0x04) is left clear —
+ * s_slot_0053f268 (read by the personality setup).  ACTIVE (+0x04) is left clear —
  * Phase 2 latches it.
  *
  * Players occupy slots 1..count; slots 1..human_count are human, the rest AI.
@@ -801,17 +802,17 @@ void engine_game_init_set_player_config(int count, int human_count,
     for (int s = 1; s <= count && s < 6; s++) {
         uint8_t *p = STRAT_REC(s);
         p[STRAT_HAS_DATA] = (s <= human_count) ? 1 : 0;   /* +0x05 */
-        p[0x0a]           = (uint8_t)s;                    /* job-slot id */
+        p[0x0a]           = (uint8_t)s;                    /* banner colour */
         p[0xee]           = (uint8_t)(1u << (s - 1));      /* player bit */
 
-        /* Human slots reserve their job slot via the aux record (retail's SP
+        /* Human slots reserve their banner colour via the aux record (retail's SP
          * seating player_seat_assign sets aux[+0x25] = strategic[+0x0a] +
-         * aux[+0x27] = 1).  engine_npc_schedule_init reads aux[+0x25] (with
-         * aux[+0x26]==0) to pre-reserve that job, so the AI players are
-         * scheduled around it — without it the AI work-location assignment
+         * aux[+0x27] = 1).  engine_realm_personality_init reads aux[+0x25] (with
+         * aux[+0x26]==0) to pre-reserve that colour, so the AI players are
+         * seated around it — without it the AI personality assignment
          * shifts and diverges from retail. */
         if (s <= human_count) {
-            g_player_aux_44[s * 0x2c + 0x25] = p[0x0a];   /* fixed-job id   */
+            g_player_aux_44[s * 0x2c + 0x25] = p[0x0a];   /* fixed colour   */
             g_player_aux_44[s * 0x2c + 0x27] = 1;         /* aux in-use flag */
 
             /* Player name + kingdom/title.  Retail's SP seat (0x4410bd →
@@ -832,7 +833,7 @@ void engine_game_init_set_player_config(int count, int human_count,
 
     /* The four config-screen substate scalars written at the TOP of the
      * same setup routine this function reproduces (retail FUN_0049792e @
-     * 0x49792e, before its player loop + npc-schedule call): a screen/page
+     * 0x49792e, before its player loop + personality-setup call): a screen/page
      * index, two selection cursors, and a player iterator.  Constants for a
      * default new game; they persist to the save (entries 73/75/76/84) so
      * the headless seat must seat them too. */
@@ -1285,8 +1286,8 @@ void engine_game_init(void)
 
     /* 1–3: clear the per-territory / unit-type / per-army save blocks. */
     engine_game_init_clear_tables();                  /* 46f3cd / 46f2ae / 46f1dc */
-    /* 4: NPC schedule seed. */
-    engine_npc_schedule_init();                       /* 49caaa */
+    /* 4: realm personality / banner colour seed. */
+    engine_realm_personality_init();                       /* 49caaa */
     /* 5: scalar world-state block (calendar etc.). */
     engine_game_init_seed_scalars();
     /* 6: overworld descriptor build (plane-unpack + autotile, single LFSR). */

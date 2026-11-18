@@ -23,7 +23,7 @@ struct or several globals · `hard` = jump table / float math / unknown layout.
 |:---:|----|-----:|:-------:|------------|-----------|-----------------|
 | 1 | `0x41423f` | 11 | 1 | mechanical | render-quad / blit primitives | `src/gfx.c` — *port with `engine_tick` body* |
 | ✅ | `0x42eaa6` | 214 | 2 | mechanical | gfx | **DONE** → `gfx.c` `gfx_release_surfaces` (2026-05-29) |
-| ✅ | `0x49caaa` | 935 | 2 | moderate | npc-schedule | **DONE** → `engine_npc_schedule.c` `engine_npc_schedule_init` (2026-05-29) |
+| ✅ | `0x49caaa` | 935 | 2 | moderate | npc-schedule | **DONE** → `engine_realm_personality.c` `engine_realm_personality_init` (2026-05-29; named engine_npc_schedule until 2026-11-18) |
 | 2 | `0x4360f2` | 41 | 1 | mechanical | stage/post-load + char tables | `src/engine.c` `[scalar-blocked]` |
 | 2 | `0x49bbe8` | 53 | 1 | mechanical | castle-army-setup | `src/engine_castle_data.c` `[scalar-blocked]` (count = entry 141) |
 | 3 | `0x4af502` | 72 | 7 | mechanical | io-helpers | `src/io.c` — *tier-2/3 deferred; dead today* |
@@ -57,7 +57,7 @@ Graphics subsystem teardown: releases DirectDraw objects (clipper, back/primary 
 
 Initialize NPC worker schedules and walking paths for armies 1-5 by assigning available workers to job slots and work locations
 
-- **target:** `engine_npc_schedule.c` · 2 ported caller(s) · 935 B
+- **target:** `engine_realm_personality.c` · 2 ported caller(s) · 935 B
 - **globals:** DAT_00553d75/76 (army availability flags), DAT_0057bf04/05/07/08/09/0a/2a/29 (worker state arrays), DAT_0053f268 (worker count limit), DAT_0053f034 (difficulty variant), DAT_00553030/0055302c (difficulty/variant flags), DAT_004dc17c/1ce/1cf (position lookup tables), DAT_005c9270 (localization walker)
 - **gotchas:** Accesses multiple global arrays with 0x160-byte stride (352 bytes per army, armies 1-5); calls localization_seek_skip and memcpy which are already ported; lookup table indexing at DAT_004dc17c uses multiplication by 4 per job slot (0-3); algorithm uses local byte arrays for tracking assigned resources; stride and offset calculations are critical to correctness
 

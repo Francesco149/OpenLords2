@@ -8,7 +8,7 @@
 #pragma once
 #include <stdint.h>
 
-extern int32_t g_rl_4d6a78[8];               /* .data 0x4d6a78..0x4d6a98: dword_4D6A78(r) — the 8 march facings (widened by hand)  DUP 4d6a78 */
+extern int32_t g_rl_4d6a78[8];               /* .data 0x4d6a78..0x4d6a98: dword_4D6A78(r) — the march step-frame offsets by step counter +0x1b, first 8 of 16 (widened by hand)  DUP 4d6a78 */
 extern int32_t g_rl_4d6ab8[16];              /* .data 0x4d6ab8..0x4d6af8: dword_4D6AB8(r)  DUP 4d6ab8 */
 extern uint8_t g_rl_4d6be8[0xb0];            /* .data 0x4d6be8..0x4d6c98: dword_4D6BE8(r) dword_4D6BEC(r) dword_4D6C28(r) dword_4D6C2C(r) aL2MapsDat(o) aL2MapsDat_0(o) aOkMapScenario(o)  DUP 4d6be8 4d6c28 */
 extern uint8_t g_rl_4d7310[576];             /* .data 0x4d7310..0x4d7550: unk_4D7310(o)  DUP 4d7310 */
