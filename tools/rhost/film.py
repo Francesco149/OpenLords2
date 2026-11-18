@@ -20,7 +20,7 @@ One rhost run captures the span of all segments (`--cap A:N --cap-wav`: capture.
 rh_shot.c / rh_dsound.c), then frames are laid out on the virtual clock (a Sleep inside a frame holds the picture, as on
 the real machine), scaled 2x (nearest), a caption band added under the 640x480 picture, the mouse drawn from the trace's
 input events (retail's cursor is a hardware cursor: not in the presented frame), and encoded with ffmpeg (H.264 + AAC).
-Speed > 1 segments are muted and marked. Everything comes from the user's own game files at run time; outputs are
+Fast-forwarded segments keep their sound, time-compressed at the same pitch (atempo), and carry a fast-forward badge. Everything comes from the user's own game files at run time; outputs are
 never committed (they show game assets)."""
 import argparse, glob, json, os, struct, subprocess, sys, wave
 
@@ -113,6 +113,33 @@ def draw_cursor(dr, x, y, down, since_click, sc=SCALE):
     dr.polygon(pts, fill=(255, 255, 255, 255) if not down else (255, 230, 120, 255), outline=(0, 0, 0, 255))
 
 
+def tempo(pcm, speed):
+    """stereo int16 at HZ, played `speed` times faster at the same pitch (ffmpeg atempo, chained in factors <= 2)"""
+    if len(pcm) == 0:
+        return pcm
+    f, chain = float(speed), []
+    while f > 2.0:
+        chain.append("atempo=2.0"); f /= 2.0
+    chain.append(f"atempo={f:.6f}")
+    out = subprocess.run(["ffmpeg", "-loglevel", "error", "-f", "s16le", "-ar", str(HZ), "-ac", "2", "-i", "-",
+                          "-af", ",".join(chain), "-f", "s16le", "-ar", str(HZ), "-ac", "2", "-"],
+                         input=np.ascontiguousarray(pcm, dtype="<i2").tobytes(), capture_output=True, check=True).stdout
+    return np.frombuffer(out, "<i2").reshape(-1, 2)
+
+
+def ff_badge(dr, right, top, speed, font):
+    """a fast-forward badge: two triangles + the factor, on a translucent plate, its top-right corner at (right, top)"""
+    label = f"{speed:g}x"
+    tw = dr.textlength(label, font=font)
+    w, h = 62 + tw, 40
+    x0, y0 = right - w, top
+    dr.rounded_rectangle([x0, y0, right, y0 + h], radius=8, fill=(10, 12, 18, 170))
+    for k in range(2):
+        ox = x0 + 10 + k * 18
+        dr.polygon([(ox, y0 + 9), (ox, y0 + h - 9), (ox + 18, y0 + h / 2)], fill=(255, 255, 255, 235))
+    dr.text((x0 + 52, y0 + 6), label, font=font, fill=(255, 255, 255, 235))
+
+
 def caption_band(title, text, speed, fonts, width=W * SCALE):
     img = Image.new("RGB", (width, BAND), (18, 18, 22))
     dr = ImageDraw.Draw(img)
@@ -120,10 +147,6 @@ def caption_band(title, text, speed, fonts, width=W * SCALE):
     y = 10
     if title:
         dr.text((20, y), title, font=fb, fill=(240, 205, 120)); y += 34
-    if speed > 1:
-        tag = f">> {speed}x"
-        tw = dr.textlength(tag, font=fb)
-        dr.text((width - tw - 20, 10), tag, font=fb, fill=(150, 200, 255))
     # wrap the caption
     words, line, lines = (text or "").split(), "", []
     for w_ in words:
@@ -191,12 +214,12 @@ def main():
     out = spec["out"]
     tmpv, tmpa = out + ".video.mp4", out + ".audio.wav"
     scale = 1 if port is not None else SCALE
-    top = 34 if port is not None else 0
+    top = 48 if port is not None else 0
     ow, oh = W * 2 if port is not None else W * SCALE, top + H * scale + BAND
     if port is not None:
         lab = Image.new("RGB", (ow, top), (18, 18, 22)); dl = ImageDraw.Draw(lab)
-        dl.text((12, 5), "Original Lords2.exe", font=fonts[0], fill=(240, 205, 120))
-        dl.text((W + 12, 5), "OpenLords2: the port alone, no original code", font=fonts[0], fill=(150, 220, 150))
+        dl.text((12, 10), "Original Lords2.exe", font=fonts[0], fill=(240, 205, 120))
+        dl.text((W + 12, 10), "OpenLords2: the port alone", font=fonts[0], fill=(150, 220, 150))
         label = np.asarray(lab)
     enc = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{ow}x{oh}",
                             "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-preset", "slow", "-crf", str(spec.get("crf", 28)),
@@ -235,6 +258,10 @@ def main():
                 for xo in ((0, W) if port is not None else (0,)):
                     draw_cursor(dov, mx + xo, my, down, since, scale)
                 img = Image.alpha_composite(img.convert("RGBA"), ov).convert("RGB")
+            if speed > 1 and port is None:
+                ov = Image.new("RGBA", img.size, (0, 0, 0, 0))
+                ff_badge(ImageDraw.Draw(ov), img.size[0] - 14, 14 + (0 if port is not None else 30), speed, fonts[0])
+                img = Image.alpha_composite(img.convert("RGBA"), ov).convert("RGB")
             rows = [np.asarray(img), band]
             if port is not None:
                 bimg = Image.fromarray(band.copy()); db = ImageDraw.Draw(bimg)
@@ -242,22 +269,29 @@ def main():
                 txt = f"presented frames compared so far: {n_c:,}   identical: {n_s:,}"
                 db.text((ow - db.textlength(txt, font=fonts[2]) - 20, BAND - 26), txt, font=fonts[2],
                         fill=(150, 220, 150) if n_s == n_c else (255, 120, 120))
-                rows = [label, np.asarray(img), np.asarray(bimg)]
+                lab = label
+                if speed > 1:
+                    li = Image.fromarray(label.copy()).convert("RGBA"); ov = Image.new("RGBA", li.size, (0, 0, 0, 0))
+                    ff_badge(ImageDraw.Draw(ov), ow - 12, 4, speed, fonts[0])
+                    lab = np.asarray(Image.alpha_composite(li, ov).convert("RGB"))
+                rows = [lab, np.asarray(img), np.asarray(bimg)]
             enc.stdin.write(np.vstack(rows).tobytes())
             nout += 1
-        # audio: the segment's samples at speed 1, silence when fast-forwarded
+        # audio: speed 1 = the samples; speed > 1 = the segment's whole audio time-compressed without a pitch shift
+        # (ffmpeg atempo); speed < 1 (a hold) = the segment's audio once, then silence. 30 ms fades at every cut.
         na = int(round(n * HZ / FPS))
-        if speed == 1:
-            sa = int((ta - t0) * HZ / 1000)
-            chunk = pcm[sa:sa + na]
-            if len(chunk) < na:
-                chunk = np.vstack([chunk, np.zeros((na - len(chunk), 2), np.int16)])
-            # 30 ms fades at cuts
-            fade = min(len(chunk), int(0.03 * HZ))
+        sa, sb = int((ta - t0) * HZ / 1000), int((tb - ta) * HZ / 1000)
+        if speed > 1:
+            chunk = tempo(pcm[sa:sa + sb], speed)
+        else:
+            chunk = pcm[sa:sa + min(na, sb)]
+        chunk = chunk[:na]
+        fade = min(len(chunk), int(0.03 * HZ))
+        if fade:
             env = np.ones(len(chunk)); env[:fade] = np.linspace(0, 1, fade); env[-fade:] = np.linspace(1, 0, fade)
             chunk = (chunk * env[:, None]).astype(np.int16)
-        else:
-            chunk = np.zeros((na, 2), np.int16)
+        if len(chunk) < na:
+            chunk = np.vstack([chunk, np.zeros((na - len(chunk), 2), np.int16)])
         audio.append(chunk)
         print(f"segment {s['from']}..{s['to']} x{speed}: {n} frames", flush=True)
     enc.stdin.close(); enc.wait()
