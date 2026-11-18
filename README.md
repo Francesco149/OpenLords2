@@ -32,6 +32,13 @@ In short (2026-11-18):
 - 1519 functions have been verified against the original on identical state, with 0 divergences.
 - `openlords2.exe` runs the port on real DirectDraw / DirectSound, full screen, and is being play-tested.
 
+**Tested is not the same as verified.** The 121 scenarios come from scripted play, an LLM autoplay bot and autonomous
+play agents that drove hundreds of turns of campaigns, battles and multiplayer sessions, reaching 82.6 % of the
+original's code. Parity is proven only for what those scenarios exercise. Real players find paths that agents don't, so
+the port should not be called verified until enough real gameplay has run through it. The project checks every
+recorded session of the port against the original, so playing it is the most useful contribution (see the human queue
+in [`docs/FRONT.md`](docs/FRONT.md)).
+
 ## How it works
 
 Everything rests on **rhost** ([`tools/rhost/`](tools/rhost/README.md)), an in-process host for the original game:
@@ -83,6 +90,10 @@ checked against the original binary. Some examples:
   you pay a quarter.
 - **Marching through foreign land wrecks it.** Terrain the map calls impassable doesn't stop an army: it flattens the
   tile, drains part of that county's stockpile, and pays double movement.
+
+**Watch some of them:** [OpenLords2 Field Notes](https://claude.ai/artifact/EeuM6mtd6c4cTDY8FeuArD) has four short
+films rendered from deterministic replays: the original and the port side by side frame for frame, a castle that
+remembers its siege damage, knights that give up in front of intact walls, and the event deck.
 
 Per-subsystem write-ups are indexed in [`docs/findings/INDEX.md`](docs/findings/INDEX.md).
 
