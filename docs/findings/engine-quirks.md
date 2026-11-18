@@ -9,166 +9,139 @@ diary.
 
 Each entry: what we found, where we found it, and (when it's
 interesting) why.  Citations to engine functions are `FUN_XXXXXX`
-Ghidra addresses from `docs/decompiled/by-address/`.
+Ghidra addresses from `docs/decompiled/by-address/` (older entries) or
+IDA VAs (`0x4b29be`, `sub_4B29BE`: `/mnt/ephemeral/openlords2/decompiled-ida/`).
+
+**Audit 2026-11-18:** every entry (#1..#241) re-checked against the IDA
+pseudocode + disassembly: 91 confirmed as written, 141 corrected (facts,
+roles, sizes, stale port pointers — each ends with a *Re-checked
+2026-11-18* line saying what changed), 9 withdrawn (#3, #16, #34, #80,
+#86, #98, #129, #143, #147 — Ghidra artefacts or misreads; the stub says
+what retail actually does). Numbers are stable: a withdrawn entry keeps
+its number, nothing is renumbered.
 
 ---
 
 ## 1. The windowed-mode bring-up path has been dead code since ~2001
 
-`FUN_0042e5c0` (DDraw create + cooperative-level + display-mode) has
-two arms gated on `DAT_0053f228` — the "fullscreen flag".  Before
-either arm runs, the flag is auto-set:
+`sub_42E5C0` (DDraw create + cooperative level + display mode) has
+two arms gated on `DAT_0053f228` — the "fullscreen flag" (the
+defaults `0x4ae310` set it to 1).  Before either arm runs, the flag is
+auto-set from the desktop depth:
 
 ```c
-desktop_bpp = GetDeviceCaps(hdc, BITSPIXEL);
-if (DAT_0053f228 == 0 && desktop_bpp != 8) DAT_0053f228 = 1;
+hdc = GetDC(NULL);
+caps = GetDeviceCaps(hdc, RASTERCAPS);
+DAT_0053f22c = GetDeviceCaps(hdc, BITSPIXEL) * GetDeviceCaps(hdc, PLANES);
+if (caps == -1) DAT_0053f22c = 16;
+ReleaseDC(NULL, hdc);
+if (DAT_0053f228 == 0) DAT_0053f228 = (DAT_0053f22c != 8);
 ```
 
-i.e. "if user asked for windowed and the desktop isn't 8bpp, promote
+i.e. "if windowed was asked for and the desktop isn't 8bpp, promote
 to fullscreen anyway."  Lords II shipped in 1996 when 8bpp desktops
 were normal; by the Windows 2000 / XP transition (~2001) virtually
-every desktop in the wild was 16bpp or 24bpp.  So the entire
-windowed branch — the `SetWindowLong` style transform, the
-`AdjustWindowRectEx` centring, the `SetCooperativeLevel(NORMAL)`
-call, the windowed-mode clipper allocation in `FUN_0042ec91` — has
+every desktop in the wild was 16bpp or deeper.  So the windowed
+branch — the `SetWindowLongA` style transform, the
+`AdjustWindowRectEx` centring, `SetCooperativeLevel(hwnd, 8)`
+(DDSCL_NORMAL; fullscreen passes 19 = EXCLUSIVE | FULLSCREEN |
+ALLOWREBOOT), the windowed clipper allocation in `0x42ec91` — has
 been effectively unreachable for ~25 years on retail.
 
-The dead-code stack runs deeper than that.  WndProc's
-`WM_ACTIVATEAPP` (`FUN_004b29be`) has a surface-restore escalator
-that calls `FUN_004b2730` (`IDirectDrawSurface::Restore`) on
-focus-regain-with-lost-surfaces, and on failure escalates to
-`FUN_004b2922` (full re-init).  But surfaces only get
-`DDERR_SURFACELOST` under exclusive coop — under NORMAL coop the
-primary is a wrapper for the desktop surface, GDI/DWM owns it, and
-it never gets evicted.  So the *windowed-mode* surface-restore
-escalator is doubly unreachable: needs the windowed branch (already
-dead) AND a surface-lost event (impossible in windowed coop).
+The in-game toggle agrees: `sub_434B10` (the windowed/fullscreen
+option) refuses to leave fullscreen on a non-8bpp desktop — with
+`DAT_0053f228 == 1 && DAT_0053f22c != 8` it only posts event 260 and
+returns; otherwise it flips the flag, tears down (`0x4b28cd(1)`) and
+re-inits (`0x4b2922`).  `engine_tick` (`0x4b99c0`) posts event 298
+once on the battlefield under the same condition.
 
-We ported both anyway — both compile, both are wired, and the
-windowed branch is OpenLords2's default.  Twenty-five years after
-the developers stopped exercising this code, it has its first real
-user.
+The surface-restore escalator in the WndProc (`0x4b29be`,
+`WM_ACTIVATEAPP`) is NOT windowed-specific: with the graphics up
+(`DAT_004e65d0`) and the app active it calls `0x4b2730` (Restore on
+the primary `DAT_004eabd0` and the back surface `DAT_004eafac`) and,
+on failure, `0x4b2922` (full teardown `0x4b28cd(0)` + re-init
+`0x4b284e`, palette reload).  That is the live fullscreen alt-tab
+path.  Under windowed coop it would be reached far less often (no
+exclusive-mode eviction), though a display-mode change can still
+lose surfaces there.
 
-> 📍 `src/gfx.c` (`gfx_init`, `gfx_restore`), `src/main.c`
-> (`WM_ACTIVATEAPP` arm), `docs/findings/ddraw-dsound-bringup.md`
-> §"FUN_0042e5c0", Ghidra `FUN_0042e5c0` / `FUN_004b2730` /
-> `FUN_004b29be`.
+We ported both arms anyway — the standalone build's windowed
+branch is OpenLords2's default (`--fullscreen` opts into retail's
+popup).  rhost's virtual GDI reports 32 bpp (`tools/rhost/rh_win.c`
+`my_GetDeviceCaps`), so retail under rhost takes the fullscreen path,
+as every GOG user's does.
+
+> 📍 `src/rl_ui4.c` (`rl_42e5c0`, `rl_4b2730`), `src/rl_host.c`
+> (`rl_4b29be` WM_ACTIVATEAPP arm, `rl_4b2922`), `src/rl_ui3.c`
+> (`rl_434b10`), standalone `src/gfx.c` (`gfx_init`, `gfx_restore`) /
+> `src/main.c`, `docs/findings/ddraw-dsound-bringup.md`
+> §"FUN_0042e5c0", IDA `sub_42E5C0` / `0x4b2730` / `0x4b2922` /
+> `0x4b29be` / `sub_434B10`.
+
+*Re-checked 2026-11-18 against the IDA export: depth = BITSPIXEL × PLANES (RASTERCAPS −1 → 16); added the 0x434b10 toggle; the restore escalator is the live fullscreen path, not windowed-only; 📍 now names the rl_ ports.*
 
 ---
 
 ## 2. The .ini parser reads past its own buffer (and gets away with it)
 
-`FUN_0040ecc4` (`l2.ini` + `sierra.ini` parser) allocates a fixed
-20000-byte scratch buffer and reads a few KB of `.ini` text into
-the start of it.  Every key lookup is the same two-step:
+`sub_40ECC4` (hardware defaults + `l2.ini` / `sierra.ini` parser)
+sets the defaults (CD letter `'D'`, CDROM speed 2, 8000 KB, CPU
+486 / 66 MHz, VideoSpeed 0, 13 sound channels), mallocs a fixed
+20000-byte scratch buffer and reads `l2.ini` into it, then the
+`sierra.ini` in the `WindowsDir=` it names, else `sierra.ini` in the
+current directory.  Every key lookup is the same two-step:
 
 ```c
-off = FUN_00401000(scratch, "CDROM", 20000);   // find substring
-eq  = FUN_00401085(scratch + off, '=', 20000); // find '=' AFTER it
-off = off + eq;
-if (off > 0) value = atoi(scratch + off);
+off = strutil_find_substr(buf, "CDROM", 20000);  // 0x401000
+off += strutil_find_char(buf + off, '=', 20000); // 0x401085: index+1 of '=', 0 if none
+if (off > 0) value = atoi(buf + off);
 ```
 
 The bound passed to `find_char` is **the full 20000**, not the
-remaining bytes after `off`.  So once `find_substr` returns a
-non-zero offset, the subsequent `find_char` is searching a window
-of `20000 - off + 20000` bytes — i.e. it walks up to `off` bytes
-past the end of the malloc.
+remaining bytes after `off`, so a key with no `=` after it walks up
+to `off` bytes past the end of the malloc.  `find_substr` itself
+compares `strlen(key)` bytes at every offset `< 20000`, so it can
+read `strlen(key) - 1` bytes past the end too, and the CPU= line's
+dash scan (`for (i = 0; buf[off + i] != '-' && i < 20; i++)`) tests
+the byte before the bound.  On a well-formed file the `=` follows
+the key immediately and nothing leaves the file's bytes.
 
-That's a heap-OOB read in textbook terms.  Modern ASan would
-scream.  Retail gets away with it because:
+The sharper quirk is in `find_substr`: it returns `0` for both "not
+found" *and* "found at offset 0".  A **missing key** therefore
+gives `off = 0`, and `find_char` then finds the first `=` anywhere
+in the file — the key takes the value of whatever line holds the
+first `=` (`atoi` of it, or its first byte for `CDRomDrives`).
+Retail only gets the defaults for a missing key when the file has
+no `=` at all.
 
-1. `malloc(20000)` on the Win32 CRT typically lands inside a
-   ≥4 KiB heap segment with surrounding bookkeeping that's
-   readable — the OOB doesn't touch unmapped memory.
-2. Whatever garbage bytes the scan happens to traverse, they end
-   up either (a) not matching `'='`, in which case the search
-   gives up and returns 0 (harmless); or (b) matching `'='` by
-   coincidence, in which case `atoi` reads more garbage starting
-   there.  `atoi` of a random non-digit byte returns 0, of an
-   ASCII digit byte returns 1–9, both of which are valid-looking
-   small ints that fit the config schema.
-3. The parser is structurally robust to "wrong but small int"
-   — the misparses get overwritten by later keys that are
-   actually present in the file, or they land in fields where
-   `0` is a reasonable fallback (`VideoSpeed=0` is the default).
+On the user's GOG install none of this runs: `L2.INI` is
+`[Config] CDDrive=. WindowsDir=.`, so the parser tries `.\sierra.ini`
+and then `sierra.ini`, neither exists, it logs
+`Err:Could not read sierra.ini` and keeps the defaults.  (Same for
+rhost's pristine game copies.)
 
-The same mass-bound shows up in `FUN_00401000`'s substring search
-itself and in the CPU= line's 20-byte dash scan
-(`for (dash = 0; dash < 0x14 && buf[off + dash] != '-'; dash++)`).
-All three can technically walk past the buffer; all three are
-de-facto safe by the same robustness argument.
+`rl_40ecc4` (`src/rl_ui4.c`) ports retail's semantics exactly
+(route b: `rl_401000` / `rl_401085` with the full 0x4e20 bound).  The
+older standalone `src/config.c` still deviates on purpose — its
+`seek_past_equals` clamps `find_char` to the remaining bytes and
+disambiguates `find_substr`'s 0 with a `memcmp` — and is not what
+rhost runs.
 
-Layered on top is a related quirk in `FUN_00401000` itself: it
-returns `0` for both "not found" *and* "found at offset 0".
-Callers (`FUN_0040ecc4`) work around this with the convention
-that real keys never sit at offset 0 (`.ini` files start with
-`[Section]` headers or comments).  When that convention holds, the
-ambiguity is invisible.  When it doesn't — say, a missing key
-combined with any other `=` in the file — the parser silently
-parses the wrong value.  Real sierra.ini files have all the
-expected keys, so this never bites in retail's actual workload.
-
-We caught both quirks the moment the parser ran under ASan in
-`make -C tests run`.  Our port (`src/config.c`) clamps
-`find_char` to the remaining bytes and disambiguates
-`find_substr`'s 0-return with an explicit `memcmp(buf, key, klen)`
-— both flagged in the comment block of `seek_past_equals` as
-deliberate retail deviations.  The on-disk behaviour is identical
-on well-formed `.ini` inputs; it's the malformed / partial / weird
-ones that now do the safer thing instead of the lucky thing.
-
-> 📍 `src/config.c` (`seek_past_equals`), `tests/test_config.c`,
+> 📍 `src/rl_ui4.c` (`rl_40ecc4`, `rl_401000`, `rl_401085`),
+> standalone `src/config.c` (`seek_past_equals`), `tests/test_config.c`,
 > `docs/findings/winmain-pre-init.md` §"String-helper family",
-> Ghidra `FUN_0040ecc4` / `FUN_00401000` / `FUN_00401085`.
+> IDA `sub_40ECC4` / `0x401000` / `0x401085`.
+
+*Re-checked 2026-11-18 against the IDA export: a missing key reads the value after the file's first '=' (not "harmless garbage"); GOG has no sierra.ini so the parse never runs; rl_40ecc4 is the retail-semantics port, config.c's deviation is standalone-only.*
 
 ---
 
-## 3. The sim-rate LUT is read ~500 bytes past its allocated end
+## 3. (withdrawn) The sim-rate LUT is read ~500 bytes past its allocated end
 
-`FUN_004bb978` (sim sub-step rate controller) consults a flat byte
-table at `DAT_004e3260` to decide whether to allow a sim step in the
-current "0.1× hint × phase column" bucket.  The lookup is:
-
-```c
-if ((&DAT_004e3260)[DAT_004d2164 + ((int)local_14 / 10) * 0xa0] == '\0') {
-    local_10 = 0;
-}
-```
-
-`DAT_004d2164` (the phase counter) is `0..0x9f`.  `local_14` is the
-clamped scenario hint, `0..0x8c` (140).  So `local_14 / 10` ranges
-`0..14`, and the index is up to `0x9f + 14*0xa0 = 0x8df`.
-
-The table is documented (in the binary's only debug-style symbol
-density nearby) as having 11 rows × `0xa0` bytes = `0x6e0` bytes
-(1760 B).  The actual max index reached is `0x8df` — **480 bytes
-past the documented end**.  Same shape as the .ini parser's OOB:
-adjacent .data is readable, the bytes that land there happen to be
-benign (zero or harmless), the engine never knows.
-
-This is reachable in retail when the scenario hint exceeds 110 ms
-per sim sub-step.  `FUN_0043de70`'s rate selector produces values up
-to `0x8c` for "Renaissance" scenarios, so the OOB rows 11..14 are
-exercised on the actual shipped maps — they just happen to read
-into adjacent .data that's all zero (or non-zero but coincidentally
-"step allowed", which is the safer-of-the-two failure mode).
-
-Our port (`src/engine_rate.c`) takes the LUT as a pointer, so we
-have to extract the real bytes from retail's `.data` and decide
-whether to allocate 0x6e0 or 0x8e0 (or beyond).  Today we pass
-`NULL` (treats as all-zeros) — the LUT path is never reached
-because `engine_scenario_rate_hint()` returns 0 until the engine
-reaches ingame state, which our drop-in can't do yet.  The
-extraction lands when the consumer subsystems land.
-
-The test suite uses a privately-allocated LUT to exercise the
-function past this boundary (`tests/test_engine_rate.c`
-`test_engine_rate_hint_clamped_to_0x8c`).
-
-> 📍 `src/engine_rate.c` (`engine_compute_sim_sub_steps`),
-> `tests/test_engine_rate.c`, `docs/findings/main-loop-tick.md`
-> §"FUN_004bb978", Ghidra `FUN_004bb978`.
+Claimed `0x4bb978` indexes an 11-row (0x6e0 B) duty table at `DAT_004e3260` with rows up to 14, reading 480 B past
+its end.  Wrong: the table is **15 rows × 0xa0 = 0x960 B** (`0x4e3260..0x4e3bc0`, next object `dword_4E3BC0`); rows
+0..14 hold 160 / 144 / … / 16 / 8 / 4 / 2 / 1 / 0 ones, a clean decay.  The hint clamps at 140 → row ≤ 14: every read
+is in bounds.  SP's hint is 1 → row 0 only.  See #195's correction and `src/engine_rate.c` `g_engine_rate_lut`.
 
 ---
 
@@ -215,55 +188,49 @@ reach the clamp because there's no input that gets there.
 
 ## 5. The "sim tick" function is an MP-only no-op
 
-Retail's per-frame sub-step body (inside `FUN_004b99c0`'s
-variable-rate loop) reads, on the surface, like the canonical "this
-is where the simulation advances":
+Retail's per-frame sub-step body (inside `engine_tick` `0x4b99c0`'s
+variable-rate loop, once per step `0x4bb978` grants) reads:
 
 ```c
-DAT_0057c998 = DAT_0057c998 + 1;                  // master tick
-... 1000/0x82/10-tick scheduled events ...
-FUN_004472ce(DAT_0057c998);                       // "advance sim"
-if (DAT_00553030 == 0) FUN_00404a46();            // SP-only step
+DAT_0057c998++;                                   // master tick
+if (player[local] +4 flag) {                      // byte_57BF04[352 * DAT_0057c8cc]
+    tick % 1000 == 0 → 0x43eda0(0xb);             // MP messages
+    battlefield: tick % 130 → 0x43eda0(0xc), % 10 → (0xa), % 130 == 45 → link poll 0x440666
+    else:        tick % 10 → 0x43eda0(0xa); turn vote 0x49b8b0
+}
+engine_dispatch_delayed_actions(DAT_0057c998);    // 0x4472ce
+if (DAT_00553030 == 0) engine_rng_step();         // SP-only LFSR step 0x404a46
+if (state 10 / 11) return;
+map (DAT_0057c8fc == 0):        0x40490d, 0x49a010, engine_army_state_run 0x4650b0
+battlefield (DAT_0057c8fc == 2): 0x478952, below screen 0x2b the unit / group passes, end check 0x477dfc
 ```
 
-The natural assumption is that `FUN_004472ce` — the function whose
-parameter is the master tick counter, in the slot labelled "advance
-sim by 1 tick" — is the heart of the simulation step.  It's 1046
-bytes; it visibly walks a 400-element table; it dispatches actions
-through a function pointer table.
+The natural assumption is that `0x4472ce` — 1046 bytes, called with
+the master tick, walking a 400-record table (56 B
+each, fields from `0x50d7bc`) and dispatching through `funcs_4476BB` — is the heart of the
+simulation step.  But its whole body is gated on
+`if (DAT_00553030 != 0)` (MP active): in single-player it returns at
+once.  The records are MP delayed actions (each due at a tick,
+committed in lock-step).  `0x43eda0` is not a scheduler either: it is
+the MP message sender (builds a 260-byte packet of type `a1`, payload
+size `byte_4D5B90[a1]`, handlers `funcs_43EE4E`), also gated on
+`DAT_00553030`.
 
-But the entire function is gated on `if (DAT_00553030 != 0)` (i.e.
-MP active).  In single-player it returns immediately.  Same with
-`FUN_0043eda0` (637 B, the "scheduled events" dispatcher called on
-1000/0x82/10 tick boundaries) — also entirely MP-gated.
+So in SP the tick-boundary messages and the delayed-action walk are
+dead, but the sub-step is still where SP's simulation advances: the
+master tick, the LFSR, and per step the strategic sim (`0x40490d`,
+`0x49a010`, `0x4650b0`) on the map or the battle passes on the
+battlefield.  SP acts on UI events the frame they fire; MP routes
+the same actions through the delayed-action queue so peers commit
+them at the same tick.
 
-So in SP mode, the sub-step body's *actual* per-step work collapses
-to: bump the master tick counter, advance the LFSR (`FUN_00404a46`
-— ported as `engine_rng_step`), check the savepump state machine
-breaks, and run the screen-state-specific extras (which themselves
-hand off to per-screen subsystems).  The real per-frame sim work in
-SP happens elsewhere — in the pre-tick block (anim phase, frame
-delta) and inside the screen-dispatch ladder's per-screen handlers.
-
-The shape suggests an architecture where SP and MP share the same
-top-level main-loop driver, but the "deterministic action queue"
-machinery (commit actions at the synchronised tick they were
-scheduled for) is MP-only because SP doesn't need to synchronise
-across peers — it can act on UI events the same frame they fire.
-`DAT_0057c998` (the master tick) still increments in SP because the
-LUT-driven rate gate depends on it, and because the savefile
-captures it, but no `FUN_004472ce` walk consumes it.
-
-We discovered this while surveying the sub-step body for porting.
-Our skeleton calls `engine_tick_rng_step` in the SP-only branch and
-leaves the MP dispatcher as a comment-only TODO — observably
-correct in SP because retail does the same thing.
-
-> 📍 `src/engine.c` (`engine_tick` sub-step body),
+> 📍 `src/rl_host.c` (`rl_4b99c0`), `src/rl_ctl.c` (`rl_4472ce`),
+> `src/engine_delayed_action.c` (`engine_dispatch_delayed_actions`),
 > `docs/findings/main-loop-tick.md` §"sub-step body",
-> Ghidra `FUN_004472ce` (1046 B, MP-gated body),
-> `FUN_0043eda0` (637 B, MP-gated body),
-> `FUN_004b99c0` lines 88749..88803.
+> `docs/findings/multiplayer-rhost.md`, IDA `0x4472ce` / `0x43eda0` /
+> `0x4b99c0`.
+
+*Re-checked 2026-11-18 against the IDA export: 0x43eda0 is the MP message sender, not a scheduled-events dispatcher; SP's sub-step does run the strategic / battle sim (0x40490d, 0x49a010, 0x4650b0 / 0x478952 …), so the "real SP sim happens elsewhere" claim is withdrawn; 📍 → rl_host.c rl_4b99c0.*
 
 ---
 
@@ -271,225 +238,224 @@ correct in SP because retail does the same thing.
 
 Modern Windows runs DWM compositing.  Each top-level window has a
 "redirection bitmap" backing store; DWM composites the visible
-desktop from those.  DDraw NORMAL-mode Blts go straight to the
-*physical* primary surface and **bypass the redirection bitmap
-entirely**.  The Blt returns `DD_OK`, the back buffer holds the
-correct pixels, but DWM re-composites the desktop from the unchanged
-backing store and the window stays black.
+desktop from those.  In our standalone build's windowed mode, DDraw
+NORMAL-coop Blts to the primary returned `DD_OK`, the back buffer
+held the correct pixels, but the window stayed black.
 
-Confirmed empirically: a windowed-mode `gfx_capture_backbuffer`
-shows the rendered fill colour while `gfx_capture_window` (GDI BitBlt
-of the same window's client area at the same instant) shows uniform
-`(0,0,0)`.
+Observed empirically (standalone build): a windowed-mode
+`gfx_capture_backbuffer` showed the rendered fill colour while
+`gfx_capture_window` (GDI BitBlt of the same window's client area at
+the same instant) showed uniform `(0,0,0)`.
 
-Retail Lords2.exe never bites this because of quirk #1 above: its
-`FUN_0042e5c0` auto-fullscreen-promotes any time the desktop isn't
-8bpp.  Exclusive coop + `SetDisplayMode` put DDraw outside DWM
-compositing, so retail's Blts hit the real front-buffer and DWM
-isn't in the loop at all.  The windowed branch — which we default
-to — is what exposes the issue.
+Retail Lords2.exe never bites this because of quirk #1: `sub_42E5C0`
+promotes to fullscreen whenever the desktop isn't 8bpp, so it runs
+exclusive coop + `SetDisplayMode(640, 480, 8)` and DWM is not in the
+loop.  The windowed branch — the standalone build's default — is
+what exposes the issue.
 
-Fix in two places:
+Fix (standalone build): `present_via_gdi()` in `src/gfx.c` Locks the
+8bpp back surface, builds a `BITMAPINFO` with the 256 palette entries
+inline (RGBQUAD B,G,R order — DDraw's PALETTEENTRY hands us R,G,B and
+the swap is the only non-obvious bit), and `StretchDIBits` to the
+window's HDC.  GDI calls go through DWM, so the composited result is
+visible.  Fullscreen `BltFast` needs no such seat.  (The legacy Frida
+harness carried the same seat for retail: `presentBackToWindowViaGdi`
+/ `installPrimaryBltGdiSeat` in `tools/frida/openlords2-agent.js` —
+superseded; rhost's software DirectDraw layer has no DWM in the path.)
 
-```
-src/gfx.c          present_via_gdi()   (drop-in's windowed present)
-tools/frida/...    presentBackToWindowViaGdi() + Blt-vtable patch
-                   (retail under the harness — visual verification)
-```
+> 📍 `src/gfx.c` (`present_via_gdi`), legacy
+> `tools/frida/openlords2-agent.js`, IDA `sub_42E5C0`.
 
-Both Lock the 8bpp DDraw back surface, build a `BITMAPINFO` with
-the 256 palette entries inline (RGBQUAD B,G,R order — DDraw's
-PALETTEENTRY hands us R,G,B and the swap is the only non-obvious
-bit), and `StretchDIBits` to the window's HDC.  GDI calls DO go
-through DWM's intercept, so the redirection bitmap updates and the
-composited result is visible.
-
-Fullscreen `BltFast` still works (no DWM mediation in exclusive
-coop) — so the GDI seat is a windowed-mode-only insertion.
-
-> 📍 `src/gfx.c` (`present_via_gdi`),
-> `tools/frida/openlords2-agent.js` (`presentBackToWindowViaGdi`,
-> `installPrimaryBltGdiSeat`),
-> the `project_dwm_ddraw_normal` auto-memory entry for the original
-> empirical diagnosis, Ghidra `FUN_0042e5c0`.
+*Re-checked 2026-11-18 against the IDA export: retail half confirmed (0x42e5c0 promotes to exclusive fullscreen); dropped the stale `project_dwm_ddraw_normal` memory pointer (no longer exists); Frida marked legacy.*
 
 ---
 
 ## 7. The save format has nine forward-compatibility slots that were never used
 
-The 225-entry positional schema table at `0x4de960` (the entire save-
-file layout) has nine trailing entries (indices 216..224) that all
-point to the **same** 4-byte buffer at `DAT_004eb2ac` — a scratch
-region.  Save: emits the contents of that scratch 9 times in a row.
-Load: reads 4 bytes from the file into that scratch, 9 times,
-overwriting itself each iteration and discarding the result.
+The 225-entry positional schema table at `0x4de960` (8-byte rows:
+address, size) is the save-file layout: `save_write` (`0x4ade93`)
+writes and `save_load` (`0x4adfe6`) reads the rows in order until a
+zero size.  Its last nine rows (indices 216..224) all point to the
+**same** 4-byte buffer at `DAT_004eb2ac`, a slot no code references
+(0 direct xrefs; it sits just before the castle scratch
+`DAT_004eb2b0`).  Save: emits those 4 bytes 9 times in a row.  Load:
+reads 4 bytes into it, 9 times, overwriting itself and never using the
+value.
 
 ```
+schema entry 215 → DAT_0056d5cc, 4 B
 schema entry 216 → DAT_004eb2ac, 4 B
-schema entry 217 → DAT_004eb2ac, 4 B   ← same address
-...
-schema entry 224 → DAT_004eb2ac, 4 B   ← same address
+...                                     ← same address ×9
+schema entry 224 → DAT_004eb2ac, 4 B
 ```
 
-The functional effect is 36 zero bytes at offset 266992 of every
-.sav file, ignored on load.  Index 87 (`0x4eafb0`) is similar.
+The effect is 36 bytes at offset 266992..267027 of every .sav file —
+zero in a fresh session (.data initial value 0), but a load leaves
+the last of them in `DAT_004eb2ac`, so a later save writes that word
+back ×9.  They are not at the end of the file: after the schema
+rows both functions copy the 16 castle-damage blocks (16 × 0x3200 B,
+`Castles.dat` ↔ the save) through `DAT_004eb2b0`.
 
-These are forward-compatibility reserved slots — placeholders the
-1996 devs added "in case we need to extend the save format."  The
-plan was presumably: a future patch would change one or more of
-those pointers from `0x4eb2ac` to a real global, automatically
-giving any save written by that patch a place to stash the new
-field while still being readable by the old engine (which would
-discard it harmlessly).
+Index 87 (`0x4eafb0`) is **not** a reserved slot: it is the screen
+the save dialog was opened from — `0x433f49` stores `DAT_004eac50`
+there before switching to screen 54, and `engine_map_post_load`
+(`0x4976a1`) restores `DAT_004eac50` from it after a load.
 
-The patch never came.  Lords II shipped, got a couple of bugfix
-releases, and the engine architecture froze.  The 36 reserved bytes
-sit at the end of every save file ever written by the game,
-faithfully scribbling zeros and reading them back.
+The nine identical rows look like reserved slots — placeholders for
+fields a later patch might add, readable by older engines that
+would discard them.  The patch never used them.
 
-Our drop-in preserves the layout exactly — the 36 bytes have to be
-in the right position for retail to load our saves.
+Our port preserves the layout exactly — the 36 bytes have to be in
+the right position for retail to load our saves.
 
 > 📍 [`docs/findings/save-format.md`](save-format.md) §"Reserved/
-> sentinel slots", Ghidra `0x4ade93` / `0x4adfe6` (the I/O loops),
-> `0x4de960` (the schema table).
+> sentinel slots", IDA `save_write 0x4ade93` / `save_load 0x4adfe6`,
+> `0x4de960` (the schema table), `0x433f49` / `0x4976a1` (index 87).
+
+*Re-checked 2026-11-18 against the IDA export: rows 216..224 confirmed; index 87 is a live field (save dialog's return screen), not scratch; the 36 bytes are followed by the 16 × 0x3200 castle blocks, and a load can make them non-zero.*
 
 ---
 
 ## 8. Footprint-neighbor helper uses the orthogonal-axis bound for the wrong axis's bounds check
 
-`FUN_004921e5` (the helper that flags the neighbors of a building
-footprint center cell at castle-load time) has two write blocks per
-orientation branch — one writing `+1` flag bits to the axis the
-building "faces", and one writing `+4` build-stage bytes to the
-perpendicular axis.  The flag writes are bounded correctly.  The
-stage writes are bounded on the **wrong axis**:
+`engine_tile_set_footprint_neighbor_flags` (`0x4921e5`) marks the
+neighbours of the centre cell of a 3×3 footprint on the battlefield
+grid (`0x5440e0`, 80×80 cells × 8 B; row stride 0x280).  It sets the
+centre's `+4 = 1`, ORs `0x10` into `+1` of the four diagonals (each
+gated on both axes, correctly), then has two orientation branches —
+one writing `+1 |= 0x10` to the two neighbours on one axis, one
+writing `+4 = 1` to the two on the other.  The flag writes are
+bounded correctly.  The stage writes are bounded on the **wrong
+axis**:
 
 ```c
-if ((param_3 == 0) || (param_3 == 4)) {           /* vertical orientation */
-    if (param_1 < 0x4f) (&DAT_005440e9)[iVar1] |= 0x10;   /* right.+1 — gated on x<79 ✓ */
-    if (0 < param_1)    (&DAT_005440d9)[iVar1] |= 0x10;   /* left.+1  — gated on x>0  ✓ */
-    if (param_1 < 0x4f) (&DAT_00543e64)[iVar1] = 1;       /* up.+4    — gated on x<79 ✗ */
-    if (0 < param_1)    (&DAT_00544364)[iVar1] = 1;       /* down.+4  — gated on x>0  ✗ */
+if (orient == 0 || orient == 4) {                  /* a3 */
+    if (x < 79) cell(x+1, y)[+1] |= 0x10;   /* byte_5440E9 — gated on x<79 ✓ */
+    if (x > 0)  cell(x-1, y)[+1] |= 0x10;   /* byte_5440D9 — gated on x>0  ✓ */
+    if (x < 79) cell(x, y-1)[+4] = 1;       /* byte_543E64 — needs y>0,  gated x<79 ✗ */
+    if (x > 0)  cell(x, y+1)[+4] = 1;       /* byte_544364 — needs y<79, gated x>0  ✗ */
+} else {
+    if (y > 0)  cell(x, y-1)[+1] |= 0x10;   /* ✓ */
+    if (y < 79) cell(x, y+1)[+1] |= 0x10;   /* ✓ */
+    if (y > 0)  cell(x+1, y)[+4] = 1;       /* byte_5440EC — needs x<79, gated y>0 ✗ */
+    if (y < 79) cell(x-1, y)[+4] = 1;       /* byte_5440DC — needs x>0,  gated y<79 ✗ */
 }
 ```
 
-The `up.+4` write only depends on the row being > 0; gating it on
-`col < 79` is geometric nonsense.  The else branch (horizontal
-orientation) is the mirror image of the same bug — vertical neighbor
-flag writes are gated on row, but the right/left neighbor `+4`
-writes are also gated on row.
+The stage writes reuse the flag writes' gates — a copy-paste.  At
+`y == 0` (or `y == 79`, `x == 0`, `x == 79`) the ungated write lands a
+row before / after the grid.
 
-The bug is *load-bearing by accident*: every caller of `FUN_004921e5`
-(via `FUN_004917dd`) feeds it a center cell from a 3x3 footprint
-whose top-left was placed by the scenario format, and scenario tooling
-constrains anchors to interior coords where both axes are in
-`[1, 78]`.  So the gates never fire on a value that would put the
-write OOB, even when the gate value is geometrically the wrong axis.
+It stays dormant because of who calls it.  There are two callers,
+both for a 3×3 siege unit (a siege tower) at the wall:
+`0x491492` (a 3×3 unit in movement state 8 docking, called with the
+unit's centre) and `0x4917dd` (castles.dat restore of a docked
+tower, called with anchor + 1 on both axes, so x, y ≥ 1).  A docked
+tower's centre is a wall-side cell inside the grid (castle walls sit
+well away from the map edge), so the wrong-axis gates are not known
+to ever let a write leave it.
 
-The port preserves this verbatim — `src/engine_tile.c`'s
-`engine_tile_set_footprint_neighbor_flags` uses the same axis on the
-same write — because a fix would break byte-identical round-trips on
-saves that depend on the side-effect surface staying constant.
+The ports preserve this verbatim — `src/engine_tile.c`'s
+`engine_tile_set_footprint_neighbor_flags` uses the same gates.
 
 > 📍 `src/engine_tile.c`'s `engine_tile_set_footprint_neighbor_flags`,
-> Ghidra `FUN_004921e5 @ 0x4921e5`.
+> `src/engine_bf_move.c` (`bf_491492`), `src/rl_cov3.c` (`rl_4917dd`),
+> IDA `0x4921e5`, callers `0x491492` / `0x4917dd`.
+
+*Re-checked 2026-11-18 against the IDA export: the wrong-axis gates confirmed; callers corrected (siege-tower dock 0x491492 + castles.dat restore 0x4917dd, not scenario-anchored buildings at castle load); the "save round-trip" rationale dropped.*
 
 ---
 
 ## 9. Delayed-action dispatcher's hard-capped 10-pass shift compaction
 
-`FUN_004472ce`'s MP-relay reorder branch (game_mode == 2, queue_count
-> 1) pulls qualifying records (types 0x21..0x23 from non-local players)
-out of the main compaction queue and into a high-priority stash, leaving
-`QUEUE_EMPTY` (0xffff) sentinels in the queue.  It then runs a hard-coded
-**10 passes** of a single-slot left-shift loop to collapse the holes:
+`engine_dispatch_delayed_actions` (`0x4472ce`, MP only) first fills
+its due-queue `DAT_00515990` (100 dwords, pre-filled with 0xffff)
+with the index of every due record of the 400-record table, count in
+`DAT_00515910`.  On the battlefield (`DAT_0057c8fc == 2`) with more
+than one due record it then pulls records of types 0x21..0x23 from
+non-local players into a stash (`DAT_0050d620`), leaving 0xffff holes,
+and runs a hard-coded **10 passes** of a shift loop to close them:
 
 ```c
-for (local_14 = 0; local_14 < 10; local_14 = local_14 + 1) {
-    for (local_c = 0; local_c < DAT_00515910; local_c = local_c + 1) {
-        if ((&DAT_00515990)[local_c] == 0xffff) {
-            for (local_10 = local_c; local_10 < DAT_00515910; local_10 = local_10 + 1) {
-                (&DAT_00515990)[local_10] = *(undefined4 *)(&DAT_00515994 + local_10 * 4);
-            }
-        }
-    }
-}
+for (m = 0; m < 10; m++)
+    for (n = 0; n < count; n++)
+        if (queue[n] == 0xffff)
+            for (ii = n; ii < count; ii++)
+                queue[ii] = queue[ii + 1];     // DAT_00515994[ii]
 ```
 
-Each pass shifts every slot from a 0xffff position rightward leftward by
-one — one contiguous run of K 0xffff entries collapses by **one slot per
-pass**, so K consecutive holes need K passes.  The 10-pass cap means that
-if **11 or more** consecutive relay records exist, the resulting queue
-still contains 0xffff entries in the middle, and the subsequent
-"find-first-EMPTY + append hipri" loop appends the stash on top of the
-first remaining 0xffff, clobbering whatever valid entries follow it.
+then appends the stash at the first remaining 0xffff
+(`for (jj = 0; jj < 100 && queue[jj] < 0xffff; jj++)`).
 
-In practice this never trips: a per-tick relay batch is at most a
-handful of records, and the bound holds.  But the cap is deliberate (the
-number is hard-coded, not derived from queue capacity), and shipping it
-without a tighter argument suggests either the dev verified the bound
-empirically or shipped a robustness margin and called it done.
+The 10 is generous, not tight.  Within one pass, after a shift at
+`n` the scan moves on to `n+1`, which now holds the run's third
+hole — so a run of K consecutive holes shrinks to ⌊K/2⌋ per pass
+and closes in ⌊log2 K⌋ + 1 passes (K = 1 → 1, 2..3 → 2, 4..7 → 3,
+… 256..511 → 9).  Scattered single holes all close in one pass.
+With at most 399 holes (count ≤ 400) the queue is always fully
+compacted by pass 9; the cap never leaves a hole for the stash to
+land on.
 
-The port preserves the 10-pass count and the inner-loop shape verbatim
-in `src/engine_delayed_action.c`'s `engine_dispatch_delayed_actions`
-step 4b.  The same function also has a related quirk: the inner shift
-reads `queue[queue_count]` on its last iteration (one slot past the
-queue tail).  At `queue_count < 100` this lands within the queue array
-(and reads the 0xffff sentinel from the function-entry clear); at
-`queue_count == 100` retail would read `DAT_00515b20`, an unrelated
-adjacent global.  The diff harness pins `queue_count <= 99` in test
-vectors, so the divergent read never fires.
+The real edge is elsewhere: the collection loop never caps `count`
+at 100, so more than 100 simultaneously-due records would write past
+`DAT_00515990` (into `0x515b20..`), and the shift's last iteration
+reads `queue[count]` — the 0xffff pre-fill for `count < 100`,
+`DAT_00515b20` at `count == 100`.  A per-tick batch is a handful of
+records in practice.
 
-> 📍 `src/engine_delayed_action.c`'s `engine_dispatch_delayed_actions`
-> step 4b, Ghidra `FUN_004472ce @ 0x4472ce`.
+The ports preserve the 10-pass count and loop shape verbatim.
+
+> 📍 `src/rl_ctl.c` (`rl_4472ce`), `src/engine_delayed_action.c`'s
+> `engine_dispatch_delayed_actions` step 4b, IDA `0x4472ce`.
+
+*Re-checked 2026-11-18 against the IDA export: the shift halves a hole run per pass, so 10 passes suffice for any run < 1024 (≤ 399 possible) — the "11+ consecutive relay records leave holes" claim was wrong; added the uncapped count > 100 overflow.*
 
 ---
 
 ## 10. The castle-load loop clobbers most of the footprint expansion's writes
 
-`FUN_004aea70` (Castles.dat slot-load — `castles_read_scenario` in
-our port) walks the 6400 records in order, copying each record's `+1`
-(flags) and `+3` (anchor char) from disk into the live tile array.
-For records flagged "preserved across reload" (`flags & 0x01`,
-`flags & 0x02` clear), the loop also calls `FUN_004917dd(byte_off)` —
-our `engine_tile_expand_footprint_at` — to lay down a 3×3 building
-footprint: stamp glyphs into `+3` of all 9 cells, set `+2 |= 0x04`
-on each, set `+2 |= 0x80` on the center, write `+1 |= 0x10` to four
-diagonal neighbors of the center, write `+4 = 1` to two cardinal
-neighbors, and write `+4 = 2 / +3 = door-char / +1 = 0` to one
-"door" cell two rows past the anchor.
+`castles_read_scenario` (`0x4aea70`) restores a county's siege
+damage: slot `n` of `Castles.dat` (0x3200 B = 6400 two-byte
+records) is unpacked row-major into the battlefield grid's `+3`
+(glyph) and `+1` (flags) bytes.  The file is written by
+`castles_write_scenario` (`0x4ae968`, packing the same two bytes of
+every cell) when a strategic siege ends with walls fallen or moats
+filled; it is read at the next siege of that county (see
+`docs/findings/coverage-round3.md`).  Per cell, with the new flags:
+bit 1 → `+7 = 9`, `+4 = 0`, `+2 = (+2 & 0xe3) | 4`; else
+bit 0 → `0x4917dd(offset)`.
 
-But the expansion happens INSIDE the per-record loop, and the loop
-keeps advancing — overwriting `+1` and `+3` of every record at byte
-offset > anchor's byte offset.  So almost every glyph and flag the
-expansion just stamped gets immediately erased.  What survives:
+Flag bit 0 marks the nine cells of a **docked siege tower**:
+`0x491492` (a 3×3 unit docking) ORs `+1 |= 1` and stamps the glyphs
+`DAT_004d9dd0[9 × orient ..]` into all nine.  On restore, `0x4917dd`
+switches on the cell's glyph — only the tower's top-left glyph
+(`'@'` / `'C'` / `'X'` / `'['`, orientation 0 / 2 / 4 / 6) proceeds,
+the other eight return at once — and re-lays the tower: the nine
+glyphs, `+2 = (+2 & 0xe3) | 4` (+ `0x80` on the centre),
+`0x4921e5`'s neighbour flags, and a ramp/door cell (`+4 = 2` on the
+footprint's facing edge, `+3` = 1 or 2 and `+1 = 0` one cell beyond
+it — above for `'@'`, right for `'C'`, below for `'X'`, left for
+`'['`).
 
-- Anchor cell's `+1`/`+3`/`+2`/`+4` (the anchor IS the iter that just
-  ran, no later iter touches it).
-- ALL cells' `+2` and `+4` (the load loop only writes `+1` and `+3`).
-- `path_scratch[]`, `stage_scratch[]`, `footprint_list[]` — separate
-  globals, untouched by the load loop.
+The expansion runs INSIDE the per-record loop, and the loop keeps
+going, so every footprint cell after the anchor in row-major order
+gets its `+3` / `+1` overwritten by the file's bytes (rl-cov3 quirk
+7).  That clobber is mostly a no-op: the file was packed from the
+grid *after* the dock stamped those same glyphs and flags, so the
+overwrite writes back what `0x4917dd` just wrote.  What only the
+expansion provides survives: `+2` / `+4` of every cell (the loop
+never writes them), the anchor's and earlier cells' bytes, and the
+path / stage scratches and footprint list (`0x471c1f`, `0x471d30`,
+`0x48ee46`).  A cell whose saved `+1` / `+3` differ from what
+`0x4917dd` stamps keeps the file's values — the file wins.
 
-This means the renderable 3×3 of building glyphs is NOT visible from
-the on-disk anchor + flags after a Castles.dat load.  Whatever the
-renderer reads must either consult `+2` (the center marker + the 0x04
-"inside footprint" bit, which DO survive) or run a second pass that
-re-expands footprints after the load loop completes.  When we get
-that far in the port the resolution to that puzzle will land in
-`docs/findings/render-*.md`; for now the load path mirrors retail
-verbatim, surviving observables and all.
+> 📍 `src/rl_cov3.c` (`rl_4aea70`, `rl_4917dd` → `src/engine_tile.c`
+> `engine_tile_expand_footprint_at`), `docs/findings/rl-cov3.md`
+> quirk 7, `docs/findings/coverage-round3.md` (siege-castles),
+> IDA `0x4aea70` / `0x4917dd` / `0x491492` / `0x4ae968`.
+> (`src/save.c`'s `castles_read_scenario` is not linked in rhost.)
 
-The diff harness for `FUN_004917dd` (port's `engine_tile_expand_
-footprint`) runs it in isolation — outside the load loop — so the
-full expansion is visible to the diff vector.  The clobber is a
-load-path quirk, not a function-of-FUN_004917dd quirk.
-
-> 📍 `src/save.c`'s `castles_read_scenario`,
-> `src/engine_tile.c`'s `engine_tile_expand_footprint_at`,
-> `tests/test_save.c`'s `test_castles_read_fixup_flag_bit0` (which
-> only asserts on the surviving observables), Ghidra
-> `FUN_004aea70 @ 0x4aea70` and `FUN_004917dd @ 0x4917dd`.
+*Re-checked 2026-11-18 against the IDA export: Castles.dat is persisted siege damage and bit-0 cells are a docked siege tower, not scenario buildings; the clobber writes back the same bytes the dock saved, so the "3×3 glyphs not visible after load" conclusion is withdrawn; 📍 → rl_cov3.c.*
 
 ---
 
@@ -624,198 +590,180 @@ documents the behavior with its own dedicated test case.
 
 ## 14. Category-bucket digest probe flips to odd parity on zero
 
-`FUN_004291b3` (the per-category-bucket "first non-duplicate" digest
-refresher) walks each bucket's entries at every-other-byte stride
-(slots 0, 2, 4, 6, ...) when looking for a value not already in the
-digest:
+`engine_category_buckets_refresh_digest` (`0x4291b3`) refreshes a
+6-byte digest (`DAT_00569518`), one entry per 16-byte bucket at
+`DAT_00567970`: it takes the first bucket value not already in the
+digest (`0x42925e`), probing at every-other-byte stride:
 
 ```c
-local_10 = (uint)(byte)(&DAT_00567970)[local_8 * 0x10];   // bucket[0]
-while ((iVar1 = FUN_0042925e(local_10), iVar1 != 0 &&
-       (local_c = local_c + 1, local_c < 6))) {
-  local_10 = (uint)*(byte *)(local_14 + 0x567972 + local_8 * 0x10);
-  local_14 = local_14 + 2;
-  if (local_10 == 0) {
-    local_14 = 1;     // <-- flip to odd-index parity
-  }
+v1 = bucket[0];  v0 = 0;  tries = 0;
+while (digest_contains(v1)) {
+    if (++tries > 5) break;
+    v0 += 2;
+    v1 = bucket[v0];
+    if (bucket[v0] == 0) v0 = 1;      // flip to odd parity
 }
+digest[i] = v1;
 ```
 
-The probe sequence is bucket[2], bucket[4], bucket[6], ... — until
-a probe hits a zero byte, at which point `local_14 = 1` flips the
-walk to odd indices: the NEXT probe reads bucket[1 + 2] = bucket[3],
-then bucket[5], bucket[7], etc.
+The probe sequence is bucket[0], [2], [4], … — until a probe reads a
+zero byte, at which point `v0 = 1` flips the walk to odd indices:
+the next probe reads bucket[3], then [5], [7].  The zero only drives
+a flip when 0 is itself already in the digest; otherwise the loop
+ends and the digest takes the 0.
 
-In practice this matters only when buckets are sparsely populated
-with zeros mixed in.  The map-load caller populates buckets densely
-from the top, so the zero-flip almost never fires.  But when crafting
-hermetic unit-test inputs it's observable — preserved verbatim and
-documented with its own test case
-(`engine_category_buckets_refresh_zero_value_flips_to_odd_parity`).
+At most six bytes are probed.  Without a flip they are slots 0, 2,
+4, 6, 8, 10; with one the walk can reach odd slots 3..9.  Slots 1,
+11, 12, 13, 14 and 15 are never read on any path; odd slots only
+after a flip.
 
-The wider every-other-byte scheme also implies the digest never
-samples slots 7, 9, 11, 13, 15 in the no-flip case — those are
-unreachable from the initial offset=0 trajectory.  That's a
-documentable but separate limitation; we don't have evidence it
-affects production runs.
+The map-load caller populates buckets densely from the top, so the
+zero-flip rarely fires; hand-made unit-test inputs show it.
+Preserved verbatim with its own test case.
 
 > 📍 `src/engine_category_buckets.c`'s
 > `engine_category_buckets_refresh_digest`,
 > `tests/test_engine_category_buckets.c`'s
 > `engine_category_buckets_refresh_zero_value_flips_to_odd_parity`,
-> Ghidra `FUN_004291b3 @ 0x4291b3`.
+> IDA `0x4291b3` / `0x42925e`.
+
+*Re-checked 2026-11-18 against the IDA export: mechanics confirmed; the unreachable-slot list corrected (≤ 6 probes: slots 1, 11..15 never read; no odd slot without a flip), and the flip needs 0 already in the digest.*
 
 ---
 
 ## 15. Text-input clear() sets length=1 even on a zeroed buffer
 
-`FUN_004020ae` (the editor "clear") memsets the 2000-byte text buffer
-to zero, then sets `DAT_0058fe94` (`length`) to **1**, not 0.  A
-subsequent recompute (`FUN_00401f49`) would set length=0 — so the
-"1" is a deliberate sentinel between operations.
+`text_input_clear` (`0x4020ae`) zeroes the 2000-byte text buffer
+`DAT_005cd550` and the cursor / flags (`DAT_005bb4a8`,
+`DAT_0057d3b0`, `DAT_0058fd54`), then sets `DAT_0058fe94`
+(`length`) to **1**, not 0.  A later `text_input_recompute_length`
+(`0x401f49`) would make it 0.
 
-In the editor's state machine, valid cursor positions are
-`0..length+1`, so `length=1` after clear means "cursor may sit at
-position 0, with the terminator visible at position 1".  Without the
-+1, an empty buffer would treat position 0 as past-the-end and the
-clamp helper would bump cursor to length+1=1 anyway — but with
-clamp_state=1.  The "1" sentinel avoids the spurious clamp report.
+Why 1 is not clear from the editor logic.  The clamp helper
+(`0x401984`, #17) flags `cursor >= length + 1`; with the cursor at 0
+neither length 0 nor length 1 trips it, so the "1" does not avoid a
+spurious clamp report.  What it does change: with length 1 the cursor
+may sit at 1 (one past the terminator) before the clamp fires at 2,
+and the insert branch's shift (`0x401333(buf + cursor, buf + length
++ 1)`) spans one more byte.  Most `text_input_init`
+(`0x402009`) calls pass a one-space literal (`" "` at
+`0x4d56d0..0x4d56f4`, `0x4d5790`), which also yields length 1 — so
+"length 1 over a blank field" is the editor's usual starting state.
 
-Init (`FUN_00402009`) doesn't apply the same sentinel — it sets
-length to whatever was copied (0 for empty payload).  Inconsistency,
-but the editor's renderer / cursor logic don't read length=0 in
-practice because init is always called with a non-empty payload.
+`text_input_init` sets length to the copied payload length (0 for an
+empty payload — possible for the name buffers `DAT_0053f1e0` /
+`DAT_004ea130`; the save-dialog caller `0x433f49` follows init with
+a recompute anyway).
 
 > 📍 `src/text_input.c`'s `text_input_clear`,
 > `tests/test_text_input.c`'s `text_input_clear_sets_length_one_sentinel`,
-> Ghidra `FUN_004020ae @ 0x4020ae`.
+> IDA `0x4020ae` / `0x402009` / `0x401984`.
+
+*Re-checked 2026-11-18 against the IDA export: the length=1 store confirmed; the "avoids a spurious clamp report" rationale is wrong (cursor 0 never clamps at length 0 either); noted the " " init literals.*
 
 ---
 
-## 16. Text-input init's register-reuse off-by-minus-one indexing
+## 16. (withdrawn) Text-input init's register-reuse off-by-minus-one indexing
 
-`FUN_00402009` (the editor "init with payload") uses a single
-register for both the clearing loop and the payload-copy loop:
-
-```c
-for (local_8 = 1999; -1 < local_8; local_8 = local_8 + -1) {
-  (&DAT_005cd550)[local_8] = 0;       // clears buf[0..1999]
-}
-// local_8 == -1 on exit
-for (; *param_1 != '\0'; param_1 = param_1 + 1) {
-  (&DAT_005cd551)[local_8] = *param_1;  // (&buf[1])[-1] == &buf[0]
-  local_8 = local_8 + 1;
-}
-DAT_0058fe94 = local_8 + 1;            // length = payload_len
-```
-
-It looks like a buffer-overflow bug at first glance — `(&buf[1])[i]`
-with `i=-1` is `buf[0]`, which is technically a one-past-the-start
-read into the *previous* allocation.  But buf is a static `.data`
-global at `0x5cd550`, and `&buf[1] + (-1)` arithmetically resolves
-to `0x5cd550` — exactly buf[0].  No out-of-bounds access.
-
-The compiler picked this shape because both loops can share `local_8`
-in EDX without a reload between them.  The off-by-one in the address
-formula compensates for the off-by-one in the register's exit value.
-
-> 📍 `src/text_input.c`'s `text_input_init`,
-> `tests/test_text_input.c`'s `text_input_init_empty_payload_yields_length_zero`,
-> Ghidra `FUN_00402009 @ 0x402009`.
+Claimed `0x402009` shares one register between its clear and copy loops and writes `(&buf[1])[i]` with `i = -1`, an
+off-by-one "compensated" in the address formula.  That is Ghidra's rendering.  The asm keeps `i` in a stack local
+(`[ebp-4]`) and does `inc [ebp-4]; mov byte_5CD550[ecx], al` — plain `buf[++i] = *p++` after the clear loop leaves
+`i = -1`: the source reused its loop variable, nothing more.  (The copy has no 2000-byte bound.)
 
 ---
 
 ## 17. Text-input cursor clamps past-end to length+1, not length
 
-`FUN_00401984` (the editor's clamp helper) treats `length+1` — not
-`length` — as the past-end cursor position:
+`text_input_clamp_cursor` (`0x401984`) resets `DAT_005cd408`
+(clamp_state) to 0, refreshes the text width (`0x401f8f`, which sets
+the too-wide flag `DAT_0057d3b0`), then:
 
 ```c
-if (DAT_0058fe94 + 1 <= DAT_005bb4a8) {       // length+1 <= cursor
-  DAT_005bb4a8 = DAT_0058fe94 + 1;            // cursor = length+1
-  DAT_005cd408 = 1;                           // clamp_state = 1
-}
+if (length + 1 <= cursor) { cursor = length + 1; clamp_state = 1; }
+if (cursor >= max_len)    { cursor = max_len;    clamp_state = 2; }   // MaxCharCount
+if (DAT_0057d3b0)          clamp_state = 2;                          // text too wide
+if (cursor < 0)            cursor = 0;
 ```
 
-So `cursor == length` is fine (sits on the terminator); `cursor ==
-length+1` is also fine (no-op); anything beyond is clamped to
-length+1 with `clamp_state := 1`.  Then a second clamp step pins
-cursor to `max_length` and sets `clamp_state := 2`.
+So `cursor == length` (on the terminator) is unflagged; `cursor ==
+length + 1` stays put but **is** flagged (state 1); anything beyond
+is pulled back to `length + 1` with state 1.  State 2 means "no
+room": the cursor reached `max_len`, or the text is wider than the
+field's pixel budget (`DAT_0058fd68`).  `text_input_insert_char`
+(`0x401d26`, #18) refuses to write in state 2.
 
-The "+1" matters because the renderer draws an insertion caret
-*after* the terminator when the cursor is at `length+1`, indicating
-"empty position at end ready to receive input".  Distinct visual
-from `cursor == length` (caret on the terminator, indicating "next
-char will overwrite the end").
+Why `length + 1` rather than `length` is not visible in the clamp
+itself; with `text_input_clear`'s length = 1 (#15) it lets the
+cursor sit one past the terminator of an empty field.
 
 > 📍 `src/text_input.c`'s `text_input_clamp_cursor`,
 > `tests/test_text_input.c`'s
 > `text_input_clamp_cursor_past_length_bumps_to_length_plus_one`,
-> Ghidra `FUN_00401984 @ 0x401984`.
+> IDA `0x401984`.
+
+*Re-checked 2026-11-18 against the IDA export: cursor == length+1 is flagged (state 1), not a no-op; state 2 also comes from the too-wide flag DAT_0057d3b0; the caret-rendering rationale was unverified and is dropped.*
 
 ---
 
-## 18. Text-input "overwrite" mode skips max_length and length update
+## 18. Text-input "overwrite" mode skips the length update
 
-`FUN_00401d26` (insert_char) has two branches depending on `DAT_005c9280`
-(the insert/overwrite toggle):
+`text_input_insert_char` (`0x401d26`) is gated twice before either
+branch runs: the editor must be enabled (`DAT_005aeb78`), and the
+clamp helper (`0x401984`, #17) must not report state 2 — so the cursor
+is below `max_len` and the text fits the field's pixel budget.  Then
+it branches on `DAT_005c9280` (the insert / overwrite toggle):
 
 ```c
-if (DAT_005c9280 == 0) {                         // overwrite branch
-  (&DAT_005cd550)[DAT_005bb4a8] = param_1;       // buf[cursor] = c
-  DAT_005bb4a8 = DAT_005bb4a8 + 1;               // cursor++
-}
-else if (DAT_0058fe94 < DAT_005cd4f4) {          // insert branch
-  FUN_00401333(buf + cursor, buf + 1 + length);  // shift_right
-  buf[cursor] = c;
-  cursor++;
+if (DAT_005aeb78 && (clamp_cursor(), clamp_state != 2)) {
+    if (DAT_005c9280 == 0) {                       // overwrite
+        buf[cursor++] = c;
+    } else if (length < max_len) {                 // insert
+        shift_right(buf + cursor, buf + length + 1);   // 0x401333
+        buf[cursor++] = c;
+    }
 }
 ```
 
-The overwrite branch is unconditional — no `length < max_length`
-guard, no length update.  If the caller types past the end, the new
-char overwrites the terminator and `length` stays stale until the
-next `recompute_length` call.  The clamp helper handles the cursor
-position fine afterward (it pins to `max_length` if needed) but
-`length` lags behind reality.
-
-The insert branch is properly bounded by `length < max_length` and
-uses `shift_right` to make room — but it also doesn't update
-`length`.  Both branches rely on the caller to call recompute when
-they care about the value.
+Neither branch updates `length` (`DAT_0058fe94`).  In overwrite mode
+a char typed at the terminator (cursor == length) or one past it
+(cursor == length + 1, allowed by the clamp) replaces the NUL / the
+byte after it, and `length` stays stale until the next
+`recompute_length` (`0x401f49`).  The insert branch bounds on
+`length < max_len`; overwrite relies on the clamp's `cursor <
+max_len` instead.
 
 > 📍 `src/text_input.c`'s `text_input_insert_char`,
 > `tests/test_text_input.c`'s `text_input_insert_char_at_end_extends_in_overwrite`,
-> Ghidra `FUN_00401d26 @ 0x401d26`.
+> IDA `0x401d26`.
+
+*Re-checked 2026-11-18 against the IDA export: overwrite is not unbounded — the clamp's state-2 gate (cursor < max_len, text fits) and DAT_005aeb78 guard both branches; the stale-length quirk stands.*
 
 ---
 
 ## 19. Text-input probe special-cases the decimal point past column 8
 
-`FUN_00401e49` (probe_at_cursor) writes `_DAT_00591520` based on the
-character under the cursor.  Normally it's 1 if the cursor sits on
-the terminator, 0 otherwise.  But when `clamp_state == 1` AND the
-character is `'.'` AND the cursor index is `>= 8`, the probe returns
-**2** instead of 1:
+`text_input_probe_at_cursor` (`0x401e49`) writes `DAT_00591520`
+from the character under the cursor: 1 if it is the terminator, 0
+otherwise — except that with `clamp_state == 1` and a `'.'` under the
+cursor it writes 1 below column 8 and **2** from column 8 on:
 
 ```c
-_DAT_00591520 = (uint)(buf[cursor] == '\0');
-if (DAT_005cd408 == 1 && buf[cursor] == '.') {
-  _DAT_00591520 = (cursor < 8) ? 1 : 2;
-}
+DAT_00591520 = (buf[cursor] == '\0');
+if (DAT_005cd408 == 1 && buf[cursor] == '.')
+    DAT_00591520 = (cursor >= 8) ? 2 : 1;
 ```
 
-The "8" is the column threshold that retail's number-entry fields
-treat as "too far right for a normal decimal point" — past column 8
-the field has run out of room for the fractional part and the
-renderer paints a warning indicator instead of a normal caret.
-`clamp_state == 1` (cursor was at past-end) plus a decimal point at
-that position is the engine's way of saying "user typed a '.' but
-there's no room for digits after it."
+Nothing uses it.  `0x401e49` has no call site in the binary (no
+`call`, no stored pointer) and `DAT_00591520` is write-only (its four
+xrefs are this function's stores).  It is dead code — the meaning of
+the 8 and the 2 is lost.  (State 1 puts the cursor one past the
+terminator, so the `'.'` test reads a stale byte there.)
 
 > 📍 `src/text_input.c`'s `text_input_probe_at_cursor`,
 > `tests/test_text_input.c`'s `text_input_probe_at_cursor_decimal_ge_eight_is_two`,
-> Ghidra `FUN_00401e49 @ 0x401e49`.
+> IDA `0x401e49`.
+
+*Re-checked 2026-11-18 against the IDA export: 0x401e49 is uncalled and DAT_00591520 never read — dead; the "number-entry warning indicator" explanation was invented and is withdrawn.*
 
 ---
 
@@ -897,97 +845,114 @@ asymmetry and notes it loudly.
 
 ## 22. Localization bounds checks are off-by-one or absent
 
-The seek and read paths gate their walk on
-`walker < (byte *)((int)&DAT_005aea40 + 1)`, where `DAT_005aea40`
-is exactly `blob_base + 120000`.  So the check permits the walker
-to land ONE BYTE past the end of the blob (offset 120000 inclusive
-is treated as in-bounds, even though 120000 is the first
-out-of-allocation byte).  The control-byte-skip loop after the
-walk has no bounds check at all and will read forward past the
-end if every byte happens to be < 0x20.
+The localized-text blob lives at `0x591580` (120000 B; L2.eng is
+100016 B).  The seek (`0x4018d7`), read (`0x4017bf`) and
+`gfx_wrap_localized` (`0x40328e`) paths check only the **section
+start** — `blob + localization_offset(index)` — once, against the
+address `0x5aea40 = blob + 120000`:
 
-The write path has **no bounds check whatsoever** — it does the
-walk + control-skip + memcpy entirely unguarded.  A caller passing
-an offset that walks the pointer past the buffer end will corrupt
-adjacent .bss.
+```c
+p = blob + localization_offset(index);
+if (p <= (char *)&DAT_005aea40) {            // asm: cmp; jnb — inclusive
+    while (n > 0) { if (*p == 0 && p[-1] ...) n--; p++; }   // unbounded
+    while (*p < 0x20) p++;                                  // unbounded
+    ...
+}
+```
 
-In retail this is masked by two things: (a) the actual l2_eng.dat
-file is much smaller than 120000 bytes for the English release
-(so the buffer is trailing zeros, not garbage), and (b) the write
-function is never called.  But the off-by-one in the seek/read
-path is observable — a section at the very end of the blob whose
-"section" is just the NUL terminator can advance the walker to
-offset 120000, where the control-skip loop reads `blob[120000]`
-(out of allocation).  Our port mirrors the off-by-one but uses a
-size_t comparison instead of pointer arithmetic.
+So the start may sit exactly at `blob + 120000` (one past the blob),
+and nothing bounds the sub-string walk or the control-byte skip that
+follow: a large `n`, or a run of bytes < 0x20, walks off the blob.
+`blob + 120000` is not padding — it is `DAT_005aea40` itself, a
+live flag (the tooltip `0x476e95` sets it to 1 around its
+measure-and-draw `gfx_wrap_localized` calls, and
+`gfx_text_render_line` reads it to skip the shadow passes).  The seek
+path stores its pointer in `DAT_005c9270` before the check, so a
+failed check still leaves the global pointing at the section start.
+
+The write path (`0x4016f3`, #21) has no check at all — walk,
+control-skip and copy all unguarded — but it has no caller.
+
+In retail this is masked by the data: section offsets come from the
+blob's own table and L2.eng ends ~20 KB short of the 120000-byte
+buffer (zero-filled .bss), so walks stop on real strings.  Our port
+mirrors the inclusive start check (`walker_in_bounds`) and, like
+retail, does not bound the walk.
 
 > 📍 `src/localization.c`'s `walker_in_bounds` and
 > `localization_write`,
 > `tests/test_localization.c`'s
 > `localization_seek_skip_out_of_bounds_suppresses_walk`,
-> Ghidra `FUN_004018d7 @ 0x4018d7`, `FUN_004017bf @ 0x4017bf`,
-> `FUN_004016f3 @ 0x4016f3`.
+> IDA `0x4018d7`, `0x4017bf`, `0x40328e`, `0x4016f3`.
+
+*Re-checked 2026-11-18 against the IDA export: the bound is a one-time check of the section start (inclusive), not a gate on the walk; blob+120000 is the live flag DAT_005aea40; added 0x40328e's copy of the check.*
 
 ---
 
 ## 23. Word-width measurer treats leading spaces as word-internal
 
-`FUN_004036f9` (the per-word pixel-width measurer used by the
-word-wrap renderer) categorizes characters into "leading" and
-"internal" via a `saw_printable` flag:
+`font_metrics_word_width` (`0x4036f9`, the per-word pixel-width
+measurer behind both word-wrap renderers) splits characters into
+"leading" and "internal" with a `saw_printable` flag:
 
 ```c
 if (c == ' ') {
-  if (saw_printable) return total;     /* internal space ends word */
+  if (saw_printable) return total;     /* internal space ends word, not consumed */
   total += 4;                          /* leading space contributes */
 }
 ```
 
-Leading spaces are MEASURED INTO the word's width (each contributes
-+4 pixels), but the FIRST internal space terminates the word.  This
-implements the conventional word-wrap rule that whitespace "belongs
-to" the preceding word for line-break purposes — the caller copies
-out `chars_consumed` bytes after the measurement, picking up the
-exact bytes that fit on the current line.
+Leading spaces are MEASURED INTO the word's width — a flat **+4 px
+each, whatever the font** (`a2` is ignored here; `0x4015b9` also
+returns 4 for a space) — but the first space after a printable ends
+the word without being counted in `DAT_005c9a7c` (chars consumed).
+The next call starts on that space, so whitespace belongs to the
+**following** word: the caller copies `DAT_005c9a7c` bytes, a word
+plus the spaces before it.  `gfx_wrap_localized` (`0x40328e`) then
+drops leading spaces at the start of each wrapped line (#35); the
+buffer variant `0x40352f` keeps them.
 
 > 📍 `src/font_metrics.c`'s `font_metrics_word_width`,
 > `tests/test_font_metrics.c`'s
 > `font_metrics_word_width_leading_spaces_count_as_four` and
 > `font_metrics_word_width_terminates_at_internal_space`,
-> Ghidra `FUN_004036f9 @ 0x4036f9`.
+> IDA `0x4036f9`.
+
+*Re-checked 2026-11-18 against the IDA export: whitespace attaches to the following word (the entry said the preceding one); the 4 px is font-independent.*
 
 ---
 
 ## 24. `$` is a soft word boundary in the word-wrap stream
 
-Same function, parallel branch:
+Same function (`0x4036f9`), parallel branch:
 
 ```c
 if (c == '$') {
-  if (saw_printable) return total;     /* internal '$' ends word */
-  /* leading '$' falls through — no width, but counted in
-   * chars_consumed by the unconditional bump at loop end */
+  if (saw_printable) return total;     /* internal '$' ends word, not consumed */
+  /* leading '$': no width, counted in chars_consumed */
 }
 ```
 
-A '$' after the first printable character terminates the word with
-no contribution.  But a '$' that appears BEFORE the first printable
-is silently consumed — no width, no boundary, still counted in
-`chars_consumed`.
+A `'$'` after the first printable ends the word; the next word then
+starts on it, where it is "leading": consumed with zero width.  So
+`'$'` is a zero-width break point for the wrap.
 
-The engine uses '$' as a sigil for runtime macro expansion ("$P"
-for player name, "$1" for the first arg, etc. — visible in the
-l2_eng.dat strings).  Treating it as a soft word boundary lets the
-word-wrap layer break between fixed text and a macro that will be
-substituted later.  The leading-skip behavior accommodates strings
-that start with a macro: the wrap state machine consumes the sigil
-prefix and continues into the macro body to determine wrap width.
+It is not a macro sigil.  The text renderer `gfx_text_render_line`
+(`0x402637`) substitutes on `'#'` (`0x402c16`, #33), not `'$'`, and
+L2.eng holds no `$P` / `$1`-style strings (four `$` bytes in all).
+In the renderer `'$'` is an ordinary character with no glyph
+(`DAT_004d71f0[4] == 0`), drawn as a 4-px gap — so a `'$'` measures
+0 px but renders 4 px wide, and a wrapped line containing one can
+overrun its budget by 4 px.  Why the measurer singles out `'$'` is
+not known.
 
 > 📍 `src/font_metrics.c`'s `font_metrics_word_width`,
 > `tests/test_font_metrics.c`'s
 > `font_metrics_word_width_terminates_at_internal_dollar` and
 > `font_metrics_word_width_leading_dollar_is_skipped`,
-> Ghidra `FUN_004036f9 @ 0x4036f9`.
+> IDA `0x4036f9`, `0x402637`.
+
+*Re-checked 2026-11-18 against the IDA export: the measurer behaviour is confirmed; the "$P / $1 macro" explanation was wrong ('#' is the substitution sigil, L2.eng has no $ macros); added the 0-vs-4 px measure/render mismatch.*
 
 ---
 
@@ -1017,84 +982,90 @@ into adjacent memory.
 
 ## 26. Clipped 2x1 painter checks only the left pixel
 
-The bounds-checked variant of the 2-byte horizontal brush
-(`FUN_00403a2c`) tests `(x, y)` against `(width, height)` and then
-calls the unchecked 2x1 painter (`FUN_004b3f7a`).  The unchecked
-painter writes `pixels[x + y*width]` *and* `pixels[x + y*width + 1]`,
-but the wrapper never separately checks the `x+1` pixel.
+The bounds-checked 2-byte horizontal brush `gfx_paint_2x1_clipped`
+(`0x403a2c`) tests `(x, y)` against `(xRight, yBottom)` and then calls
+the unchecked painter `gfx_paint_2x1` (`0x4b3f7a`), which writes
+`Buf[x + y*xRight]` *and* `Buf[x + y*xRight + 1]`; the `x+1` pixel is
+never checked.
 
 ```c
-if (-1 < x && x < width && -1 < y && y < height) {
-    FUN_004b3f7a(x, y, color);   /* writes [x] and [x+1] */
-}
+if (x >= 0 && x < xRight && y >= 0 && y < yBottom)
+    gfx_paint_2x1(x, y, color);   /* writes [x] and [x+1] */
 ```
 
-Consequence: when called with `x == width - 1`, the left pixel
-writes the last column of row `y` and the right pixel writes one
-column past the row end.  In a contiguous canvas (pitch == width,
-which is retail's setup at 640×480×8 with no row padding), that
-"one past the end" lands on the FIRST pixel of row `y+1`.
+With `x == xRight - 1` the right pixel lands on the first pixel of
+row `y+1` (`Buf` is the locked back surface, addressed with pitch =
+`xRight`); at the bottom-right corner it writes one byte past the
+surface.
 
-The corner case (`x = width-1`, `y = height-1`) writes one byte
-PAST the back-buffer entirely — into whatever heap-adjacent memory
-DDraw's `lpSurface` was followed by.  Retail callers (the line
-drawers in `FUN_00403c49` / `FUN_0040437d`) iterate with a step of
-2 and never call the wrapper at exactly the right edge, so the
-quirk is dormant in practice.  We preserve it verbatim — the
+In retail this is unreachable: `0x403a2c`'s only caller is
+`0x4040d6` (a diamond outline drawer stepping x by 2), and `0x4040d6`
+itself has no caller (no `call`, no stored pointer).  We preserve
+it verbatim — the
 `gfx_paint_2x1_clipped_bottom_right_corner_wraps_into_guard` test
-pins the behavior down by checking that the byte one past the
-canvas does in fact get stomped.
+pins the stomp.
 
 > 📍 `src/gfx_paint.c`'s `gfx_paint_2x1_clipped`,
 > `tests/test_gfx_paint.c`'s
 > `gfx_paint_2x1_clipped_right_edge_wraps_to_next_row` and
 > `_bottom_right_corner_wraps_into_guard`,
-> Ghidra `FUN_00403a2c @ 0x403a2c` (wrapper),
-> `FUN_004b3f7a @ 0x4b3f7a` (unchecked painter).
+> IDA `0x403a2c` (wrapper), `0x4b3f7a` (unchecked painter),
+> `0x4040d6` (sole, dead caller).
+
+*Re-checked 2026-11-18 against the IDA export: the unchecked x+1 confirmed; the callers are not the line drawers 0x403c49 / 0x40437d — the only caller 0x4040d6 is itself uncalled, so the quirk is dead code.*
 
 ---
 
 ## 27. Glyph blitter clipped duplicates are byte-identical
 
-The text-glyph dispatcher (`FUN_00402a14`) selects between three
-leaf blitters by clip mode:
+The text-glyph dispatcher (`gfx_dispatch_glyph`, `0x402a14`) selects
+between three leaf blitters by the x-clip mode `DAT_005cdd20` set by
+`0x40464c`:
 
-  - `DAT_005cdd20 == 0` (unclipped)  → `FUN_004b41b7` (165 B)
-  - `DAT_005cdd20 == 1` (left-clip)  → `FUN_004b425c` (105 B)
-  - `DAT_005cdd20 == 2` (right-clip) → `FUN_004b42c5` (105 B)
+  - `0` (unclipped)  → `0x4b41b7` (165 B)
+  - `1` (left-clip)  → `0x4b425c` (105 B)
+  - `2` (right-clip) → `0x4b42c5` (105 B)
 
-The two clipped functions are **byte-for-byte identical**.  Every
-instruction matches — same prologue, same DAT_* references, same
-loop structure, same epilogue.  r2 confirms (105 B each, identical
-disassembly modulo address):
+(mode 5 = invisible, no call.)  The two clipped functions are
+**byte-for-byte identical** modulo addresses: same prologue, same
+globals, same loop:
 
 ```
-0x004b425c: push ebp; mov ebp,esp; push ebx; push esi; push edi
-0x004b4262: mov esi,[ebp+8]; add esi,[0x58fe04]   ; src = font + glyph_offset
-0x004b426b: mov edi,[0x4ea1a8]; add edi,[0x591524]; dst = canvas + cursor_x
-0x004b4277: mov eax,[0x591528]; mov edx,[0x4eb274]; mul edx; add edi,eax  ; + cursor_y*W
-...
+0x4b425c: push ebp; mov ebp,esp; push ebx; push esi; push edi
+          mov esi,[ebp+8]; add esi,[Offset]           ; src = font + glyph offset
+          mov edi,[Buf]; add edi,[0x591524]           ; dst = surface + x
+          mov eax,[0x591528]; mov edx,[xRight]; mul edx; add edi,eax
+          mov edx,[0x5bb478]; mov ebx,[0x57d3bc]      ; rows, colour
+row:      mov ecx,[0x591514]                          ; visible width
+px:       mov al,[esi]; cmp al,0; jz +2; mov [edi],bl ; paint non-zero texels
+          inc esi; inc edi; dec ecx; jg px
+          add esi,[0x59150c]; add edi,[0x5cd400]; dec edx; jg row
 ```
 
-The retail source almost certainly had two distinct functions —
-`blit_clipped_left()` and `blit_clipped_right()` — that reduced to
-the same code after the column-stride / source-stride math was
-unified.  MSVC 4.20's inliner/de-duplicator did not catch the
-overlap (or the build settings disabled COMDAT folding), so both
-copies shipped.  The dispatcher selects "the right one" but they're
-behaviorally indistinguishable.
+These are hand-written assembly (the `0x4b3xxx` blitter module:
+register-only loops, `dec / jg`), not compiler output, so no
+compiler de-duplication question arises — the author simply wrote
+the left and right cases as two copies.  The clip offsets
+(`DAT_0058fd50` into the source, the x shift) are applied by the
+dispatcher / `0x40464c` beforehand, which is why one body serves both.
 
-Our port exposes both as named entry points
+One behavioural difference vs the unclipped blitter: `0x4b41b7`
+tests `DAT_005cd40c == 1` and, if set, copies each texel's own
+colour; both clipped copies always paint the solid colour
+`DAT_0057d3bc`.  A multicolour glyph clipped at a side edge draws
+single-colour.
+
+Our port exposes both clipped entry points
 (`gfx_glyph_blit_left_clipped` / `_right_clipped`) sharing a static
-helper.  Preserves the retail call topology and gives the eventual
-port of `FUN_00402a14` a 1:1 mapping for both clip cases, without
-duplicating the body.
+helper.
 
 > 📍 `src/gfx_glyph.c`'s `gfx_glyph_blit_left_clipped` /
 > `_right_clipped` / shared `glyph_blit_clipped`,
 > `tests/test_gfx_glyph.c`'s
 > `gfx_glyph_blit_right_clipped_byte_identical_behavior`,
-> Ghidra `FUN_004b425c @ 0x4b425c`, `FUN_004b42c5 @ 0x4b42c5`.
+> IDA `0x4b41b7`, `0x4b425c`, `0x4b42c5`.
+
+*Re-checked 2026-11-18 against the IDA export: identity confirmed; the MSVC de-dup / COMDAT rationale is wrong (hand-written asm); added the clipped copies' missing DAT_005cd40c texel-colour path.*
 
 ---
 
@@ -1142,117 +1113,112 @@ upstream filter is the only thing keeping it dormant in retail.
 
 ## 29. Glyph descriptor has two height fields, used at different stages
 
-Each 16-byte glyph descriptor in a Lords II font blob carries TWO
-"height-shaped" fields, read by different consumers:
+Each 16-byte glyph descriptor in a Lords II font blob (`font + 8 +
+16 × (glyph − 1)`, read by `gfx_dispatch_glyph` `0x402a14`) carries:
 
-  - **`short` at descriptor +2** — the "natural" glyph extent in rows.
-    The Y-clip setter (`FUN_0040477b`) uses this to decide whether the
-    glyph fits inside the clip rect and to compute the top/bottom skip.
-  - **`byte` at descriptor +0xd** — a per-glyph cursor_y advance.  The
-    dispatcher reads it into `DAT_005bb478` and immediately *adds it to
-    cursor_y*, as if it were a line advance.
+  - **`short` +0** — width (`word_5C9258`; the return value is width + 1).
+  - **`short` +2** — height in rows (`word_5AEB70`).  The y-clip setter
+    `0x40477b` clips it against the clip rect and computes the top skip
+    `DAT_0058feac`.
+  - **`dword` +4** — the texel offset.
+  - **`byte` +0xd** — a per-glyph **vertical offset**.  The dispatcher
+    stores it in `DAT_005bb478` and adds it to the draw y
+    `DAT_00591528`.
 
-What makes this interesting: `DAT_005bb478` then gets OVERWRITTEN by
-the Y-clip setter with the visible (post-clip) row count — that's the
-value the blitter actually reads as its outer-loop bound.  So one
-global has two unrelated uses, ordered carefully by the dispatcher to
-avoid clobbering before the cursor update:
+`DAT_005bb478` then gets OVERWRITTEN by the y-clip setter with the
+visible (post-clip) row count — the value the blitter actually uses
+as its row counter.  One global, two unrelated uses, ordered so the
+offset is applied before the clip needs the slot:
 
 ```c
-DAT_005bb478 = byte_at_descriptor_+0xd;          // step 1: stage advance
-DAT_00591528 += DAT_005bb478;                    // step 2: cursor_y += advance
-... (default-font tweak shaves) ...
-FUN_0040477b(...);                               // step 3: clip; OVERWRITES
-                                                 //         DAT_005bb478
-                                                 //         with row count
-FUN_004b41b7(font);                              // step 4: blitter reads the
-                                                 //         post-clip value
+DAT_005bb478 = desc[+0xd];           // step 1: per-glyph y offset
+DAT_00591528 += DAT_005bb478;        // step 2: draw y += offset
+... (default-font accent shave, #30) ...
+clip_x(…); clip_y(…);                // step 3: OVERWRITES DAT_005bb478 with visible rows
+blit(font);                          // step 4: blitter reads the row count
 ```
 
-The natural reading is that the `short` at +2 is the *glyph height for
-clip math* and the `byte` at +0xd is the *cursor advance for the next
-glyph*.  Almost always they should be equal (a glyph occupies as many
-rows as it advances the cursor), but the engine treats them as
-independent — handy for descenders, accent marks above the baseline,
-or zero-height combining marks that consume zero rows but still
-advance the line.
+The offset is not a line advance: `gfx_text_render_line` (`0x402637`,
+the only caller) re-sets `DAT_00591528` to the line's y (± 1 for
+the shadow passes) before every dispatch, so it never accumulates.
+It is the glyph's top bearing — how far below the line top its
+first stored row is drawn (presumably so short glyphs need no blank
+top rows in the blob).
 
-> 📍 `src/gfx_dispatch.c`'s `gfx_dispatch_glyph`,
-> `docs/decompiled/by-address/402a14.c`, Ghidra `FUN_00402a14` lines
-> reading `psVar2[1]` (height short) vs `psVar2[+0xd]` (advance byte).
+> 📍 `src/gfx_dispatch.c`'s `gfx_dispatch_glyph` (its comment still
+> calls +0xd an "advance"), IDA `0x402a14`, `0x40477b`, `0x402637`.
+
+*Re-checked 2026-11-18 against the IDA export: +0xd is a per-glyph y offset (top bearing), not a cursor/line advance — render_line resets the y before each glyph; dropped the dead docs/decompiled pointer.*
 
 ---
 
 ## 30. Glyph dispatcher hard-codes per-character kerning tweaks for one font
 
-`FUN_00402a14` has three independent character-range checks that each
-decrement `cursor_y` by one pixel — but ONLY when the font passed in
-matches a specific global (`DAT_005af8f0`, one of the Charset blobs):
+`gfx_dispatch_glyph` (`0x402a14`) has three character-range checks
+that each subtract one from the draw y — but ONLY when the font
+passed in is the default font blob at `0x5af8f0`:
 
 ```c
-if (font_base == &DAT_005af8f0) {
-    if (0x60 < c && c < 0x6e) cursor_y -= 1;   // 'a'..'m'
-    if (0x72 < c && c < 0x78) cursor_y -= 1;   // 's'..'w'
-    if (0x7f < c && c < 0x85) cursor_y -= 1;   // 0x80..0x84
+if (font == &unk_5AF8F0) {
+    if (a2 >= 0x61 && a2 <= 0x6d) y--;
+    if (a2 >= 0x73 && a2 <= 0x77) y--;
+    if (a2 >= 0x80 && a2 <= 0x84) y--;
 }
 ```
 
-A few observations:
+`a2` is not the character: the only caller, `gfx_text_render_line`
+(`0x402637`), passes `c − 0x20` (the index into `DAT_004d71f0`, #32).
+The ranges are therefore characters **0x81..0x8d, 0x93..0x97 and
+0xa0..0xa4** — in code page 437 exactly the accented lowercase
+letters: ü é â ä à å ç ê ë è ï î ì, ô ö ò û ù, á í ó ú ñ (not the
+unaccented æ at 0x91).  Smaller y is higher on the screen, so these
+glyphs are drawn **one pixel higher** than their descriptor's offset
+(#29) says — room for the accent, in the default font only.
 
-  - **The tweaks are baked into the dispatcher, not the font.**  Two
-    callers using the same font data with different `font_base`
-    pointers would get different kerning.  Almost certainly a way to
-    reuse the same font blob with and without the tweak (one pointer
-    is the "tweaked" alias, the other is the raw).
-  - **The ranges look like a manual kerning pass.**  Lowercase
-    `'a'..'m'` covers most of the high-x-height lowercase letters
-    (a, c, e, m, n, o…); `'s'..'w'` picks up the rest.  The third
-    range is in the extended Latin block (0x80..0x84) — almost
-    certainly accented variants of the same lowercase letters.  A
-    type-designer would say these glyphs sit one pixel "tall" in the
-    font blob and need to be drawn one pixel "lower" to align.
-  - **The decrement happens AFTER `cursor_y += advance`.**  So the
-    effective draw position is `(prev_cursor_y + advance) - 1` — a
-    one-pixel shave per tweaked character.  Glyphs are positioned
-    vertically per-character.
+  - **The tweak lives in the dispatcher, not the font**: keyed on the
+    font pointer, so the tall font `0x5b2fa0` and any other blob draw
+    the same glyph indices unshifted.
+  - **It applies after `y += offset`** and only to the glyph pass it is
+    in; render_line re-sets y before each pass, so nothing accumulates.
 
 We expose the trigger font as a runtime registration
-(`gfx_dispatch_set_default_font`) so the test harness can pick which
-font gets the tweak.
+(`gfx_dispatch_set_default_font`); the port tests the same raw
+`a2` ranges.
 
 > 📍 `src/gfx_dispatch.c`'s `gfx_dispatch_glyph` default-font branch,
-> `docs/decompiled/by-address/402a14.c`, Ghidra `FUN_00402a14` at
-> `0x402a97` (`cmp dword [arg_8h], 0x5af8f0`).
+> IDA `0x402a14` (`cmp` against `0x5af8f0`), caller `0x402637`.
+
+*Re-checked 2026-11-18 against the IDA export: the ranges are glyph indices (char − 0x20) → CP437 accented lowercase 0x81..0x8d / 0x93..0x97 / 0xa0..0xa4, not 'a'..'m' / 's'..'w'; y−1 draws them one pixel higher, not lower.*
 
 ---
 
 ## 31. Alt-clip rect mixes runtime globals with hard-coded constants
 
-The glyph dispatcher's alt-clip branch — used when an overlay panel
-(scenario list, hint text) wants to confine glyphs to a sub-rectangle
-— sources its clip bounds from FOUR places:
+`gfx_dispatch_glyph` (`0x402a14`) clips each glyph against one of
+two rects.  Normally `(0, 0)..(xRight, yBottom)`.  When
+`DAT_005aeb84 != 0` it uses an alt rect from four sources:
 
-  - **Left**: `DAT_0052afdc` (runtime global).
-  - **Right**: `0x1de` (hard-coded immediate in the dispatcher body).
-  - **Top**: `0x18` (hard-coded immediate).
-  - **Bottom**: `DAT_00553254` (runtime global).
+  - **Left**: `DAT_0052afdc` (runtime global; 0 or 4 by map zoom, set in
+    `engine_map_init_set_camera` `0x451fcc`).
+  - **Right**: 478 (`0x1de`, immediate).
+  - **Top**: 24 (`0x18`, immediate).
+  - **Bottom**: `DAT_00553254` (runtime global, same setter).
 
-The two constants (478, 24) are pixel-perfect for the panel-overlay
-layout in 640×480 mode — they correspond to specific UI element
-edges baked into the dispatcher's body rather than configured
-externally.  Our port preserves the asymmetry: `set_alt_clip(enabled,
-left, bottom)` takes runtime values for the two axes that retail
-loads from globals, and the constants are encoded as `#define`s
-inside `src/gfx_dispatch.c`.
+The globals are the map view's extents, so the alt rect would clip
+text to the map viewport.
 
-This means OpenLords2 can't render text in a panel of a different
-size without re-compiling — the same constraint retail had.  Not a
-bug; just a design choice from 1996 where "the overlay is always 24
-pixels from the top and 478 pixels wide" was a fixed assumption.
+It never fires in retail: every store to `DAT_005aeb84` writes 0
+(eight `mov dword_5AEB84, 0` in `0x402637` and the wrap / label
+renderers `0x402c5e` .. `0x40328e`; the image holds nine references:
+those eight stores and the dispatcher's one read).  The alt-clip
+branch is dead code.  Our port keeps it (`set_alt_clip`, the two
+constants as `#define`s) for shape parity.
 
 > 📍 `src/gfx_dispatch.c`'s `GFX_DISPATCH_ALT_CLIP_TOP/RIGHT` +
-> `gfx_dispatch_glyph` alt-clip branch, Ghidra `FUN_00402a14` at
-> `0x402b1b` / `0x402b34` (push immediates 0x1de / 0x18).
+> `gfx_dispatch_glyph` alt-clip branch, IDA `0x402a14` (`0x402b0e`
+> read of `DAT_005aeb84`), `0x451fcc`.
+
+*Re-checked 2026-11-18 against the IDA export: DAT_005aeb84 is only ever written 0, so the alt-clip branch is dead (the entry said overlay panels used it); the globals are map-view extents.*
 
 ---
 
@@ -1289,58 +1255,42 @@ helper that materializes the memory layout retail relied on.
 
 ## 33. Renderer's substitution stream is one-shot but loop-sticky
 
-The text renderer at `FUN_00402637` has a '#' macro: when the
-substitution flag (`DAT_005bb4c4`) is set and a '#' appears in the
-source, the renderer pulls bytes from a fixed substitution buffer
-(`DAT_005bb4d0`) instead.  But the stickiness is unusual.  The
-top-of-loop check `if (local_c == 0x23)` only triggers the FIRST
-substitution; from that point on, the BOTTOM-of-loop advance switches
-to "fetch from stream" purely because the stream cursor
-(`DAT_005bb4b4`) is non-zero.  Subsequent chars come from the stream
-without needing more '#'s in the source.
+`gfx_text_render_line` (`0x402637`) has a `'#'` macro: when the
+substitution flag `DAT_005bb4c4` is 1 (the wrap renderers arm it per
+line), a `'#'` in the source is replaced by bytes from the buffer
+`DAT_005bb4d0` via `substitution_next` (`0x402c16`); with the flag
+off `'#'` renders as a space.  The top-of-loop `'#'` test only
+starts the stream; from then on the BOTTOM-of-loop advance fetches
+from the stream purely because its cursor `DAT_005bb4b4` is non-zero.
+The source pointer stays parked on the `'#'` meanwhile.
 
-When the stream's NUL terminator is hit, `FUN_00402c16` returns ' '
-and resets the cursor to 0.  THIS is what re-arms the source-buffer
-read: the bottom-of-loop advance checks `DAT_005bb4b4 == 0`, and once
-the cursor wraps to 0, the next iteration reads from the source
-buffer again.  The substituted '#' has been "consumed" by then.
+When the stream reaches its NUL, `0x402c16` returns `' '` and resets
+the cursor to 0.  That space is rendered (4 px), and the zero cursor
+re-arms the source read: the next advance is `*++src`, the char
+after the `'#'`.
 
-So `"text#more"` with substitution "AB" loaded renders as
-`"textABmore"` — exactly one source `#` triggers TWO substituted
-characters because once the stream is engaged, it stays engaged
-until exhausted.
+So `"text#more"` with substitution `"AB"` renders as
+**`"textAB more"`** — the stream's terminator becomes a visible
+space.  Every `'#'` restarts the stream from its first byte (an empty
+substitution renders the `'#'` as one space).  Neither the flag nor
+the cursor survive the call (both reset at the end).  The wrap
+measurer (`0x4036f9`) sees `'#'` as a zero-width glyph-less char, so
+substituted text is not measured.
 
 > 📍 `src/gfx_text.c`'s `gfx_text_render_line` (substitution stream
-> branch) + `substitution_next`, Ghidra `FUN_00402637` lines around
-> `0x402702` / `0x402a05` (top-of-loop '#' branch vs bottom-of-loop
-> stream advance).
+> branch) + `substitution_next`, IDA `0x402637` (`0x4026c6` the `'#'`
+> test, the bottom-of-loop `DAT_005bb4b4` test), `0x402c16`.
+
+*Re-checked 2026-11-18 against the IDA export: the stream's NUL yields a rendered space ("textAB more", not "textABmore"); each '#' restarts the stream; corrected the cited addresses.*
 
 ---
 
-## 34. Renderer's uppercase-highlight does a per-iteration color reset
+## 34. (withdrawn) Renderer's uppercase-highlight does a per-iteration color reset
 
-When `DAT_0058fe2c` (the uppercase-highlight flag) is non-zero, the
-text renderer at `FUN_00402637` reassigns the per-glyph color
-(`local_8 = param_5`) on EVERY loop iteration — then, if the current
-character is uppercase A-Z, overrides it to 1.  When the flag is
-zero, the renderer skips both the reset AND the override, leaving
-`local_8` at whatever value it had from the prior iteration (which
-starts at `param_5` from the function preamble).
-
-This means the behavior with the flag off is "use the caller's color
-throughout" — the reset-and-override is dead-equivalent to just
-"override per-char" when the flag is on.  The reset is a defensive
-write that costs an iteration store but ensures the previous char's
-override doesn't bleed forward.
-
-Implemented as a comma-expression in retail's source:
-`(DAT_0058fe2c != 0) && (local_8 = param_5, 0x40 < local_c) && ...`
-where the side-effect lives inside the short-circuit gate.  Cute
-1996-era pattern.
-
-> 📍 `src/gfx_text.c`'s `gfx_text_render_line` (the
-> `g_uppercase_highlight` block), Ghidra `FUN_00402637` at `0x4026d4`
-> (comma-expression with `mov dword [local_8], esi`).
+Claimed `0x402637` resets the glyph colour every iteration through a source-level comma expression in a short-circuit
+gate.  That is Ghidra's rendering; the asm at `0x4026ff` is a plain block: `if (DAT_0058fe2c) { colour = a5; if ('A' <=
+c && c <= 'Z') colour = 1; }`.  Nothing quirky: with `DAT_0058fe2c` set (by the screens at `0x40f5fd`, `0x41608b`,
+`0x41635f`, `0x417960`) uppercase letters draw in palette index 1, everything else in the caller's colour.
 
 ---
 
@@ -1386,28 +1336,29 @@ matches the retail call shape.
 ## 36. max_line_x output is reset only by the localized word-wrap
 
 The wrap subsystem's `DAT_005aeb88` tracks the widest emitted line
-across the most recent multi-line render — caller-readable; used by
-upstream UI code (e.g. retail's scenario-hint center at `0x476e95`)
-to compute centering offsets.
+(the max of `gfx_text_render_line`'s `DAT_005cd404` across lines).
 
-`FUN_0040328e` resets it to 0 at the top (`DAT_005aeb88 = 0;` is
-the FIRST statement of the function).  `FUN_0040352f` does NOT —
-it relies on the caller to seed the value externally.
+`gfx_wrap_localized` (`0x40328e`) resets it to 0 as its first
+statement.  `gfx_wrap_buffer` (`0x40352f`) does NOT, so after it the
+field holds "max of this render's lines AND whatever was there
+before".  No other code writes it — there are no compensating resets
+at call sites.
 
-Effect: a `FUN_0040352f` call's reported max-width is "max of THIS
-render's lines AND whatever was already in the field".  Callers
-that want a fresh reading must zero `DAT_005aeb88` themselves
-before the call.  In retail this manifests as a few specific call
-sites doing the reset explicitly; a typo or omission would have
-yielded a stale-max bug.
+The asymmetry is unobservable in retail: the field's only reader is
+the tooltip `engine_tooltip_tick` (`0x476e95`), which reads it right
+after its own `gfx_wrap_localized` call (to size the tooltip box:
+`12 - (176 - DAT_005aeb88) / 16` tiles).  Nothing reads it after a
+`gfx_wrap_buffer`.
 
-Our port exposes the asymmetry verbatim: `gfx_wrap_localized`
-resets, `gfx_wrap_buffer` does not.  `gfx_wrap_set_max_line_x` is
-the explicit reset helper for the latter.
+Our port keeps the asymmetry: `gfx_wrap_localized` resets,
+`gfx_wrap_buffer` does not; `gfx_wrap_set_max_line_x` is a test
+helper.
 
 > 📍 `src/gfx_wrap.c`'s `gfx_wrap_buffer` (no reset) +
-> `gfx_wrap_localized` (resets at top), Ghidra `FUN_0040352f` and
-> `FUN_0040328e`.
+> `gfx_wrap_localized` (resets at top), IDA `0x40352f`, `0x40328e`,
+> reader `0x476e95`.
+
+*Re-checked 2026-11-18 against the IDA export: no call site resets DAT_005aeb88 (the entry claimed some do); its only reader is the tooltip 0x476e95 right after a localized wrap, so the missing reset is never observed.*
 
 ---
 
@@ -1437,151 +1388,152 @@ the runtime loader puts in the equivalent BSS slot.
 
 ## 38. Bresenham line drawer mutates the abs(dx)/abs(dy) BSS slots
 
-`FUN_00403a8f` is a Bresenham line drawer with an unusual variant:
-the `DAT_005aeb40` and `DAT_005aeb44` slots (set up by `FUN_004037ee`
-to hold abs(dx) and abs(dy)) are **decremented inside the inner
-loop** — one slot per iteration, and BOTH when the err accumulator
-crosses zero.
+`gfx_line_draw` (`0x403a8f`) is a Bresenham line drawer with an
+unusual variant: `DAT_005aeb40` / `DAT_005aeb44`, set by `bres_setup`
+(`0x4037ee`) to abs(dx) / abs(dy), are **decremented inside the
+loop** — the dominant axis's every step, the other's on each minor
+step.  (Pure vertical / horizontal lines take separate plain loops.)
 
-Loop body:
+Shallow loop body (steep mirrors it):
 
-    paint(local_c, local_8, color);           // current pixel
-    bres_err_update(steep_mode);              // err update using
-                                              //   CURRENT abs_dx/dy
-    DAT_005aeb40-- (or 44, dominant axis);    // decrement
-    if (err > 0) {
-        DAT_005aeb44-- (or 40, other axis);   // also decrement
-        local_c += DAT_005aeb54 (x or y step);
-    }
+    paint(x, y, color);                  // 0x4039c7, clipped
+    bres_err_update(0);                  // 0x403949, reads CURRENT slots
+    DAT_005aeb40--;
+    if (err >= 1) { DAT_005aeb44--; y += DAT_005aeb58; }
+    x++;
 
-The accumulator update inside `FUN_00403949` reads the current
-(mutated) abs_dx / abs_dy each call.  Reads:
+with `err = 2·dy − dx` initially and
 
   shallow: err < 0  → err += 2 * abs_dy
            err >= 0 → err += 2 * (abs_dy - abs_dx)
   steep:   err < 0  → err += 2 * abs_dx
            err >= 0 → err += 2 * (abs_dx - abs_dy)
 
-This is mathematically valid but not the textbook form (textbook
-Bresenham keeps abs_dx/abs_dy fixed and updates err with the same
-constants every iteration).  The mutating form has a non-uniform
-pixel distribution along shallow / steep diagonals — e.g. a line
-from `(0,0)` to `(10,5)` plots 4 pixels at y=0, 3 at y=1, then 1
-each at y=2..5.  Distinct from textbook Bresenham's symmetric
-2-2-2-2-2-1 distribution, but endpoints land on the correct
-coordinates and total pixel count = `max(|dx|,|dy|) + 1` is
-preserved.
+Textbook Bresenham keeps the deltas fixed.  With the shrinking
+deltas the distribution is lopsided — `(0,0)→(10,5)` plots 4 pixels
+at y=0, 3 at y=1, then 1 each at y=2..5 — and the far endpoint is
+often **missed**: the pixel count is always `max(|dx|,|dy|) + 1`
+and the endpoint `bres_setup` starts from (lower x when shallow,
+lower y when steep) is exact; the other often is not: `(0,0)→(2,1)` ends at `(2,0)`,
+`(0,0)→(1,2)` at `(0,2)`, `(0,0)→(10,3)` at `(10,2)`; 154 of the 400
+lines with |dx|, |dy| in 1..20 end off their target.  The common
+callers draw axis-aligned rects (`0x403cf4` …), which take the plain
+loops and are exact.
 
-Why retail did this is unclear — possibly an MSVC 4.20 codegen
-artifact from a hand-written algorithm, possibly an explicit choice
-(the per-iteration `abs_dx - abs_dy` motif removes one constant
-load).  Our port preserves the exact arithmetic verbatim.
+Why retail did this is unclear.  Our port preserves the exact
+arithmetic (rhost row `gfx_line_draw`, 0x403a8f).
 
-> 📍 `src/gfx_line.c`'s `bres_err_update` + `gfx_line_draw`, Ghidra
-> `FUN_00403a8f @ 0x403a8f` and `FUN_00403949 @ 0x403949`.
+> 📍 `src/gfx_line.c`'s `bres_err_update` + `gfx_line_draw`,
+> `tools/rhost/rh_hooks_gfx.c` (row `gfx_line_draw`), IDA `0x403a8f`,
+> `0x403949`, `0x4037ee`.
+
+*Re-checked 2026-11-18 against the IDA export: the mutation and the (0,0)→(10,5) distribution confirmed; the "endpoints land on the correct coordinates" claim is false (simulated from the IDA body: 154/400 small diagonals miss the end).*
 
 ---
 
 ## 39. Bevel rects skip the right/bottom clamp when x/y was clamped
 
-The 3 axis-rect bevel wrappers (`FUN_00403deb`, `FUN_00403ee4`,
-`FUN_00403fdd`) all use the same bounds-clamp pattern at the top:
+The 3 axis-rect bevel wrappers (`0x403deb`, `0x403ee4`, `0x403fdd`)
+all use the same bounds-clamp pattern at the top:
 
-    if (param_1 < 1) {
-        param_1 = 0;
-    } else if (DAT_004eb274 <= param_3 + param_1) {
-        param_3 = DAT_004eb274 - param_1;
+    if (x > 0) {
+        if (x + w >= xRight) w = xRight - x;
+    } else {
+        x = 0;
     }
 
-Note the `else if`.  The right-edge clamp ONLY fires when the
-left-edge clamp DIDN'T.  So a rect with x=0 (well in-canvas) gets
-its left edge clamped to 0 (no-op since x was already 0), but the
-right-edge-fit-in-canvas check is **skipped entirely**.  Same
-pattern for y / height.
+(same for y / h against `yBottom`).  The right-edge clamp ONLY runs
+when the left edge was positive.  A rect starting at `x <= 0` is
+moved to x = 0 with its width unchanged and no right-edge fit.
 
-By contrast, the solid rect (`FUN_00403cf4`) uses sequential `if`s:
+The solid rect `gfx_line_rect` (`0x403cf4`) uses sequential `if`s:
 
-    if (param_1 < 1)                              param_1 = 0;
-    if (DAT_004eb274 <= param_3 + param_1)        param_3 = DAT_004eb274 - param_1;
+    if (x <= 0) x = 0;
+    if (x + w >= xRight) w = xRight - x;
 
 Both clamps fire independently.
 
-Behaviorally the bevel skip is harmless — the per-pixel painter
-(`FUN_004039c7`) clips off-canvas writes, so the visible result is
-the same.  But the line drawer iterates the full unclamped width,
-wasting cycles painting pixels that then get dropped.  Looks like
-an oversight that survived for 30 years because the slow path is
-never hit at common rect sizes.
+The difference is visible, not just wasted work: for a rect with
+`x <= 0` and `x + w > xRight` (or the y analogue), the solid rect
+draws its right (bottom) edge at `xRight − 1`, while the bevel's
+right edge lands at `x + w − 1 >= xRight` and is clipped away
+entirely by the per-pixel painter (`0x4039c7`) — the bevel loses its
+right (bottom) edge.  Ordinary on-screen panels never hit it.
 
 Our port preserves both clamp shapes as distinct helpers
-(`clamp_solid` vs `clamp_bevel`) — the visible difference only
-shows up when oversize rects are stress-tested.
+(`clamp_solid` vs `clamp_bevel`).
 
-> 📍 `src/gfx_line.c`'s `clamp_solid` + `clamp_bevel`, Ghidra
-> `FUN_00403cf4`, `FUN_00403deb`, `FUN_00403ee4`, `FUN_00403fdd`.
+> 📍 `src/gfx_line.c`'s `clamp_solid` + `clamp_bevel`, IDA
+> `0x403cf4`, `0x403deb`, `0x403ee4`, `0x403fdd`.
+
+*Re-checked 2026-11-18 against the IDA export: clamp shapes confirmed; "visible result is the same" is wrong — an oversize bevel starting at x ≤ 0 loses its right/bottom edge.*
 
 ---
 
 ## 40. Dotted line drawer is axis-only — diagonals silently draw nothing
 
-`FUN_00403c49` is the dotted-line variant of the Bresenham line
-drawer.  Its body is the same setup + axis-dispatch shape as
-`FUN_00403a8f`, but trimmed:
+`gfx_line_draw_dotted` (`0x403c49`) is the dotted variant of the
+line drawer.  Its body is the same `bres_setup` + axis dispatch as
+`0x403a8f`, trimmed:
 
   - Pure vertical (x1==x2)   → loop with step +2 on y
   - Pure horizontal (y1==y2) → loop with step +2 on x
   - Anything else            → fall through, draw NOTHING
 
-There are no shallow or steep branches.  Diagonal calls reach the
-end of the function without painting a single pixel.
+There are no shallow or steep branches.  Diagonal calls return
+without painting a pixel.
 
-The retail codebase never invokes this with diagonal endpoints (the
-two callsites both pass axis-aligned coords for UI panel borders),
-so this is "load-bearing only for the axis path".  A future caller
-that didn't check would draw an invisible line and have no
-diagnostic to point at.
+It does not matter in retail: `0x403c49` has no caller at all (no
+`call`, no stored pointer in the image) — the whole function is dead
+code.
 
 Our port preserves the silent no-op verbatim — tests assert that
-diagonal dotted-line calls produce zero pixels, so a future
-regression that "fixes" the body to draw diagonals would
-deliberately fail.
+diagonal dotted-line calls produce zero pixels.
 
-> 📍 `src/gfx_line.c`'s `gfx_line_draw_dotted`, Ghidra
-> `FUN_00403c49 @ 0x403c49`.
+> 📍 `src/gfx_line.c`'s `gfx_line_draw_dotted`, IDA `0x403c49`.
+
+*Re-checked 2026-11-18 against the IDA export: axis-only body confirmed; the function is uncalled (the entry claimed two UI-border call sites).*
 
 ---
 
 ## 41. Label-render `prefix` overwrites buffer[0] rather than prepending
 
-The four label-render wrappers (`FUN_00402f64`, `FUN_00403015`,
-`FUN_004030c6`, `FUN_00403190`) all take a `char prefix` parameter.
-The wrapper body is:
+The four label-render wrappers (`0x402f64` render_dec, `0x403015`
+render_hex, `0x4030c6` render_dec_centered, `0x403190`
+render_dec_signed) all take a `char prefix` parameter.  The wrapper
+body is:
 
-    FUN_004022bd(value, 1, 0);          /* format digits at offset 1 */
-    if (prefix != 0) {
-        DAT_0058fda0 = prefix;          /* OVERWRITE byte 0 */
-    }
+    gfx_text_label_format_dec(value, 1, 0);   /* 0x4022bd: digits at offset 1 */
+    if (prefix != 0)
+        byte_58FDA0[0] = prefix;              /* OVERWRITE byte 0 */
     /* ...append suffix, render... */
 
 The formatter is called with offset=1, so it writes the sign (if any)
-at buffer[1] and digits at buffer[1..count].  Buffer[0] is left as 0
-by the prior zero-fill.  The prefix then drops INTO buffer[0] — it
-isn't a "prepended" character; it's the byte-0 sentinel slot.
+at buffer[1] and digits after it.  Buffer[0] is left as 0 by the
+formatter's zero-fill.  The prefix then drops INTO buffer[0] — it
+isn't a "prepended" character; it's the byte-0 slot.
 
-So `prefix=' '` with value=42 yields the buffer `" 42\0"` (space at
-[0], "42" at [1..2]); `prefix='@'` yields `"@42\0"`.  All retail
-callers rely on this slot being either a separator (' ') for rank
-lists or an icon-like sigil ('@') for stat readouts — there's no
-"unprefixed" path that uses buffer[0] for a digit.  The width budget
-implicitly includes the prefix slot.
+So `prefix=' '` with value=42 yields `" 42\0"`; `prefix='@'` yields
+`"@42\0"`.  Retail passes ' ' (most callers), '@' (stat readouts),
+'(' (three callers: `0x4224e7` twice, `0x425487`) and '+' / '-'
+(`0x402e0c`, the labeled-signed renderer — see #47).  Every literal
+prefix in the IDA export is non-zero; the width budget implicitly
+includes the prefix slot.
 
-A future caller passing `prefix=0` will get a 1-byte gap (NUL) at
-the start of the buffer, which the renderer skips silently — but no
-retail callsite does this.
+A caller passing `prefix=0` would NOT get a harmless leading gap: the
+suffix-append walk starts at the first NUL, which is buffer[0] itself.
+In the non-centered wrappers the suffix is copied over the digits from
+[0] and the string renders as the suffix alone; in the centered ones
+(#45's off-by-one) the suffix lands at [1] and buffer[0] = NUL renders
+nothing.  Either way the number vanishes.  No retail callsite does
+this.
 
-> 📍 `src/gfx_text_label.c`'s `apply_prefix`, Ghidra `FUN_00402f64
-> @ 0x402f64` / `FUN_00403015 @ 0x403015` / `FUN_004030c6 @ 0x4030c6`
-> / `FUN_00403190 @ 0x403190`.
+> 📍 `src/gfx_text_label.c`'s `apply_prefix`; rhost rows
+> `gfx_label_dec` / `gfx_label_hex` / `gfx_label_dec_centered` /
+> `gfx_label_dec_signed` in `tools/rhost/rh_hooks_gfx.c`; IDA
+> `0x402f64` / `0x403015` / `0x4030c6` / `0x403190`.
+
+*Re-checked 2026-11-18 against the IDA export: prefixes also '(' / '+' / '-', and prefix 0 drops the number instead of leaving a skipped gap.*
 
 ---
 
@@ -1622,32 +1574,37 @@ Our port keeps the silent-zero branch verbatim; tests assert that
 
 ---
 
-## 43. Format buffer pre-zero scope is 100 bytes (not the full 8000)
+## 43. Format buffer pre-zero scope is 100 bytes — the whole retail buffer
 
-Both integer formatters open with:
+Both integer formatters (`0x4022bd` dec, `0x402447` hex) open with:
 
-    for (i = 0; i < 100; i++) {
-        DAT_0058fda0[i] = 0;
-    }
+    for (i = 0; i < 100; ++i)
+        byte_58FDA0[i] = 0;
 
-The format buffer (`DAT_0058fda0`) is 8000 bytes wide.  Only the
-first 100 bytes are zeroed before each format/render — bytes 100+
-retain whatever a prior caller left there.
+In retail that is the ENTIRE buffer: `byte_58FDA0` is 100 bytes, and
+the next global, `Offset` at `0x58fe04` (= `0x58fda0 + 100`), is the
+sprite-descriptor src-offset dword staged by every sprite wrapper
+(`0x404442`, `0x40a21a`, ...).  The port's 8000-byte
+`g_gfx_format_buffer` (`GFX_TEXT_LABEL_BUFFER_LEN`) is a standalone
+safety margin, not retail's size (see also
+`docs/findings/render-under-rhost.md`).
 
-This is fine in practice because:
-  - The longest formatted prefix+digits+suffix sequence in real
-    callers is well under 100 bytes (typically ≤ 16 bytes).
-  - The suffix-append walks until the first NUL, which always lies
-    within the zeroed region.
+Consequences:
+  - Every format/render starts from a fully zeroed retail buffer.
+  - A prefix+digits+suffix string longer than ~99 bytes would run
+    past the buffer into `Offset` (and the globals after it) in retail;
+    real callers stay well under 16 bytes.
 
-But the buffer is **genuinely shared mutable state** across multiple
-subsystems: the label-render path here, and the save-name copy paths
-in `FUN_004afab9` and `FUN_004afeed` (not yet ported) which READ
-bytes 0..99 of the same buffer.  Any future addition that wants to
-stage longer strings in this buffer needs to extend the zero scope.
+Other readers of the buffer: `0x4afab9` (the status.txt logger,
+`rl_4afab9` in `src/rl_io.c`) copies at most 100 bytes of it after
+formatting its line number, and `0x4afeed` (a date/time formatter whose
+only caller `0x4b03ab` has no callers) copies at most 10 / 4 bytes.
 
-> 📍 `src/gfx_text_label.c`'s `format_zero_and_sign`, Ghidra
-> `FUN_004022bd @ 0x4022bd` and `FUN_00402447 @ 0x402447`.
+> 📍 `src/gfx_text_label.c`'s `format_zero_and_sign`,
+> `src/gfx_globals.h` (`GFX_TEXT_LABEL_BUFFER_LEN`), IDA
+> `0x4022bd` / `0x402447`.
+
+*Re-checked 2026-11-18 against the IDA export: retail's buffer is 100 bytes (`Offset` at 0x58fe04 follows), not 8000; 0x4afab9 / 0x4afeed roles corrected.*
 
 ---
 
@@ -1870,31 +1827,35 @@ match retail under emulation / instrumented runs.
 
 ## 49. Zero-width sprite still writes 4 bytes per row
 
-The unrolled-prefix gate in `FUN_004b43b1` is `(glyph_w & 3) != 0`.
-For `glyph_w == 0` this evaluates to `false` (the zero matches the
-"multiple of 4" path), so the unrolled body fires unconditionally:
+The unrolled-prefix gate in `0x4b43b1` (`gfx_sprite_blit`) is
+`(word_5C9258 & 3) != 0`.  For a width of 0 this is `false` (zero
+matches the "multiple of 4" path), so the unrolled body fires
+unconditionally:
 
     if (src[0]) dst[0] = src[0];
     if (src[1]) dst[1] = src[1];
     if (src[2]) dst[2] = src[2];
     if (src[3]) dst[3] = src[3];
 
-Four source bytes are read and written per row, regardless of the
-"zero width" semantic intent.  The post-unroll gate then computes
-`tail_count = -4` (wrapping unsigned) and the tail-loop conditional
-short-circuits to `false` (`glyph_w > 3` is false for `glyph_w == 0`),
-so the byte-at-a-time tail does NOT compound the over-write.
+Four source bytes are read and up to four written per row.  The
+post-unroll test is `v6 = v4 <= 4; v4 -= 4; if (!v6) break;` — for
+width 0 `v6` is true, so the row ends there and the byte-at-a-time
+tail does NOT compound the over-write.
 
-Latent in retail because the dispatcher (`FUN_00404442`) sets
-`y_clip_mode == 5` (skip) before calling — but that gate only fires
-when the CLIP rect knocks the sprite entirely off-canvas, not when
-the descriptor itself encodes a zero width.  No retail sprite blob
-contains a zero-width descriptor, so the path is never exercised.
-Preserved as a witness test in `tests/test_gfx_sprite.c` documenting
-the on-disk behavior.
+Unreachable in retail, though: every caller of the blitter (all 13 —
+`0x404442`, `0x404547`, `0x408438`, `0x40946d`, `0x409934`, the
+`0x40a0xx` wrappers, `0x4bcbdc`, `0x4be070`, `0x4be33f`) runs
+`gfx_dispatch_clip_x` (`0x40464c`) first, which sets x mode 5 when
+`word_5C9258 <= 0`, and `gfx_dispatch_clip_y` (`0x40477b`) copies that
+5 into `byte_58FE18`; the callers then skip the blit
+(`byte_58FE18 != 5`).  So a zero-width descriptor never reaches
+`0x4b43b1`.  The behaviour is kept as a witness test in
+`tests/test_gfx_sprite.c`.
 
 > 📍 `src/gfx_sprite.c`'s `gfx_sprite_blit`,
-> Ghidra `FUN_004b43b1 @ 0x4b43b1`.
+> IDA `0x4b43b1`, `0x40464c`, `0x40477b`.
+
+*Re-checked 2026-11-18 against the IDA export: the clip setters DO skip zero-width sprites (x mode 5 for width <= 0, propagated by clip_y), so the path is unreachable, not merely unused by the data.*
 
 ---
 
@@ -2034,25 +1995,29 @@ Preserved verbatim in the port; tests cover both rejection paths.
 
 ## 54. Raw-buffer sprite render leaks descriptor flags from prior call
 
-`FUN_0040a01d` (the "render a raw caller-supplied buffer" wrapper)
-stages width / height / src_offset / dst_x / dst_y from its own
-parameters — but does NOT touch the descriptor-flag globals
-(`DAT_00591568`, `DAT_0057d3c0`) or the per-glyph advance byte
-(`DAT_005bb478`).  Whatever the previous descriptor-based render
-left in those slots carries over into the next blit.
+`0x40a01d` (`gfx_sprite_render_raw`, "render a raw caller-supplied
+buffer") stages width / height / `Offset = 0` / dst_x / dst_y from its
+own parameters — but does NOT touch the descriptor-flag globals
+(`byte_591568`, `byte_57D3C0`, descriptor +0xc / +0xe) or the row
+count `dword_5BB478` (+0xd).  Whatever the previous descriptor-based
+render left in those slots carries over.
 
-`DAT_005bb478` is harmless — `FUN_0040477b` (clip_y) overwrites it
-with the post-clip visible row count before the blitter reads it.
-The two flag bytes (`DAT_00591568` / `DAT_0057d3c0`, retail offsets
-+0xc and +0xe in a descriptor) have NO current consumer in the
-ported code, so the leak is invisible today.
+None of it is observable in retail:
+  - `dword_5BB478` is overwritten by clip_y (`0x40477b`) with the
+    post-clip visible row count before the blitter reads it.
+  - `byte_57D3C0` has no reader anywhere in the binary (data_xrefs:
+    writes only).
+  - `byte_591568`'s only readers, `0x406673` (drawer_b) and
+    `0x406bba`, stage it from their own descriptor (+12) before
+    reading it, so a stale value from `0x40a01d` is never consumed.
 
-Latent but worth a witness — once the flag readers land (whatever
-they are), a `FUN_0040a01d` call interleaved between a sprite render
-and a flag-reading caller will surface the wrong flag values.
+A harmless leak — worth knowing only if a future port reads these
+globals without restaging them.
 
-> 📍 `src/gfx_sprite_render.c`,
-> Ghidra `FUN_0040a01d`.
+> 📍 `src/gfx_sprite_render.c`, IDA `0x40a01d`; readers `0x406673`,
+> `0x406bba`.
+
+*Re-checked 2026-11-18 against the IDA export: the flag globals' only readers restage them first (0x57d3c0 is never read), so the leak is unobservable in retail.*
 
 ---
 
@@ -2242,53 +2207,69 @@ boundary read uninitialized memory.
 
 ---
 
-## 61. Map-render linked-list terminator is self-loop, not zero
+## 61. Map-render linked-list terminator is self-loop (or zero)
 
-The per-tile drawer iterates the linked list of territory records
-using each record's next-link field (offset +0x04, short).  The
-loop's continuation condition is:
+The per-tile drawer (`0x408438`) iterates the linked list of feature
+records (`g_per_territory_420`, base `0x52f0b0`, stride `0x1a4`) using
+each record's next-link field (+0x04, signed short,
+`word_52F0B4[210 * idx]`).  The end-of-record test is:
 
-    *(short *)(&DAT_0052f0b4 + local_28 * 0x1a4) == local_28
+    v1 = word_52F0B4[210 * v5];
+    if (v1 == v5) return;      /* next points at itself → done */
+    v5 = (__int16)v1;
 
-That is, the loop exits when the next-link points back at the
-current record's index — a SELF-LOOP, not a null terminator.
-Records linked through valid maps always have a non-zero next-link;
-the LAST record's next-link is its own index.
+and the loop top is `if (v5 == 0) return;`.  So the walk ends on
+EITHER a self-loop (the last record's next-link is its own index) or
+a 0 link (slot 0 is the reserved "none" record — the tile head byte
+`byte_522F95[cell]` is 0 for an empty tile by the same rule).  A
+record with `next == 0` does NOT advance into slot 0; slot 0 is never
+drawn.
 
-Effect: an in-list record with `next == 0` does NOT terminate the
-loop — it advances to slot 0 (the reserved sentinel), which the
-loop continues to process.  Engine code must ensure last-record's
-next-link is set to its own slot index.  We preserve verbatim.
+The self-loop convention is the notable part: a list whose last record
+points at a DIFFERENT live record (e.g. a stale link after a record
+moved tiles) keeps walking into that record's list, and a 2-cycle
+loops forever.  The port matches (`while (v5 != 0)` + the
+`next == v5` exit).
 
 > 📍 `src/engine_map_render.c` (`engine_map_render_tile`),
-> Ghidra `FUN_00408438` line 203.
+> IDA `0x408438` (asm loop tail at the `word_52F0B4` compare).
+
+*Re-checked 2026-11-18 against the IDA export: a 0 next-link terminates too (loop top `if (v5 == 0) return`); the "slot 0 gets processed" claim was wrong.*
 
 ---
 
 ## 62. Map-render invalid descriptor aborts ENTIRE linked-list walk
 
-The per-tile drawer's two validation gates (`src_offset > 310000`
-and `sprite_w < 1`) both `return;` from the function — NOT just the
-current record's iteration:
+The per-tile drawer's (`0x408438`) two validation gates
+(`Offset > 310000` and `word_5C9258 <= 0`), checked once for the
+record's primary sprite and once for its overlay sprite, all
+`return` from the function — NOT just the current record's iteration:
 
-    if (310000 < DAT_0058fe04) {
-        _DAT_0058fea8 = _DAT_0058fea8 + 1;
-        return;       // <- exits FUN_00408438 entirely
+    if (Offset > 310000) {
+        ++dword_58FEA8;
+        return;       // <- exits 0x408438 entirely
     }
 
 So a single bad primary OR overlay descriptor in the middle of a
-multi-record tile causes all SUBSEQUENT records in that tile's
-linked list to be skipped — for that frame.  Two distinct error
-counters' worth of bumps are possible per tile (one primary check,
-one overlay check) but the second is unreachable past the early
-return.
+multi-record tile causes all SUBSEQUENT records in that tile's list to
+be skipped for that frame.  The same counter `dword_58FEA8` takes at
+most one bump per call.
 
-Effect: if one of a tile's army/decoration records has a corrupt
-descriptor, the whole tile renders as just its earliest valid
-records — undefined visual outcome for that frame, but no crash.
+Worse, the OVERLAY-gate return skips the cursor restore.  By then the
+drawer has saved the cursor to `dword_591508 / 591504` and moved
+`dword_591524 / 591528` to the overlay anchor (`v13 + 18 / 24 / 4`,
+`v12 - 21 / 18 / 4`); returning there leaves the cursor displaced.  The
+row iterators (`0x405862` etc.) only add the cell pitch
+(`591524 += 568220`) and reset x at the next row start, while y is
+never reset (`591528 += 53F65C` per row) — so the rest of the row is
+drawn shifted and every later row of the frame is shifted vertically.
+The primary-gate return happens before the cursor is touched, so it
+only drops the tile's remaining records.
 
 > 📍 `src/engine_map_render.c` (`engine_map_render_tile`),
-> Ghidra `FUN_00408438` lines 84-87 / 173-176.
+> IDA `0x408438`; its callers `0x405487` (frame driver) / `0x405862` / `0x4059af` (row iterators).
+
+*Re-checked 2026-11-18 against the IDA export: added the unrestored cursor on the overlay-gate return (one shared error counter, not two).*
 
 ---
 
@@ -2321,50 +2302,59 @@ between primary-only and primary-plus-overlay records is observable.
 
 ## 64. Map-render dead 48-px dirty box in non-overlay path
 
-The per-tile drawer's `local_24 == 2` branch dispatches to the 48-px
-dirty-rect helper:
+The per-tile drawer's (`0x408438`) primary-sprite dirty mark selects
+by the local kind `v6`:
 
-    if (local_24 == 3)      FUN_004524dc(iVar2, iVar1);   // 64-px
-    else if (local_24 == 2) FUN_00452489(iVar2, iVar1);   // 48-px ← dead
-    else                    FUN_00452436(iVar2, iVar1);   // 32-px
+    if (v6 == 3)      engine_dirty_rect_mark_tile_64(x, y);  // 0x40880e
+    else if (v6 == 2) engine_dirty_rect_mark_tile_48(x, y);  // 0x408837 ← dead
+    else              engine_dirty_rect_mark_tile_32(x, y);  // 0x408856
 
-But the only writes to `local_24` in FUN_00408438 set it to 0 (default,
-type 0) or 3 (decorated types 1/2/3/4).  Value 2 is never assigned.
+But the only writes to `v6` in `0x408438` set it to 0 (default) or 3
+(record types 1/2/3/4).  Value 2 is never assigned, so the 48-px mark
+for the primary sprite is UNREACHABLE (Hex-Rays drops the arm from its
+pseudocode; it is present in the asm).  The 48-px helper IS reached
+via the overlay path's post-dispatch mark (`0x408bed`), a different
+call site with a different cursor (#63).
 
-So the 48-px mark for the primary sprite is UNREACHABLE.  The 48-px
-helper IS reachable via the overlay path's POST-dispatch mark (line
-199), but that's a different call site with a different cursor.
-
-Preserved verbatim — branch likely a remnant of an earlier version
-or a defensive guard never trimmed by the compiler.
+A remnant of an earlier version or a defensive guard never trimmed by
+the compiler.  The port omits the dead arm
+(`mark(kind == 3 ? 64 : 32)`) — behaviourally identical.
 
 > 📍 `src/engine_map_render.c` (`engine_map_render_tile`),
-> Ghidra `FUN_00408438` lines 100-108.
+> IDA `0x408438` (asm `0x4087f0..0x408856`).
+
+*Re-checked 2026-11-18 against the IDA export: the dead arm confirmed in the asm; the port no longer keeps it.*
 
 ---
 
 ## 65. Overlay-pass phase0 row has NO left/right edge cells (asymmetric vs primary pass)
 
-The strategic-mode OVERLAY pass at `FUN_00405eb5` (the phase-0 row
-iterator) walks exactly `col_count` cells, no more.  Contrast with the
-PRIMARY pass's phase-0 row iterator at `FUN_00405862` which walks
-`col_count + 2` cells (one extra left-edge cell gated on
-`col_start > 0`, plus one extra trailing cell gated on `cur_col < 0x40`).
+The strategic-mode OVERLAY pass's phase-0 row iterator (`0x405eb5`)
+walks exactly `dword_53E8AC` (col_count) cells.  The PRIMARY pass's
+phase-0 row iterator (`0x405862`) walks up to `col_count + 2`: one
+extra cell at `col_start - 1` (gated on `dword_5651B4 > 0`) drawn at
+`x = left - pitch`, plus one at `col_start + col_count` (gated on
+`dword_56D598 < 64`).
 
 The two iterators have nearly identical shapes — same camera, same
 map array, same per-tile descriptor base — but the OVERLAY iterator
-omits both edge-cell paths entirely.  The visible consequence: at the
-left/right edges of the map, the territories layer extends one column
-further than the units/cities overlay.  This is rarely noticed because
-the camera typically positions away from the map edge.
+omits both edge-cell paths entirely.  The edge cells are the columns
+just outside the VIEWPORT on either side; the `> 0` / `< 64` gates are
+only map-bound guards.  So on every frame the primary layer draws the
+off-view neighbour columns (whose sprites are wider than the pitch and
+bleed into view) while the overlay layer (armies, path markers) does
+not — an army standing one column outside the view is not drawn even
+where its sprite would overlap the visible edge.
 
-Suspect motivation: edge cells in the primary pass exist to draw
-half-visible decorative terrain (mountains, water).  The overlay pass
-doesn't need them — armies and cities are always anchored to whole
-tiles, never bleeding into half-tiles.
+Suspect motivation: the primary pass's wide terrain/feature sprites
+need the neighbours to fill the edge; the overlay sprites were judged
+narrow enough not to.
 
-> 📍 `src/engine_overlay_render.c` (`engine_overlay_render_row_phase0`),
-> Ghidra `FUN_00405eb5` (247 B) vs `FUN_00405862` (333 B).
+> 📍 `src/engine_overlay_render.c` (`engine_overlay_render_row_phase0`)
+> vs `src/engine_map_render.c` (the phase-0 row), IDA `0x405eb5`
+> (247 B) vs `0x405862` (333 B).
+
+*Re-checked 2026-11-18 against the IDA export: the edge cells sit at the viewport edges every frame, not at the map edges.*
 
 ---
 
@@ -2394,59 +2384,75 @@ set — production builds have both at 0.
 
 ---
 
-## 67. Overlay city drawer's territory-cap test is asymmetric for negative sizes
+## 67. Overlay path-marker drawer's step-budget cap is asymmetric for non-positive costs
 
-The city drawer at `FUN_004081a6` computes a sprite-size selector
-from a per-cell size table:
+`0x4081a6` (ported as `engine_overlay_render_tile_city` — the name is
+historical) draws the planned-move PATH markers: it runs on cells whose
+descriptor +2 bit 0x40 is set, and that bit is set only by
+`hover_mark_path_overlay` (`0x4a91ba`, one cell per path step of
+player `DAT_0057c8cc`'s planned route) and cleared map-wide by
+`0x46c6ba`.  It picks the marker sprite from the path-cost field
+`word_500C30` (the local player's i16 64×64 grid, filled by
+`engine_path_field_fill` `0x46f700`):
 
-    local_c = (short *)0x500c30[cell/8] - 1;
-    if (max_hi - max_lo < local_c)  local_c = 0;
-    DAT_005c9288 = local_c + 0x38;
+    v5 = word_500C30[cell / 8] - 1;
+    if (rec[0x154] - rec[0x153] < v5)     /* rec = record DAT_0057c8c4 */
+        v5 = 0;
+    dword_5C9288 = flagged ? 78 : v5 + 56;
 
-The cap test fires only when the computed size EXCEEDS the territory's
-allowed band.  For negative `local_c` (table value < 1), the cap test
-does NOT fire — the negative size passes through unchecked, producing
-a sprite index BELOW `0x38` (e.g., `0x37` when table value is 0).
+`rec` is the `g_per_territory_420` record of `DAT_0057c8c4`; +0x154 is
+the step budget and +0x153 the path-progress accumulator (both signed
+bytes, `movsx`; see `combat-resolution.md`).  A step whose cost exceeds
+the remaining budget collapses to sprite 56.
 
-This is a likely source of latent bugs.  Negative sprite indices read
-out-of-bounds descriptors in the overlay blob.  Map files that produce
-a 0 value in the per-cell table at any cell hosting a city would
-trigger this — but in practice the per-cell table seems to never hold
-0 at city-bearing cells (no error path observed in retail traces).
+The cap fires only on the high side.  A cost <= 0 (v5 < 0) passes
+through unchecked, giving a sprite index below 56 (0x37 for cost 0) —
+a different sprite of the same overlay sheet, not an out-of-bounds
+read unless the cost is <= -55.  Whether a marked path cell can hold
+cost 0 (e.g. the route's start cell) is not established; no error has
+been observed.
 
 > 📍 `src/engine_overlay_render.c` (`engine_overlay_render_tile_city`),
-> Ghidra `FUN_004081a6` lines 18-22.
+> IDA `0x4081a6` (cap at `0x40821d..0x408265`), `0x4a91ba`, `0x46c6ba`.
+
+*Re-checked 2026-11-18 against the IDA export: 0x4081a6 is the path-marker drawer (bit 0x40 = planned path, word_500C30 = path-cost field, cap = selected record's step budget), not a city / size drawer; a negative index stays inside the sheet for costs > -55.*
 
 ---
 
-## 68. Overlay city drawer clears bit 0x40 of descriptor[+2] post-dispatch
+## 68. Overlay path-marker drawer clears bit 0x40 of descriptor[+2] first thing
 
-After dispatching, `FUN_004081a6` clears bit `0x40` of the per-tile
-descriptor's flag byte (`& 0xbf`).  This is mid-frame mutation of
+The very first instruction group of `0x4081a6` (`0x4081af..0x4081c4`)
+clears bit `0x40` of the per-tile descriptor's +2 flag byte
+(`byte_522F92[cell] &= 0xbf`) — BEFORE staging, the offset gate and the
+dispatch, so the bit is consumed even when the sprite is rejected
+(`++dword_58FEA8`) or clipped away.  This is mid-frame mutation of
 descriptor table state.
 
-The bit is re-set elsewhere — likely by save-load, by city-state
-changes, or by a frame-edge "mark all visible" pass.  Whatever the
-re-arm path is, this clear is load-bearing: without it, every cell
-with a city would re-dispatch every frame, and the bit would never
-fall to 0.
+The bit is the planned-path marker (#67): `hover_mark_path_overlay`
+(`0x4a91ba`) sets it on every step cell of the planned route, and
+`engine_territory_clear_cell_path_overlay` (`0x46c6ba`) clears it
+map-wide.  So a marker cell is drawn once per arming; without a re-arm
+from `0x4a91ba` the marker is not redrawn on the next frame.
 
 Tests must re-arm the bit between frames to verify multi-frame
 dispatch behavior.  See
 `test_engine_overlay_render_error_count_persists_across_frames`.
 
 > 📍 `src/engine_overlay_render.c` (`engine_overlay_render_tile_city`),
-> Ghidra `FUN_004081a6` line 13.
+> IDA `0x4081a6`, `0x4a91ba`, `0x46c6ba`.
+
+*Re-checked 2026-11-18 against the IDA export: the clear precedes the dispatch (also on error paths); the re-arm is 0x4a91ba, not save-load / city changes.*
 
 ---
 
 ## 69. Overlay pre-clear strip is view-mode-1-only
 
-The driver `FUN_00405602` pre-clears a 4-pixel-wide vertical strip
-at column 0, rows `0x18..0x1bc`, by calling `FUN_004b4056` (4-byte
-write) in a 420-iteration loop at the very top of the function.  But
-this clear is GATED on `DAT_0057cb18 == 1` — only view-mode 1 (zoom-
-mid) triggers it.  View-modes 0 and 2 leave the strip undisturbed.
+The driver `0x405602` (`engine_overlay_render_frame`) pre-clears a
+4-pixel-wide vertical strip at column 0, rows `24..443`, by calling
+`0x4b4056` (four bytes of colour 0 through `Buf` / `xRight`) in a
+420-iteration loop at the very top of the function.  But this clear is
+GATED on `dword_57CB18 == 1` — only view-mode 1 (zoom-mid) triggers
+it.  View-modes 0 and 2 leave the strip undisturbed.
 
 The strip's position corresponds to the leftmost column of the visible
 map area in zoom-mid layout.  Suspected purpose: cleaning up stale
@@ -2458,40 +2464,48 @@ mid setting).
 Quirk-worth because the same driver function changes behavior based
 on a global mode — typical "load-bearing if" pattern.
 
-> 📍 `src/engine_overlay_render.c` (`engine_overlay_render_frame` →
-> `pre_clear_left_strip`), Ghidra `FUN_00405602` lines 10-14.
+> 📍 `src/engine_overlay_render.c` (`engine_overlay_render_frame`, the
+> loop calling `engine_overlay_render_fill4` — port of `0x4b4056`),
+> IDA `0x405602`.
+
+*Re-checked 2026-11-18 against the IDA export: behaviour confirmed; 📍 updated (no `pre_clear_left_strip` helper any more).*
 
 ---
 
 ## 70. Army drawer 0x40 path dispatches stale sprite for unhandled low-nibble
 
-The army drawer's `bit 0x40` branch dispatches sub-branches keyed by
-`descriptor[+4] & 0x0f`:
+The army drawer's (`0x4071a0`) `descriptor[+1] & 0x40` branch
+dispatches sub-branches keyed by `descriptor[+4] & 0x0f`:
 
-  - low-nibble == 0 → fortress sprite (uses army record's +0x07 byte)
-  - low-nibble == 2 → march-out sprite (fixed 0x81)
-  - **low-nibble ∈ {1, 3, 4, …, 15}** → **no sprite_idx set, no
-    offsets set, BUT the dispatch tail still runs.**
+  - low-nibble == 0 → fortress sprite (army record `+0x07`,
+    `byte_53F9B7[768 * army]`; returns if it is 0), dirty kind 48
+  - low-nibble == 2 → march-out sprite (fixed 129 = 0x81; returns if
+    army `+0x1ad` is 0), no dirty mark
+  - **low-nibble ∈ {1, 3, 4, …, 15}** → **no sprite index set, no
+    offsets set, BUT control still reaches the dispatch tail
+    (LABEL_118).**
 
-The dispatch tail reads `DAT_005c9288` (the last-glyph-index global)
-to stage from the overlay blob.  In the unhandled-nibble case, that
-global retains whatever value it held from the most recent staging —
-typically a city sprite from the city drawer earlier in the same
-frame, or another army sprite from the previous tile.
+The tail stages from the overlay sheet using `dword_5C9288`, which in
+the unhandled-nibble case still holds whatever the last staging left —
+the previous army / path-marker sprite of this frame, or the 999 /
+overlay index the primary pass's `0x408438` leaves behind.  The cursor
+offset is (0, 0) (minus `dword_567950` in x for a phase-1 cell), and
+`v22` stays 0, so no dirty-rect mark is made for the draw.  If the
+stale index stages an offset outside `(0, 70000]` the tail logs
+`aErrTopItBadDat*` and latches `byte_5AEB68`.
 
-Result: the cell at (cur_col, cur_row) gets a STALE sprite drawn at
-its cursor position (offset 0,0 because dx/dy weren't set either).
-Visually surfaces as garbled territory markers when a tile has both
-`descriptor[+1] & 0x40` set AND `descriptor[+4] & 0x0f` outside
-{0, 2}.
+Visually: a stale sprite drawn at the cell's cursor when a tile has
+`descriptor[+1] & 0x40` set and `descriptor[+4] & 0x0f` outside
+{0, 2}, without a dirty mark to erase it next frame.
 
-The port mirrors this by pulling `gfx_dispatch_last_glyph_index()`
-into the local sprite_idx when no branch supplied one.
+The port reproduces it by leaving the global `g_gfx_last_glyph_index`
+untouched on that path and falling into the same tail.
 
 > 📍 `src/engine_overlay_render.c` (`engine_overlay_render_tile_army`,
-> stale-sprite fall-through comment), Ghidra `FUN_004071a0` lines
-> 265-294 (the `bit 0x40 → else if low_nibble == 0 / 2` chain has no
-> default — control falls through to the unconditional dispatch tail).
+> the block comment cites this quirk), IDA `0x4071a0` (the 0x40 branch,
+> `if (v8 != 0) { if (v8 == 2) … }` with no else).
+
+*Re-checked 2026-11-18 against the IDA export: confirmed; added the missing dirty mark / phase-1 x shift, port description updated (no gfx_dispatch_last_glyph_index() pull).*
 
 ---
 
@@ -2528,143 +2542,144 @@ PL8-pack layout MUST honor this boundary.
 
 ## 72. End-frame animation byte committed even when dispatch is suppressed
 
-The army drawer's "end-frame" branches (categories 3, 6, 9, 12 and
-the 0x10 path with `first == 0x13`) write a fixed end-frame value
-to `descriptor[+3]` BEFORE checking the tier byte / tick-cycle gates
-that decide whether to dispatch:
+The army drawer's (`0x4071a0`) "end-frame" branches — descriptor[+0]
+categories 3, 6, 9 and 12 — write a fixed end-frame value to
+`descriptor[+3]` (`byte_522F93[cell]`) BEFORE checking the army tier
+byte / tick gates that decide whether to dispatch:
 
 ```c
-descriptors[cell + 3] = END_FRAME_BAND_X;
-if (army[tier_off] < 3)             return;   // no dispatch
-if (g_animation_tick > 0xf)         return;   // no dispatch
-sprite_idx = tick + 0x28;
-// → fall through to dispatch
+byte_522F93[cell] = END_FRAME;               /* 46 / 9 / 19 / 29 */
+if (army[tier] < 3 || dword_53E9A4 >= 16)    /* tier: +0x2ae / +0x2de / +0x2c6 / +0x296 */
+    return;                                   /* no dispatch */
+dword_5C9288 = dword_53E9A4 + 40;
+/* → dispatch tail (LABEL_118), dirty kind 32 */
 ```
 
 A failed gate leaves the descriptor in its end-frame state (0x2e /
-0x09 / 0x13 / 0x1d) — meaning the animation "completes" visually
-even if the sprite for that frame was never drawn.  On the NEXT
-frame the cell will be in a different category band (because the
-descriptor[+0] category byte determines which band) — but the
-descriptor[+3] frame byte reflects a transition the player never
-saw rendered.
+0x09 / 0x13 / 0x1d) even though the tick+40 sprite for that frame was
+never drawn.  The `descriptor[+1] & 0x10` branch (category 19 = 0x13)
+uses the same `dword_53E9A4 + 40` sprite and tick gate but writes no
++3 byte.
 
-This is observable as units that appear to "skip" the last frame of
-their animation when the army-record's tier byte hasn't ramped up
-to the dispatch threshold yet.
+The +3 byte is the frame the walk-cycle categories advance (#74), so
+the committed value is what the next frame's walk starts from
+regardless of whether the end frame was shown — units can appear to
+"skip" the last frame while the army's tier byte is below 3.
 
-> 📍 `src/engine_overlay_render.c` (`army_end_frame_band`),
-> Ghidra `FUN_004071a0` lines 60-71 (cat 3),
-> 98-109 (cat 6), 136-147 (cat 9), 174-185 (cat 12).
+> 📍 `src/engine_overlay_render.c` (`engine_overlay_render_tile_army`,
+> the `k_band` table's `end_cat` / `end_frame` / `tier` columns),
+> IDA `0x4071a0` (the `v15 == 3 / 6 / 9 / 12` arms).
+
+*Re-checked 2026-11-18 against the IDA export: the 0x10 path writes no +3 byte; port helper `army_end_frame_band` replaced by the `k_band` table.*
 
 ---
 
-## 73. Arrow-marker sub-branch silently filters 0x13 via byte underflow
+## 73. Arrow-marker sub-branches silently filter 0x0F and 0x13 via byte underflow
 
-The army drawer's `bit 0x20` (no 0x40, no 0x10) directional-arrow
-branch is range-gated to `first_byte ∈ [0xf, 0x16]`, then split at
-0x13 into low (0x10..0x12) and high (0x14..0x16) sub-branches.  The
-high sub-branch's inner gate is:
+The army drawer's (`0x4071a0`) `bit 0x20` (no 0x40, no 0x10)
+directional-arrow branch is range-gated to `first_byte ∈ [0xf, 0x16]`,
+then split at 0x13 into a high and a low sub-branch, each with an
+unsigned-byte inner gate:
 
 ```c
-if (2 < (byte)(bVar2 - 0x14)) return;
+if (v15 >= 0x13) { v17 = v15 - 20; if (v17 > 2u) return; … 6*v17 + 85 }
+else             { v16 = v15 - 16; if (v16 > 2u) return; … 6*v16 + 103 }
 ```
 
-When `bVar2 == 0x13`, `bVar2 - 0x14` underflows in the byte cast to
-`0xff` — well over 2 — so the gate trips and the function returns.
-Net effect: 0x13 is FILTERED by the upper sub-branch via byte
-arithmetic underflow, not by an explicit equality check.
+For `v15 == 0x13` the high gate's `0x13 - 0x14` wraps to `0xff`; for
+`v15 == 0x0f` the low gate's `0x0f - 0x10` wraps the same way.  Both
+return.  Net effect: of the gated range only 0x10..0x12 and 0x14..0x16
+draw — the two boundary values are FILTERED by byte underflow, not by
+an explicit equality check.
 
-The port replicates this faithfully via a signed `delta < 0 || delta
-> 2` test, matching the same outcome without relying on
-implementation-defined unsigned wrap.
+The port uses the same `uint8_t` wrap (`(uint8_t)(v15 - 20) > 2`).
 
-Practical implication: the 0x13 value of `first_byte` is reserved by
-the OTHER `bit 0x10` branch (animation-end path) — having both arms
-silently filter it keeps the descriptor reach unambiguous.
+Practical note: 0x13 is the category the `bit 0x10` branch draws (#72);
+the arrow branch is selected by descriptor[+1] bits, not by the
+category, so the filter only matters for a cell with bit 0x20 and
+category 0x0f / 0x13.
 
 > 📍 `src/engine_overlay_render.c`
-> (`engine_overlay_render_tile_army`, 0x20 high sub-branch),
-> Ghidra `FUN_004071a0` lines 240-246.
+> (`engine_overlay_render_tile_army`, the 0x20 branch),
+> IDA `0x4071a0`.
+
+*Re-checked 2026-11-18 against the IDA export: 0x0F is filtered by the low arm's underflow too; the port uses the byte wrap, not a signed delta test.*
 
 ---
 
 ## 74. Animation-tier flag is a GLOBAL toggle, not a per-army timer
 
-The four animation-rate "tier" flags (`DAT_0058fd08`, `DAT_0057d3c8`,
-`DAT_0057d3ac`, `DAT_00591510`) are SINGLE GLOBAL booleans, not
-per-army or per-tile state.  The army drawer's step categories
-(0, 2, 5, 8, 11) compute `distance = army[cur] - army[prev]` per
-tile, then pick a tier based on `distance` bin — but the tier flag
-itself is a frame-level toggle that bumps EVERY army in that
-distance bin uniformly.
+The four animation-rate "tier" flags (`dword_58FD08`, `dword_57D3C8`,
+`dword_57D3AC`, `dword_591510`) are SINGLE GLOBAL booleans, not
+per-army or per-tile state.  The army drawer's (`0x4071a0`) walk-cycle
+categories (descriptor[+0] 0, 2, 5, 8, 11 — each band's values other
+than its skip category 1 / 4 / 7 / 10 and end category 3 / 6 / 9 / 12)
+compute
+`distance = army[cur] - army[prev]` for the cell's army record
+(`+0x2b8 - +0x2bc`, `+0x2e8 - +0x2ec`, `+0x2d0 - +0x2d4`,
+`+0x2a0 - +0x2a4` per band), then pick a tier by `distance` bin — but
+the tier flag itself is a frame-level toggle shared by every army in
+that bin.
 
-When the global tier flag is non-zero, every army record matching
-that distance bin advances its frame by 1 this iteration.  When the
-flag is zero, none of them advance.  The "distance" computation
-exists only to BIN armies into rate tiers; the actual time-base is
-shared.
+When the selected flag is non-zero, the cell's frame byte
+(descriptor[+3]) advances by 1 (wrapping per band); when it is zero,
+nothing advances.  The "distance" computation exists only to BIN
+armies into rate tiers; the actual time-base is shared.
 
-The four tiers map to the 640/320/160/80-ms phase ticks (in that
-order) — small distance gets the slow 640 ms cadence, large
-distance gets the fast 80 ms cadence:
+The four tiers map to the 640/320/160/80-ms phase ticks:
 
-  distance <  10   → tier 0 → `DAT_0058fd08` (640 ms — slowest)
-  distance < 0x19  → tier 1 → `DAT_0057d3c8` (320 ms)
-  distance < 0x32  → tier 2 → `DAT_0057d3ac` (160 ms)
-  distance ≥ 0x32  → tier 3 → `DAT_00591510` ( 80 ms — fastest)
+  distance <  10   → `dword_58FD08` (640 ms — slowest)
+  distance < 0x19  → `dword_57D3C8` (320 ms)
+  distance < 0x32  → `dword_57D3AC` (160 ms)
+  distance ≥ 0x32  → `dword_591510` ( 80 ms — fastest)
 
 So slow-moving armies (small cur-prev gap) cycle their sprite
-sequence more slowly than fast-moving ones — visually correct
-gait: a marching column at walking pace flickers its frames less
-often than a unit at full speed.
+sequence more slowly than fast-moving ones.
 
-The four "tier" globals are produced by `FUN_004bbc80` (the
-9-flag animation-phase tick generator, ported as
-`engine_compute_phase_ticks` in `src/engine_phase.c`).  The
-Win32-coupled wrapper `engine_tick_phase_step` writes the four
-outputs straight through to
-`engine_overlay_render_set_animation_rate_flags` each main-loop
-iteration — so once the wider main loop runs the army drawer in
-production, no extra wiring is needed.  (Originally filed as
-"the driver lives elsewhere" before we realized the phase-tick
-ports were the same generator.)
+The four flags are produced by `0x4bbc80` (`engine_compute_phase_ticks`,
+the 9-flag phase-tick generator: a base tick every >= 20 ms of
+`timeGetTime`, `dword_591510` every 4 base ticks, `57D3AC` every 8,
+`57D3C8` every 16, `58FD08` every 32), all cleared at its entry.  The
+port's `engine_tick_phase_step` (`src/engine.c`) forwards them to
+`engine_overlay_render_set_animation_rate_flags`.
 
-> 📍 `src/engine_overlay_render.c`
-> (`engine_overlay_render_set_animation_rate_flags`,
-> `pick_rate_tier`), Ghidra `FUN_004071a0` lines 41-54
-> (and parallels at 80-91, 119-130, 156-167).  Driver:
-> `src/engine_phase.c` (`engine_compute_phase_ticks`),
-> `src/engine.c` (`engine_tick_phase_step`),
-> Ghidra `FUN_004bbc80` @ 0x4bbc80.
+> 📍 `src/engine_overlay_render.c` (`rate_gate`, `walk`,
+> `engine_overlay_render_set_animation_rate_flags`),
+> IDA `0x4071a0` (the four walk arms); driver `src/engine_phase.c`
+> (`engine_compute_phase_ticks`), `src/engine.c`
+> (`engine_tick_phase_step`), IDA `0x4bbc80`.
+
+*Re-checked 2026-11-18 against the IDA export: behaviour confirmed; 📍 updated (`pick_rate_tier` is now `rate_gate` / `walk`), tick periods stated from 0x4bbc80.*
 
 ---
 
 ## 75. 16×16 raw sprite blit has a HARDCODED 640-byte dest row stride
 
-`FUN_004b49f7` (ported as `gfx_sprite_blit_16x16_raw`) computes its
+`0x4b49f7` (ported as `gfx_sprite_blit_16x16_raw`) computes its
 destination row stride from compile-time dword indices, NOT from the
-runtime canvas pitch.  Each row writes via `puVar2[0xa0 * row + col]`
-where 0xa0 dwords = 640 bytes — the standard 640×480 back-buffer
-pitch.  In contrast, the destination *origin* is computed from
-`DAT_004ea1a8 + DAT_00591524 + DAT_00591528 * DAT_004eb274` — which
-DOES read the dynamic pitch global.
+runtime canvas pitch.  Each row writes `v2[160 * row + 0..3]` where
+160 dwords = 640 bytes — the standard 640×480 back-buffer pitch.  In
+contrast, the destination *origin* is
+`Buf + dword_591524 + xRight * dword_591528` — which DOES read the
+dynamic pitch global `xRight` (`0x4eb274`).
 
 So the origin respects whatever pitch is bound, but the per-row
-stride is locked.  If the bound canvas pitch is anything other than
-640, rows past the first land at offsets that DO NOT line up with the
-canvas's actual scanline structure — pixels written by the blit
-would overwrite arbitrary buffer locations.
+stride is locked.  If the bound pitch were anything other than 640,
+rows past the first would not line up with the canvas's scanlines.
+The 32×32 sibling `0x4b5333` (`gfx_sprite_blit_32x32_raw`) has the
+same fixed stride.
 
-The function works correctly in retail because retail never binds a
-non-640 canvas at this primitive's call sites (battlefield terrain
-renderer and the 5 UI helpers at 0x40920..0x4097a).  The mismatch is
-a latent footgun, preserved verbatim in the port (16 rows × 16 byte
-memcpy with literal `dst += 640` between rows).  Tests use a 640-
-wide canvas to match retail's deployment.
+The function works correctly in retail because `xRight` is 640 at all
+its call sites: the zoom-16 battlefield terrain pass `0x4bc8fc` and
+the UI helpers `0x40914b`, `0x40927a`, `0x4097c5`, `0x409c93`,
+`0x40cfd2`.  The mismatch is a latent footgun, preserved verbatim in
+the port (16 rows × 16-byte `memcpy` with literal `dst += 640`).
+Tests use a 640-wide canvas to match retail's deployment.
 
-> 📍 `src/gfx_sprite.c` (`gfx_sprite_blit_16x16_raw`),
-> Ghidra `FUN_004b49f7` @ 0x4b49f7 (705 B).
+> 📍 `src/gfx_sprite.c` (`gfx_sprite_blit_16x16_raw`,
+> `gfx_sprite_blit_32x32_raw`), IDA `0x4b49f7` (705 B), `0x4b5333`.
+
+*Re-checked 2026-11-18 against the IDA export: caller list corrected (0x40914b / 0x40927a / 0x4097c5 / 0x409c93 / 0x40cfd2 / 0x4bc8fc); 0x4b5333 shares the quirk.*
 
 ---
 
@@ -2782,11 +2797,18 @@ LAB_004bcc53:
     /* per-cell advance */
 ```
 
-The port mirrors the three-path structure via a local `do_boundary`
-flag rather than goto, but the behavior is byte-equivalent.
+The port mirrors the three-path structure via a local `boundary`
+int (1 = mark, 0 / -1 = the gates that jump to LABEL_4) rather than
+goto, but the behavior is byte-equivalent.
+
+Note the second-sprite path itself has no `Offset` gate: once the mode
+byte passes, the `desc[+0] + 0x8b` / 0x9a sprite (#78) is staged and
+dispatched through clip_x / clip_y unchecked.
 
 > 📍 `src/engine_battlefield_render.c` (`pass_terrain_zoom32`),
-> Ghidra `FUN_004bcbdc` @ 0x4bcbdc.
+> IDA `0x4bcbdc` (advance `loc_4BCC53`).
+
+*Re-checked 2026-11-18 against the IDA export: the three paths and abort gates confirmed; the port's flag is `boundary`, not `do_boundary`.*
 
 ---
 
@@ -2831,57 +2853,52 @@ table.
 ## 79. Battlefield zoom-32 layer bit `descriptor[+1] & 4` is the SAME bit used by two opposing passes
 
 The battlefield zoom-32 cluster reads `descriptor[+1] & 0x04` in BOTH
-the terrain pass (`FUN_004bcbdc`) AND the overlay pass (`FUN_004bd07f`)
-to decide whether to draw — but with opposite polarity:
+the terrain pass (`0x4bcbdc`) AND the overlay pass (`0x4bd07f`) to
+decide whether to draw — with opposite polarity:
 
-  - Terrain-z32: SKIPS the cell when the bit is set (EARLY-SKIP gate).
-  - Overlay-z32: REQUIRES the bit to draw (layer gate).
+  - Terrain-z32: SKIPS a dirty / forced cell when the bit is set
+    (straight to the advance: no dirty clear, no draw, no boundary).
+  - Overlay-z32: REQUIRES the bit (and dirty / forced) to draw.
 
-Net effect: per cell, at most ONE of the two zoom-32 passes runs the
-drawing block in a given frame, picked by the bit.  Cells flagged
-with the bit are "feature overlays" that replace what would have been
-terrain in that cell.  Cells without the bit get terrain.  Neither
-pass touches the dirty bit unless it actually draws; cells that are
-clean AND have a clear layer bit get neither drawing nor a dirty
-clear from either pass.
+Net effect: per dirty cell, exactly one of the two zoom-32 passes runs
+its drawing block in a given frame, picked by the bit.  Both passes
+draw the cell's descriptor[+3] sprite from the primary sheet
+(`dword_4E5D78`) as a 32×32 raw blit; terrain may instead pick the alt
+sheet by the +2 selector and adds a second sprite.
 
-This explains the apparent asymmetry of terrain-z32's quirk #77 (cell
-abort skips boundary marking on a dirty+skip-bit cell): the cell ISN'T
-abandoned — overlay-z32 picks it up next.
+Order matters: `engine_battlefield_render_frame` (`0x4bc142`) runs
+terrain → `pass_middle` (the units) → overlay, so bit-4 cells are
+drawn AFTER the units — a foreground layer that occludes units
+standing on them, not just "a feature instead of terrain".
+
+Dirty-bit handling: each pass clears bit 0 of +2 as soon as it
+commits to the cell, BEFORE its `Offset` gate — the terrain pass also
+when the +2 selector is outside {0, 4} and nothing is drawn (#76),
+the overlay pass also when the blit is rejected (#81).  A dirty bit-4
+cell gets no boundary mark (+2 |= 2) that frame — the overlay pass has
+no boundary step; a CLEAN bit-4 cell is still marked by the terrain
+pass's clean path.
+
+This explains the skip-bit path of terrain-z32's quirk #77 (path 3):
+that cell ISN'T abandoned — overlay-z32 picks it up later the same
+frame.
 
 > 📍 `src/engine_battlefield_render.c` (`pass_terrain_zoom32`,
-> `pass_overlay_zoom32`), Ghidra `FUN_004bcbdc` (line 376 of
-> decomp) and `FUN_004bd07f` (line 16 of decomp).
+> `pass_overlay_zoom32`), IDA `0x4bcbdc`, `0x4bd07f`, `0x4bc142`.
+
+*Re-checked 2026-11-18 against the IDA export: both passes can clear the dirty bit without drawing (the old "only when it draws" was wrong); the overlay pass runs after pass_middle, over the units.*
 
 ---
 
-## 80. Battlefield zoom-32 glyph_offset gate constant is 0x4baf0, NOT 310000
+## 80. (withdrawn) Battlefield zoom-32 glyph_offset gate constant is 0x4baf0, NOT 310000
 
-Ghidra's decomp shows the `[1, 310000]` glyph_offset gate in
-`FUN_004bcbdc` as a decimal literal, but the underlying retail
-constant is `0x4baf0` = 309488.  Confirmed via r2 at 0x4bcd76:
-
-```
-0x4bcd76      cmp dword [0x58fe04], 0x4baf0
-0x4bcd80      jle 0x4bcd8b           ; offset <= 0x4baf0 → draw
-0x4bcd86      jmp 0x4bcc53           ; abort
-```
-
-The same constant appears in the overlay pass (`FUN_004bd07f` @
-0x4bd1ef) and presumably elsewhere — it's likely the size of the
-largest blob the engine accepts (~302 KB).
-
-OpenLords2's chip-4 port initially used 310000 verbatim from the
-decomp — a 512-value off-by-one that would have accepted bad glyph
-offsets in `[309489, 310000]`.  Fixed in this commit while landing
-chip 5b.  Lesson: when Ghidra shows a "round" decimal literal as a
-cmp immediate, verify against the disassembly — Ghidra normalizes
-hex to decimal aggressively and the rounding direction is not
-documented.
-
-> 📍 `src/engine_battlefield_render.c` (chips 4 + 5b), retail
-> Ghidra `FUN_004bcbdc` + `FUN_004bd07f`, r2 disasm at 0x4bcd76 /
-> 0x4bd1ef.
+Claimed retail's gate constant `0x4baf0` is 309488, so the decompiler's
+`310000` was a 512-value off-by-one.  Wrong: `0x4baf0` = 310000
+exactly (`0x40000 + 0xbaf0` = 262144 + 47856).  The asm at `0x4bcd76`
+(`cmp Offset, 4BAF0h; jle`) and `0x4bd1ef` is the plain
+`0 < Offset <= 310000` gate used by every sprite wrapper; the port's
+`310000` / `0x4baf0` spellings are the same value and the "fix" changed
+nothing.
 
 ---
 
@@ -2915,836 +2932,708 @@ block that gets skipped on abort, whereas overlay has none.
 
 The five-helper coordinate family at the head of the battlefield
 cluster includes two "neighbor-biased" variants of the basic screen→hex
-column converter:
+column converter (band = `DAT_004e5d3c` = zoom/4, set by
+`engine_battlefield_render_bind_hex_grid_context` 0x4bc020):
 
-  - `FUN_004bc2e5` — right-biased (residue ≥ band*3 → col+=1).
-    Clamps low: `col < 1 → col = 0`.
-  - `FUN_004bc346` — left-biased  (residue < band  → col-=1).
-    Clamps high: `col >= row_stride → col = row_stride - 1`.
+  - `0x4bc2e5` — right-biased (residue ≥ band*3 → col+=1).
+    Clamps low only: `col <= 0 → 0`.
+  - `0x4bc346` — left-biased  (residue < band  → col-=1).
+    Clamps high only: `col >= DAT_004e6578 (row stride) → row_stride - 1`.
 
-Neither variant clamps both sides.  In particular, the left-biased
-function can return NEGATIVE column indices when the input pixel is
-near the left edge of the grid AND falls in the first sub-band — a
-double-shift that's not blocked by any low clamp.  Callers must handle
-out-of-range columns themselves; the helpers are not safe to use as a
-"clip into grid" primitive.
+Neither variant clamps both sides.  The left-biased function returns
+-1 for a pixel just left of the viewport (C truncation: `(px-vx)/zoom`
+= 0, residue negative < band → col-1); the right-biased one lets a
+high column through unclamped.  The row pair `0x4bc3ac` (bottom-biased,
+low clamp) / `0x4bc40d` (top-biased, high clamp against `DAT_004e6570`)
+has the same shape.
 
-Real-world effect on input handling: a click 7 pixels left of the
-viewport but within the visible cell row evaluates to column -1, which
-will index past the descriptor table on the LOW side if used as-is.
-The right-biased variant has the OPPOSITE asymmetry — it clamps low
-but not high, so out-of-band column indices on the high side propagate
-freely.  Lesson: don't substitute either variant for the other or
-combine clamps; they're carefully tuned to their respective callers
-(unsurveyed).
+The asymmetry is tuned to the only caller, `0x479b58` (the battlefield
+rubber-band selection, called from 0x43c247): after sorting the box
+corners it takes the LEFT edge through the right-biased helper and the
+RIGHT edge through the left-biased one (and the rows likewise), so each
+edge rounds inward and is clamped only on the side it can overrun.  A
+box entirely off one side yields `first > last` and the cell loop
+(`for j = first; j <= last`) runs zero times — the missing clamp is
+never used as an index.  Don't substitute either variant for the other
+or treat them as a generic "clip into grid" primitive.
 
-> 📍 `src/engine_battlefield_render.c` (`pixel_to_col_left_biased`,
-> `pixel_to_col_right_biased`), Ghidra `FUN_004bc346` + `FUN_004bc2e5`.
+> 📍 `src/engine_battlefield_render.c`
+> (`engine_battlefield_render_pixel_to_col_left_biased`,
+> `engine_battlefield_render_pixel_to_col_right_biased`, `…_row_top_biased`,
+> `…_row_bottom_biased`), IDA `0x4bc346` / `0x4bc2e5` / `0x4bc3ac` / `0x4bc40d`,
+> caller `sub_479B58`.
+
+*Re-checked 2026-11-18 against the IDA export: caller surveyed (0x479b58 box select, sole caller — the asymmetry is the inward rounding of a box's edges), row pair added, port names updated.*
 
 ---
 
 ## 83. Battlefield middle pass iterates an OVER-SCAN extension of the visible grid
 
-The middle pass (`FUN_004bd355`, chip 5a.i) does NOT iterate the visible
-grid like its terrain / overlay siblings.  Instead it walks an extension
-that starts ONE cell west / ONE cell north of the camera and ends up to
-TWO cells past the south-east corner — a `(cols + 2) × (rows + 2)`
-window when no clamp fires, reduced near grid edges by clamps against
-the underlying grid extent (`camera_row_stride` for cols, `total_rows`
-— a new global `DAT_004e6570` — for rows).
+The middle pass (`0x4bd355`) does NOT iterate the visible grid like
+its terrain / overlay siblings.  After building / sorting / drawing the
+entity list (0x4bd938 / 0x4bda92 / 0x4bdb95) it walks a cell window
+that starts ONE cell west / ONE cell north of the camera and spans
+`(cols + 2) × (rows + 2)` cells, clamped against the grid extent
+(`DAT_004e6578` row stride for cols, `DAT_004e6570` total rows):
 
 ```c
-local_10 = DAT_004e657c - 1;            // start_col = cam_x - 1
-local_c  = DAT_004e6558 - DAT_004e656c; // start_px_x = viewport_x - zoom
-if (local_10 < 0) { local_10 = 0; local_c += DAT_004e656c; }  // west cancel
-local_18 = DAT_004e6580 - 1;            // start_row = cam_y - 1
-local_20 = DAT_004e6554 - DAT_004e656c; // start_px_y = viewport_y - zoom
-if (local_18 < 0) { local_18 = 0; local_20 += DAT_004e656c; }  // north cancel
-local_2c = DAT_004e5d5c + 2;            // num_cols = grid_cols + 2
-if (DAT_004e6578 <= local_2c + local_10) local_2c = DAT_004e6578 - local_10;
-local_28 = DAT_004e5d4c + 2;            // num_rows = grid_rows + 2
-if (DAT_004e6570 <= local_28 + local_18) local_28 = DAT_004e6570 - local_18;
+c0 = DAT_004e657c - 1;  x0 = DAT_004e6558 - DAT_004e656c;   // cam_x - 1, viewport_x - zoom
+if (c0 < 0) { c0 = 0; x0 = DAT_004e6558; }                 // west edge: start at col 0
+r0 = DAT_004e6580 - 1;  y0 = DAT_004e6554 - DAT_004e656c;
+if (r0 < 0) { r0 = 0; y0 = DAT_004e6554; }
+cols = DAT_004e5d5c + 2;
+if (c0 + DAT_004e5d5c + 2 >= DAT_004e6578) cols = DAT_004e6578 - c0;
+rows = DAT_004e5d4c + 2;
+if (r0 + DAT_004e5d4c + 2 >= DAT_004e6570) rows = DAT_004e6570 - r0;
 ```
 
-Why the asymmetry (+1 west / +2 east, +1 north / +2 south)?  The
-middle pass renders Y-sorted entities (units/effects) plus per-cell
-extras whose sprites can be **larger than one hex cell**.  An entity
-anchored at a hex column adjacent to the visible viewport on the WEST
-side can still have its right edge visible inside the viewport; the
-middle pass needs to iterate that off-screen cell to draw the
-overlapping portion.  Similarly on the east / south, but those need
-+2 cells of slack rather than +1 because the entities are drawn at
-cell-origin-PLUS-offset positions that can poke up to ~32 px past the
-anchor, which can span TWO cells at zoom 16.  Terrain and overlay
-passes don't have this problem because their sprites are exactly one
-cell, so they iterate only the visible cells.
+Unclamped, the window is symmetric: cells `cam-1 .. cam+cols` — one
+cell of slack on each side (visible cells are `cam .. cam+cols-1`).
+Only at the west / north edge, where the start clamps to 0 but the
+count stays `cols + 2`, does it reach TWO cells past the east / south
+edge.  The per-cell leaves (player marker, unit key, effect chain) draw
+sprites that can overhang a neighbouring cell, so the one-cell rim
+lets a marker anchored just off-screen still paint its visible part;
+terrain / overlay sprites are exactly one cell and iterate only the
+visible cells.  The cursor advances by `DAT_004e656c` (zoom) per cell,
+unlike the late pass (quirk #97).
 
-A separate consequence: the west / north start cells can have
-NEGATIVE pixel coordinates relative to the viewport's top-left
-(`start_px_x = viewport_x - zoom`).  Per-cell extras that draw at
-those coords rely on the clip rect to suppress the off-screen
-portions — quirk on its own that gates a future port (chip 5a.iii).
+The west / north start cells have NEGATIVE pixel coordinates relative
+to the viewport's top-left (`x0 = viewport_x - zoom`); the leaves rely
+on the clip rect (`0x40464c` / `0x40477b` against `DAT_004e6564`..) to
+suppress the off-screen part.
 
-The `DAT_004e6570` global is otherwise unbound by terrain / overlay,
-so it's a NEW binding introduced in chip 5a.i
-(`engine_battlefield_render_bind_total_rows`).
+> 📍 `src/engine_battlefield_render.c` (`pass_middle`, binder
+> `engine_battlefield_render_bind_total_rows`), `docs/findings/battlefield-render.md`,
+> IDA `0x4bd355`.
 
-> 📍 `src/engine_battlefield_render.c` (`pass_middle`),
-> `docs/findings/battlefield-render.md` §"What's next",
-> Ghidra `FUN_004bd355` lines for the local_10/c/18/20/2c/28 setup.
+*Re-checked 2026-11-18 against the IDA export: the over-scan is +1 on every side (not +1 west / +2 east); +2 east/south only when the start clamps at the west/north edge; speculative "+2 because sprites poke 32 px" reasoning removed.*
 
 ---
 
 ## 84. Battlefield middle pass re-dirties cell only on player-marker branch
 
-The middle pass's per-cell dispatch on `descriptor[+2] & 0x80` has
-TWO branches that differ in ONE crucial side-effect:
+The middle pass's (`0x4bd355`) per-cell dispatch on
+`descriptor[+2] & 0x80` has TWO branches that differ in ONE side-effect:
 
 ```c
-if (descriptor[+2] & 0x80) {
-    if (descriptor[+3] == 0) {
-        FUN_004bd574();                       // player marker
-        descriptor[+2] = descriptor[+2] | 1;  // RE-DIRTY (!)
-    } else {
-        FUN_004bd759(descriptor[+3]);          // unit-key sprite
+if ((int8_t)descriptor[+2] < 0) {
+    if (descriptor[+3] != 0) {
+        0x4bd759(descriptor[+3]);             // unit-key letter
         /* no re-dirty */
+    } else {
+        0x4bd574();                           // player marker
+        descriptor[+2] |= 1;                  // RE-DIRTY (!)
     }
 }
 ```
 
-Only the **player-marker branch** sets bit 0x01 (re-dirty) on the
-flag byte.  The unit-key branch does NOT.
+Only the **player-marker branch** sets bit 0x01 (re-dirty).  The
+unit-key branch does NOT.
 
-Why: the player marker is an **animated sprite** that cycles through
-8 frames driven by an internal counter (`DAT_004e5b18`, advanced once
-per call to `FUN_004bd574`).  Re-dirtying the cell ensures the terrain
-pass picks it up next frame and re-paints the cell, which causes the
-middle pass to re-render the marker with the next animation frame.
-Without the re-dirty the cell would only re-render when something else
-marked it dirty, and the animation would freeze.
+Why: the player marker is an **animated sprite** — frame
+`DAT_004e5b18` (kept in 0..7) of the marker player's slot group
+(`DAT_0052f0b2[DAT_00568218 * 0x1a4] * 8 + 33 + frame`).  The frame
+counter advances only when the animation gate `DAT_00591510` is set
+(the 80 ms tick), once per marker drawn — it is one shared counter, so
+two markers in view each step it.  Re-dirtying the cell makes the
+terrain pass repaint it next frame (erasing the previous marker frame)
+before the middle pass draws the next one; without it the cell would
+only repaint when something else dirtied it.
 
-The unit-key sprite is static per frame (no animation counter), so it
-doesn't need the re-paint loop.  The unit-key branch is also called
-with a SPECIFIC byte from `descriptor[+3]` — only four values (0x49,
-0x4c, 0x61, 0x64) are valid; anything else is silently dropped by the
-leaf (separate quirk to file when chip 5a.iii lands).
+The unit-key sprite is static.  `0x4bd759` accepts only four key bytes
+— `'I' 'L' 'a' 'd'` (0x49 0x4c 0x61 0x64) → frames 31..34 of
+`DAT_00553250`; any other byte returns before drawing (switch default).
 
-Caveat: the re-dirty bit is ORed into the flag byte READ AFTER the
-leaf returns (retail: `*(byte *)(...) = *(byte *)(...) | 1`).  If the
-leaf mutates the same byte (e.g. clearing a different bit), the
-re-read picks up that mutation.  For chip 5a.i the leaf is a stub
-that doesn't mutate, but the verbatim port preserves the re-read
-semantics for chip 5a.iii.
+The OR is a read-modify-write of the flag byte after the leaf returns;
+neither leaf writes the descriptor, so it is equivalent to setting the
+bit before the call.
 
-> 📍 `src/engine_battlefield_render.c` (`pass_middle`),
-> `docs/findings/battlefield-render.md` §"What's next",
-> Ghidra `FUN_004bd355` lines 50-56.
+> 📍 `src/engine_battlefield_render.c` (`pass_middle`,
+> `engine_battlefield_render_player_marker`, `engine_battlefield_render_unit_key`),
+> IDA `0x4bd355` / `0x4bd574` / `0x4bd759`.
+
+*Re-checked 2026-11-18 against the IDA export: the frame advance is gated by DAT_00591510 (not every call), marker slot formula added, unit-key filter confirmed, stale "chip 5a.i stub" note dropped.*
 
 ---
 
 ## 85. Battlefield visible-entity build filter window is INCLUSIVE on both ends
 
-The visible-entity build helper (`FUN_004bd938`, chip 5a.ii.a) walks
-the entity table for ids 1..0x50 and includes each alive entity whose
-hex coords fall in the window:
+The visible-entity build helper (`0x4bd938`) walks entity ids 1..80
+(records `0x554480`, 0x1b0 each) and includes each live one (`+0x2c`
+byte, `0x5544ac`, non-zero) whose hex coords (`+0x20` / `+0x22`) fall in
 
 ```c
 ex ∈ [cam_x - 1, cam_x + cols]    (inclusive both ends)
 ey ∈ [cam_y - 1, cam_y + rows]    (inclusive both ends)
 ```
 
-The retail source confirms inclusive bounds on the RIGHT/BOTTOM end:
-
 ```c
-if (((((&DAT_005544ac)[id*0x1b0] != 0) &&
-     (iVar1 <= *(short *)(&DAT_005544a0 + id*0x1b0))) &&
-    (*(short *)(&DAT_005544a0 + id*0x1b0) <= iVar2)) &&  // <= (NOT <)
-   ((iVar3 <= *(short *)(&DAT_005544a2 + id*0x1b0) &&
-    (*(short *)(&DAT_005544a2 + id*0x1b0) <= iVar4)))) { // <= (NOT <)
+if (byte_5544AC[432*i] != 0
+    && word_5544A0[216*i] >= cam_x - 1 && word_5544A0[216*i] <= cam_x + cols
+    && word_5544A2[216*i] >= cam_y - 1 && word_5544A2[216*i] <= cam_y + rows)
 ```
 
-Both `<=` checks are inclusive, so an entity at the EXACT north / south
-or east / west bound coord is part of the visible list.  The terrain /
-overlay passes' cell loop has the same inclusive shape on its
-over-scan extent (`(cam_x - 1) .. (cam_x - 1) + (cols + 2) - 1 =
-cam_x + cols`), so an entity at `cam_x + cols` is reachable by the
-cell loop as well — the two ranges match exactly.
+Both upper checks are `<=`, so an entity exactly one cell past the
+visible east / south edge is in the list.  This matches the middle
+pass's own over-scan cell window (quirk #83: `cam-1 .. cam+cols`
+unclamped) — not the terrain / overlay passes, which walk only the
+visible cells.  Those edge entities can have sprite pixels reaching
+back into the viewport.
 
-What this means in practice: an entity anchored exactly one cell
-past the visible viewport's east edge IS included in the visible
-list AND iterated by the cell loop.  This is intentional — those
-entities can have sprite pixels reaching back into the visible
-viewport.
+The build helper does NOT clamp the window against the grid extent the
+way the middle pass's cell loop does; an entity outside the 80×80 grid
+can't exist (the simulator places entities on cells), so the missing
+clamp is not observable.
 
-The build helper does NOT clamp the filter window against the grid
-extent the way the cell loop does (clamping against `camera_row_stride`
-for cols, `total_rows` for rows).  An entity outside the grid extent
-can't exist in practice (the simulator places entities on cells), so
-the missing clamp is observably equivalent.  Keeping the un-clamped
-form lets the build helper short-circuit a few comparisons per id.
+> 📍 `src/engine_battlefield_render.c` (`engine_battlefield_render_build_list`),
+> `docs/findings/battlefield-render.md` §5a.ii.a, IDA `0x4bd938`.
 
-> 📍 `src/engine_battlefield_render.c` (`middle_leaf_build_entity_list`),
-> `docs/findings/battlefield-render.md` §5a.ii.a,
-> Ghidra `FUN_004bd938` lines 13-19.
+*Re-checked 2026-11-18 against the IDA export: the matching over-scan is the middle pass's (#83), not terrain/overlay's; port function renamed.*
 
 ---
 
-## 86. Battlefield visible-entity sort uses an in-band sentinel as right-edge max
+## 86. (withdrawn) Battlefield visible-entity sort uses an in-band sentinel as right-edge max
 
-The bubble sort (`FUN_004bda92`, chip 5a.ii.a) walks pairs `(i, i+1)`
-for `i = 0 .. high - 1`.  On the final pass with `high = count - 1`,
-the inner loop reads `y[count]` — which is the IN-BAND SENTINEL that
-the build helper writes at index `count` (id=0, y=9999):
-
-```c
-/* End of FUN_004bd938 */
-(&DAT_004e5d82)[DAT_004e5d38 * 2] = 9999;   // y sentinel
-(&DAT_004e5d80)[DAT_004e5d38 * 2] = 0;      // id sentinel
-```
-
-The sentinel value 9999 is chosen to exceed any realistic y coord
-(the battlefield grid is on the order of tens of cells tall), so the
-comparison `y[count] < y[count-1]` always fires false and no swap
-happens at the sentinel boundary.  Net effect: the sort behaves
-identically with or without the sentinel — its purpose is to keep the
-read at `y[count]` defined for the loop bound `i < high`.
-
-Subtle property: the sort uses STRICT `<` (`y[i+1] < y[i]`) for the
-swap condition, so equal-y entries retain their input order — the
-sort is effectively stable for ties.  The render loop walks the sorted
-list in that order, which matters when two entities share a y coord
-(typically one cell stacked on another) — the rendering order is
-determined by entity id ascending (since the build helper walks ids
-1..0x50 in order).
-
-The 500-iter outer safety cap on the bubble sort is purely defensive:
-with `max_id = 0x50 = 80` the worst case is 79 outer passes, well
-under the cap.
-
-> 📍 `src/engine_battlefield_render.c` (`middle_leaf_build_entity_list`,
-> `middle_leaf_sort_entity_list`),
-> `docs/findings/battlefield-render.md` §5a.ii.a,
-> Ghidra `FUN_004bd938` lines 28-29; `FUN_004bda92` lines 10-21.
+Claimed the bubble sort `0x4bda92` reads the `(id 0, y 9999)` sentinel the build helper `0x4bd938` writes at
+index `count`.  It does not: the inner loop is `for (i = 0; i < high; i++)` comparing `y[i+1] < y[i]` with
+`high = count - 1` (asm 0x4bdaee..0x4bdb12: `cmp var_C, i; jle`), so the last index read is `count - 1`; no
+function reads the sentinel (data_xrefs: only 0x4bd938 touches index `count`).  True and kept: the swap is strict
+`<` (`jge` skip at 0x4bdb12), so equal-y entities keep id order; the 500-pass cap never binds (≤ 79 passes).
 
 ---
 
 ## 87. Battlefield per-entity draw type-6 PRE-call fires even when blob is NULL
 
-The per-entity draw `FUN_004bdc31` (chip 5a.ii.b) has a strict
-top-to-bottom order:
+The per-entity draw `0x4bdc31` has a strict top-to-bottom order:
 
 ```c
-if (entity[+0x12] == 6) FUN_004be4df(id);    // pre-call (TYPE-6)
+if (entity[+0x12] == 6) 0x4be4df(id);       // pre-call (TYPE-6)
 
 blob = entity[+0x00];
 if (blob == 0) {
-    FUN_004afab9(...);                       // log "no blob"
+    0x4afab9(aErrTileMapShow, 0, type + 1);  // log "no blob"
     return;                                   // <— skips type-7/9 too
 }
-... main draw, post-calls ...
+... stage frame entity[+0x10]; if (0 < Offset <= 310000) { main draw, post-calls }
 ```
 
 The type-6 PRE-call is **outside** the no-blob gate.  An entity of
-type 6 with a NULL primary sprite blob still gets `FUN_004be4df`
-called — only the main draw + type-7 + type-9-subtype-0xe post-calls
-are skipped.
+type 6 with a NULL primary sprite blob still gets `0x4be4df` called —
+only the main draw + type-7 + type-9-subtype-0xe post-calls are
+skipped.
 
-Why this matters: `FUN_004be4df` is the SECONDARY draw (likely a
-shadow / ground decal for type-6 units).  It uses a DIFFERENT blob
-field (`entity[+0x04]`, the secondary blob), so even when the primary
-blob is missing the secondary can still render.  Treating the
-PRE-call as part of the main-draw gate would silently lose shadows
-for entities whose primary asset failed to load.
+`0x4be4df` is the SECONDARY draw: it uses a DIFFERENT sheet field
+(`entity[+0x04]`, frame `entity[+0x11]`, a 6×6 dirty mark), so even
+when the primary blob is missing the secondary can still render.
+Treating the PRE-call as part of the main-draw gate would silently lose
+it for entities whose primary asset failed to load.
 
-The type-7 / type-9-subtype-0xe POST-calls are different — they sit
-**inside** the glyph-offset gate AND inside the no-blob else branch,
-so an out-of-band glyph offset OR a missing primary blob suppresses
-all three.  The asymmetry between PRE-call (loose gate) and POST-calls
-(strict gates) is consistent: secondary draws survive primary
-failures; type-specific overlays only fire when the primary draw
-succeeded.
+The type-7 (`0x4be7be`) / type-9-subtype-0xe (`0x4beab9`) POST-calls
+sit **inside** both the no-blob branch AND the glyph-offset gate, after
+the cursor restore — so an out-of-band offset OR a missing primary blob
+suppresses all three.  Secondary draws survive primary failures;
+type-specific overlays only fire when the primary draw happened.
 
-> 📍 `src/engine_battlefield_render.c` (`middle_leaf_draw_entity`),
-> `docs/findings/battlefield-render.md` §5a.ii.b,
-> Ghidra `FUN_004bdc31` lines 11-14.
+> 📍 `src/engine_battlefield_render.c` (`engine_battlefield_render_entity`,
+> `engine_battlefield_render_entity_type6`), `docs/findings/battlefield-render.md`
+> §5a.ii.b, IDA `0x4bdc31`.
+
+*Re-checked 2026-11-18 against the IDA export: confirmed; port function names updated.*
 
 ---
 
 ## 88. Battlefield per-entity draw reads uninitialised stack at unsupported zoom
 
-`FUN_004bdc31` (chip 5a.ii.b) selects the per-entity animation-offset
-table based on zoom:
+`0x4bdc31` selects the per-entity centering + animation offset by zoom:
 
 ```c
 if (DAT_004e656c == 0x20) {
-    local_1c = ...DAT_004e4030[facing*0x88 + frame*8]...;
-    local_24 = ...DAT_004e4034[facing*0x88 + frame*8]...;
+    dx = 16 - (w >> 1) + DAT_004e4030[34*facing + 2*frame];
+    dy = 16 - (w >> 1) + DAT_004e4034[34*facing + 2*frame] - 8;
 } else if (DAT_004e656c == 0x10) {
-    local_1c = ...DAT_004e3bf0[facing*0x88 + frame*8]...;
-    local_24 = ...DAT_004e3bf4[facing*0x88 + frame*8]...;
+    dx =  8 - (w >> 1) + DAT_004e3bf0[...];
+    dy =  8 - (w >> 1) + DAT_004e3bf4[...] - 4;
 }
-DAT_00591524 = DAT_00591524 + local_1c;   // <— uses local_1c
-DAT_00591528 = DAT_00591528 + local_24;   // <— uses local_24
+DAT_00591524 += dx;   // <— uninitialised at any other zoom
+DAT_00591528 += dy;
 ```
 
-There is NO else arm — if `DAT_004e656c` is neither `0x10` nor `0x20`,
-both `local_1c` and `local_24` are READ uninitialised on the stack.
-The 1996 MSVC codegen leaves them as whatever the calling convention
-junk happens to be, and the cursor is then shifted by garbage.
+There is NO else arm — at any other zoom both locals are read
+uninitialised (stack residue).  The type-6 / type-7 leaves
+(`0x4be4df`, `0x4be7be`) have the same shape.
 
-Why this is unreachable in retail: the frame driver's terrain /
-overlay pass dispatch ALSO has no else arm on the same zoom check —
-unsupported zooms skip both passes.  The game never sets zoom to
-anything but `0x10` or `0x20`.  But the middle pass dispatches
-unconditionally on zoom, so this gate is technically alive.
+Unreachable in retail, more strongly than "the game only uses 16 or
+32": the zoom global `DAT_004e656c` has one writer,
+`engine_battlefield_render_bind_hex_grid_context` (0x4bc020), and both
+of its callers pass the literal `0x20` (`push 20h` at 0x498d2b /
+0x498f47, before the calls at 0x498d4c / 0x498f68).  So the battlefield
+always runs at zoom 32 and even the zoom-16 arm is dead.
 
-The port initialises both offsets to 0 in the missing-else arm.
-Deterministic behaviour at unsupported zoom; observationally
-equivalent in retail because the unsupported-zoom path doesn't
-exist.
+The port's `entity_offset` initialises both offsets to 0 in the
+missing-else arm — unobservable, since the arm is never taken.
 
-> 📍 `src/engine_battlefield_render.c` (`middle_leaf_draw_entity` — the
-> `g_zoom == 0x20 / 0x10` chain), `docs/findings/battlefield-render.md`
-> §5a.ii.b, Ghidra `FUN_004bdc31` lines 21-39.
+> 📍 `src/engine_battlefield_render.c` (`entity_offset`,
+> `engine_battlefield_render_entity`), `docs/findings/battlefield-render.md`
+> §5a.ii.b, IDA `0x4bdc31` / `0x4bc020`.
+
+*Re-checked 2026-11-18 against the IDA export: zoom is always 0x20 (sole writer 0x4bc020, both callers push 0x20), so the zoom-16 arm is dead too; the "middle pass keeps the gate alive" remark dropped; port names updated.*
 
 ---
 
 ## 89. Battlefield per-entity dirty-rect box size threshold uses entity type, not sprite size
 
-`FUN_004bdc31` (chip 5a.ii.b) marks a dirty box AFTER applying the
-anim-offset + type-9/type-10 Y bonus but BEFORE dispatching the blit.
-Box size is picked by entity TYPE, not sprite dimensions:
+`0x4bdc31` marks a dirty box AFTER applying the anim offset + the
+type-9 (+12) / type-10 (+8) Y bonus but BEFORE dispatching the blit.
+Box size is picked by entity TYPE (`entity[+0x12]`), not sprite
+dimensions:
 
 ```c
-if ((byte)(&DAT_00554492)[id*0x1b0] < 7) {
-    FUN_004527a6(cursor_x, cursor_y, 5, 5, 2);   // 5×5 tile box
-} else {
-    FUN_004527a6(cursor_x, cursor_y, 9, 9, 2);   // 9×9 tile box
-}
+if ((uint8_t)entity[+0x12] < 7)
+    engine_dirty_rect_mark_box_tiled(cursor_x, cursor_y, 5, 5, 2);   // 0x4527a6
+else
+    engine_dirty_rect_mark_box_tiled(cursor_x, cursor_y, 9, 9, 2);
 ```
 
-The 5×5 box covers 80×80 pixels (5 tiles × 16 px); the 9×9 box
-covers 144×144 pixels.  Types 0..6 (units?) get 5×5; types ≥ 7
-(heroes / siege engines / larger entities) get 9×9.
+`0x4527a6` marks `x .. x + 16*w`, `y .. y + 16*h` (negative origins
+clamped to 0), so 5×5 covers 80×80 pixels and 9×9 covers 144×144.
+Types 0..6 get 5×5; types ≥ 7 get 9×9.
 
-A few subtle properties:
-
-- The box size is hardcoded.  Sprites of varying actual size all
-  trigger the same dirty extent — over-marking is preferred over
-  under-marking (the blit might write outside the 5×5 box and still
-  be safely re-painted next frame because the box is conservative).
-- The escalation flag is `2` (forces full-repaint behaviour), not
-  the default `1`.  An entity's per-frame mark always escalates
-  `dirty_mark` to 2 — even if the rest of the frame only marked at
-  level 1.
+- The box size is hardcoded; over-marking is preferred to sprite-exact
+  marking.
+- The last argument `2` sets the escalation global `DAT_0050d09c = 2`
+  (`if (a5 > 1)`), so any drawn entity escalates the frame's mark to 2.
 - The box is anchored at the FULLY-ADJUSTED cursor (anim offset +
-  type-9/10 Y bonus applied), NOT at the entity's hex-aligned
-  anchor.  Off-by-one bugs in anim tables would shift the box
-  accordingly.
+  type-9/10 bonus), NOT at the entity's cell origin.
 
-> 📍 `src/engine_battlefield_render.c` (`middle_leaf_draw_entity`),
-> `docs/findings/battlefield-render.md` §5a.ii.b,
-> Ghidra `FUN_004bdc31` lines 47-52.
+> 📍 `src/engine_battlefield_render.c` (`engine_battlefield_render_entity`),
+> `docs/findings/battlefield-render.md` §5a.ii.b, IDA `0x4bdc31` / `0x4527a6`.
+
+*Re-checked 2026-11-18 against the IDA export: confirmed (tile = 16 px, escalation global DAT_0050d09c); port function name updated.*
 
 ---
 
 ## 90. Battlefield effect-chain glyph_offset gate aborts the WHOLE chain walk
 
-`FUN_004beed4` (chip 5a.iii) walks a linked list of visual effect
-records anchored to a battlefield cell.  Per record, it gates the
-sprite blit on the `[1, 0x4baf0]` glyph_offset window — same gate that
-guards the per-cell terrain/overlay/per-entity paths.  But here the
-gate's failure path is a `return;` rather than a `continue;` — the
-whole function exits, abandoning any unwalked records remaining in the
-chain:
+`0x4beed4` walks a linked list of visual-effect records (`0x57a100`,
+0x4c each; `+4` next id) anchored to a battlefield cell (head =
+`descriptor[+6]`), at most 10 links; it stops on a dead record
+(`+8 == 0`) or a self-link.  Per record it stages frame `+0x12` of the
+record's sheet (`+0`) and gates the blit on `0 < Offset <= 0x4baf0`
+(= 310000 — the same gate as every other battlefield path).  Here the
+gate's failure path is a `return` rather than a `continue`:
 
 ```c
-if ((310000 < DAT_0058fe04) || (DAT_0058fe04 < 1)) {
-    return;       // exits FUN_004beed4 entirely — even if next-id is non-zero
-}
+if (Offset > 310000 || Offset <= 0)
+    return;       // asm 0x4bf06d..0x4bf08f → 0x4bf1f4: skips the restore at 0x4bf1e4
 ```
 
-(The decompiler renders the constant as 310000; r2 confirms it's
-actually 0x4baf0 = 309488, same as everywhere else.)
+Effects:
 
-Net effect: a single mis-loaded effect record at position N silently
-prevents the rest of the chain from rendering this frame.  The
-`current_id` global isn't even updated to walk past the bad record
-— so on the NEXT frame, if `current_id` still points at the bad
-record, the chain restart hits the same gate and the same chain-
-abandonment.  Effects "behind" a bad record stay invisible until the
-bad record's metadata clears.
+- A single bad record at position N silently drops the rest of the
+  chain this frame.  The walk restarts from the cell's head next frame,
+  so it keeps being dropped until the bad record changes.
+- The epilogue that restores the saved cursor (`DAT_00591524 /
+  DAT_00591528 = saved`, 0x4bf1e4) is skipped.  This is NOT a no-op:
+  every earlier drawn link SETS the cursor absolutely
+  (`scroll_pad + x + viewport`), so when link N ≥ 2 fails, the cursor
+  is left at link N-1's position.  The middle pass (`0x4bd355`) then
+  keeps advancing that cursor by `zoom` for the rest of the row, and
+  `cursor_y` (reset only at the pass start) stays wrong for every later
+  row — later markers / unit keys / chains in the frame draw displaced.
+  Only when the FIRST link fails (or kind 7 links precede it) is the
+  cursor still the caller's.
 
-The chain-abort also skips the saved-cursor restore epilogue
-(`DAT_00591524 / DAT_00591528 = saved`), but since the cursor isn't
-written before the gate check (cursor write sits AFTER the gate), this
-particular missing-restore is observably a no-op.
+> 📍 `src/engine_battlefield_render.c` (`engine_battlefield_render_effect_chain`,
+> its QUIRK comment), `docs/findings/battlefield-render.md` §5a.iii, IDA `0x4beed4`.
 
-> 📍 `src/engine_battlefield_render.c` (`middle_leaf_draw_effect_chain`),
-> `docs/findings/battlefield-render.md` §5a.iii,
-> Ghidra `FUN_004beed4` lines 50-51.
+*Re-checked 2026-11-18 against the IDA export: 0x4baf0 is 310000 (not 309488); the skipped cursor restore is observable (an earlier link's position leaks into the middle pass); port name updated.*
 
 ---
 
 ## 91. Battlefield player_marker / unit_key re-center cursor by sprite WIDTH on both axes
 
-`FUN_004bd574` (player marker) and `FUN_004bd759` (unit key) each
-re-center the cursor by `(16 - sprite_w/2)` BEFORE drawing.  Both
-axes use the SAME `sprite_w` term — the Y axis re-center does NOT use
-`sprite_h`:
+`0x4bd574` (player marker) and `0x4bd759` (unit key) each re-center
+the cursor by `(16 - sprite_w/2)` BEFORE drawing.  Both axes use the
+SAME `sprite_w` (`DAT_005c9258`) term — the Y re-center does NOT use
+`sprite_h` (`DAT_005aeb70`):
 
 ```c
-DAT_00591524 = DAT_00591524 + (0x10 - ((int)DAT_005c9258 >> 1));   // cursor_x
-DAT_00591528 = DAT_00591528 + (0x10 - ((int)DAT_005c9258 >> 1));   // cursor_y — same term
+DAT_00591524 += 16 - (DAT_005c9258 >> 1);   // cursor_x
+DAT_00591528 += 16 - (DAT_005c9258 >> 1);   // cursor_y — same term
 ```
 
-For 16×16 sprites (the actual marker / unit-key shape) this is
-incidentally correct (sprite_w == sprite_h), but it's a copy-paste bug
-that would yield mis-centered draws if either leaf is ever pointed at
-a non-square sprite.  Since both leaves only ever dispatch from a
-fixed slot range (0x21..0x28 for the player marker animation, 0x1f..0x22
-for the four unit-key letters), and the asset designer made all those
-slots square, the bug stays unobservable in retail.
+For square sprites this is harmless; a non-square sprite would be
+mis-centred vertically.  The slots: unit keys are frames 31..34
+(0x1f..0x22) of `DAT_00553250`; the marker is frame
+`DAT_0052f0b2[player * 0x1a4] * 8 + 33 + (0..7)` of `DAT_00566518` — the
+range depends on the marker player's slot byte (0x21..0x28 for slot
+1).  Whether every one of those frames is square has not been checked
+against the sheets.
 
-The per-entity draw (`FUN_004bdc31`, chip 5a.ii.b) does NOT share this
-bug — it has separate `(16 - sprite_w/2)` and `(- sprite_w/2 + 8)`
-expressions for X and Y, derived from the anim-offset table.
+This is the cluster's convention, not a one-off: the per-entity draw
+(`0x4bdc31`) and its type-6 / type-7 / type-9-0xe leaves (`0x4be4df`,
+`0x4be7be`, `0x4beab9`) also centre BOTH axes with
+`16 - (DAT_005c9258 >> 1)` (plus an anim offset, and `- 8` on Y for the
+entity draw).
 
-> 📍 `src/engine_battlefield_render.c`
-> (`player_marker_or_unit_key_render`),
-> `docs/findings/battlefield-render.md` §5a.iii,
-> Ghidra `FUN_004bd574` lines 30-31, `FUN_004bd759` lines 35-36.
+> 📍 `src/engine_battlefield_render.c` (`engine_battlefield_render_player_marker`,
+> `engine_battlefield_render_unit_key`, `entity_offset`),
+> `docs/findings/battlefield-render.md` §5a.iii, IDA `0x4bd574` / `0x4bd759` / `0x4bdc31`.
+
+*Re-checked 2026-11-18 against the IDA export: the per-entity draw shares the width-on-both-axes centering (the entry said it did not); marker slot range depends on the player's slot byte; port names updated.*
 
 ---
 
 ## 92. Battlefield effect-chain dirty-box branch is identical in both arms
 
-`FUN_004beed4` (chip 5a.iii) gates dirty-box marking on the per-record
-subtype:
+`0x4beed4` gates its dirty-box marking on the record's kind
+(`+9`, `0x57a109`):
 
-```c
-if ((&DAT_0057a109)[DAT_00568994 * 0x4c] == '\x05') {
-    FUN_004527a6(DAT_00591524, DAT_00591528, 4, 4, 2);   // subtype 5
-}
-else {
-    FUN_004527a6(DAT_00591524, DAT_00591528, 4, 4, 2);   // anything else
-}
+```
+004bf0fc  cmp  ecx, 5
+004bf0ff  jnz  loc_4BF124
+004bf105  push 2 / push 4 / push 4 / push y / push x
+004bf117  call engine_dirty_rect_mark_box_tiled      ; kind 5
+004bf11f  jmp  loc_4BF13E
+004bf124  push 2 / push 4 / push 4 / push y / push x
+004bf136  call engine_dirty_rect_mark_box_tiled      ; anything else
 ```
 
-Both arms call the SAME mark-box-tiled helper with the SAME arguments
-(4×4 tile box, force_full=2).  The conditional is dead code — likely
-a leftover from an earlier version where subtype-5's box size or
-force_full differed, then later collapsed without removing the
-branch.  The port folds the conditional away; behavior is identical.
+Both arms call `0x4527a6` with the SAME arguments (4×4 tiles,
+escalation 2).  The conditional is dead code — a leftover from an
+earlier version where kind 5's box differed.  IDA's pseudocode already
+folds the two arms into one call (so it is only visible in the asm);
+the port folds it too.  Kind 5's real difference is elsewhere: it adds
+the 16-step jitter `DAT_004e4470[DAT_004e5b1c]` to the position.
 
-Three plausible histories for the leftover:
+Not behaviorally observable; documented because a reader of the asm
+might otherwise read the branch as meaningful.
 
-1. Early version had a smaller box for non-animated effects (e.g. 3×3
-   for static, 4×4 for animated) — later equalized.
-2. Early version had different force_full escalation (1 vs 2) — later
-   standardized on 2.
-3. Pure cargo-cult: the dev assumed subtype 5 might need a special
-   box later and pre-stubbed the branch.
+> 📍 `src/engine_battlefield_render.c` (`engine_battlefield_render_effect_chain`),
+> `docs/findings/battlefield-render.md` §5a.iii, IDA asm `0x4bf0fc`..`0x4bf13b`.
 
-Not behaviorally observable; documented because future RE work might
-otherwise read the branch as meaningful.
-
-> 📍 `src/engine_battlefield_render.c`
-> (`middle_leaf_draw_effect_chain`),
-> `docs/findings/battlefield-render.md` §5a.iii,
-> Ghidra `FUN_004beed4` lines 57-62.
+*Re-checked 2026-11-18 against the IDA export: confirmed in the asm (pseudocode folds it); speculative histories dropped; port name updated.*
 
 ---
 
 ## 93. Battlefield type-9-subtype-0xe leaf reads z32 anim table even at zoom 16
 
-`FUN_004beab9` (chip 5a.iv, type-9-sub-0xe POST-call) reads its
-animation offset from `DAT_004e4030` (the zoom-32 table) UNCONDITIONALLY:
+`0x4beab9` (the type-9 / subtype-0x0e POST-call of `0x4bdc31`) reads
+its animation offset from `DAT_004e4030` / `DAT_004e4034` (the zoom-32
+table) UNCONDITIONALLY, for both of its sprites, and centres with the
+zoom-32 constant 16:
 
 ```c
-DAT_00591524 = DAT_00591524 +
-               *(int *)(&DAT_004e4030 + ...);   // z32 table, no zoom check
-DAT_00591528 = DAT_00591528 +
-               *(int *)(&DAT_004e4034 + ...);
+DAT_00591524 += DAT_004e4030[34*facing + 2*frame];   // z32 table, no zoom check
+DAT_00591528 += DAT_004e4034[34*facing + 2*frame];
+DAT_00591524 += 16 - (w >> 1);
 ```
 
-The sister leaves `FUN_004be4df` (type-6) and `FUN_004be7be` (type-7)
-both have proper `if (DAT_004e656c == 0x20) {...z32...} else if (...
-== 0x10) {...z16...}` branches.  Only this leaf skips the check.
+The sister leaves `0x4be4df` (type 6) and `0x4be7be` (type 7) — and the
+entity draw `0x4bdc31` itself — branch on `DAT_004e656c == 0x20 /
+0x10` and pick `DAT_004e4030` or the zoom-16 table `DAT_004e3bf0`.
 
-Likely two-part explanation:
-1. Subtype 0x0e (the only subtype that triggers this leaf) only ever
-   occurs at zoom 32 in the actual game data, so the missing zoom
-   check is never exercised.
-2. The z16 table sits adjacent in memory at `DAT_004e3bf0`, with
-   identical 0x88-byte-per-facing layout — accidentally indexing
-   into z32 from a z16-intended context would corrupt the offset
-   by reading "the wrong facing's z32 entry" rather than
-   segfaulting.
+The missing check is never exercised: the battlefield zoom
+`DAT_004e656c` is written only by `0x4bc020`, whose two callers pass
+`0x20` (0x498d2b / 0x498f47), so every battlefield frame is zoom 32 and
+the z32 table is the right one.  The port keeps the unconditional z32
+read verbatim.
 
-The port preserves the unconditional z32 read verbatim.  Tests
-verify the behavior by running the leaf at zoom 16 and observing
-that z32-table values (not z16) feed the cursor.
+> 📍 `src/engine_battlefield_render.c` (`engine_battlefield_render_entity_type9e`),
+> `docs/findings/battlefield-render.md` §5a.iv, IDA `0x4beab9`.
 
-> 📍 `src/engine_battlefield_render.c`
-> (`entity_type9_subtype_e_post_call`),
-> `docs/findings/battlefield-render.md` §5a.iv,
-> Ghidra `FUN_004beab9` lines 23-30 (first sprite),
-> lines 57-62 (second sprite).
+*Re-checked 2026-11-18 against the IDA export: zoom is always 0x20 (sole writer 0x4bc020), so the zoom-16 case cannot occur; adjacency speculation dropped; port name updated.*
 
 ---
 
 ## 94. Battlefield type-9-sub-0xe second sprite anchored at SAVED entry cursor
 
-`FUN_004beab9` draws TWO sprites per call.  Between the two, the leaf
-RESETS the cursor to the saved entry cursor (`iVar2` / `iVar3`
-captured at function entry) rather than continuing from the first
-sprite's post-adjustment cursor:
+`0x4beab9` draws TWO sprites per call (frames `entity[+0x11] + 22` and
+`+ 13` of the entity's sheet `entity[+0]`).  Between the two, the leaf
+RESETS the cursor to the cursor saved at entry rather than continuing
+from the first sprite's adjusted cursor:
 
 ```c
-// First sprite ends with cursor at (entry_x + anim_x + ..., entry_y + ...)
-// ... blit ...
-
-// Second sprite restarts from SAVED entry cursor:
-DAT_00591524 = iVar2 + *(int *)(&DAT_004e4030 + ...);   // iVar2 = saved entry_x
-DAT_00591528 = iVar3 + *(int *)(&DAT_004e4034 + ...);   // iVar3 = saved entry_y
+// first sprite:  cursor = entry + anim + (16 - w1/2, 16 - w1/2) + (0, 12 - 44)
+// ... 6×6 mark, clip, RLE blit ...
+DAT_00591524 = saved_x;  DAT_00591528 = saved_y;
+// second sprite: cursor = entry + anim + (16 - w2/2, 16 - w2/2) + (0, 12 + 58)
 ```
 
-If retail had continued from the first sprite's adjusted cursor, the
-second sprite would have inherited the first's anim offset twice over,
-plus the first's `(0x10 - half_w)` X bias and `(- half_w - 0x10)` Y
-bias.  By restarting from entry, both sprites share the same
-"anchor + anim_offset + half-cell centering" base, just with
-different Y biases:
+Both sprites share the same "anchor + anim offset + width centering"
+base, with different Y biases: `16 + 12 - 44 = -16` above the anchor
+for the first, `16 + 12 + 58 = +86` below for the second — 102 px apart
+(plus `(w1 - w2)/2` if the two frames differ in width).  A two-tier
+sprite (top piece / bottom piece).
 
-- First sprite Y bias:  `- 0x10` (shifts UP 16 pixels)
-- Second sprite Y bias: `+ 0x56` (shifts DOWN 86 pixels)
+Two more properties of the shape:
+- The second sprite is staged and drawn only INSIDE the first sprite's
+  `0 < Offset <= 310000` gate — a bad first frame suppresses both.
+- The cursor is restored after each sprite, but not when the SECOND
+  frame fails its gate (it is still the saved value then, so no leak).
 
-Total Y separation between the two sprites: 102 pixels.  This matches
-what you'd expect for a two-tier siege-engine-style entity: top piece
-(catapult arm?) above, bottom piece (catapult base?) below the
-anchor.
+> 📍 `src/engine_battlefield_render.c` (`engine_battlefield_render_entity_type9e`),
+> `docs/findings/battlefield-render.md` §5a.iv, IDA `0x4beab9`.
 
-The port mirrors this by passing the saved `entry_y` (not the post-
-first-sprite cursor) into the second sprite's cursor computation.
-
-> 📍 `src/engine_battlefield_render.c`
-> (`entity_type9_subtype_e_post_call`),
-> `docs/findings/battlefield-render.md` §5a.iv,
-> Ghidra `FUN_004beab9` lines 57-58 (`DAT_00591524 = iVar2 + ...`).
+*Re-checked 2026-11-18 against the IDA export: confirmed; nested gate and frame indices added; port name updated.*
 
 ---
 
 ## 95. Battlefield late-pass creature draw reads z32 anim table at zoom 16 too
 
-The chip-5c per-cell creature draw leaf (`FUN_004be070`) indexes into
-the z32 anim-offset table (`DAT_004e4030`) UNCONDITIONALLY — no
-`if (zoom == 0x20)` gate at all:
+The late-pass per-cell creature leaf (`0x4be070`) indexes the zoom-32
+anim-offset table (`DAT_004e4030` / `DAT_004e4034`) UNCONDITIONALLY —
+no `if (zoom == 0x20)` gate:
 
 ```c
-iVar4 = *(int *)(&DAT_004e4030 +
-                 (char)(&DAT_00554498)[param_1 * 0x1b0] * 0x88 +
-                 (char)(&DAT_005544b2)[param_1 * 0x1b0] * 8);
+dx = DAT_004e4030[34 * entity[+0x18] + 2 * entity[+0x32]];
+dy = DAT_004e4034[34 * entity[+0x18] + 2 * entity[+0x32]];
 ```
 
-The middle-pass per-entity draw (chip 5a.ii.b) gates this lookup by
-zoom (z16 table at zoom 0x10, z32 at zoom 0x20).  The late pass does
-not.  Whether this matters in practice depends on the late pass ever
-running at zoom 16 — which it does (the frame driver dispatches it
-unconditionally regardless of zoom — see quirk #97).  At zoom 16 the
-leaf still indexes z32, so the per-cell creature draw inherits z32
-anim offsets even though every other zoom-16 caller uses z16.
+The middle-pass per-entity draw (`0x4bdc31`) gates the same lookup by
+zoom.  Like the late pass's hardcoded 0x20 cell pitch (quirk #97), this
+is a zoom-32-only assumption — and it is never violated: the
+battlefield zoom `DAT_004e656c` is written only by `0x4bc020`, whose
+two callers pass `0x20`.  At the only zoom retail uses, the z32 table
+is correct.
 
-> 📍 `src/engine_battlefield_render.c` (`late_leaf_draw_creature`),
-> `docs/findings/battlefield-render.md` §5c,
-> Ghidra `FUN_004be070` lines 14-16.
+> 📍 `src/engine_battlefield_render.c` (`engine_battlefield_render_creature`),
+> `docs/findings/battlefield-render.md` §5c, IDA `0x4be070`.
+
+*Re-checked 2026-11-18 against the IDA export: the "at zoom 16 it inherits z32 offsets" scenario cannot happen (zoom is always 0x20); port name updated.*
 
 ---
 
 ## 96. Battlefield late-pass creature draw lopsided cursor restore on gate fail
 
-`FUN_004be070` saves the entry cursor at the top (`iVar2 / iVar3`),
-applies a type-conditional offset, then dispatches the sprite stage +
-gate.  On gate PASS, the leaf restores cursor to entry; on gate FAIL,
-cursor stays at the POST-OFFSET value:
+`0x4be070` saves the entry cursor, applies a type-conditional offset
+(anim offset + 8 on X; −12 on Y for types < 7 and type 10, −32 for
+other types ≥ 7, +16 back for type 9), stages frame
+`46 + (entity[+0x1a0] shifted by DAT_00566514)` of `DAT_005530c8`, then
+gates on `0 < Offset <= 310000`.  On gate PASS it draws and restores the
+entry cursor; on gate FAIL it returns with the cursor still at the
+POST-OFFSET value:
 
 ```c
-iVar4 = DAT_00591524;   // re-read post-offset cursor_x
-iVar1 = DAT_00591528;   // re-read post-offset cursor_y
-if (gate passes) {
-    ... clip + stage ...
-    iVar4 = iVar2;     // OVERWRITE with entry x
-    iVar1 = iVar3;     // OVERWRITE with entry y
-    if (...) blit;
+saved_x = DAT_00591524; saved_y = DAT_00591528;
+DAT_00591524 += dx + 8; DAT_00591528 += dy - 12 /* or -32 / -16 */;
+if (0 < Offset && Offset <= 310000) {
+    ... clip + blit ...
+    DAT_00591524 = saved_x; DAT_00591528 = saved_y;
 }
-DAT_00591528 = iVar1;   // restore: entry on PASS, offset on FAIL
-DAT_00591524 = iVar4;
+/* fail: no restore */
 ```
 
-The late-pass driver resets cursor_x at the start of each ROW (so the
-damage stays localised within a row) but NEVER resets cursor_y within
-the frame.  A gate-fail in row N propagates the offset Y into every
-subsequent row's per-cell advance.  In practice every valid creature
-record passes the gate, so this is defensive territory.  Filed because
-it's a subtle "leaf cursor restore asymmetry" — the kind of thing a
-test discovers by accident and a reader can't reconstruct from the
-surrounding code.
+The late-pass driver (`0x4bd233`) resets `cursor_x` at the start of
+each ROW but only ADVANCES `cursor_y` (`+= 0x20`) — so a gate fail in
+row N shifts the Y of every creature drawn in later rows of the frame
+(and X for the rest of row N).  The selection marker (`0x4be33f`) sets
+its cursor absolutely and is unaffected.  Valid creature frames always
+pass the gate, so this is defensive territory.
 
-> 📍 `src/engine_battlefield_render.c` (`late_leaf_draw_creature`),
-> `docs/findings/battlefield-render.md` §5c,
-> Ghidra `FUN_004be070` lines 49-70.
+> 📍 `src/engine_battlefield_render.c` (`engine_battlefield_render_creature`,
+> `pass_late`), `docs/findings/battlefield-render.md` §5c, IDA `0x4be070` / `0x4bd233`.
+
+*Re-checked 2026-11-18 against the IDA export: confirmed; offsets/frame spelled out; port name updated.*
 
 ---
 
 ## 97. Battlefield late-pass cell pitch is HARDCODED 0x20 regardless of zoom
 
-`FUN_004bd233`'s per-cell cursor advance is a hardcoded `+ 0x20`:
+`0x4bd233`'s per-cell cursor advance is a hardcoded `+ 0x20`:
 
 ```c
-for (local_10 = 0; local_10 < DAT_004e5d5c; ++local_10) {
+for (col = 0; col < DAT_004e5d5c; ++col) {
     ...
-    DAT_004e6588 = DAT_004e6588 + DAT_004e5d50;
-    DAT_00591524 = DAT_00591524 + 0x20;       // HARDCODED 32px pitch
+    DAT_004e6588 += DAT_004e5d50;
+    DAT_00591524 += 32;            // HARDCODED 32 px pitch
 }
-DAT_004e6588 = DAT_004e6588 + DAT_004e5d70;
-DAT_00591528 = DAT_00591528 + 0x20;           // HARDCODED 32px pitch
+DAT_004e6588 += DAT_004e5d70;
+DAT_00591528 += 32;                // per row
 ```
 
-The middle-pass driver uses `g_zoom` for its per-cell advance (16 at
-zoom 0x10, 32 at zoom 0x20); the late pass uses a literal `0x20`.
-Net effect: at zoom 16, the late pass walks the descriptor cursor
-correctly (by `g_desc_stride`), but the SCREEN cursor advances at
-zoom-32 spacing over a zoom-16 grid — creature sprites land at half-
-density (every other cell's worth of pixel space).
+The middle pass (`0x4bd355`) advances by `DAT_004e656c` (zoom); the
+late pass, the zoom-32 terrain / overlay passes, the selection marker
+`0x4be33f` (`32 * (col - cam_x) + 2`) and the creature leaf's z32 table
+(quirk #95) all assume 32.  The frame driver `0x4bc142` calls the late
+pass with no zoom branch.
 
-The late pass is effectively a zoom-32-only feature even though it's
-dispatched unconditionally.  Probable cause: combat zoom 16 is the
-"strategic overview" view where creature draws aren't needed (or
-where the per-cell entity index byte at descriptor[+5] is always 0),
-so the misalignment never manifests visually.  Filed because the
-zoom-coupling assumption is implicit (no zoom branch in the driver)
-and easy to miss.
+This never misaligns: the battlefield zoom `DAT_004e656c` is written
+only by `engine_battlefield_render_bind_hex_grid_context` (0x4bc020),
+and both callers pass `0x20` (0x498d2b / 0x498f47) — retail's
+battlefield is always zoom 32, and the whole zoom-16 side of the
+cluster (0x4bc8fc, 0x4bcbd1, the z16 anim table) is dead code.  The
+hardcoded pitch is a latent assumption, not a visible bug.
 
-The selection-marker leaf (`FUN_004be33f`) uses the same `0x20`
-literal for its cursor formula, inheriting the same quirk for the
-hero/army marker position.
+> 📍 `src/engine_battlefield_render.c` (`pass_late`,
+> `engine_battlefield_render_selection_marker`), `docs/findings/battlefield-render.md`
+> §5c, IDA `0x4bd233` / `0x4be33f` / `0x4bc020`; `tests/probes/zoom16.probe` (the dead zoom-16 rows).
 
-> 📍 `src/engine_battlefield_render.c` (`pass_late`),
-> `docs/findings/battlefield-render.md` §5c,
-> Ghidra `FUN_004bd233` lines 21, 24.
+*Re-checked 2026-11-18 against the IDA export: zoom is always 0x20, so the "half-density at zoom 16" effect and the "zoom 16 = strategic overview" speculation are moot.*
 
 ---
 
-## 98. Battlefield final-pass three-way bucket has unreachable branches
+## 98. (withdrawn) Battlefield final-pass three-way bucket has unreachable branches
 
-The chip-5d final pass digests each visible creature into a one-byte
-signed-char sum (port of retail `FUN_00440089(0x19e, ...)`), then
-three-way buckets the result:
-
-```c
-if (sum < 0xc9) {
-    if (sum < 0x65) { value = sum;        pen = 0x3f; }
-    else            { value = sum - 100;  pen = 0xf9; }
-} else            { value = sum - 200;  pen = 0x20; }
-```
-
-Then filters: `if (value != 999 && value != 0) render(...)`.
-
-A signed-char sum has range `[-128, 127]`.  So:
-
-  - bucket-low: `sum < 101`              — fires for sums in `[-128, 100]`.
-  - bucket-mid: `101 <= sum < 201`       — UNREACHABLE for signed-char.
-  - bucket-high: `sum >= 201`            — UNREACHABLE for signed-char.
-
-Both bucket-mid and bucket-high are dead code with a signed-char
-sum.  The filter `value == 999` is also unreachable (max value is
-`127 - 0 = 127`).
-
-Likely cause: an older revision used a wider sum type (16-bit?
-32-bit?) where the bucket ranges and 999 filter were meaningful.
-When the sum was narrowed to signed-char, the bucket boundaries
-weren't pruned.
-
-Filed because the port preserves the (dead) branches verbatim — a
-reader naively running through the bucket logic would assume all
-three pens can fire in practice.  The pen-color expectation in
-tests should only target bucket-low.
-
-> 📍 `src/engine_battlefield_render.c` (`pass_final`),
-> `docs/findings/battlefield-render.md` §5d,
-> Ghidra `FUN_004bf1f9` lines 22-34.
+Claimed the byte sum `0x440089(0x19e, entity + 0x12)` is a signed char, so the `> 100` / `> 200` buckets of
+`0x4bf1f9` are dead.  Wrong: `0x440089` returns `mov al, [sum]` with EAX's upper bytes already 0 (its loop exit
+leaves `eax = [arg_0] = 0`, 0x44009d / 0x4400cd), and `0x4bf1f9` stores the full EAX (0x4bf2f6) — the value is the
+unsigned 0..255 byte sum.  All three buckets are reachable: ≤ 100 → pen 0x3f, 101..200 → `-100`, pen 0xf9,
+201..255 → `-200`, pen 0x20; only the `!= 999` filter is dead.  (The pass runs only with the debug flag `DAT_005bb4a5`.)
 
 ---
 
 ## 99. Battlefield final-pass cell pitch IS zoom-aware (sibling of quirk #97)
 
-`FUN_004bf1f9` computes its per-cell pixel position inline from
-column/row:
+`0x4bf1f9` (the debug-label pass, active only while `DAT_005bb4a5 != 0`)
+computes its per-cell label position inline from column/row:
 
 ```c
-FUN_00402f64(value, ' ', &DAT_004e4520,
-             local_1c * DAT_004e656c + DAT_004e6558 + 1,  /* zoom-aware */
-             local_c  * DAT_004e656c + DAT_004e6554 + 1,
-             &DAT_005af8f0, pen);
+gfx_text_label_render_dec(value, ' ', &DAT_004e4520,
+    DAT_004e6558 + DAT_004e656c * col + 1,   /* zoom-aware */
+    DAT_004e6554 + DAT_004e656c * row + 1,
+    &DAT_005af8f0, pen);
 ```
 
-The `DAT_004e656c` (zoom) multiplier on `local_1c` (col) and
-`local_c` (row) means the final pass walks the visible grid at the
-ACTUAL zoom-level cell pitch, NOT the hardcoded `0x20` the late
-pass uses (quirk #97).
-
-Quirk-worth as the **counter-example** to #97: a sibling pass that
-walks the same descriptor table, in the same cluster, with the same
-gates — but does NOT inherit #97's pitch hardcoding.  Reinforces that
-#97 is a localized bug (or zoom-32-only design decision) inside
-`FUN_004bd233 / FUN_004be33f`, not a cluster-wide convention.
-
-Tests verify the final pass renders labels at correct positions at
-both zoom 16 and zoom 32 — neither misaligns the way the late pass
-would at zoom 16.
+Unlike the late pass's literal `0x20` (quirk #97), this pass multiplies
+by the zoom global.  The contrast is only stylistic: the zoom
+`DAT_004e656c` is always 0x20 in retail (sole writer 0x4bc020, both
+callers pass 0x20), so both passes place their output identically.
 
 > 📍 `src/engine_battlefield_render.c` (`pass_final`),
-> `docs/findings/battlefield-render.md` §5d,
-> Ghidra `FUN_004bf1f9` lines 36-37.
+> `docs/findings/battlefield-render.md` §5d, IDA `0x4bf1f9`.
+
+*Re-checked 2026-11-18 against the IDA export: zoom is always 0x20, so #97 is not a "localized bug" this pass avoids; debug gate DAT_005bb4a5 added.*
 
 ---
 
-## 100. Mini-map rolling-scan wrap formula leaves a one-row guard band
+## 100. Mini-map rolling-scan cursor is bumped BEFORE the strip it renders
 
-`FUN_004bc1d1` bumps `DAT_004e5d74` (next-scan-row cursor) by `param_1`
-each call, then wraps when:
+`0x4bc1d1` advances the next-scan-row cursor `DAT_004e5d74` by
+`param_1`, wraps it, and only then renders (when the minimap mode
+`DAT_004e5d58 == 2`):
 
 ```c
-if (DAT_004e6570 - param_1 < DAT_004e5d74) {
-    DAT_004e5d74 = 0;
-}
+DAT_004e5d74 += param_1;
+if (DAT_004e6570 - param_1 < DAT_004e5d74) DAT_004e5d74 = 0;
+if (DAT_004e5d58 == 2) 0x4bc51a(DAT_004e5d74, param_1);   // rows [pos, pos + param_1)
 ```
 
-That is, the wrap fires when `scan_pos > total_rows - rows`, NOT when
-`scan_pos >= total_rows`.  Net effect: a `param_1`-row strip render
-never spills past the bottom — because the snap-to-zero happens
-BEFORE the render call, the last strip rendered at the bottom of a
-cycle is always the FIRST strip of the next cycle, never a partial
-half-strip.
+The wrap test `pos > total_rows - rows` is exact, not a guard band:
+with the battlefield's `total_rows = 80` (bind 0x4bc020, both callers
+pass 80) and the tick's step 4, the rendered strips start at
+`4, 8, …, 76`, then `80 > 76` wraps to `0` — every row of the 80 is
+covered once per 20 calls and no strip spills past row 79.  A
+`total_rows` not divisible by the step would leave its last
+`total_rows mod step` rows unscanned; retail never has one.
 
-Strict reading: at `total_rows = 80`, `param_1 = 4`, the cursor reaches
-`{0, 4, 8, ..., 76}` and then on the next call (`72 + 4 = 76 + 4 = 80
-> 76`) it wraps to 0.  The "row 80" position would have been a valid
-zero-indexed off-grid row anyway, but the conservative formula avoids
-the off-by-one risk if `total_rows` ever ends up not-divisible by the
-typical scroll step.
+The pre-increment is the visible quirk: the strip at row 0 is drawn
+only on a wrap, never on the first call after a reset.  The full
+redraw `param_1 = 80` always lands on 0 (`pos + 80 > 0`) and renders
+all rows.  The caller is `engine_tick` (`0x4b99c0`) on the battle
+screens 0x28..0x2a: `80` while the force-redraw counter `DAT_0053e9ac`
+is set, else `4`.  The cursor advances even when the mode gate skips
+the render.
 
-The same hardcoded `4` is used from the main-loop tick (`FUN_004b99c0`
-line 47), and `0x50` (=80, full sweep) from the many full-redraw call
-sites — so both paths benefit from the guard.
+> 📍 `src/engine_battlefield_render.c` (`engine_battlefield_render_minimap_scroll`),
+> `docs/findings/battlefield-render.md` §7, IDA `0x4bc1d1` / `0x4b99c0`.
 
-> 📍 `src/engine_battlefield_render.c`
-> (`engine_battlefield_render_minimap_scroll`),
-> `docs/findings/battlefield-render.md` §7,
-> Ghidra `FUN_004bc1d1` lines 6-12.
+*Re-checked 2026-11-18 against the IDA export: there is no guard band (the wrap is exact for 80 rows / step 4); title and walk-through corrected; mode gate and caller added.*
 
 ---
 
 ## 101. Mini-map cell silently drops on unmapped flag values
 
-`FUN_004bc51a`'s terrain-cell path uses `flags & 0x1c` to select
-between the primary and alt mini-map sprite blobs:
+`0x4bc51a` (the minimap strip, 2×2 px per cell) visits a cell only when
+forced (`DAT_0053e9ac`), boundary-marked (`flags & 2`) or dirty
+(`flags & 1`), then dispatches in this order:
+
+1. an entity on the cell (`descriptor[+5] != 0`) → the owner's colour
+   frame (`DAT_0057bf0a[owner * 0x160]`, owner 6 → frame 6) of
+   `DAT_004e5d40`, clearing bit 0x02;
+2. else boundary bit 0x02 → frame 0 of `DAT_004e5d40`, clearing 0x02;
+3. else (not the in-game first column, quirk #102) the terrain selector:
 
 ```c
-if ((bVar1 & 0x1c) == 0) FUN_004b49b7(DAT_004e6584);  // primary
-else if ((bVar1 & 0x1c) == 4) FUN_004b49b7(DAT_004e6568);  // alt
+if ((flags & 0x1c) == 0)      blit 2×2 from DAT_004e6584;  // primary
+else if ((flags & 0x1c) == 4) blit 2×2 from DAT_004e6568;  // alt
 // else: nothing
 ```
 
-The mask spans 3 bits (0x1c = 0b00011100), so it can take values 0,
-4, 8, 0xc, 0x10, 0x14, 0x18, 0x1c — but only `0` and `4` map to a
-blob.  Cells whose flag bits land on any of the other 6 values are
-silently dropped (no blit, no error, no fallback to default).  In
-practice the engine should only ever set `0` or `4` here — the other
-combinations are probably "we never get there", but the code leaves
-no safety net.
+The mask spans 3 bits, so it can take 0, 4, 8, … 0x1c — only `0` and
+`4` map to a blob.  A plain terrain cell (no entity, no boundary bit)
+with any other value is silently skipped: no blit, no error, no
+default.  Retail's level data only produces 0 / 4 here (the battlefield
+terrain passes 0x4bc8fc / 0x4bcbdc use the same strict pair, quirk #76).
 
-The boundary-cell branch (`flags & 0x02`) IS taken first, so a cell
-with both `0x02` set AND `0x08` set will paint the default descriptor
-(bit 2 cleared after) rather than being dropped.  Only pure-terrain
-cells (no boundary bit, no entity) fall into the silent-drop case.
+> 📍 `src/engine_battlefield_render.c` (`engine_battlefield_render_minimap_strip`,
+> `minimap_cell`), `docs/findings/battlefield-render.md` §7, IDA `0x4bc51a`.
 
-> 📍 `src/engine_battlefield_render.c` (`minimap_render_strip`),
-> `docs/findings/battlefield-render.md` §7,
-> Ghidra `FUN_004bc51a` lines 34-56.
+*Re-checked 2026-11-18 against the IDA export: confirmed; full dispatch order spelled out (entity branch first); port name updated.*
 
 ---
 
-## 102. Mini-map first-col-ingame override fires BEFORE the blob-selector
+## 102. Mini-map first-col-ingame override replaces only the terrain selector
 
-For the first cell of each mini-map row (`local_24 == 0`), the strip
-render checks the engine state gate:
+In `0x4bc51a`, the terrain-selector branch (quirk #101) is reached only
+after the entity and boundary branches, and is itself guarded:
 
 ```c
-if ((local_24 == 0) && (DAT_0052af94 == 3)) {
-    // Default descriptor slot 0 — overrides the normal path
-    ...
-} else {
-    // Normal blob-selector path (flags & 0x1c)
-    ...
-}
+if (entity) { owner colour }
+else if (flags & 2) { frame 0 of DAT_004e5d40 }
+else if (col != 0 || DAT_0052af94 != 3) { flags & 0x1c selector }
+else { frame 0 of DAT_004e5d40 }        // col 0 while engine state == 3
 ```
 
-When the engine is in-game (state == 3), the leftmost column of the
-mini-map is ALWAYS painted from the default descriptor's slot 0,
-regardless of the cell's flags or sprite_idx.  This produces a
-consistent left-edge marker — almost certainly the world-map's
-left-edge boundary indicator.
+So with the engine state `DAT_0052af94 == 3` (in game), the minimap's
+column 0 — world column 0 of the 80-column battlefield, not a screen
+column — paints frame 0 (the same frame the boundary branch uses)
+instead of its terrain, giving a consistent left-edge strip.  An entity
+on column 0 still shows its owner colour.  With any other engine state
+column 0 falls through to the normal selector.
 
-When NOT in-game (menu, save dialog, etc., state != 3), the first
-column falls through to the normal blob-selector path, which means
-the mini-map's left edge can look different across screens.  This
-is probably deliberate but worth flagging because tests can't
-observe it without setting the engine state gate.
+The minimap only renders on the battle screens (0x28..0x2a, from
+`engine_tick` 0x4b99c0), so "state != 3" there is not a menu; which
+battle path runs with state != 3 (e.g. a battle launched from the
+title's skirmish setup) is unverified — a `--watch-write 0x52af94` over
+a skirmish battle would settle whether the override ever turns off.
 
-> 📍 `src/engine_battlefield_render.c` (`minimap_render_strip`),
-> `docs/findings/battlefield-render.md` §7,
-> Ghidra `FUN_004bc51a` lines 24-33.
+> 📍 `src/engine_battlefield_render.c` (`engine_battlefield_render_minimap_strip`),
+> `docs/findings/battlefield-render.md` §7, IDA `0x4bc51a`.
+
+*Re-checked 2026-11-18 against the IDA export: the override sits after the entity and boundary branches (it does not pre-empt them); "menu / save dialog" reading removed; port name updated.*
 
 ---
 
 ## 103. Camera-anchor clamp uses asymmetric bounds (0x41 vs 0x42)
 
-`FUN_0047ed34` clamps the strategic / battlefield camera anchor
-`DAT_0055ce70` / `DAT_005678a0` to `[0, 0x41]` (x) and `[0, 0x42]`
-(y) — one cell taller than wide.  Both bounds are hardcoded literals
-in the binary; nothing scalar is fed in.
+`0x47ed34` clamps the **battlefield** camera anchor `DAT_0055ce70`
+(col) / `DAT_005678a0` (row) — the pair `engine_tick` passes to the
+battlefield frame driver `0x4bc142` — to `[0, 0x41]` × `[0, 0x42]`:
 
 ```c
-if (DAT_0055ce70 < 0)    DAT_0055ce70 = 0;
-if (DAT_005678a0 < 0)    DAT_005678a0 = 0;
-if (0x41 < DAT_0055ce70) DAT_0055ce70 = 0x41;
-if (0x42 < DAT_005678a0) DAT_005678a0 = 0x42;
+if (DAT_0055ce70 < 0)  DAT_0055ce70 = 0;
+if (DAT_005678a0 < 0)  DAT_005678a0 = 0;
+if (DAT_0055ce70 > 65) DAT_0055ce70 = 65;
+if (DAT_005678a0 > 66) DAT_005678a0 = 66;
 ```
 
-Strategic-map dimensions are 64 × 128 (0x40 × 0x80) — the wider
-sibling clamp `FUN_00429b1d` derives its upper bounds from those
-constants minus the per-frame visible-cells count.  This clamp's
-constants are NOT derived from anything that would naturally produce
-0x41 / 0x42:
+The literals are not a typo: they are the battlefield's grid minus its
+visible window.  The grid bind `0x4bc020` (called at 0x498d4c /
+0x498f68) sets an 80 × 80 cell grid with a 15-column × 14-row viewport,
+and `80 - 15 = 65 = 0x41`, `80 - 14 = 66 = 0x42`.  So the clamp keeps
+the 15 × 14 view inside the grid; the asymmetry is the viewport's
+shape, hardcoded rather than derived from the bound globals.  (The
+strategic-map scroll `0x429b1d`, quirk #104, is a different clamp on
+different globals.)
 
-  - 0x41 = 0x40 + 1 — one past max map x.
-  - 0x42 = 0x40 + 2 — two past?  Or 0x80 / 2 + 2?  No obvious algebra.
+Both bounds are inclusive (`> 65` clamps, so 65 itself stays).
 
-Likely the anchor coordinate space is a centered camera with a 16-cell
-viewport: valid centers would be 7..0x40-8 = 7..56 on the strategic
-map (or some battlefield-specific range).  But the implementation
-does not actually compute that — it just clamps to hardcoded 0x41 /
-0x42.  The asymmetry is probably a single-character typo in the
-source ("hand-tuned" by an artist who tweaked one value and forgot
-the other).  Preserved for parity.
+> 📍 `src/engine_camera.c` (`engine_camera_clamp_anchor`; called from
+> `src/rl_glue.c` / `src/rl_turn.c`), IDA `0x47ed34`, grid bind `0x4bc020`.
 
-The clamp's test is `0x41 < x` (strict less-than), so 0x41 itself is
-INCLUSIVE.
-
-> 📍 `src/engine_camera.c` (`engine_camera_clamp_anchor`),
-> `docs/findings/main-loop-tick.md` §"render-phase tail",
-> Ghidra `FUN_0047ed34` lines 62798-62816.
+*Re-checked 2026-11-18 against the IDA export: 0x41 / 0x42 = 80 − 15 / 80 − 14 (the battlefield grid and viewport), not a typo; the anchor is the battlefield camera, not the strategic one.*
 
 ---
 
@@ -3807,66 +3696,75 @@ byte-identical to retail while the runtime gets all six pairs.
 
 ## 106. Roster compaction cannot remove its last slot (non-convergent)
 
-`FUN_0049bc5f` compacts the roster by dropping any pair whose seat index
-exceeds the active-player count, shifting later pairs down:
+`0x49bc5f` counts the active realms (slots 1..5 with `+5` or `+7` set in
+`0x57bf00`, 0x160 each), then compacts the roster `0x568db0` by
+dropping any pair (from index 1) whose seat byte exceeds that count,
+shifting later pairs down:
 
 ```c
-for (i = 1; i < 6; i++)
-    if (active < pair[i].seat) {
-        for (j = i; j < 5; j++) pair[j] = pair[j + 1];   /* shift down */
-        changed = 1;
-    }
+for (pass = 0; changed && pass < 6; pass++)      // v1 = v2++; if (v1 >= 6) break
+    for (i = 1; i < 6; i++)
+        if (active < pair[i].seat) {
+            for (j = i; j < 5; j++) pair[j] = pair[j + 1];   /* shift down */
+            changed = 1;
+        }
 ```
 
 The shift copies `pair[j+1]` into `pair[j]` for `j = i..4`, so when the
-offending entry is at index 5 the inner loop (`j = 5; j < 5`) runs zero
-times — nothing moves, `pair[5]` is untouched — yet `changed` is still
-set.  The outer pass loop reruns while `changed` is true, re-detects the
-same index-5 entry every pass, and only stops when it hits its hard
-**6-pass cap**.  The out-of-range entry survives as a trailing duplicate.
+offending entry is at index 5 the inner loop runs zero times — nothing
+moves, `pair[5]` is untouched — yet `changed` is still set.  The pass
+loop reruns until its hard **6-pass cap**.  The out-of-range entry
+survives as a trailing duplicate.  With `active = 0`, pairs 1..4
+collapse to copies of the stale `pair[5]`; `pair[0]` is never examined.
 
-This is harmless in practice: the consumer (`FUN_0049bd99`, deferred)
-reads only the front `active` entries, so a stale tail is never seen.
-But the surviving bytes are part of the persisted slot, so the port
-reproduces the cap-bounded non-convergence verbatim rather than looping
-to a clean fixpoint.  The `active=0` case is the extreme: every front
-pair collapses to a copy of the stale `pair[5]` over the six passes.
+Harmless in practice: the consumer, `0x49bd99` (new-game realm setup,
+ported as `rl_49bd99`), reads `pair[j]` only for active realms `j` and
+the local player's `pair[DAT_0057c8cc]`.  Note `pair[5]` (bytes 10..11)
+is outside the 6-byte saved slot (quirk #105), so the surviving tail is
+not persisted; pairs 1..2 are.  The port reproduces the cap-bounded
+non-convergence verbatim.
 
 > 📍 `src/engine_roster.c` (`player_roster_compact`),
-> test `roster_compact_non_convergent_tail_survives`,
-> Ghidra `FUN_0049bc5f` lines 74394+.
+> test `roster_compact_non_convergent_tail_survives`, IDA `0x49bc5f`;
+> consumer `rl_49bd99` (`src/rl_turn.c`).
+
+*Re-checked 2026-11-18 against the IDA export: confirmed; consumer 0x49bd99 is ported (not deferred); the trailing pair[5] lies outside the 6-byte persisted slot; pair[0] is never examined.*
 
 ---
 
 ## 107. NPC schedule reads the global localization walker mid-routine
 
-The NPC worker-schedule initialiser (`FUN_0049caaa`) hands each AI
-player a job, then copies that job's localized 16-byte name out of
-L2.ENG by reading the **global walker pointer** `DAT_005c9270`
-*directly* — right after seeking it — rather than via a self-contained
-read accessor:
+The AI-realm seating routine `0x49caaa` (`engine_npc_schedule_init` /
+`rl_49caaa`) gives each non-human realm within the AI count
+`DAT_0053f268` a free slot (`+0x0a`) and the first free personality
+(`+0x07`) from its slot's row of `0x4dc17c` (MP or `DAT_0055302c == 1`)
+/ `0x4dc180` (by the map `DAT_0053f034 & 3`), then copies that
+personality's localized 16-byte name into the realm's aux record
+(`0x553d50 + 44*j + 4`) by reading the **global walker pointer**
+`DAT_005c9270` right after seeking it:
 
 ```c
-FUN_004018d7(7, work_location);              // seek walker into section 7
-FUN_00401136(DAT_005c9270, &aux[+4], 0x10);  // copy 16 B FROM the walker
+localization_seek_skip(7, realm[+0x07]);                 // 0x4018d7: sets DAT_005c9270
+strutil_bounded_copy(DAT_005c9270, &aux[+4], 16);         // 0x401136: 16 B, no NUL
 ```
 
-This is the one caller that motivated surfacing the walker offset in
-the localization port (see `localization.h` §"Walker pointer").  Our
-port runs the seek with a *local* `localization_state_t` over an
-injected blob and copies from `blob + walker_offset`, deliberately not
-modelling the cross-subsystem global walker (other functions, e.g.
-`0x42ab82`, repurpose `DAT_005c9270` for unrelated regions).
+This is retail's ordinary localization pattern, not a one-off: 13
+functions read `DAT_005c9270` directly after a seek (data_xrefs), and
+others reuse it for unrelated regions.  Retail copies unconditionally
+— L2.ENG is always resident before setup runs.
 
-**Drop-in divergence:** retail copies unconditionally — L2.ENG is
-always resident, loaded by WinMain before any strategic setup.  Our
-port skips the copy when no blob has been wired
-(`engine_npc_schedule_set_localization(NULL, …)`), so the routine is
-safe to run before localization load.  Once a strategic caller lands,
-the bring-up wires `config_localization_data()` and the copy fires.
+**Port:** the retail-layout port `rl_49caaa` (`src/rl_turn.c`) seeks and
+copies through the global walker exactly like retail.  The older pure
+port `engine_npc_schedule_init` (`src/engine_npc_schedule.c`, still
+called from `game_init.c`) runs the seek on a *local*
+`localization_state_t` over an injected blob and skips the copy when
+no blob is wired (`engine_npc_schedule_set_localization(NULL, …)`) — a
+standalone-only divergence.
 
-> 📍 `src/engine_npc_schedule.c` (`engine_npc_schedule_init`),
-> test `npc_copies_localized_name`, Ghidra `FUN_0049caaa` line 74720.
+> 📍 `src/rl_turn.c` (`rl_49caaa`), `src/engine_npc_schedule.c`
+> (`engine_npc_schedule_init`), test `npc_copies_localized_name`, IDA `0x49caaa`.
+
+*Re-checked 2026-11-18 against the IDA export: the name is the personality's (+0x07), copied into aux +4; the direct walker read is the common pattern (13 readers); the rl_ port matches retail, only the legacy pure port skips the copy.*
 
 ---
 
@@ -3895,34 +3793,40 @@ blind.
 
 ## 109. Seat-assign uses 999 as an in-band "keep the existing id" sentinel
 
-`FUN_0049bae9` (`player_seat_assign`) always writes the seat's
-occupancy flag and 31-byte name, but stamps the aux id field only when
-`player_id != 999`.  The single-player reload path (`FUN_004412cc`'s
-second call, `FUN_0044121a`) passes literal `999` to re-seat the local
-player by name **without** disturbing an id that was already set up
-elsewhere; the join paths pass the real id read from the packet.
+`0x49bae9` (`player_seat_assign(id, seat, name)`) always sets the
+seat's in-play flags (`0x57bf05[seat*0x160] = 1`, aux `+0x27` = 1) and
+copies the 31-byte name into aux `+4`, stamps the aux id field
+(`0x553d50[seat*11]`) only when `id != 999`, and in single-player
+(`DAT_00553030 == 0`) copies the realm's slot `+0x0a` into aux `+0x25`.
+
+The only caller passing `999` is the page-4 ("Choose your title and
+your shield") button action `0x433155`, which re-seats the local player
+`DAT_0057c8cc` with the edited name `0x53f1e0` **without** disturbing an
+id set up elsewhere.  The other callers pass real ids: `0x432b05`
+(page 1, id 0), `0x4410bd` / `0x44121a` / `0x4412cc` (MP join / seat
+paths, ids from the packet or `DAT_004e2a28`), `0x4978ad` (id 0, seat 1).
 
 So `999` is a magic value carried through the same `int` argument as
-real ids — there is no separate "set id?" flag.  Any future caller that
-legitimately needed id 999 would silently no-op the write; in practice
-ids are small (army/color indices), so the collision never bites.
+real ids; a caller that legitimately needed id 999 would silently
+no-op the write.  Ids are small, so the collision never bites.
 
-The 31-byte name copy (`strutil_bounded_copy`, no NUL terminator) also
-assumes the source is a full ≥31-byte field — retail always hands it
-the 0x53f1e0 config buffer or a fixed packet slot.  Passing a short C
-string reads past it (the host tests use 32-byte zero-padded buffers
-to stay clean under ASan).
+The 31-byte name copy (`0x401136`, a plain byte loop, no NUL
+terminator) assumes the source is a full ≥31-byte field — retail always
+hands it the `0x53f1e0` buffer or a fixed packet slot.  Passing a short
+C string reads past it (the host tests use 32-byte zero-padded buffers).
 
-> 📍 `src/engine_roster.c` (`player_seat_assign`),
-> Ghidra `FUN_0049bae9`; callers `FUN_004410bd` / `FUN_0044121a` /
-> `FUN_004412cc`.
+> 📍 `src/engine_roster.c` (`player_seat_assign`; wrapped in `src/rl_turn.c`),
+> IDA `0x49bae9`; callers `0x433155` (999), `0x432b05`, `0x4410bd`, `0x44121a`,
+> `0x4412cc`, `0x4978ad`.
+
+*Re-checked 2026-11-18 against the IDA export: the 999 caller is the page-4 button action 0x433155, not 0x44121a / 0x4412cc (they pass DAT_004e2a28); the SP aux +0x25 write added.*
 
 ---
 
 ## 110. Turn-save backup is a 3-deep generational rename chain
 
-Every turn-save goes through `FUN_0049a453` (`save_rotate_and_write`),
-which keeps three generations on disk under fixed sentinel names:
+Every turn-save goes through `0x49a453` (`save_rotate_and_write`),
+which keeps three generations on disk under fixed names:
 
 ```
 lastturn.*   ← the turn being written
@@ -3930,58 +3834,66 @@ old_turn.*   ← previous turn
 safeturn.*   ← two turns ago (oldest)
 ```
 
-The rotation is three unchecked file ops — `remove(safeturn)`,
-`rename(old_turn → safeturn)`, `rename(lastturn → old_turn)` — then the
-new `lastturn` is written.  Nothing checks a return value: on the first
-save of a game the two `rename`s simply fail (no source file) and the
-chain fills in over the next two turns.  It's a poor-man's ring buffer
-built entirely out of `rename`.
+The rotation is three unchecked CRT calls — `remove(safeturn)`,
+`rename(old_turn → safeturn)`, `rename(lastturn → old_turn)` — then
+`save_write(lastturn)` (`0x4ade93`).  Nothing checks a return value: on
+the first save of a game the renames fail (no source file) and the
+chain fills in over the next two turns.
 
-Two twists worth noting:
+Two twists:
 
 - **The suffix encodes the session mode.**  Single-player uses `.sav`;
-  multiplayer splits into `.sva` / `.svb` selected by `DAT_00553248`
-  (`g_sim_mp_variant`).  So an MP game keeps an entirely separate backup
-  chain from an SP game in the same directory — they never collide.
-- **Rotation can be held off.**  `DAT_00553260` (`g_sim_save_rotate_hold`)
-  is a small countdown bumped to 2 on the MP turn-advance path
-  (`FUN_0049b973`) and decremented elsewhere; while it's ≥ 1 the chain is
-  *not* rotated — `lastturn` is just overwritten in place, preserving the
-  older two generations across a burst of saves.  It's always 0 in SP, so
-  SP rotates on every save.
+  multiplayer (`DAT_00553030 != 0`) uses `.sva` when `DAT_00553248 != 0`,
+  else `.svb`.  An MP game keeps a separate chain from an SP game in the
+  same directory.
+- **Rotation can be held off.**  The rotation runs only while
+  `DAT_00553260 <= 0`.  `0x49b973` — the MP turn-sync resolution —
+  on its resync branch (`param == 0`) RELOADS `old_turn` / `lastturn`
+  (`.sva` / `.svb`) and then sets `DAT_00553260 = 2`; on its normal
+  branch it decrements the counter.  `0x43f01d` zeroes it.  So after a
+  resync reload the next saves overwrite `lastturn` in place, keeping
+  the older generations the reload came from.  It is always 0 in SP.
 
-The filenames are bare relative paths; retail's `save_write`
-(`FUN_004ade93`) `chdir`s to the save base dir first (`FUN_004af502`)
-before opening them.
+Filename templates (13-byte copies) at `0x4dc290`–`0x4dc31c`.  The names
+are bare relative paths: `save_write` `chdir`s to the save base dir
+(`0x4af502`) before opening, but the remove / renames run before that,
+in whatever the current directory already is.
 
-> 📍 `src/save.c` (`save_rotate_and_write`),
-> Ghidra `FUN_0049a453`; filename templates @ `0x4dc290`–`0x4dc310`;
-> hold counter set by `FUN_0049b973`.
+> 📍 `src/save.c` (`save_rotate_and_write`), IDA `0x49a453`; hold counter
+> `DAT_00553260` set / decremented by `0x49b973`, zeroed by `0x43f01d`.
+
+*Re-checked 2026-11-18 against the IDA export: the hold is set to 2 by 0x49b973's resync-reload branch and decremented by its normal branch (not "bumped on turn advance, decremented elsewhere"); 0x43f01d reset added.*
 
 ---
 
 ## 111. Two readers of the player roster disagree on how many slots there are
 
-The end-of-turn readiness check (`FUN_0049b762`) walks player slots
-`1..5` — its loop is `for (i = 1; i < 6; ...)`.  The sibling min-tick
-walker (`FUN_0043e330`), reading the *same* 2112-byte roster array
-(`0x57bf00`, 6 records × 352 B), walks `1..6` — `for (i = 1; i < 7;
-...)`.  Slot 6 sits at byte offset `6 * 0x160 = 2112`, exactly one
-record *past* the end of the array, so `FUN_0043e330` reads four bytes
-of whatever `.data` follows on every active-player count.
+The end-of-turn readiness check (`0x49b762`) walks realm slots `1..5`
+(`for (i = 1; i < 6; ...)`).  The MP min-tick walker (`0x43e330`) and
+its sibling `0x43e433` walk `1..6` (`for (i = 1; i <= 6; ...)`) over the
+*same* realm array (`0x57bf00`, 6 records × 352 B = 2112 B, the saved
+block).  Slot 6 sits at `0x57bf00 + 6*0x160 = 0x57c740`, one record past
+the end, so `0x43e330`'s gate reads `0x57c745` (`+5`) and `0x57c744`
+(`+4`), plus the aux byte `0x553d76 + 44*6 = 0x553e7e` (past the
+6-record aux table) and `DAT_0053e8d0[6]` (in bounds — that table has
+10 entries).
 
-In retail this is benign-by-layout: the bytes after the array happen to
-be a zeroed/inactive region, so the `has_data && active && !disconnected`
-gate fails for the phantom slot 6 and it never contributes.  Our port
-of `FUN_0043e330` (the rate-controller min-tick walker in
-`engine_rate.c`) collapses the strided layout into 7-entry arrays,
-sidestepping the OOB read — but it's a reminder that the engine's notion
-of "how many player slots" is not consistent across functions.
-`FUN_0049b762`'s 1..5 stays safely in bounds either way.
+Benign by layout: no instruction references `0x57c740..0x57c74f`
+directly (data_xrefs), so the bytes keep their zero BSS value and the
+`+5 && +4 && !aux+0x26` gate fails for the phantom slot — it never
+counts toward `DAT_0053f068` nor the minimum.  (A runtime confirmation
+would be a `--watch-write 0x57c744` over an MP scenario.)
 
-> 📍 `src/engine_turn.c` (`engine_turn_end_check`), Ghidra
-> `FUN_0049b762` (1..5) vs `FUN_0043e330` (1..6); roster array
-> `0x57bf00`.
+Ports: `rl_43e330` / `rl_43e433` (`src/rl_mpmsg.c`) reproduce the
+slot-6 read on retail's layout; the older `src/engine_rate.c` model
+collapses the layout into 7-entry arrays.  `0x49b762`'s 1..5 stays in
+bounds either way.
+
+> 📍 `src/rl_turn.c` (`rl_49b762`), `src/engine_turn.c` (`engine_turn_end_check`),
+> `src/rl_mpmsg.c` (`rl_43e330`, `rl_43e433`), IDA `0x49b762` (1..5) vs
+> `0x43e330` / `0x43e433` (1..6); realm array `0x57bf00`.
+
+*Re-checked 2026-11-18 against the IDA export: the phantom read is +4/+5 of 0x57c740 plus aux 0x553e7e (not "four bytes"); 0x43e433 walks 1..6 too; rl_43e330 reproduces it.*
 
 ---
 
@@ -4028,91 +3940,89 @@ the wrong string for button 3.
 
 ## 114. `DAT_004eac50` (screen-state byte) has two independent port mirrors
 
-Retail's `DAT_004eac50` is a single byte: the current screen-state ID,
-the selector for the `FUN_0040f1a0` render-dispatch switch.  In the port
-it is mirrored **twice, independently**: `g_sim_current_screen` (engine.c,
-the dispatch selector) and `g_language_tag` (gfx_text.c, which renders
-title-screen text in a taller line box — 0x36 vs 0x10 — when the value is
-`0x1f`/`0x1c`; the "language tag" name is a misnomer carried over from an
-early labelling).
+Retail's `DAT_004eac50` is a single byte: the current screen id, the
+selector for the `0x40f1a0` render-dispatch switch and hundreds of
+other references.  One of them is the text renderer `0x402637`, which picks its
+drop-shadow colour pair by it: `(0x10, 0x1f)` normally, `(0x36, 0x2c)`
+when the byte is `0x1f` or `0x1c` (the title-class screens).
 
-Both are `0` today because no producer transitions the screen, so they
-cannot yet desync.  But the boot→title transition (`FUN_0042b780`, sets
-`0x1f`) will write the screen-state byte, and at that point **both mirrors
-must be updated together** or the menu will dispatch the title arm while
-`gfx_text` still measures text with the short box.  The faithful fix is a
-single screen-state setter that fans out to both — to be introduced when
-that transition lands (the first real producer), so it can be tested
-against observable behaviour rather than added as dead infrastructure.
+In the port the byte is mirrored **twice**: `g_sim_current_screen`
+(`src/engine.c`, the standalone dispatch selector) and
+`g_gfx_screen_byte` (`src/gfx_globals.c`, read by `gfx_text.c` for the
+shadow pair, by `engine_hud_panel.c` and `engine_title_render.c`).
+`engine_set_current_screen` (`src/engine.c`) writes both, so the
+standalone paths stay in step.  But the retail-layout ports write
+`g_gfx_screen_byte` directly (e.g. `src/rl_mpmsg3.c`: `= 31`, `= 46`),
+bypassing `g_sim_current_screen`, so the two mirrors can skew
+whenever an rl_ port changes the screen.
+The faithful end state is one variable.
 
-> 📍 `src/engine.c` (`g_sim_current_screen`), `src/gfx_text.c`
-> (`g_language_tag`, line ~163), Ghidra `FUN_0040f1a0` @ `0x40f1a0`
-> (dispatch) / `FUN_00402637` (taller-box special-case).
+> 📍 `src/engine.c` (`g_sim_current_screen`, `engine_set_current_screen`),
+> `src/gfx_globals.c` (`g_gfx_screen_byte`), `src/gfx_text.c` (shadow pair),
+> IDA `0x40f1a0` (dispatch) / `0x402637` (shadow-pair special case).
+
+*Re-checked 2026-11-18 against the IDA export: 0x402637 switches the shadow colour pair (16,31)→(54,44), not a taller line box; `g_language_tag` is gone (now `g_gfx_screen_byte`), the fan-out setter exists, and rl_ ports write the gfx mirror directly.*
 
 ---
 
 ## 115. Two palette builders by desktop depth — fullscreen shows the red highlight, 8bpp/windowed blacks it
 
-Every image-palette upload runs through the dispatcher `FUN_0042f1df`,
-which picks one of **two** PALETTEENTRY builders based on `DAT_0053f228`
-(set once at boot in `FUN_0042e5c0` from the *desktop* color depth):
+Every image-palette upload runs through the dispatcher `0x42f1df`,
+which picks one of **two** PALETTEENTRY builders on `DAT_0053f228` —
+the **Full screen** option (rl-ui3.md):
 
-- **`DAT_0053f228 == 0`** — desktop is 8bpp → **`FUN_0042f449`**, builds
-  `DAT_00515d90`: 10..245 from the `.256` (peFlags 4 / `PC_NOCOLLAPSE`);
-  0..9 and 246..255 keep their never-written BSS value (**black**),
-  peFlags 0.  Also does a `SetSystemPaletteUse(NOSTATIC)`/`(STATIC)` dance.
-- **`DAT_0053f228 != 0`** — desktop is "full color" (any modern 16/32bpp
-  desktop) → **`FUN_0042f306`**, builds `DAT_005165b0`: **1..254 from the
-  `.256`** (peFlags 4), idx 0 hard-coded black `(0,0,0)` and idx 255 hard-
-  coded white `(255,255,255)`, both peFlags 0.
+- default 1 in the options defaults (`0x4ae310`);
+- at boot `0x42e5c0` promotes a 0 to 1 whenever the desktop is not
+  8 bpp (`DAT_0053f228 = DAT_0053f22c != 8`) and, when it is 1, seeds
+  `DAT_00515d90` with `GetPaletteEntries(NULL, 0, 256, …)`;
+- the Full-screen menu action `0x434b10` can flip it only on an 8 bpp
+  desktop / ≤ 640 px wide screen (otherwise it just posts event 0x104).
+
+So on any modern 16/32 bpp desktop retail is full screen and stays so.
+
+- **`DAT_0053f228 == 0`** (windowed, 8 bpp desktop) → **`0x42f449`**,
+  builds `DAT_00515d90`: 10..245 from the `.256` (peFlags 4 /
+  `PC_NOCOLLAPSE`); 0..9 and 246..255 are copied the other way — FROM
+  `DAT_00515d90` into the working RGB buffer `0x4ea1b0` — so they keep
+  whatever that array held (zero BSS = **black** unless seeded), peFlags 0.
+  The dispatcher also does a `SetSystemPaletteUse(NOSTATIC)/(STATIC)`
+  dance first when its argument is non-zero.
+- **`DAT_0053f228 != 0`** (full screen) → **`0x42f306`**, builds
+  `DAT_005165b0`: **1..254 from the `.256`** (peFlags 4), idx 0 from
+  `0x4d50f0` (black) and idx 255 from `0x4d4e2e + 765` (white), peFlags 0.
 
 The menu's UI/text indices land where the two builders differ: the
-uppercase-highlight color is **1** (`FUN_0041ea14` arms `DAT_0058fe2c`,
-`FUN_00402637` sets foreground 1 for A..Z) and the selected/hovered-button
-highlight is **0xf9** (`FUN_0041eaa3`).  gateway.256 carries idx 1 =
+uppercase-highlight colour is **1** (`0x41ea14` arms `DAT_0058fe2c`,
+`0x402637` sets foreground 1 for A..Z) and the selected/hovered-button
+highlight is **0xf9** (`0x41eaa3`).  gateway.256 carries idx 1 =
 `(128,0,0)` dark red and idx 0xf9 = `(252,0,0)` bright red.
 
-So the visible result depends on the desktop, *not* on fullscreen-vs-
-windowed per se:
+- Full screen (every modern machine): `0x42f306`, the `.256` colours
+  at 1 and 0xf9 survive — **dark-red title caps** and a **bright-red
+  hover highlight**.  This is what a real player sees, and what rhost
+  reproduces (it reports a 32 bpp desktop, so retail takes this path).
+- Windowed on a true 8 bpp desktop: `0x42f449` blacks the reserved
+  range and the highlight is invisible.
 
-- On a **full-color desktop** (every modern machine), retail runs
-  `FUN_0042f306`, the `.256` colors at 1 and 0xf9 survive, and the menu
-  shows **dark-red title caps** and a **bright-red hover highlight**.
-  This is what a real player sees.
-- On a true **8bpp desktop**, `FUN_0042f449` blacks the reserved range and
-  the highlight is invisible.
+**Empirically confirmed (2026-05-29), both ways** with the legacy Frida
+capture: fullscreen read idx 0xf9 = `(252,0,0)` peFlags 4, idx 1 =
+`(128,0,0)`, idx 0xff = `(255,255,255)`, and the red hover was visible;
+the `--force-windowed` capture read idx 0xf9 = `(0,0,0)` because that
+harness hook set `DAT_0053f228 = 0` before the menu's gateway.256
+upload — a self-inflicted artifact.  (An earlier version of this entry
+called the blackout retail-faithful; wrong.)
 
-**Empirically confirmed (2026-05-29), both ways.**  A live
-fullscreen-exclusive retail capture (`frida_capture.py --no-force-windowed
---no-gdi-seat`, palette dumped via GetEntries) read back **idx 0xf9 =
-`(252,0,0)` peFlags 4**, idx 1 = `(128,0,0)`, idx 0xff = `(255,255,255)`;
-and the red hover was **visually confirmed on screen**.  The matching
-windowed capture (default `--force-windowed`) read idx 0xf9 = `(0,0,0)`.
+**Port:** `gfx_load_palette` defaults to the `0x42f306` build
+(`g_palette_full_range = 1`); `gfx_set_palette_full_range(0)` selects
+the `0x42f449` blackout build for regression against the old
+`--force-windowed` groundtruths.
 
-> **Earlier mistake, corrected.**  This entry once claimed the blackout was
-> retail-faithful, and a first "correction" then claimed fullscreen was *also*
-> black (reasoning only from `FUN_0042f449` + a NULL-handle `GetPaletteEntries`
-> seed, having missed `FUN_0042f306` entirely).  Both were wrong.  The blackout
-> our windowed capture showed is a **self-inflicted artifact**: the
-> `--force-windowed` harness hook sets `DAT_0053f228 = 0` inside
-> `SetCooperativeLevel`, which fires *before* the menu's `gateway.256` upload,
-> so `FUN_0042f1df` takes the 8bpp `FUN_0042f449` branch.  Real retail on the
-> same box never does this — it stays on `FUN_0042f306` and renders red.
+> 📍 `src/gfx.c` (`gfx_load_palette`, `gfx_set_palette_full_range`);
+> IDA `0x42f1df` (dispatcher) / `0x42f306` (full-screen builder, `DAT_005165b0`) /
+> `0x42f449` (windowed builder, `DAT_00515d90`) / `0x42e5c0` (boot promote + seed) /
+> `0x4ae310` (default 1) / `0x434b10` (Full-screen action); `docs/findings/rl-ui3.md`.
 
-**Port:** `gfx_load_palette` now defaults to the `FUN_0042f306` build
-(`g_palette_full_range = 1`) — the faithful path for the drop-in's
-full-color-desktop target, so the red hover highlight + dark-red caps
-render.  `gfx_set_palette_full_range(0)` selects the `FUN_0042f449`
-blackout build for bit-identical regression against the *old* windowed
-groundtruths (which were captured under `--force-windowed` and are
-therefore black-reserved-range; new full-color groundtruths should be
-captured with `--no-force-windowed`).
-
-> 📍 `src/gfx.c` (`gfx_load_palette`, `gfx_set_palette_full_range`); Ghidra
-> `FUN_0042f1df` @ `0x42f1df` (dispatcher) / `FUN_0042f306` @ `0x42f306`
-> (full-color builder, `DAT_005165b0`) / `FUN_0042f449` @ `0x42f449` (8bpp
-> builder, `DAT_00515d90`) / `FUN_0042f58c` (SetEntries) / `FUN_004b0ab5`
-> (×4 working buffer) / `FUN_0041ea14` + `FUN_00402637` (color-1 caps).
+*Re-checked 2026-11-18 against the IDA export: DAT_0053f228 is the Full-screen option (default 1, promoted at boot on non-8bpp, toggled by 0x434b10), not a once-at-boot depth flag; 0x42f449 copies the reserved entries from DAT_00515d90 into the image buffer.*
 
 ---
 
@@ -4168,102 +4078,120 @@ the bad-offset abort, is immaterial — the port elides the error latch.
 
 ## 118. The page-7 coat-of-arms preview is a plain blit — the compositor is dead at param 0
 
-The game-setup screen's top-right preview is drawn by `0x410c71(0, …)`,
-which blits the 128×128 buffer `0x569590` and then calls the shield
-compositor `0x410cbd` with **param 0**.  That compositor's entire
-per-pixel remap loop is guarded by `if (param_1 != 0)`, so at param 0 it
-does **nothing visible** — only an unconditional title/rank state
-recompute (`0x451bba`, which writes lord-record fields read by the
-compositor's *non-zero* paths) runs.  So the page-7 preview is exactly a
-raw blit of whatever the scenario-load path rendered into `0x569590` (the
-selected map thumbnail), and porting the 654-byte shield compositor is
-unnecessary for this screen.
+The game-setup screen's top-right preview is drawn by
+`0x410c71(0, 496, 9)` (from the country list `0x41f98b`), which blits
+the 128×128 strategic-map image `0x569590` at `(x - 2, y + 3)` and then
+calls the minimap plotter `0x410cbd` (`engine_minimap_plot`) with
+**param 0**.  That plotter's entire per-pixel loop — recolouring the
+county pixels (map bytes 10..13 of `0x569590`, county id from
+the 128×128 grid `0x52aff0`) by owner / band — is guarded by
+`if (param_1 != 0)`, so at param 0 it draws **nothing**.  Only its
+unconditional first call runs: `0x451bba`
+(`engine_minimap_compute_bands`), which recomputes per-county band
+bytes (`0x53f9b1` / `0x53f9b2` of the 768-byte county records) that the
+plotter's non-zero modes read.  So the page-7 preview is exactly a raw
+blit of whatever the scenario-load path rendered into `0x569590`.
 
-The render port therefore models the preview as a bound buffer
-(`engine_title_render_set_preview`) and defers `0x410cbd` / `0x451bba`
-until an in-game screen exercises the non-zero compositor paths (which
-need the lord-record structures that nothing ported yet reads).
+The render port models the preview as a bound buffer
+(`engine_title_render_set_preview`, or the hybrid's `0x410c71` hook)
+and defers `0x410cbd` / `0x451bba`; the other callers of `0x410c71`
+(`0x417cef`, `0x475e07`) and the direct plotter callers (`0x410a5d`,
+`0x410aa9`) are where the non-zero modes run.
 
 > 📍 `src/engine_title_render.c` (`engine_title_render_setup_country_list`),
-> Ghidra `0x410c71` / `0x410cbd` / `0x451bba`, called from `FUN_0041f98b`.
+> IDA `0x410c71` / `0x410cbd` (engine_minimap_plot) / `0x451bba`
+> (engine_minimap_compute_bands), called from `0x41f98b`.
+
+*Re-checked 2026-11-18 against the IDA export: 0x410cbd is the strategic minimap plotter (county colours), not a shield compositor, and 0x451bba recomputes county bands, not lord title/rank; the core "param 0 = plain blit" holds.*
 
 ---
 
 ## 119. The page-7 per-frame refresh is dirty-gated inside its sub-renderers, and one of its three calls is multiplayer-only
 
-`FUN_004ba26e`'s page-7 arm (`DAT_005530f0 == 7`) re-runs three calls every
-frame: `FUN_0041f98b()` (country list), `FUN_0041f86d(999)` (option tabs,
-`999` ⇒ no tab is "active" so all keep their bevel), and `FUN_0041ff75(0)`.
-Two non-obvious facts:
+`0x4ba26e`'s page-7 arm (`DAT_005530f0 == 7`) re-runs three calls every
+frame: `0x41f98b()` (country list), `0x41f86d(999)` (option tabs,
+`999` ⇒ no tab is "active" so all keep their bevel), and `0x41ff75(0)`.
+Page 8 (the multiplayer setup) is its own case with the same three
+calls plus `0x420147(0)`.  Two non-obvious facts:
 
-- **The gate lives inside the sub-renderer, not the caller.**  `FUN_0041f98b`
-  is wrapped in `if (0 < DAT_0057c948) { DAT_0057c948 = 0; … }` and
-  `FUN_0041f86d` in `if (0 < DAT_0055ce94) { … }`.  So the per-frame arm is
-  cheap — it paints nothing unless an input action set the flag.  The
-  full-scene root `FUN_0041f6c7` sets *both* flags to 1 before calling the
-  same subs, so a full redraw always draws and ends with both back at 0.
-  The drop-in's `setup_country_list` / `setup_tabs` render *unconditionally*
-  (the full-scene path needs that), so the port **hoists the gate to the
-  refresh caller** (`engine_title_render_refresh_setup`) and has the full
-  render clear both flags at its tail — same observable behavior.
+- **The gate lives inside the sub-renderer, not the caller.**  `0x41f98b`
+  is wrapped in `if (DAT_0057c948 > 0) { DAT_0057c948 = 0; … }` and
+  `0x41f86d` in `if (DAT_0055ce94 > 0) { DAT_0055ce94 = 0; … }`.  So the
+  per-frame arm paints nothing unless an action set a flag.  The
+  full-scene root `0x41f6c7` sets *both* flags to 1 before calling the
+  same subs, so a full redraw always draws and ends with both at 0.
+  The port does the same: `engine_title_render_setup_country_list` /
+  `engine_title_render_setup_tabs` gate on and clear
+  `g_tr_country_dirty` / `g_tr_tabs_dirty` themselves, and
+  `engine_title_render_setup_screen` sets both first.
 
-- **`FUN_0041ff75(0)` is the multiplayer chat-line ticker and a no-op in
-  single-player.**  Its whole body is guarded by `if (DAT_00553030 != 0 …)`;
-  page 7 is the single-player setup screen (`DAT_00553030 == 0`), so the
-  call does nothing.  The drop-in elides it.  (The multiplayer setup screen
-  is page 8, which shares this arm but adds `FUN_00420147`.)
+- **`0x41ff75(0)` is the multiplayer chat-line ticker and a no-op in
+  single-player.**  Its body is guarded by
+  `if (DAT_00553030 != 0 && DAT_00553fc4 > 0)`; page 7 is the
+  single-player setup screen (`DAT_00553030 == 0`), so it does nothing.
+  The drop-in elides it.
 
-A third subtlety: the country scroll/select actions (`FUN_004337b4` /
-`FUN_00433905`) set the demand-redraw `DAT_0057d340 = 2` **and** both sub-
-dirty flags.  In the drop-in `DAT_0057d340 = 2` triggers a full-scene redraw
-next frame (which redraws the scrolled list and clears the flags), so the
-dirty-gated refresh is the faithful per-frame path but the full redraw is
-what's observed after an action.
+A third subtlety: the country scroll/select actions (`0x4337b4` /
+`0x433905`) set the demand-redraw `DAT_0057d340 = 2` **and** both
+sub-dirty flags.  In the drop-in `DAT_0057d340 = 2` triggers a
+full-scene redraw next frame, so the dirty-gated refresh is the
+faithful per-frame path but the full redraw is what's observed after
+an action.
 
 > 📍 `src/engine_title_render.c` (`engine_title_render_refresh_setup`,
+> `engine_title_render_setup_country_list`, `engine_title_render_setup_tabs`,
 > `engine_title_render_country_scroll/select`), `src/engine_menu_input.c`
-> (page-7 arm), Ghidra `FUN_004ba26e` / `FUN_0041f98b` / `FUN_0041f86d` /
-> `FUN_0041ff75` / `FUN_004337b4` / `FUN_00433905`.
+> (page-7 arm), IDA `0x4ba26e` / `0x41f98b` / `0x41f86d` / `0x41ff75` /
+> `0x41f6c7` / `0x4337b4` / `0x433905`.
+
+*Re-checked 2026-11-18 against the IDA export: the port now gates inside the sub-renderers like retail (no hoisted gate; refresh_setup's doc comment still says otherwise); page 8 is its own case; 0x41ff75's guard includes DAT_00553fc4.*
 
 ---
 
 ## 120. Retail's mouse input assumes a fullscreen window — three globals fight a windowed seat
 
-Driving retail interactively in a *windowed* (non-fullscreen) window exposes
-three input/timing assumptions baked in for its native 640×480-fullscreen
-mode.  All three were found while building the `frida_capture.py
---interactive` seat (PROGRESS 2026-05-30):
+Driving retail interactively in a *windowed* window while the Full
+screen option `DAT_0053f228` is 1 (quirk #115: always so on a non-8bpp
+desktop) exposes three input/timing assumptions baked in for 640×480
+fullscreen.  All three were found building the legacy
+`frida_capture.py --interactive` seat (PROGRESS 2026-05-30):
 
-- **App-active gate (`DAT_004e65a8`).**  The main loop `FUN_0040e9ab` runs its
-  present + full-rate tick only while `DAT_004e65d0 == 0 && DAT_004e65a8 != 0`,
-  else `Sleep(200)`.  `DAT_004e65a8` is set to 1 by the WndProc on
-  `WM_ACTIVATEAPP` (0x1c) *only when the window is the foreground window* and
-  not iconic.  A background window crawls at ~5 Hz.
+- **App-active gate (`DAT_004e65a8`).**  The main loop `0x40e9ab` runs
+  its present + full-rate tick only while `DAT_004e65d0 == 0 &&
+  DAT_004e65a8 != 0`, else `Sleep(200)`.  The WndProc `0x4b29be` sets
+  `DAT_004e65a8` on `WM_ACTIVATEAPP` (0x1c) to `wParam && foreground &&
+  !IsIconic`, and also to 1 on `WM_MOVE` / `WM_SIZE` when not iconic.  A
+  background window crawls at ~5 Hz.
 
-- **Cursor cache (`DAT_0057cac4`).**  `FUN_004b191e` (the per-tick input read)
-  calls `GetCursorPos` (screen coords) and, *iff* `DAT_0057cac4 != 0`,
-  overwrites the WndProc's WM_MOUSEMOVE-cached cursor (`DAT_004eabbe/c0`,
-  client coords) with those screen coords.  Correct only when client == screen
-  (fullscreen at origin); in a window it feeds screen coords into a
-  client-coord mapping.  It's set to 1 in in-game screens (`FUN_0043278b`),
-  0 elsewhere.
+- **Cursor override (`DAT_0057cac4`).**  The per-tick input read
+  `0x4b191e` calls `GetCursorPos` (screen coords) and, *iff*
+  `DAT_0057cac4 != 0`, overwrites the WndProc's WM_MOUSEMOVE cursor
+  (`DAT_004eabbe/c0`, client coords) with them.  `DAT_0057cac4` is a
+  "camera just moved" latch, not an in-game flag: the edge-scroll step
+  `0x431f59` and the recentre `0x43278b` set it to 1, the in-game input
+  dispatcher `0x42ff10` copies it to `DAT_0052afa0` and clears it.
+  Correct only when client == screen (fullscreen at the origin).
 
-- **Client rect (`DAT_004ea180..18c`) = fullscreen when `DAT_0053f228 != 0`.**
-  The WndProc fills the cursor→game mapping rect from `GetClientRect` only when
-  `DAT_0053f228 == 0`; otherwise (`!= 0`, retail's default) it uses
-  `SetRect(0,0,GetSystemMetrics(0/1))` — the whole desktop.  `FUN_004b191e`
-  then maps `game = cached_cursor * 640 / (rect width)`.  So in a 640×480
-  window on a 1920-wide desktop, every click is scaled by 640/1920 (÷3) into
-  the wrong game position, even though the on-screen image (GDI-seat
-  StretchDIBits to the *actual* client) looks right.
+- **Mapping rect (`DAT_004ea180..18c`).**  On WM_MOVE / WM_SIZE the
+  WndProc sets it to `(0, 0, GetSystemMetrics(0), GetSystemMetrics(1))`
+  when `DAT_0053f228 != 0`, else to the client rect converted to screen
+  coords (`GetClientRect` + `ClientToScreen`).  `0x4b191e` maps
+  `game = cursor * 640 / (rect width)` (width only — the rect's origin
+  is never subtracted).  So in a 640×480 window on a 1920-wide desktop
+  with the option at 1, every position is scaled by 640/1920 into the
+  wrong game position, even though the image looks right.
 
-The interactive seat neutralises all three by poking, every tick:
-`DAT_004e65a8=1`, `DAT_004e65d0=0`, `DAT_0057cac4=0`, and
-`DAT_004ea180..18c = (0,0, GetClientRect.w, GetClientRect.h)`.
+The legacy interactive seat neutralised all three by poking, every
+tick: `DAT_004e65a8=1`, `DAT_004e65d0=0`, `DAT_0057cac4=0`, and
+`DAT_004ea180..18c = (0,0, client w, client h)`.  rhost does not need
+this: its software window layer presents the 640×480
+display itself and trace input is recorded in 640×480 coordinates.
 
-> 📍 `tools/frida/openlords2-agent.js` (`tryForceAppActive`), Ghidra
-> `FUN_0040e9ab` / `FUN_004b191e` / `FUN_004b29be` (WndProc),
-> `DAT_004e65a8` / `DAT_0057cac4` / `DAT_0053f228` / `DAT_004ea180`.
+> 📍 `tools/frida/openlords2-agent.js` (`tryForceAppActive`, legacy), IDA
+> `0x40e9ab` / `0x4b191e` / `0x4b29be` (WndProc) / `0x431f59` / `0x43278b` /
+> `0x42ff10`; `DAT_004e65a8` / `DAT_0057cac4` / `DAT_0053f228` / `DAT_004ea180`.
+
+*Re-checked 2026-11-18 against the IDA export: DAT_0057cac4 is set by the camera edge-scroll / recentre and cleared by 0x42ff10 (not "1 on in-game screens"); WM_MOVE/WM_SIZE also raise DAT_004e65a8; the windowed rect is in screen coords and only its width is used.*
 
 ---
 
@@ -4346,35 +4274,51 @@ then on — retail does **not** pre-select the current value.
 
 ## 123. The text editor's enable flag is reset to 0 every frame, so the WM_CHAR route is gated by the *render* arm, not the keyboard
 
-The one global title text editor (`DAT_005cd550` buffer + state scalars) is
-fed by `WM_CHAR`/`WM_KEYDOWN` in the WndProc (`FUN_004b29be`), but every
-insert leaf (`FUN_00401d26`) first checks `DAT_005aeb78 != 0`.  That enable
-flag is **not** owned by the keyboard path — it's owned by the per-frame UI
-input dispatcher `FUN_004ba9c8`, which sets `DAT_005aeb78 = 0` at its very
-top (line 9, gated on the input-suppress timer `DAT_0057a0cc < 1`) and then
-each page arm that has a live text field raises it back to 1 (page 4 →
-name box, page 3/8/0xb → save-name, page 5/6 → MP name).  Pages with no
-field leave it 0.
+The one global text editor (`DAT_005cd550` buffer + state scalars) is
+fed by `WM_CHAR`/`WM_KEYDOWN` in the WndProc (`0x4b29be`), but every
+edit leaf — insert `0x401d26`, delete `0x401dc8` — first checks
+`DAT_005aeb78 != 0`.  That enable flag is **not** owned by the keyboard
+path — it's owned by the per-frame UI input dispatcher `0x4ba9c8`, which
+clears it at its very top (`if (DAT_0057a0cc <= 0) DAT_005aeb78 = 0;`) and
+then each arm that has a live text field raises it back to 1 and streams the
+editor out with `0x401f49` + `0x40210c`:
+
+| screen `DAT_004eac50` / page `DAT_005530f0` | field |
+|---|---|
+| 0x1f page 3 | load filename `DAT_004ea130` (64) |
+| 0x1f page 4 | player name `DAT_0053f1e0` (31) |
+| 0x1f pages 8 / 0xb (MP setup) | MP game name `DAT_00553e80` (64, lower-cased by `0x401246`) |
+| 0x35 / 0x36 (in-game load / save) | filename `DAT_004ea130` (64) |
+| 0x1a (letter, `DAT_005651cc` 1..4) | `DAT_0053f1e0 + 200·n + 16` (199) |
+
+Pages 5 / 6 do **not** raise it (no field there).  The only other writer is
+the in-game chat-entry tick `0x420316`: while its countdown `DAT_0057a0cc` is
+> 0 it raises the flag itself and streams into `DAT_00553e80` — which is also
+why the dispatcher's reset is skipped while that countdown runs.
 
 So a keystroke that arrives while you're on, say, page 7 is filtered and
-then **dropped** — `FUN_00401a20` runs, but the insert no-ops because the
+then **dropped** — `0x401a20` runs, but the insert no-ops because the
 last dispatch frame cleared the gate and page 7 never re-raised it.  The
-editor only accepts input on the exact frame-after-frame a text-field page
-is on screen.  This is why the editor can be a single global shared across
-every screen: it's mode-gated by whichever render arm is running, not by
-focus tracking.
+editor only accepts input on frames where a text-field arm ran.  This is why
+the editor can be a single global shared across every screen: it's
+mode-gated by whichever input arm is running, not by focus tracking.
 
 Corollary for the drop-in: the gate must be reset at the *top of the menu
-input dispatch* (before the page switch) and re-raised in the page arm —
-not in the WndProc.  Putting the reset in the keyboard handler would mean a
-key with no intervening frame keeps the stale enable.
+input dispatch* (before the page switch, gated on `DAT_0057a0cc <= 0`) and
+re-raised in the arm — not in the WndProc.  Putting the reset in the keyboard
+handler would mean a key with no intervening frame keeps the stale enable.
+The retail-layout port `rl_4ba9c8` does exactly this; the older
+`engine_menu_title_input` port resets unconditionally (it ignores the
+`DAT_0057a0cc` gate) and covers only the title pages.
 
-> 📍 `src/engine_menu_input.c` (`engine_menu_title_input` head reset +
-> page-4 arm tail), `src/engine_title_render.c`
+> 📍 `src/rl_host.c` (`rl_4ba9c8`, `editor_out`), `src/engine_menu_input.c`
+> (`engine_menu_title_input` head reset + page arms), `src/engine_title_render.c`
 > (`engine_title_render_title_editor_disable` /
 > `engine_title_render_choose_title_name_tail`), `src/main.c` (WM_CHAR /
-> WM_KEYDOWN route), Ghidra `FUN_004ba9c8` line 9 + page arms,
-> `FUN_00401d26`, `FUN_004b29be`.
+> WM_KEYDOWN route); IDA `0x4ba9c8`, `0x420316`, `0x401d26`, `0x401dc8`,
+> `0x4b29be`.
+
+*Re-checked 2026-11-18 against the IDA export: the reset is gated on `DAT_0057a0cc <= 0`; raising arms are pages 3/4/8/0xb, screens 0x35/0x36/0x1a and the chat tick 0x420316 (pages 5/6 never raise it, page 8/0xb is the MP name not a save name); added the rl_4ba9c8 pointer.*
 
 ---
 
@@ -4402,18 +4346,25 @@ not by any property of the name field itself.
 
 ## 125. The button-record hit-test reuses the sprite `kind` field as the hitbox side length
 
-The screen button strips (`FUN_0040cfd2` renderer / `FUN_0040da1e` hit-test,
+The screen button strips (`0x40cfd2` renderer / `0x40da1e` hit-test,
 e.g. the page-3 file list's gauntlet + scroll buttons) store one 24-byte
-record per button.  Field +0x06 is the *sprite kind* — a sheet+blitter
-selector: `0x18` reads a 24×24 `system2.pl8` sprite, `0x20` a 32×32 one.  The
-hit-test then computes the clickable box as `[x, x + kind)` square — i.e. it
-uses the **same byte** as both the sprite selector *and* the pixel side
-length.  It works only because the two system-sheet kinds happen to equal
-their own sprite dimensions (0x18 = 24, 0x20 = 32).  A new kind whose numeric
-value didn't match its sprite size would silently get the wrong hitbox.
+record per button.  The i16 at +0x06 is the *sprite kind* — a sheet+blitter
+selector in `0x40cfd2`: kinds `>= 24` read the `system2.pl8` sheet
+(`0x5bb540`), smaller kinds the setup sheet (`DAT_005530c8`); `16` blits
+16×16, `17` and `24` blit 24×24, `32` blits 32×32.  The hit-test then
+computes the clickable box as `[x, x + kind) × [y, y + kind)` — i.e. it uses
+the **same field** as both the sprite selector *and* the pixel side length.
+It works only because every kind the shipped tables use equals its own
+sprite size: a scan of all 32 strip tables passed to `0x40da1e` /
+`0x40cfd2` (`0x4dd310` .. `0x4de000`) finds only kinds 16, 24 and 32.  The
+renderer's kind 17 is the counter-example already built in: it would draw a
+24×24 sprite under a 17×17 hitbox — no table uses it.
 
 > 📍 `src/engine_menu_input.c` (`button_rec_contains`), `src/engine_button.h`
-> (the `kind` field), Ghidra `FUN_0040da1e` @ 0x40da1e.
+> (the `kind` field); IDA `0x40da1e` (`v8 = a3[3]`), `0x40cfd2` (the
+> `v8 >= 24` sheet pick + `case 16/17/24/32` blitter switch).
+
+*Re-checked 2026-11-18 against the IDA export: three kinds in use (16 on the setup sheet, 24 / 32 on system2), not two; the renderer also accepts kind 17 (24×24 sprite, 17-px hitbox), unused by any table.*
 
 ## 126. The scroll-arrow auto-repeat is driven by a 0x30-byte sparse "gate" table that thins toward fire-every-frame
 
@@ -4436,191 +4387,177 @@ returns 0 (no counter advance) if < 30 ms elapsed since the last poll.
 ## 127. Save filenames are still DOS 8.3 — the page-3 editor caps at 8 chars even though it streams to a 64-byte field
 
 The page-3 "Loading a game." filename editor is seeded with
-`FUN_00402009(&DAT_004ea130, 8, 0xa0, 1)` — `max_length = 8`.  The per-frame
-copy-out streams it with width `0x40` (`FUN_0040210c(&DAT_004ea130, 0x40)`),
+`0x402009(&DAT_004ea130, 8, 0xa0, 1)` — `max_length = 8`.  The per-frame
+copy-out streams it with width `0x40` (`0x40210c(&DAT_004ea130, 0x40)`),
 but the editor refuses inserts past 8 chars (quirk #124's clamp).  Eight is the
 DOS 8.3 base name: the engine still writes `*.sav`-style files and won't let
 you name a save longer than the filesystem of 1996 allowed.  Typing "war" over
 the seed "lastturn" yields "wartturn" — overwrite-from-cursor, then truncated
-at 8.  (Mode 1, vs page 4's mode 0, changes the allowed-character filter, not
-the case — the captured frame stays lowercase.)
+at 8.  Mode 1 (vs page 4's mode 0) changes the key filter `0x401a20` in two
+ways: it rejects `, . ? !` (accepted only in mode 0), and it **folds A–Z to
+lower case** (`strutil_to_lower_char` `0x4011b0`) — so a save name is
+always lower-case whatever the shift state.
 
 > 📍 `src/main.c` (`seed_page3_state` → `text_input_init(.., 8, 0xa0, 1)`),
-> Ghidra `FUN_00402009(&DAT_004ea130, 8, 0xa0, 1)` (5 call sites).
+> `src/text_input.c` (`init_mode_param` filter); IDA
+> `0x402009(&DAT_004ea130, 8, 0xa0, 1)` (5 call sites), `0x401a20`.
+
+*Re-checked 2026-11-18 against the IDA export: mode 1 does change the case (upper → lower in 0x401a20) as well as dropping four punctuation keys; the old "not the case" remark was wrong.*
 
 ---
 
 ## 128. The new-game calendar is seeded as six redundant scalars — year and season each stored alongside their own ±1 neighbours and a verbatim copy
 
-The new-game initialiser (`FUN_00497ced`) doesn't store the start date as
+The new-game initialiser (`0x497ced`) doesn't store the start date as
 two numbers (year, season).  It writes **six** save scalars laid out as two
 parallel "triple + copy" groups, derived in the asm from a single base via
-`inc`/`dec` rather than as independent constants:
+`inc`/`dec` rather than as independent constants (0x497d2f–0x497d97):
 
 ```
-year   base 0x4f3 (1267)   prev 0x4f2 (entry 21)   next 0x4f4 (entry 22)   copy 0x4f3 (entry 28)
-season base 3              prev 2    (entry 24)    next 4    (entry 25)    copy 3    (entry 29)
+year   cur  DAT_00553edc 0x4f3 (1267)  prev DAT_0057c900 0x4f2  next DAT_00553e74 0x4f4  copy DAT_00553228 0x4f3
+season cur  DAT_0057c934 3             prev DAT_00554470 2      next DAT_0057c92c 4      copy DAT_0057c990 3
 ```
 
-The bases live in save entries 20 (year) and 23 (season); entries 21–29 are
-the contiguous block that holds their neighbours and copies.  The pre-computed
-prev/next mirrors are why the strategic-map header can render adjacent
-years/seasons without arithmetic at draw time — entry 20 is read straight into
-the year glyph by the map arm `FUN_0040f5fd` → `FUN_0041a900`.
+(save entries 20/21/22/28 and 23/24/25/29.)  The triples are a **rolling
+window**, not a render convenience: the turn advance `0x448440` shifts them
+every turn — `prev ← cur`, `cur ← next++`, `next` wraps `> 4 → 1`; when the new
+`cur` season is 4 the year triple shifts the same way (`0x57c900 ← 0x553edc ←
+0x553e74++`).  The previous season is a live input (`0x44bf04` passes
+`DAT_00554470` to the provisioning decision `0x44df5f`); the previous year
+`DAT_0057c900` is write-only.  The "copies" are the **start date**, never
+advanced: `DAT_00553228` feeds `county_year_number` (`0x41a900`, from
+`0x4110b1` / `0x4116fb`) and the elapsed-years thresholds (`start + 6 / 12 / 32`
+vs the current year) in `0x475b41`; `DAT_0057c990` is write-only.
 
-The season-next write (`entry 25 = base+1`) is followed in retail by a wrap
-clamp `if (next > 4) next = 1` — the 1..4 seasonal cycle — but it is **dead**
-at the seeded value 4 (`4 > 4` is false), so the decompiler folds the block
-away ("Removing unreachable block").  The clamp only bites once a turn
-actually advances the season past winter; at new-game it never fires.
+The season-next write is followed in `0x497ced` by a wrap clamp
+`if (next > 4) next = 1` (0x497d97) that is **dead** at the seeded value 4.
+But the seed never survives to the first turn: `0x497ced` itself calls
+`engine_turn_advance` (`0x448440`) further down, so a new game starts at
+season 4, year 1268 (prev season 3, next season 5 → wrapped to 1 by
+`0x448440`'s own clamp, turn counter `DAT_00553240` = 1).
 
-> 📍 `src/game_init.c` (`engine_game_init_seed_scalars`),
-> Ghidra `FUN_00497ced` @ 0x497d2f–0x497d97, r2 `pdf @ 0x497ced`.
+> 📍 `src/rl_turn.c` (`rl_497ced`), `src/rl_ctl.c` (`rl_448440`'s calendar
+> shift), `src/game_init.c` (`engine_game_init_seed_scalars`); IDA `0x497ced`
+> @ 0x497d2f–0x497d9e, `0x448440`.
+
+*Re-checked 2026-11-18 against the IDA export: the ±1 neighbours are a rolling prev/cur/next window shifted by 0x448440 (not a draw-time convenience); the "copies" are the never-advanced start date (DAT_00553228 read by 0x41a900 / 0x475b41); 0x497ced's own turn advance means play starts at season 4 / 1268.*
 
 ---
 
-## 129. The army-coord probes index a 3-byte table that Ghidra renders as a 0x300 stride
+## 129. (withdrawn) The army-coord probes index a 3-byte table that Ghidra renders as a 0x300 stride
 
-The new-game / AI-setup army-neighbourhood probes `FUN_00428007` and
-`FUN_00428078` look up an army's map coordinate before scanning the cells
-around it.  Ghidra decompiles the lookup as
-
-```c
-FUN_0046cfbd((uint)(byte)(&DAT_0053fa1c)[param_1 * 0x300],   // col
-             (uint)(byte)(&DAT_0053fa1d)[param_1 * 0x300],   // row
-             radius);
-```
-
-i.e. a stride of **0x300** — which lines up suspiciously well with the
-768-byte per-army record stride of the block that table lives in (save
-entry 4, `g_per_army_768`).  It's a lie.  The actual instruction is
-
-```
-mov cl, byte [eax + eax*2 + 0x53fa1c]   ; eax = param_1  →  base + param_1*3
-```
-
-`eax + eax*2` is `param_1 * 3`.  The coordinate table is a **packed
-3-byte-stride** array — `{col, row, ?}` per army id — sitting at offset
-0x6c of entry 4, *not* one field sampled once per 768-B record.  The
-decompiler appears to have mis-folded the `lea`-style `base + idx*3`
-into a scaled array index and picked the wrong scale.  This is a
-standing reminder that Ghidra's array-stride rendering is not byte-truth;
-`r2 pdf` is.
-
-A corollary: save entry 4 is therefore **not** a flat 17×768 block — it
-carries internal sub-tables (this coord array among them).  Our
-`engine_game_init_clear_tables` still clears it correctly (17×0x300 ==
-the whole 13056-byte block), but the "17 per-army records" framing is a
-clear-shape convenience, not a faithful layout.
-
-> 📍 `src/game_init.c` (`engine_game_init_army_near_rawflag_bit0` /
-> `_only_bit1`), Ghidra `FUN_00428007`/`FUN_00428078`,
-> r2 `pdf @ 0x428007` (`@ 0x428035` / `0x428045` show the `eax*2`).
+Claimed `0x428007` / `0x428078` read a packed stride-3 `{col,row,?}` table at `0x53fa1c` and that Ghidra's
+`[id*0x300]` was a mis-rendered `lea`.  Wrong: the asm is `mov eax,[id]; shl eax,8; mov cl,[eax+eax*2+0x53fa1c]`
+(0x428030 / 0x428035) = `id*0x300 + 0x53fa1c` — the earlier reading skipped the `shl`.  Retail reads the per-county
+record's capital cursor at `+0x6c/+0x6d` (stride 0x300, written by `setup_capitals` 0x468d4f); the port already
+uses stride 0x300 (`ARMY_COORD_STRIDE`, commit f550b09; see #174).
 
 ---
 
-## 130. The box-scan loop counters double as the engine's nearest-cell result globals — a port trap for FUN_00427ed0  ✅ RESOLVED
+## 130. The box-scan loop counters double as the engine's shared cell cursor — a port trap for FUN_00427ed0  ✅ RESOLVED
 
-The strategic-map box scans `FUN_0046cfbd` / `FUN_0046d130` (and the
-ring-distance finder `FUN_0046733c` over them) use the globals
-`DAT_00569570` (inner/col) and `DAT_00569578` (outer/row) as their loop
-counters — the very same globals `engine_path` fills with its
-nearest-cell result.  On the return-1 path the counters happen to hold
-the **matching cell's (col, row)**:
+The strategic-map box scans `0x46cfbd` / `0x46d130` (and the ring-distance
+finder `0x46733c` over them) use the globals `DAT_00569570` (inner/col) and
+`DAT_00569578` (outer/row) as their loop counters — the shared cell cursor
+that ~90 retail functions (path field, grid sweeps, the AI scanners) count in
+(see #226).  On the return-1 path the counters hold the **matching cell's
+(col, row)**; on a miss they hold the scan's end position:
 
 ```
-0x46d0ae  mov [0x569570], eax   ; col = clamped start, then inc per cell
 0x46d083  mov [0x569578], eax   ; row = clamped start, then inc per row
-0x46d110  mov eax, 1            ; match → return, counters frozen at the hit
+0x46d0ae  mov [0x569570], eax   ; col = clamped start, then inc per cell
+          return 1              ; match → counters frozen at the hit
 ```
 
-Our port of all three predicates deliberately uses **locals**, because
-their three direct callers (`0x46733c` / `0x428007` / `0x428078`) read
-only the 0/1 (or ring-distance) return value — never the globals.  That
-is faithful *for those callers*.
-
-But `FUN_00427ed0` (a direct `0x497ced` new-game callee) calls the army
-probes and then immediately does
+Three callers read the cursor right after an army probe (`0x428007` /
+`0x428078`):
 
 ```c
-if (FUN_00428007(id) || FUN_00428078(id))
-    FUN_0046e1b0(3, DAT_00569570, DAT_00569578, 6);   // place something AT the found cell
+/* 0x427ed0 place_army_starts */
+if (0x428007(id) || 0x428078(id)) 0x46e1b0(3, DAT_00569570, DAT_00569578, 6);
+/* 0x4292af AI caravan dispatch */
+if (0x428007(r) || 0x428078(r))   0x46e1b0(4, DAT_00569570, DAT_00569578, player);
+/* 0x4280e9 settle marches */
+if (0x428007(r)) { stack[+0x14] = stack[+0x16] = DAT_00569570;
+                  stack[+0x15] = stack[+0x17] = DAT_00569578; }
 ```
 
-— reading the globals the probe's box scan left behind.  When
-`FUN_00427ed0` is ported, the box scan **must** expose the matched
-(col, row) (an out-param, or by actually writing the globals), or the
-placement will silently target the wrong cell.  Flagged here and in
-`engine_map_query.c` so the trap is seen before, not after.
+— so the box scan **must** expose the matched (col, row), or the placement
+silently targets the wrong cell.
 
-**Resolution (FUN_00427ed0 chip).**  Took the out-param route: `box_scan`
-and the two box predicates gained `int *out_col, int *out_row`, written
-on the return-1 path and passed through `army_near` up to the public army
-probes (`engine_game_init_army_near_rawflag_bit0/_only_bit1`).
+**Resolution.**  `box_scan` counts in `g_cell_cursor_col/row` (the port's
+binding of `DAT_00569570/78`, #226) exactly as retail does, *and* reports the
+hit through `int *out_col, int *out_row` out-params threaded through
+`army_near` up to the public army probes
+(`engine_game_init_army_near_rawflag_bit0/_only_bit1`) and
+`engine_army_state_find_settle_spot`.
 `engine_game_init_place_army_starts` reads them with the same `||`
-short-circuit retail uses, so the cell handed to the placer
-(`engine_territory_place_entity`) is the one the winning probe matched —
-no global clobber, no clash with `engine_path`'s nearest-cell result.
-Callers that ignore the position (the ring finder, region_clear) pass
-NULL.  A host test (`game_init_army_probe_reports_matched_cell`) pins the
-reported cell; the two `place_army_starts` tests confirm the marker lands
-at the matched cell.
+short-circuit retail uses.  Callers that ignore the position (the ring finder,
+region_clear) pass NULL.  A host test (`game_init_army_probe_reports_matched_cell`)
+pins the reported cell; the two `place_army_starts` tests confirm the marker
+lands at the matched cell.
 
-> 📍 `src/engine_map_query.c` (`box_scan` + predicates, out-params),
-> `src/game_init.c` (`engine_game_init_place_army_starts`),
-> `src/engine_territory.c` (`engine_territory_place_entity` = FUN_0046e1b0),
-> Ghidra `FUN_0046cfbd` @ 0x46d083/0x46d0ae, `FUN_00427ed0` @ 0x427f0a.
+> 📍 `src/engine_map_query.c` (`box_scan` + predicates), `src/game_init.c`
+> (`army_near`, `engine_game_init_place_army_starts`), `src/engine_army_state.c`
+> (`engine_army_state_find_settle_spot`), `src/engine_army_ai.c` (the 0x4292af
+> caravan caller), `src/engine_territory.c` (`engine_territory_place_entity` =
+> 0x46e1b0); IDA `0x46cfbd`, `0x427ed0`, `0x4280e9`, `0x4292af`.
 
----
-
-## 131. The all-cells grid clearer is unrolled 8 cells wide and steers itself with the nearest-cell result globals
-
-`FUN_0046c5b8` zeroes one byte of every overworld cell (4096 cells, 8 B
-each), and a one-line C loop would do it — but retail hand-unrolls the
-sweep **8 cells per inner iteration** (eight `mov byte [...], 0` at cell
-offsets +0, +8, … +0x38) and runs the two enclosing loops on
-`DAT_00569578` (0..0x40) and `DAT_00569570` (0..8), advancing a byte
-cursor `DAT_0053e8b8 += 0x40` each step.
-
-The charming part: `DAT_00569570` / `DAT_00569578` are the *same two
-globals* `engine_path` uses to report its nearest-found cell (quirk
-#130).  A grid-wipe has no "result," so here they're pure loop counters —
-the function just grabbed two convenient zero-page dwords.  After it
-returns they hold (8, 0x40), meaningless leftovers.  Like the box scans,
-our port (`engine_territory_clear_cell_field`) uses locals and leaves
-engine_path's result globals alone; the byte cursor `DAT_0053e8b8` and
-the sibling `DAT_0053e974` (in `FUN_0046df51`) are likewise write-only
-scratch reset at entry, never read across calls, so they collapse to the
-loop variable.  r2 (`pdf @ 0x46c5b8`) was needed to see the stores are
-byte-sized and the parameter is the low-byte field offset — Ghidra's
-unrolled render hid both.
-
-> 📍 `src/engine_territory.c` (`engine_territory_clear_cell_field`,
-> `engine_territory_clear_cell_render_flags`),
-> Ghidra `FUN_0046c5b8` @ 0x46c5b8, `FUN_0046df51` @ 0x46df51.
+*Re-checked 2026-11-18 against the IDA export: the port no longer uses locals (box_scan counts in g_cell_cursor_col/row, #226); 0x4280e9 and 0x4292af also read the cursor after the probe, not only 0x427ed0; the globals are the shared cell cursor, not engine_path's private result.*
 
 ---
 
-## 132. The per-key cell roster's overflow guard allows a key (17) the destination table can't hold — a latent 1-int OOB defused only by the producers' tighter gate
+## 131. The all-cells grid clearer is unrolled 8 cells wide and steers itself with the shared cell-cursor globals
 
-`FUN_0046da4b` rebuilds a per-key roster (retail `DAT_0053ea00` = save
-entry 12, `g_misc_1360`) that groups active overworld cells by their +7
-"group-key" byte: row *k* lists up to 20 cell byte-offsets whose key ==
-*k*.  The destination is exactly **1360 bytes = 17 rows × 20 × 4** — rows
-0..16.  But the scan's accept guard is `key != 0 && key < 0x12`, i.e. it
+`0x46c5b8` zeroes one byte (the parameter's low byte = the field offset) of
+every overworld cell (4096 cells, 8 B each), and a one-line C loop would do
+it — but retail hand-unrolls the sweep **8 cells per inner iteration** (eight
+`mov byte [...], 0` at cell offsets +0, +8, … +0x38) and runs the two enclosing
+loops on `DAT_00569578` (0..0x40) and `DAT_00569570` (0..8), advancing a byte
+cursor `DAT_0053e8b8 += 0x40` each step.  Its sibling `0x46c6ba` (clear bit
+0x40 of every cell's +2) is the same unrolled sweep.
+
+`DAT_00569570` / `DAT_00569578` are the engine's shared cell cursor (quirk
+#130 / #226) — the same two globals the box scans leave their hit in.  A
+grid-wipe has no "result", but after it returns they hold (8, 0x40) and
+`DAT_0053e8b8` holds 0x8000 — and per #226 that leftover is live state (the
+cursor is read by ~90 functions, `DAT_0053e8b8` is the cursor of a dozen
+sweeps 0x46a1a6..0x46ca84).  So the retail-layout ports keep them:
+`rl_46c5b8` / `rl_46c6ba` count in the cursor and `DAT_0053e8b8` exactly as
+retail does, and `rl_46df51` counts its cells in `DAT_0053e974`.  The older
+`engine_territory_clear_cell_field` / `_clear_cell_render_flags` ports still
+use locals and leave the cursor alone.
+
+> 📍 `src/rl_terr.c` (`rl_46c5b8`, `rl_46c6ba`, `rl_46df51`),
+> `src/engine_territory.c` (`engine_territory_clear_cell_field`,
+> `engine_territory_clear_cell_render_flags`); IDA `0x46c5b8`, `0x46c6ba`,
+> `0x46df51`.
+
+*Re-checked 2026-11-18 against the IDA export: the cursor / byte-cursor leftovers are live state (#226) and the rl_ ports write them; "write-only scratch, collapses to a local" no longer describes the verified port.*
+
+---
+
+## 132. The per-key cell roster's overflow guard allows a key (17) the destination table can't hold — a latent 1-int OOB defused only by the shipped map data
+
+`0x46da4b` rebuilds a per-key roster (retail `DAT_0053ea00` = save
+entry 12, `g_misc_1360`) that groups active overworld cells (+1 bit 0x20) by
+their +7 "group-key" byte: row *k* lists up to 20 cell byte-offsets whose key
+== *k*.  The destination is exactly **1360 bytes = 17 rows × 20 × 4** — rows
+0..16.  But the scan's accept guard is `key != 0 && key <= 0x11`, i.e. it
 admits keys **1..17**, and a key of 17 indexes `roster[17*20 + c]` =
-i32 index 340.. = the first int *past* `g_misc_1360`.
+i32 index 340.. = the first int *past* `g_misc_1360`.  (A cell with no free
+column left is reset instead: +0 = 0, +3 = 6, +1 = 0, +2 &= 0xe3.)
 
 The clear half is narrower still: it zeroes rows **1..16 only**
-(`for (k = 1; k < 0x11; …)`), so even row 0 and the would-be row 17 are
-left untouched at entry.  The write never actually lands out of bounds in
-practice because the +7 field is produced clamped to **1..16** — every
-other reader gates it `< 0x11` (see `engine_strat_cost.h`, "+7 a
-level/count, gated `< 0x11`").  So `< 0x12` here is just one-too-loose;
-17 is unreachable.  The port preserves the `< 0x12` guard verbatim (a
-faithful drop-in keeps retail's latent bug) and documents it rather than
-silently clamping; the host tests stay within keys 1..16, and a 340-i32
-roster buffer + ASan would catch any regression that fed a 17 through.
+(`for (k = 1; k < 0x11; …)`), so row 0 and the would-be row 17 are
+left untouched at entry.  The write never lands out of bounds in practice,
+but not because anything clamps +7: the map loader `0x467770` copies it
+verbatim from plane 5 of `L2_maps.dat` (#158) — it only *counts* keys `<= 0x10`
+for `DAT_0056d5dc`.  The defuse is the data: across all 80 maps plane 5 holds
+only 0..16 and 0x20 (sea), never 17.  (Of the other +7 readers only
+`0x46ff43` gates it, `< 0x11`.)  A custom map with a 17 would reach the OOB.
+The port preserves the `<= 0x11` guard verbatim (a faithful drop-in keeps
+retail's latent bug); the host tests stay within keys 1..16.
 
 Second, smaller blind spot in the same function: the "free column"
 sentinel is the value **0**, which is also cell (0,0)'s own byte-offset.
@@ -4629,61 +4566,71 @@ so it could never register distinctly and a later same-key cell would
 overwrite its slot.  Harmless because cell (0,0) is map-border terrain,
 never an active feature.
 
-The **per-army adjacency builder `FUN_00467ca6`** shares this exact loose
-guard against a 17-row block: it accepts a cell's owning-army key with
-`key != 0 && key <= 0x11` (1..17) and indexes the per-army record block
+The **per-county adjacency builder `0x467ca6`** shares this exact loose
+guard against a 17-row block: it accepts a cell's key with
+`key != 0 && key <= 0x11` (1..17) and indexes the per-county record block
 (retail `DAT_0053f9b0` = save entry 4, **17 rows × 0x300 B**) at
 `base + key*0x300`, so a centre cell with key 17 would write its
 neighbour-count (`+0x5a`) and list (`+0x5c`) one 0x300-row *past* the
-block.  Same defuse — the +7 producers clamp to 1..16, so a key-17 *centre*
-never occurs — and the same verbatim preservation (`engine_territory_build_army_adjacency`).
+block.  Same defuse (no key 17 in the shipped maps) and the same verbatim
+preservation (`engine_territory_build_army_adjacency`).
 Note a neighbour key of 17 is harmless: it is only stored as a list *byte*,
 never used to index the block; the OOB needs key 17 as the swept centre.
 
-The **per-army feature-seeding pass `FUN_00467a36`** is a third instance of
-the same loose guard against the **same** 17-row per-army block: it accepts a
-cell's owning-army key with `key != 0 && key < 0x12` (1..17) and bumps that
-army's active-cell tally at `base + key*0x300 + 0x205`, so a key-17 centre
-would write its tally one 0x300-row past the block.  Identical defuse (the +7
-producers clamp to 1..16) and verbatim preservation
+The **feature-seeding pass `0x467a36`** is a third instance of the same
+loose guard against the **same** 17-row block: it accepts `key != 0 &&
+key <= 17` and bumps that county's active-cell tally at
+`base + key*0x300 + 0x205`.  Identical defuse and verbatim preservation
 (`engine_territory_seed_army_features`).
 
-> 📍 `src/engine_territory.c` (`engine_territory_rebuild_cell_roster`,
+> 📍 `src/rl_terr.c` (`rl_46da4b`, `rl_467ca6`, `rl_467a36`, `rl_467770`),
+> `src/engine_territory.c` (`engine_territory_rebuild_cell_roster`,
 > `engine_territory_build_army_adjacency`, `engine_territory_seed_army_features`),
-> `docs/findings/game-start.md` §"FUN_004676e0", Ghidra `FUN_0046da4b`
-> @ 0x46da4b, `FUN_00467ca6` @ 0x467ca6, `FUN_00467a36` @ 0x467a36.
+> `docs/findings/game-start.md` §"FUN_004676e0"; IDA `0x46da4b`, `0x467ca6`,
+> `0x467a36`, `0x467770`.
+
+*Re-checked 2026-11-18 against the IDA export: +7 is not clamped by its producer (0x467770 stores plane 5 raw); the defuse is that no shipped map has key 17 (plane-5 values 0..16 and 0x20 over all 80 maps); only 0x46ff43 gates +7 `< 0x11`; added the rl_ pointers.*
 
 ---
 
-## 133. The overworld neighbour predicate's bounds check is load-bearing, not defensive — and the strategic map is a doubled-row hex grid
+## 133. The overworld neighbour predicate's bounds check is load-bearing, not defensive — and the strategic map is a staggered-row (iso diamond) grid
 
-`FUN_0046de94` (the per-tile eligibility predicate behind the new-game
-feature-spread) opens with a four-way signed bounds ladder —
-`-1 < col && -1 < row && col < 0x41 && row < 0x81` — and returns 0
-(ineligible) for anything off-grid.  That guard looks like ordinary
-defensive coding, but it is **functional**: its caller `FUN_0046de05`
+`0x46de94` (the per-tile predicate behind the terrain auto-tiler
+`0x46dbf5`) opens with a four-way signed bounds ladder —
+`row >= 0 && col >= 0 && row < 0x81 && col < 0x41` — and returns 0 for
+anything off-grid; otherwise it reads the 129 × 65 i32 terrain-index render
+grid `DAT_0055cea0[65*row + col]` and returns 1 iff the tile is a real cell
+(value `< 0xfff0000`, a byte-offset into the cell grid) whose +1 flags lack
+bit 0x4, or the plain special sentinel `0xfff0006`.  That guard looks like
+ordinary defensive coding, but it is **functional**: its caller `0x46de05`
 adds a neighbour offset to (col,row) *before* the call, and for tiles on
-the map border those offsets land off the edge (e.g. col `-1`, row `-2`).
-Retail relies on the predicate quietly reporting "ineligible" there, so a
-port that drops the bounds check as redundant (the grid read would still
-be in-bounds for most coordinates) would silently corrupt feature
-generation along the map edges — exactly the cells hardest to eyeball.
+the grid border those offsets land off the edge (e.g. col `-1`, row `-2`).
+Retail relies on the predicate quietly reporting "ineligible" there; a port
+that drops the check would read a neighbouring row's tile (`65*row - 1` is
+still inside the array) and pick the wrong edge variant along the map border.
+
+The auto-tiler (`0x46dbf5`) runs this for every feature tile (+1 bit 0x4, or
+a non-`0xfff0006` special): `0x46de05` fills the 8-entry mask `DAT_00543fe0`,
+`0x46c2de` (`engine_territory_pick_feature`) maps it through the 48-entry
+pattern table `0x4d7310` to the tile variant.
 
 The reason the offsets reach off-grid at all is the second half of the
-quirk: the strategic map is a **doubled-row hex grid**, so `FUN_0046de05`
-picks one of *two* 8-entry `{dx,dy}` offset tables by **row parity**
-(`row & 1`) — retail `DAT_004d6c28` (even) / `DAT_004d6be8` (odd).  The
-two sets are genuinely different (even includes `(1,-1)(1,1)`; odd
-includes `(-1,1)(-1,-1)`), the hallmark of offset-coordinate hex
-neighbours.  Both tables carry a `(0,±2)` pair — the doubled-row vertical
-step.  Any future strategic-map adjacency code (pathfinding, fog, feature
-spread) must consult the parity-correct table, not a single 8-neighbour
-set.
+quirk: the render grid is a **staggered-row isometric (diamond) grid** — 65
+columns × 129 half-rows — so `0x46de05` picks one of *two* 8-entry
+`{dx,dy}` tables by **row parity** (`row & 1`): `0x4d6c28` (even) /
+`0x4d6be8` (odd).  Both carry E/W `(±1,0)` and N/S `(0,±2)` (the
+doubled-row vertical step); the four diagonals `(dx,±1)` take dx = 0 / +1 on
+even rows and −1 / 0 on odd rows — the hallmark of offset (staggered)
+coordinates.  It is an 8-neighbourhood, not a hex grid.  Any strategic-map
+adjacency code over this grid must consult the parity-correct table.
 
-> 📍 `src/engine_territory.c` (`engine_territory_tile_eligible` /
+> 📍 `src/rl_terr.c` (`rl_46de94`, `rl_46de05`, `rl_46dbf5`),
+> `src/engine_territory.c` (`engine_territory_tile_eligible` /
 > `engine_territory_compute_neighbour_mask`),
-> `docs/findings/game-start.md` §"FUN_004676e0", Ghidra `FUN_0046de94`
-> @ 0x46de94 / `FUN_0046de05` @ 0x46de05.
+> `docs/findings/game-start.md` §"FUN_004676e0"; IDA `0x46de94`, `0x46de05`,
+> `0x46dbf5`, tables `0x4d6c28` / `0x4d6be8`.
+
+*Re-checked 2026-11-18 against the IDA export: the caller is the auto-tiler 0x46dbf5 (not a feature-spread); the grid is the 129×65 render grid DAT_0055cea0; the geometry is a staggered iso 8-neighbourhood, not a hex grid; added the rl_ pointers.*
 
 ---
 
@@ -4764,52 +4711,55 @@ five directly.
 
 ## 136. The population allocator reads a 999999 cap as "fill nothing," not "no limit"
 
-`FUN_0044f6e7` (the new-game per-realm population / job-slot allocator)
-distributes each population pool into capped buckets with a greedy `while
-(counter < cap)` fill plus a round-robin that also tests `counter < cap`.
-Before any of that it normalises every cap field:
+`0x44f6e7` (`engine_territory_allocate_realm_workforce`, the per-county
+population / job-slot allocator — called from 23 sites: new-game setup
+`0x49bd99`, the turn passes and every management-UI change) distributes the
+population into capped buckets with a greedy `while (counter < cap)` fill plus
+a round-robin that also tests `counter < cap`.  Before any of that it
+normalises every cap field (the +8 of the nine 0xc-byte bucket records at
+`+0xc4`):
 
 ```
-cap = army[+0xcc + 0xc*i];
+cap = rec[+0xcc + 0xc*i];
 if (cap == 999999) cap = 0;
 ```
 
-`999999` is the engine's "unlimited" sentinel elsewhere, so the natural
-reading is "this bucket has no ceiling."  Here it does the **opposite**: a
-sentinel cap becomes `0`, and `counter < 0` is never true, so the bucket
-accepts nothing and its target share spills into the +0x124 leftover.  A
-bucket that wants to be unbounded must instead carry a large concrete cap.
-
-The likely intent is that `999999` marks a bucket that is *absent/disabled*
-for this realm (the same value an uninitialised cap field would never
-legitimately hold as a real ceiling), so mapping it to a no-fill `0` is how
-the allocator skips it.  Either way the port preserves the literal compare —
-mapping `999999 → 0` and leaving every other value as the cap — because the
-greedy and round-robin passes both depend on it to leave sentinel buckets
-empty.  The same realm record's phase-2 buckets are *also* gated to `0` by
-their per-building "present" flags (+0x297/+0x2af/+0x2c7/+0x2df and the
-settlement flag +0x1c3 ∧ +0x1b0); a 999999 cap is the parallel mechanism for
-the ungated path.
+So a `999999` cap becomes `0`, and `counter < 0` is never true: the bucket
+accepts nothing and its share spills into the leftover.  The caps are the
+planners' per-bucket targets (#143), and 999999 is not an "unlimited" value
+anywhere in retail: its only producer is `engine_army_economy_select_candidate`
+(`0x44dd4d`), whose best-index variable starts at 999999 and is stored into
+`+0xd8` unchanged when no candidate was evaluated (population `+0x24 <= 0`).
+Retail's real "no ceiling" is a large concrete cap — `0x44f318` writes
+`100000` into the non-slot-2 resource buckets.  So `999999 → 0` reads "no
+candidate → staff nothing", and the compare on the seven other cap fields is
+defensive (only `+0xd8` can carry the value).  The port preserves the literal
+compare on all eight fields.  The same county's phase-2 buckets are *also*
+gated to `0` by their per-building "present" flags
+(+0x297/+0x2af/+0x2c7/+0x2df and +0x1c3 ∧ +0x1b0).
 
 > 📍 `src/engine_territory.c` (`engine_territory_allocate_realm_workforce`),
-> Ghidra `FUN_0044f6e7` @ 0x44f6e7.
+> `src/engine_army_economy.c` (`engine_army_economy_select_candidate`); IDA
+> `0x44f6e7`, `0x44dd4d` (`v11 = 999999` → `+0xd8`), `0x44f318` (`100000`).
+
+*Re-checked 2026-11-18 against the IDA export: 999999 is not an "unlimited" sentinel anywhere — its only producer is 0x44dd4d's no-candidate best index (→ +0xd8); retail's no-ceiling cap is 100000 (0x44f318); the allocator runs from 23 call sites, not only at new game.*
 
 ## 137. The strategic-map recenter clamps the scroll even when it refused to move it
 
-`FUN_0043278b` (recenter-on-tile) scans the terrain-index grid for a tile
-value and, on a hit, sets the scroll position to centre on it — but **only
-when the view-mode global `DAT_0057cb18` is 0** (the normal map view).  The
-clamp that follows, however, is called **unconditionally**, outside that
-gate:
+`0x43278b` (recenter-on-tile) scans the 129 × 65 terrain-index grid
+`DAT_0055cea0` for a tile value and, on a hit, sets the scroll position to
+centre on it — but **only when the view-mode global `DAT_0057cb18` is 0** (the
+normal map view).  The clamp that follows, however, is called
+**unconditionally**, outside that gate:
 
 ```c
 if (DAT_0057cb18 == 0) {
     DAT_005651b4 = col - 4;
     DAT_005651b8 = (row & 0xfffe) - 0xc;
 }
-FUN_00429b1d();          /* clamp DAT_005651b4/b8 in place — always */
-DAT_0053e9ac = 1;        /* below-status redraw    */
+0x429b1d();              /* clamp DAT_005651b4/b8 in place — always */
 DAT_0057cac4 = 1;        /* cursor-cache enable    */
+DAT_0053e9ac = 1;        /* below-status redraw    */
 return 2;
 ```
 
@@ -4817,80 +4767,100 @@ So calling the recenter while in a non-normal view mode still (a) re-clamps
 whatever scroll position was already there — which can *move* it if a prior
 state left it out of range — and (b) latches the two redraw flags and
 returns the same "found" code 2.  The hit is reported and the screen is
-flagged dirty regardless of whether the view actually scrolled.  The port
-mirrors this: the clamp + flag latches live after the view-mode `if`, not
-inside it.
+flagged dirty regardless of whether the view actually scrolled.  Both ports
+mirror this: the clamp + flag latches live after the view-mode `if`.
 
 Two incidental notes from the same pair of functions:
 
 - The centring offsets are asymmetric — column is `−4`, row is
   `(row & ~1) − 12` — and the row is floored to even first.  That `& 0xfffe`
-  is the doubled-row hex grid showing through (quirk #133): a logical map
+  is the staggered-row grid showing through (quirk #133): a logical map
   row spans two grid rows, so the camera anchors on the even one.
 
-- The caller `FUN_00432746` stages the capital's cell offset through the
-  global `DAT_0053f0dc` purely as a write-then-read temporary
-  (`DAT_0053f0dc = record[+0x70]; if (DAT_0053f0dc != 0) recenter(DAT_0053f0dc)`).
-  All three call sites that drive the recenter do the identical
-  write-then-read; nothing ever reads `DAT_0053f0dc` across a call boundary,
-  so it is scratch, not state — the port uses a local.
+- The caller `0x432746` stages the county's capital tile (`+0x70`) through the
+  global `DAT_0053f0dc` (`DAT_0053f0dc = rec[+0x70]; if (!= 0) recenter(it);`)
+  and then selects the county (`DAT_0057c93c = c`).  The other two stagers
+  (`0x43253a`, `0x43caf4`) do the same write-then-read; nothing reads
+  `DAT_0053f0dc` across a call, but it is a written global, so the
+  retail-layout port `rl_432746` writes it (`g_rl_53f0dc`); the older
+  `engine_territory_recenter_on_capital` uses a local.
 
-> 📍 `src/engine_territory.c` (`engine_territory_recenter_on_tile` /
-> `engine_territory_recenter_on_capital`), Ghidra `FUN_0043278b` @ 0x43278b
-> and `FUN_00432746` @ 0x432746.  First producer of the scroll save globals
-> (entries 16/17) — see the camera-mirror note in `src/engine.c`.
+> 📍 `src/rl_ctl.c` (`rl_43278b`, `rl_432746`), `src/engine_territory.c`
+> (`engine_territory_recenter_on_tile` / `engine_territory_recenter_on_capital`);
+> IDA `0x43278b`, `0x432746`.  First producer of the scroll save globals
+> (entries 16/17) — see #157 / #176.
 
-## 138. One per-army byte (+0x1a7) is shared between the production-level fallback and the cell-retype flag
+*Re-checked 2026-11-18 against the IDA export: the grid is the staggered iso grid (not hex, #133); 0x432746 also sets DAT_0057c93c; the verified rl_432746 writes DAT_0053f0dc rather than using a local; added the rl_ pointers.*
 
-The production-level solver `FUN_0044cfe1` (`engine_army_economy_production_output`)
-writes a per-army boolean at record **+0x1a7**: it sets the byte to 1 when the
-army cannot afford its rate-scaled output and falls back to a flat production
-level, and clears it (to 0) both on entry and when nothing fits at all.
+## 138. One per-county byte (+0x1a7) is shared between the production-level fallback and the cell-retype flag
 
-That same byte is what `FUN_00469d21`
-(`engine_territory_retype_army_band`, `ARMY_RETYPE_FLAG = 0x1a7`) reads to decide
-whether a band-retype should collapse every match after the first to type 2.  So
-a flag the *economy* sets as "this realm fell back on production this turn" is
-later consumed by the *terrain/cell-retype* pass — two unrelated-sounding
-subsystems sharing one byte of the 0x300 per-army record.  Whether this is
-deliberate signalling or just a reused scratch slot is unclear from the two
-functions alone, but the coupling is real: both modules name the same offset, so
-a faithful port must treat +0x1a7 as live cross-subsystem state, not a private
-scratch byte of either.
+The production-level solver `0x44cfe1` (`engine_army_economy_production_output`)
+writes a per-county boolean at record **+0x1a7** (`DAT_0053fb57`): with both
+inputs positive it clears the byte, tries a rate-scaled output
+(`level × +0x201`) that fits the budget, and on failure sets it to 1 and falls
+back to a flat level; if even that fails it clears it again.  (The two early
+`<= 0` returns leave the byte as it was.)
 
-> 📍 `src/engine_army_economy.c` (`ARMY_PROD_FALLBACK`, `engine_army_economy_production_output`)
-> writes it; `src/engine_territory.c` (`ARMY_RETYPE_FLAG`, `engine_territory_retype_army_band`)
-> reads it.  Ghidra `FUN_0044cfe1` @ 0x44cfe1 and `FUN_00469d21` @ 0x469d21.
+The byte is read in two places, both inside the seasonal production pass
+`0x44c8ae` (`engine_army_economy_apply_season_pass`), which itself calls
+`0x44cfe1` in its season-1 arm:
 
-## 139. The provisioning decision's level clamp reads one entry past its supply-cost table
+- `0x44c8ae` directly: flag set → `+0x202` and `+0x206` = 1, else both copy
+  `+0x201`;
+- `0x469d21` (`engine_territory_retype_army_band`, `ARMY_RETYPE_FLAG = 0x1a7`),
+  called by `0x44c8ae` with `a4 == 2`: flag set → every match after the first
+  is collapsed to type 2.  (Its other caller `0x44d913` passes `a4 == 19`, so
+  the flag never matters there.)
 
-The per-army provisioning decision `FUN_0044df5f`
-(`engine_army_economy_provision`) prices a ration "supply level" L by indexing a
-table of `(divisor, mult)` pairs at `DAT_004d6738`, stride 8.  The real ladder
-is six levels, 0..5:
+So it is not two unrelated subsystems sharing a scratch byte: it is the season
+pass signalling to its own retype step that the county fell back to the flat
+production level, so only its first field keeps the retyped cell.  It is
+still cross-function state (written in one turn-pass leaf, read by two
+others, saved with the record), so a faithful port must treat +0x1a7 as live
+state, not a private scratch byte of either module.
+
+> 📍 `src/engine_army_economy.c` (`ARMY_PROD_FALLBACK`,
+> `engine_army_economy_production_output`, the season pass) writes / reads it;
+> `src/engine_territory.c` (`ARMY_RETYPE_FLAG`, `engine_territory_retype_army_band`)
+> and `src/rl_terr.c` (`rl_469d21`) read it.  IDA `0x44cfe1`, `0x44c8ae`,
+> `0x469d21`.
+
+*Re-checked 2026-11-18 against the IDA export: a third reader (0x44c8ae itself, → +0x202/+0x206) was missing; both readers sit in the season pass that calls the producer, so the coupling is intra-economy signalling; the early returns leave the byte stale.*
+
+## 139. The provisioning decision's level clamp allows one entry past its supply-cost table — but no path ever reaches it
+
+The per-county provisioning decision `0x44df5f`
+(`engine_army_economy_provision`) prices a ration level L (`+0x15d`) by
+indexing a table of `(divisor, mult)` pairs at `0x4d6738`, stride 8.  The real
+ladder is six levels, 0..5:
 
 ```
 L0 (1,0)  L1 (4,1)  L2 (2,1)  L3 (1,1)  L4 (1,2)  L5 (1,3)
 ```
 
 — monotonically rising cost `mult·ceil(feed/divisor)`: 0, ~feed/4, ~feed/2,
-feed, 2·feed, 3·feed.  But the two level-ratchet loops clamp the index with
-`if (6 < level) level = 6`, i.e. they permit **level 6**, one past the table.
-At offset `0x4d6738 + 6·8 = 0x4d6768` sits not a 7th supply tier but the first
-entry of the *adjacent* reciprocal-percentage table (`100, 50, 33, 25, 20, …` =
-⌊100/n⌋).  So "level 6" silently means `(divisor, mult) = (100, 50)` → cost
-`ceil(feed/100)·50 ≈ feed/2`, which is *cheaper* than levels 3–5 and breaks the
-otherwise-monotone ladder.
+feed, 2·feed, 3·feed.  The two level-ratchet loops clamp the index with
+`if (level > 6) level = 6`, i.e. the bound permits **level 6**, one past the
+table: at `0x4d6738 + 6·8 = 0x4d6768` sits the first entry of the adjacent
+`⌊100/n⌋` table (`100, 50, 33, 25, 20`, read by `0x4502ca` / `0x450639`), so
+"level 6" would price as `(100, 50)` — cheaper than levels 3–5.
 
-Whether the original authors intended a 7-level ladder and got lucky with
-adjacent data, or the clamp bound is simply off by one, the observable behavior
-is a real over-read with a real (if odd) cost.  The port reproduces it exactly:
-`k_supply_table` is seven entries, the 7th hard-coded to `{100, 50}`, so the
-clamped index range `[0,6]` matches retail's memory reads bit-for-bit.
+That read never happens.  L starts at the requested ration `+0x15e` + 1 and
+the first loop decrements **before** each evaluation, so its first read is at
+`+0x15e`; the second loop only decrements.  `+0x15e` is 0..5 by every writer:
+the UI steppers `0x43a23f` (`< 5 → ++`) / `0x43a307` (`> 0 → --`), the AI
+`0x4a4782` (0..5), new-game `0x451150` (3), and the MP mirror `0x444280` (a
+peer's value).  So L ∈ 0..5 throughout and both `> 6` clamps are dead code.
+The port's seven-entry `k_supply_table` (7th = `{100, 50}`) is harmless
+belt-and-braces.  The same level byte `+0x15d` is the row index of the
+ration→approval table (#149), whose would-be row 6 is likewise unreachable.
 
 > 📍 `src/engine_army_economy.c` (`k_supply_table`, `supply_cost`,
-> `clamp_supply_level`).  Ghidra `FUN_0044df5f` @ 0x44df5f; table at
-> `0x4d6738`, percentage table it bleeds into at `0x4d6768`.
+> `clamp_supply_level`); IDA `0x44df5f` (L = `+0x15e` + 1, pre-decrement
+> loops, clamps), writers of `+0x15e` `0x43a23f` / `0x43a307` / `0x4a4782` /
+> `0x451150` / `0x444280`; tables `0x4d6738`, `0x4d6768`.
+
+*Re-checked 2026-11-18 against the IDA export: the over-read is unreachable — L starts at +0x15e + 1 and is decremented before the first read, and +0x15e is 0..5 by every writer, so the `> 6` clamps never fire.*
 
 ## 140. A yield-bonus helper guards a field with a branch whose two arms are identical
 
@@ -4963,48 +4933,30 @@ The port keeps both calls (the recompute is free and faithful).
 
 On top of that, `FUN_0044c278` builds an `int` return value through three
 branches — `key*0x100`, the fullest cell's headroom, or the turns quotient —
-and its only caller `FUN_004485a5` discards it (the call is a bare statement).
+and all three callers (`0x4485a5` plan_realm, `0x44bf7a` the development
+spread, `0x451150` the new-game baseline) discard it (bare statements).
 So the function's entire return path is dead; only its record-field side effects
 (`+0xe0/+0xe4/+0x20c/+0x210/+0x214`) matter.  Ported verbatim regardless.
 
 > 📍 `src/engine_army_economy.c` (`engine_army_economy_distribute_stock` /
-> `_seed_fullest_cell` / `_pick_fullest_cell`).  Ghidra `FUN_0044c278` @
-> 0x44c278, `FUN_0044c5fc` @ 0x44c5fc, `FUN_0044c53b` @ 0x44c53b; caller
-> `FUN_004485a5` @ 0x4485a5.
+> `_seed_fullest_cell` / `_pick_fullest_cell`).  IDA `0x44c278`,
+> `0x44c5fc`, `0x44c53b` (the pair is also called back to back by
+> `0x44c093`, #150); callers `0x4485a5`, `0x44bf7a`, `0x451150`.
 
-## 143. One eight-slot record array, two unrelated lives — and a field that gates its own producer
+*Re-checked 2026-11-18 against the IDA export: 0x44c278 has three callers (0x4485a5, 0x44bf7a, 0x451150), all discarding the return — not one; the argmax keeps cells with type >= 0x19.*
 
-The per-realm economy plumbing reuses the same eight 0xc-byte records at record
-`+0xc4` (retail `DAT_0053fa74`) for two completely different jobs in two
-different game phases.  At new-game setup, `FUN_0044f6e7`
-(`engine_territory_allocate_realm_workforce`, the WF_COUNTER array) fills each record as a
-*job-slot bucket*: `+0x00` the assigned worker count, `+0x08` that bucket's
-population cap.  Per turn, the resource planner `FUN_0044f318`
-(`engine_army_economy_plan_resource`) walks the *same* records by `rec_idx`
-(4..7, one per resource slot) and reads `+0x00` as the **production level** to
-feed the supply-target solver — then overwrites `+0x08` (the bucket cap) with
-either the sweep's best level (resource slot 2) or a flat `100000` sentinel
-(every other slot).  Nothing reconciles the two readings; they simply never run
-in the same phase, so the cap field leads a double life as "max workers" and
-"best production level / unbounded sentinel".
+## 143. (withdrawn) One eight-slot record array, two unrelated lives — and a field that gates its own producer
 
-The aliasing has a second twist: `FUN_0044f15b`
-(`engine_army_economy_sum_supply_pools`), the leaf that totals a realm group's
-race-weighted supply pool, gates each army on `*(int *)(record + 0x118) > 0` —
-and `+0x118` is exactly job-slot record **7**'s `+0x00` count (`0xc4 + 7*0xc`),
-i.e. the slot-2 production level that `FUN_0044f318(…,2,7,…)` itself writes.  So
-the pool-summation reads the very field its sibling planner produces, one record
-index hard-coded into an offset that looks unrelated until you do the
-arithmetic.  The race weights themselves (`DAT_004d8990`/`94`) are a baked
-six-entry `.data` table — one `(poolA, poolB)` pair per nationality —
-`{(6,10),(4,4),(3,10),(6,3),(13,0),(4,18)}`.
+Claimed the `+0xc4` bucket records (`0xc` B) live two unrelated lives (setup job buckets vs per-turn production levels),
+that `0x44f318` writes `+0x118`, and that `0x4d8990` is a per-nationality table.  None holds: there are nine records
+(`0x44f6e7` zeroes `+0xc4 + 0xc·i`, i < 9) with one meaning throughout — `+0` workers assigned (written by the allocator
+`0x44f6e7`, 23 call sites, every turn and UI change), `+8` the planners' target (`0x44d374` / `0x44dd4d` / `0x44f318`,
+`100000` = no ceiling, #136) that the allocator fills up to.  `0x44f318` only *reads* `+0` and writes `+4` / `+8`;
+`0x44f15b` gates on `+0x118` (record 7's workers, set by `0x44f6e7`) ∧ `+0x2c7`.  `0x4d8990` `{(6,10),(4,4),(3,10),
+(6,3),(13,0),(4,18)}` is indexed by `+0x290`, which also selects the player's six-slot stock `+0x140 + k·4` (read by the armoury overlay
+`0x418653` and the muster `0x4a50ae`, #154) — a per-weapon material cost, not a race weight.
 
-> 📍 `src/engine_army_economy.c` (`engine_army_economy_plan_resource` /
-> `_sum_supply_pools`).  Ghidra `FUN_0044f318` @ 0x44f318, `FUN_0044f15b` @
-> 0x44f15b, `FUN_0044f6e7` @ 0x44f6e7 (ported as `engine_territory`'s
-> WF_COUNTER); race table `DAT_004d8990`/`DAT_004d8994` @ 0x4d8990.
-
-## 144. Three new-game preset tables share one block of bytes, and a realm's resource defaults overwrite the economy it just planned
+## 144. Three new-game preset tables share one block of bytes
 
 The per-realm/country setup pass `FUN_0049bd99`
 (`engine_game_init_setup_realms`) draws its starting values from three baked
@@ -5019,32 +4971,33 @@ from the bounded config-screen selection (a handful of rows each) — but the
 overlap is real, so the port bakes the single backing region and exposes the
 three views by base-offset + stride rather than as three independent arrays.
 
-Two ordering oddities inside the per-player init:
+An oddity inside the per-player init: a four-iteration loop that ignores its
+own counter.  Retail clears player record `+0x80` inside
+`for (k = 0; k < 4; k++)` but the body never indexes `k`, so it writes the
+same dword four times — a redundant zero, folded to a single write in the
+port.  (The neighbouring `+0x140` loop *does* index its counter, so the two
+are not the same pattern misread.)
 
-- The economic passes run, *then* the defaults clobber them.  For each active
-  player the function calls `allocate_realm_workforce` → `provision` →
-  `plan_realm` (twice), all of which write the realm's resource fields — and
-  only *after* that does it slam `+0x120`/`+0x128`/`+0x130` to a flat `0x32`
-  and reload `+0x140..` from the resource preset.  So whatever the planner
-  computed for those three pool fields at setup is immediately discarded; the
-  first real values come from the next turn's planner.
-
-- A four-iteration loop that ignores its own counter.  Retail clears player
-  record `+0x80` inside `for (i = 0; i < 4; i++)` but the body never indexes
-  `i`, so it writes the same dword four times — a redundant zero, folded to a
-  single write in the port.  (The neighbouring `+0x140` loop *does* index `i`,
-  so the two are not the same pattern misread.)
+The per-player commodity stocks `+0x120` / `+0x128` / `+0x130` are seeded to a
+flat `0x32` and the six-slot stock `+0x140..` from the `0x4dc070` preset
+*after* the county's `allocate_realm_workforce` → `provision` → `plan_realm`
+calls (twice) — but nothing is clobbered: none of those passes (nor any
+callee) writes the player's `+0x120..+0x134`; their writers are the resource
+pass `0x44ea92`, trade `0x4284ce`, the AI `0x436d02` and events
+`0x4494fe` / `0x4497ad` / `0x450ccd`.  The order is harmless.
 
 The pass is also the **producer** of the per-player strategic block
-(`g_player_strategic_352`, retail `0x57bf00`) whose `+0x120` sub-view the
-per-turn economy planner later reads as its resource-demand pool, and of the
+(`g_player_strategic_352`, retail `0x57bf00`) whose `+0x120..` commodity
+stocks the per-turn resource pass `0x44e852` later reads and writes (#154), and of the
 runtime-only troop muster pool (`DAT_0053f6a0`, 6 × 0x80, not persisted) that
 the recruitment UI and the deferred battlefield spawn (`0x4a9a9a`) consume.
 
-> 📍 `src/game_init.c` (`engine_game_init_setup_realms`).  Ghidra
-> `FUN_0049bd99` @ 0x49bd99; preset tables `DAT_004dc070`/`DAT_004dc0d0`/
-> `DAT_004dc110` @ 0x4dc070; r2 `pdf @ 0x49bd99` confirms the byte/dword field
-> widths, the `+0x80` no-index loop, and the post-plan `0x32` overwrite.
+> 📍 `src/game_init.c` (`engine_game_init_setup_realms`).  IDA
+> `0x49bd99`; preset tables `DAT_004dc070`/`DAT_004dc0d0`/
+> `DAT_004dc110` @ 0x4dc070; the `+0x80` no-index loop is
+> `for (k…) dword_57BF80[88*j] = 0`.
+
+*Re-checked 2026-11-18 against the IDA export: the "defaults overwrite the economy it just planned" oddity is withdrawn — no callee of 0x44f6e7 / 0x44df5f / 0x4485a5 writes the player's +0x120..+0x134, so the 0x32 seeding clobbers nothing; title shortened accordingly.*
 
 ## 145. The emigration pass's source-list fill has no break — the first feeder claims all 16 slots
 
@@ -5116,65 +5069,32 @@ Two consequences fall straight out of this:
    twice as likely to land as the singletons.  The deck *is* the probability
    table; there is no separate weighting logic.
 
-The gate that lets any of this fire at all is the era counter
-`DAT_00553edc > 0x4f4` (plus the owner's per-player events-enabled flag), so
-events only begin well into a game.  The drop-in reproduces the deck byte-exact
+The gate that lets any of this fire at all is the year
+`DAT_00553edc > 0x4f4` (1268) **and** the county's owner being a **human**
+player (`(&DAT_0057bf05)[owner·0x160] != 0`, the human/AI byte of #190) —
+AI-owned counties never get a random event, though they still advance the
+cursor.  A new game's first turn is already 1268 (#128), so events begin with
+the first year rollover (into 1269).  The drop-in reproduces the deck byte-exact
 and the single-draw walk; a host test
 (`engine_events_scratch_and_gates`) pins the cursor arithmetic by landing a
 chosen realm on a chosen deck slot via the seed.
 
-> 📍 `src/engine_realm_events.c` (`engine_realm_roll_events` + `EVENT_DECK`).
-> Ghidra `FUN_00448819` @ 0x448819; r2 `pdf @ 0x448819` confirms the
-> `mov eax,[0x58fd60]; add eax,eax` cursor seed and the per-realm `inc`/`cmp
-> 0x100` walk; deck dumped via `p8 512 @ 0x4d6108`.
+> 📍 `src/engine_realm_events.c` (`engine_realm_roll_events` + `EVENT_DECK`),
+> `src/rl_link_logic.c` (`rl_448819`).  IDA `0x448819` (`v1 = 2 * DAT_0058fd60`,
+> per-realm `++v1 >= 256 → 0`, gate `byte_57BF05[352·owner] && DAT_00553edc > 1268`);
+> deck = 256 u16 @ `0x4d6108`.
 
-## 147. In spring and winter a realm can collapse without the player ever being told
+*Re-checked 2026-11-18 against the IDA export: the per-player gate is +5 = human-controlled (#190), not an "events-enabled" flag, so only human-owned counties roll events; 0x4f4 = 1268 means events start at the first year rollover, not "well into a game".*
 
-The per-realm mood/standing machine `FUN_00449889`
-(`engine_realm_update_mood`) recomputes each realm's "standing" band (army
-`+0x21b`, 1=collapsed .. 5=peak) from a mood accumulator, then runs side
-effects: a band-1 collapse posts notification code `0x8f` to the local player
-and stamps an unrest marker (overworld cell type `0x18`); a band-5 peak posts
-`0x90` and stamps type `0x17`.  But in event-modes 1 and 4 (two of the four
-seasons) the pass first **demotes** the two best bands toward zero — band 1
-always becomes band 0, and band 2 becomes 0 when the accumulator still exceeds
-74 — and *then* checks the band for the notify/marker step:
+## 147. (withdrawn) In spring and winter a realm can collapse without the player ever being told
 
-```c
-band = classify(acc);
-if (mode == 4 || mode == 1) {        /* demotion runs FIRST */
-    if (band == 1) band = 0;
-    else if (band == 2 && acc > 74) band = 0;
-}
-clear_old_markers(realm);
-if (band == 1) { notify(0x8f); mark(0x18); }   /* reads the DEMOTED band */
-if (band == 5) { notify(0x90); mark(0x17); }
-```
-
-Because the marker/notify checks read the post-demotion band, a realm that
-genuinely hit band 1 in mode 1 or 4 is already band 0 by the time the `== 1`
-check runs, so it gets **neither the collapse notification nor the unrest
-marker** — only peaks (band 5, never demoted) still fire in those modes.  The
-collapse marker/notice is effectively a mode-2/3-only event for the bottom
-band.  Whether this is intentional (collapses are "absorbed" silently in those
-seasons) or an ordering oversight is unknown, but the drop-in reproduces it
-verbatim (`test_engine_realm_mood_mode1_demotion` pins the band-0 outcome; the
-notify/marker tests run in mode 3 to keep band 1 alive).
-
-A smaller companion quirk lives in the helper `FUN_00449d6e`
-(`realm_mood_delta`), which maps a realm's disposition byte (`+0x21e`) to a
-mood adjustment under the same event-mode.  Its mode-2 arm has a **dead
-duplicate**: it tests `disp == 4` twice in a row, so the first arm returns −12
-and the second (which would return −24) is unreachable; mode 2 also never
-handles `disp == 3` (falls through to 0).  Ghidra renders both `disp == 4`
-comparisons faithfully; the port keeps the first and drops the dead second arm
-with a comment.
-
-> 📍 `src/engine_realm.c` (`engine_realm_update_mood` + static helpers
-> `realm_mood_delta` / `realm_clear_marker_cells` / `realm_mark_next_cell`).
-> Ghidra `FUN_00449889` @ 0x449889 (helpers 0x449d6e / 0x46942c / 0x469a9c);
-> r2 `pdf @ 0x449889` confirms the per-mode base delta (`BASE − rng_b/8`), the
-> demote-before-check ordering, and the duplicate `cmp …, 4` in 0x449d6e.
+Claimed `0x449889`'s band 1 is a "collapse" that seasons 1 / 4 hide.  The byte `+0x21b` is the county's **weather**
+(L2.eng: 0 Frost, 1 Drought, 2 Sunny, 3 Cloudy, 4 Storms, 5 Flooding — matching `0x44c8ae`'s crop factors, e.g. season 4:
+Frost ½, Sunny ×1½, Storms ½, Flooding ¼); the accumulator `+0x21d` gets a seasonal drift (`8 / 24 / 12 / −12` − rng/8) and classifies
+`>= 95` → Drought (notice 0x8f, baked-field cell 0x18), `< 5` → Flooding (0x90, flooded-field 0x17).  In seasons 1 and
+4 a Drought, or a Sunny with accumulator `>= 75`, becomes Frost (0) — so no drought notice is correct, nothing is
+silently lost.  Still true: the demotion runs before the notice check, and `0x449d6e`'s season-2 arm has a dead
+duplicate `cmp ecx, 4` (0x449e04 / 0x449e2b; the second, −24, is unreachable).
 
 ## 148. A realm's army count is reset every turn — but the i32 beside it just keeps growing
 
@@ -5215,56 +5135,49 @@ count and the i32 climbing across two recounts).
 > `FUN_00451061` @ 0x451061; the kind-3 = placed-army mapping comes from
 > `engine_territory_place_entity`'s army-start caller (kind=3, type=6).
 
-## 149. The tax-approval pass has six policy rows for a seven-value policy — the seventh reads off the end into the next table
+## 149. The ration→approval pass has six rows for a 0..6-clamped level — the seventh would read into the next table, but is never reached; a maxed approval of exactly 100 drops a band
 
-The per-realm tax-policy → approval-modifier pass `FUN_0044bd9f`
-(`engine_realm_apply_tax_approval`) turns a realm's tax-rate policy (`+0x15d`,
-clamped 0..6 by its writer at 0x36435) into the approval modifier the
-roll-forward (`engine_realm_advance_rating`) later folds into the main rating.
-The core is a 2D lookup: a signed adjustment indexed by `[policy] × [band]`,
-added to the realm's tax-approval value.
+The per-county pass `0x44bd9f` (`engine_realm_apply_tax_approval`; despite
+the name its row index is the **ration** level) turns the county's effective
+ration level `+0x15d` — the level the provisioning decision `0x44df5f` settles
+on (#139) — into an adjustment of the approval value `+0x0b`:
 
 ```c
-adj = tbl_0x4d64a8[policy * 5 + band];   /* policy 0..6, band 0..4 */
+approval += tbl_0x4d64a8[level * 5 + band];   /* band = +0x09 */
 ```
 
-The table at `0x4d64a8` has **six** rows (one per policy 0..5), `5 × i32`
-each — 0x78 bytes, ending at `0x4d6520`.  But the policy is clamped to **0..6**,
-not 0..5.  Policy 6 indexes `6 * 5 = 30` entries in, which lands exactly at
-`0x4d6520` — the start of the *band-threshold table* that immediately follows in
-`.rdata` (and which this very pass also reads, via
-`engine_math_lookup_threshold`, to classify the result).  So for a 100%-tax
-realm the "adjustment" isn't a happiness penalty at all; it's the threshold
-table's `(cutoff, band)` pairs reinterpreted as adjustments:
+The table at `0x4d64a8` has **six** rows (levels 0..5: none … triple
+rations), `5 × i32` each — 0x78 bytes, ending at `0x4d6520`:
 
-| policy 6, band | reads | value |
-|---|---|---|
-| 0 | cutoff[0] | 10 |
-| 1 | band[0]   | 0  |
-| 2 | cutoff[1] | 35 |
-| 3 | band[1]   | 1  |
-| 4 | cutoff[2] | 65 |
+```
+L0 −8 −10 −13 −16 −20   L1 −4 −6 −9 −12 −15   L2 −2 −4 −6 −8 −12
+L3  8   4   2   1  −1   L4 12  8  4   2   0   L5 20 12  6   3   1
+```
 
-Adding +10/+35/+65 to *approval* for the highest tax bracket is plainly not the
-intent — the row is simply missing and the read falls through into the next
-table.  Because the two tables are read across this boundary, the drop-in bakes
-them as one contiguous `k_tax_approval_tbl[40]` so the aliasing reproduces
-exactly (`test_engine_realm_tax_policy6_aliasing` pins the +35 read for policy 6
-band 2).  This is the same "one block of bytes, two tables" hazard as quirk
-#144, but here the overlap is read accidentally rather than by design.
+`0x44df5f` clamps the level with `> 6 → 6`, so on paper level 6 would index
+`0x4d6520` — the band-threshold table this pass also reads — and add its
+`(cutoff, band)` pairs (`10, 0, 35, 1, 65`) as adjustments.  But as #139
+shows, the level is always 0..5 (it starts at the requested ration `+0x15e`
+∈ 0..5 and is only decremented), so the row-6 read never happens.  The port
+bakes the two tables as one contiguous `k_tax_approval_tbl[40]`
+(`test_engine_realm_tax_policy6_aliasing` pins the hypothetical row-6 read);
+harmless, since no input reaches it.
 
-A smaller sibling oddity lives in the classification step.  The threshold table
-is `(10,0) (35,1) (65,2) (90,3) (100,4)` with fallback band 3, and
-`engine_math_lookup_threshold` returns the first band whose cutoff is *strictly
-greater* than the value.  The pass clamps tax-approval to a maximum of 100 — but
-`100 < 100` is false, so a realm pinned at exactly 100 falls through to the
-**fallback band 3**, one band *below* a realm sitting at 99 (which gets band 4).
-Maxing out tax-approval quietly costs you a band
-(`test_engine_realm_tax_clamp_high_and_100_quirk`).
+The real quirk is in the classification step.  After clamping approval to
+0..100 (and forcing 50 for an empty AI county), the band is
+`engine_math_lookup_threshold(approval, 0x4d6520, 5, 3)` over
+`(10,0) (35,1) (65,2) (90,3) (100,4)`, which returns the first band whose
+cutoff is *strictly greater* than the value, else the fallback 3.  `100 < 100`
+is false, so a county pinned at exactly 100 falls through to **band 3**, one
+band *below* a county at 99 (band 4).  Maxing out approval quietly costs a
+band (`test_engine_realm_tax_clamp_high_and_100_quirk`).  The band then picks
+the modifier `+0x10` from `0x4d6548` (`−10, −5, 0, 1, 2`).
 
 > 📍 `src/engine_realm.c` (`engine_realm_apply_tax_approval`, `k_tax_approval_tbl`).
-> Ghidra `FUN_0044bd9f` @ 0x44bd9f; tables r2-dumped from 0x4d64a8 (2D), 0x4d6520
-> (thresholds) and 0x4d6548 (band modifiers).
+> IDA `0x44bd9f`, `0x404e4b` (`engine_math_lookup_threshold`), `0x44df5f`
+> (the level's producer); tables `0x4d64a8`, `0x4d6520`, `0x4d6548`.
+
+*Re-checked 2026-11-18 against the IDA export: the row index +0x15d is 0x44df5f's ration level (not a tax policy; 0x436435 does not write it) and is always 0..5, so the row-6 over-read is unreachable; the exactly-100 → band 3 fallthrough is real.*
 
 ## 150. The development-spread pass finds the best cell twice in a row, throwing the first answer away
 
@@ -5272,9 +5185,9 @@ The per-realm territory-development spread pass `FUN_0044bf7a`
 (`engine_realm_spread_development`) distributes each realm's surplus pool across
 its developable overworld cells, starting from the cell with the highest
 current development value.  Finding that cell is delegated to a tiny helper that
-scans the realm's 20-slot roster, skips empty cells and cells whose terrain type
-is already ≥ 0x19, and records the slot with the maximum `+0x90` value into
-`+0x210`.  Retail ships the helper as **two** near-identical copies that differ
+scans the realm's 20-slot roster, skips empty slots and cells whose terrain type
+is *below* 0x19 (only developed cells, type ≥ 0x19, count), and records the slot
+with the maximum `+0x90` value into `+0x210`.  Retail ships the helper as **two** near-identical copies that differ
 only in what they leave in `+0x210` when *no* cell qualifies: `FUN_0044c5fc`
 writes the sentinel 99, `FUN_0044c53b` writes 0.
 
@@ -5301,6 +5214,8 @@ came along for the ride.
 > 📍 `src/engine_realm.c` (`realm_dev_spread_pool`, `realm_dev_best_cell`).
 > Ghidra `FUN_0044c093` @ 0x44c093; the two argmax variants are `FUN_0044c5fc`
 > @ 0x44c5fc (default 99) and `FUN_0044c53b` @ 0x44c53b (default 0).
+
+*Re-checked 2026-11-18 against the IDA export: the helpers keep cells with type >= 0x19 (the old text had the filter inverted); the rest holds (0x44c093 calls 0x44c5fc then 0x44c53b).*
 
 ## 151. A realm's displayed tax income and its actually-collected tax income are two different numbers — and only one of them can be suppressed
 
@@ -5343,17 +5258,22 @@ A third sibling difference: the projection pass writes its rate-adjustment to
 `0x4d63d8`), whereas the accrual pass writes its adjustment to the *adjacent*
 `+0x0e`.  The `0x4d63d8` table is sized for exactly the tax setting's live range
 (0..50, the cap its incrementer enforces): indices 0..19 are zero and 20..50
-ramp `-1 … -15`, and entry 51 is the last zero before the *tax-approval* table
-(`0x4d64a8`, quirk #149) begins — so a tax setting above 50 would read straight
-into that neighbouring table, the same off-the-end hazard as #149 / #139, kept
-latent only by the 0..50 clamp.
+ramp `-1 … -15`, and entry 51 is a spare zero before the ration→approval table
+(`0x4d64a8`, quirk #149) begins — so a tax setting of 52+ would read into that
+neighbouring table, kept latent only by the `< 0x32` increment guards
+(`0x43aa83` / `0x43ab25`) and the AI writers `0x49d638` /
+`0x49f431` (values ≤ 35).
 
 > 📍 `src/engine_realm.c` (`engine_realm_recompute_realm_income`,
 > `realm_refresh_player_income_totals`, `k_taxsetting_tally_modifier`).
 > Ghidra `FUN_0044b80b` @ 0x44b80b, `FUN_0044ba35` @ 0x44ba35; tally table
 > r2-dumped from 0x4d63d8.  Field semantics (+0xc0 displayed vs +0xbc collected)
 > provisional but the suppression-gate asymmetry is exact.  Verified byte-exact
-> vs retail (`tools/diff_test.py --functions realm_income`, 24/24).
+> vs retail (`tools/diff_test.py --functions realm_income`, 24/24).  The suppression
+> gate is `+0x1a8` = `DAT_0053fb58`, set by events and cleared each turn by
+> `0x448819`; IDA `0x44b59b` / `0x44b80b`.
+
+*Re-checked 2026-11-18 against the IDA export: gate and field offsets confirmed; the tally table has 52 entries (index 51 is in-table), so the hazard starts at 52; the neighbour is the ration→approval table (#149).*
 
 ## 152. The AI pays up to a third of the human's unit upkeep — and the discount is hardcoded to the difficulty
 
@@ -5389,47 +5309,50 @@ multiple subsystems.
 > `FUN_004ad495` @ 0x4ad495.  Verified byte-exact vs retail
 > (`tools/diff_test.py --functions upkeep`, 64/64).
 
-## 153. The winter-season production adjustment scales the wrong number — the cap, not the yield it just computed
+## 153. The season-4 production adjustment scales the wrong number — the standing crop, not the yield it just computed
 
-The seasonal production pass `FUN_0044c8ae` computes a season's output, then
-applies a model-type "fudge" to it before storing.  For three of the four
-seasons the fudge scales the value it just computed.  But the **season-4
-(winter)** branch scales a *different* field:
+The seasonal production pass `0x44c8ae` computes a season's output, then
+applies the county's **weather** (`+0x21b`: 0 Frost, 1 Drought, 2 Sunny,
+3 Cloudy, 4 Storms, 5 Flooding — see the withdrawn #147) to it before storing.
+For seasons 1–3 the factor scales the value just computed: season 1 scales
+the `0x44cfe1` output `+0x240` (Flooding ¼, Frost ½, Storms ½), seasons 2/3
+scale the freshly grown crop `+0x244` in place (Flooding ½, Drought ½,
+Sunny ×1½).  But the **season-4** branch (the harvest: its output is added to
+the store `+0x1d4`) scales a *different* field:
 
 ```c
-out = yield_phase4(key, ref, cap);   /* cap = record +0x244 */
+out = yield_phase4(key, workers, crop);   /* crop = record +0x244 */
 record[+0x248] = out;
-/* model-type adjustment — note it reads +0x244 (the CAP), not `out`: */
-if (type == 5) record[+0x248] = cap / 4;     /* not out/4 */
-if (type == 4) record[+0x248] = cap / 2;     /* not out/2 */
-if (type == 0) record[+0x248] = cap / 2;
-if (type == 2) record[+0x248] = cap * 3 / 2;
+/* weather adjustment — note it reads +0x244 (the CROP), not `out`: */
+if (w == 5) record[+0x248] = crop / 4;       /* Flooding, not out/4 */
+if (w == 4) record[+0x248] = crop / 2;       /* Storms */
+if (w == 0) record[+0x248] = crop / 2;       /* Frost */
+if (w == 2) record[+0x248] = crop * 3 / 2;   /* Sunny */
 ```
 
-The other three seasons (`type`-gated by the same byte `+0x21b`) adjust the
-freshly-computed output in place.  Winter alone, whenever the realm's model
-type is one of {0,2,4,5}, throws away the `yield_phase4` result entirely and
-substitutes a fraction of the **input cap** — so the army's stored winter
-output bears no relation to what the yield evaluator returned, and the
-`+0x24c` delta field (stored output − raw yield) records the full difference.
-Only a model type *not* in {0,2,4,5} (e.g. type 1/3/6) leaves the genuine
-yield in place for winter.
+Whenever the weather is Frost, Sunny, Storms or Flooding, season 4 throws away
+the `yield_phase4` result (which accounts for the workers available to bring
+the crop in) and substitutes a fraction of the **standing crop** — so the
+stored harvest bears no relation to what the yield evaluator returned, and the
+`+0x24c` delta field (stored − raw yield) records the full difference.  Only
+Drought or Cloudy leave the genuine yield in place.
 
-Whether this is a deliberate "winter caps production at a fraction of capacity"
-rule or a copy-paste slip from the season-1 branch (which legitimately reads
-its own `+0x240` output) is impossible to tell from the binary — but it is
-load-bearing: it runs every winter turn for every army and is reproduced
-exactly by the port.
+Whether this is a deliberate rule or a copy-paste slip from the season-2/3
+branch (which legitimately scales its own `+0x244`) is impossible to tell from
+the binary — but it is load-bearing: it runs every season-4 turn for every
+county and is reproduced exactly by the port.
 
 > 📍 `src/engine_army_economy.c` (`engine_army_economy_season_update`).
-> Ghidra/r2 `FUN_0044c8ae` @ 0x44c8ae.  Verified byte-exact vs retail
-> (`tools/diff_test.py --functions season_economy`, 128/128 across seeds).
+> IDA `0x44c8ae` (`case 4:` arm).  Legacy evidence: `tools/diff_test.py
+> --functions season_economy`, 128/128 across seeds (pre-rhost).
 
-## 154. The "resource demand pool" is not its own table — it's accounts inside each player's strategic record, and resource production is booked as cashflow income
+*Re-checked 2026-11-18 against the IDA export: the gating byte +0x21b is the weather (L2.eng names, 0..5), not a "model type"; +0x244 is the standing crop grown in seasons 1–3, not a cap; only Drought / Cloudy keep the yield; the "type 6" case does not exist.*
 
-The resource-delivery pass `FUN_0044e852` and its leaves (`FUN_0044ea92`
-quota-apply, `FUN_0044edc2` cell-stamp) read and write a per-group "demand
-pool" addressed as `DAT_0057c020 + group * 0x160`.  That looks like a standalone
+## 154. The "resource demand pool" is not its own table — it's accounts inside each player's strategic record, and smithy output is booked straight into the player's six-slot stock
+
+The resource-delivery pass `0x44e852` and its leaves (`0x44ea92`
+quota-apply, `0x44edc2` cell-stamp) read and write a per-player "pool"
+addressed as `DAT_0057c020 + owner * 0x160`.  That looks like a standalone
 6×0x160 runtime table.  It is not:
 
 ```
@@ -5438,37 +5361,37 @@ g_player_strategic_352 base = 0x57bf00   (0x160 stride, players 0..5)
 ```
 
 `0x57c020` is **field +0x120 of player 0's strategic record** — so
-`pool[group]` is just `strategic[group] + 0x120`.  The "pool" fields are
-economic accounts living in the same record the leaderboard/standings code
-already owns:
+`pool[owner]` is just `strategic[owner] + 0x120` (also #179).  What
+`0x44ea92` books, by resource slot `a2`, for the county's owner:
 
-| pool offset | strat offset | meaning |
-|------------:|-------------:|---------|
-| +0x00 / +0x04 | +0x120 / +0x124 | commodity-B demand (this turn / prior turn) |
-| +0x08 / +0x0c | +0x128 / +0x12c | commodity-C demand |
-| +0x10 / +0x14 | +0x130 / +0x134 | commodity-A demand |
-| +0x20 + race·4 | **+0x140 + race·4** | slot-2 per-race accumulator |
+| slot | strat offset | effect |
+|---:|---:|---|
+| 1 | +0x120 | `+= delivered` |
+| 3 | +0x128 | `+= delivered` |
+| 0 | +0x130 | `+= delivered` |
+| 2 | +0x140 + k·4 | `+= delivered`, where k = the county's `+0x290`; then `+0x130 -= delivered·cost_a[k]`, `+0x120 -= delivered·cost_b[k]` (table `0x4d8990`) and `0x4487a9` re-sums `+0x140..+0x154` into `+0x138` |
 
-That last row is the punchline: the slot-2 per-race accumulator at pool +0x20
-is the **same memory** as the strategic record's six cashflow category
-sub-accounts at +0x140..+0x154 — the very fields `FUN_004487a9`
-(`engine_ranking_recompute_player_total`) sums into the +0x138 cashflow total.
-So when a realm delivers slot-2 production, `FUN_0044ea92` credits the
-race-indexed cashflow category, debits the A/B commodity columns by the race
-weights, and then calls `recompute_player_total` to fold the new income into
-the player's running total — production and the economy/standings ledger are
-literally the same bytes.
+`+0x120` / `+0x128` / `+0x130` are commodity stocks (seeded to 50 per player
+at new game by `0x49bd99`, #144; also traded by `0x4284ce`).  `+0x140..+0x154`
+is a six-slot stock seeded from the `0x4dc070` preset and read by the armoury
+overlay `0x418653`, the AI disband / garrison passes and the defender muster
+`0x4a50ae` — the player's weapon stock, with `+0x138` its total; slot 2 is the
+smithy turning the two commodities into weapon k at `0x4d8990`'s per-weapon
+cost.  (The `0x4487a9` port name `engine_ranking_recompute_player_total` is
+historical: it only sums the six slots.)
 
-Consequence for the diff harness: there is **no separate global to inject**.
-Binding the port's resource pool to `g_player_strategic_352 + 0x120` and
-injecting/reading-back the strategic block alone covers every pool write *and*
-the cashflow resync.  A reader who treated `0x57c020` as an independent table
-would either miss the strategic-record aliasing or double-allocate it.
+Consequence for any harness: there is **no separate global to inject**.
+Binding the port's pool to `g_player_strategic_352 + 0x120` and
+injecting / reading back the strategic block alone covers every pool write
+*and* the `+0x138` resync.  A reader who treated `0x57c020` as an independent
+table would either miss the strategic-record aliasing or double-allocate it.
 
 > 📍 `src/engine_army_economy.c` (`engine_army_economy_resource_pass` +
-> `..apply_resource_quota` / `..stamp_resource_cell`).  Ghidra/r2
-> `FUN_0044e852`/`FUN_0044ea92`/`FUN_0044edc2`.  Verified byte-exact vs retail
-> (`tools/diff_test.py --functions resource_pass`, 24/24 across seeds 0+7).
+> `..apply_resource_quota` / `..stamp_resource_cell`).  IDA `0x44e852` /
+> `0x44ea92` / `0x44edc2` / `0x4487a9`.  Legacy evidence: `tools/diff_test.py
+> --functions resource_pass`, 24/24 across seeds 0+7 (pre-rhost).
+
+*Re-checked 2026-11-18 against the IDA export: the aliasing holds; the field meanings were wrong — +0x120/+0x128/+0x130 are commodity stocks credited per slot, not demand columns; +0x140.. is the six-slot weapon stock indexed by the county's +0x290 (not a race), and +0x138 its total, not a cashflow ledger.*
 
 ## 155. When a realm's population crashes below 1, the engine records a *negative* death count
 
@@ -5519,6 +5442,14 @@ data, so a raw-index dump / `--strat-load` byte-exact validation is blind to
 this — the `--strat-load` seat never shows the menu, so `base01.256` is still
 active there, which is why its frame looked right.)
 
+Retail shows where the reinstall lives: the base palette is read once at
+start-up into the buffer `0x5691f0` (`0x499859`, the 13-file system-graphics
+load, entry 0 = `base01.256`), the title pages `0x41e1dd` / `0x41e61d` load
+`gateway.256` / `skirmish.256` / `custom.256` over the active palette, and the
+strategic-screen render `0x40f5fd` ends every full draw (`a1 < 3`) with
+`0x4b0ab5(&0x5691f0)` — expand the 6-bit entries ×4, zero entry 0, push to
+DirectDraw.  The load path reaches it via `0x4976a1` → `0x40f5fd(1)`.
+
 **The transition into a screen owns its palette.**  The drop-in's menu→map load
 (`drop_in_load`) reinstalls `base01.256` after the map setup; any future screen
 that arrives from a differently-palettized one will need the same.  Symptom to
@@ -5526,9 +5457,13 @@ watch for: a structurally-correct frame that is uniformly mis-coloured (often
 magenta, since unused/parchment indices land on magenta in foreign palettes) —
 suspect the palette before the render.
 
-> 📍 `src/main.c` (`drop_in_load` → `gfx_load_palette("base01.256")`); the
-> menu page palettes are in `gfx.c` (`gfx_title_background_load`).  Found
-> live 2026-06-02 when the wired menu→load path rendered the map magenta.
+> 📍 `src/rl_ui4.c` (`rl_40f5fd`), `src/rl_host.c` (`rl_4b0ab5`),
+> `src/main.c` (`drop_in_load` → `gfx_load_palette("base01.256")`); the
+> menu page palettes are in `gfx.c` (`gfx_title_background_load`); IDA
+> `0x40f5fd`, `0x4b0ab5`, `0x499859`.  Found live 2026-06-02 when the wired
+> menu→load path rendered the map magenta.
+
+*Re-checked 2026-11-18 against the IDA export: added retail's mechanism — 0x40f5fd re-pushes the base01 palette buffer 0x5691f0 through 0x4b0ab5 on every full strategic draw — and the rl_ pointers.*
 
 ---
 
@@ -5636,9 +5571,19 @@ state.
 
 The strength field (+0x00) is a plain sum of member populations (+0x24) computed
 in a final pass, and the active-group count is mirrored to `_DAT_00553ef4`.
-Ported as `engine_realm_build_coalitions` (engine_realm.c); the consumer half
-`FUN_0044ae51` (eliminate every group but each owner's strongest — it reaches
-the combat-init chokepoint `FUN_004ac3c6` and posts popups) is deferred.
+Ported as `engine_realm_build_coalitions` (engine_realm.c, wrapped by
+`rl_44b042`).  The consumer half `0x44ae51` — keep each player's strongest
+group (ties: the later one) and demolish every county of its other groups
+through `0x4ac3c6`, telling the local player (event 127 / 128) — is ported too:
+`engine_realm_coalition_pass` (`0x44ae3c`) and `rl_44ae51`.  (The "armies"
+here are the 0x300-stride per-county records; the rl_ ports call them counties.)
+
+> 📍 `src/engine_realm.c` (`engine_realm_build_coalitions`,
+> `engine_realm_coalition_pass`), `src/rl_ctl.c` (`rl_44b042`, `rl_44ae51`);
+> IDA `0x44b042`, `0x44b391` (join), `0x44b302` (seed), `0x467e2c`
+> (directed adjacency), `0x44ae51`.
+
+*Re-checked 2026-11-18 against the IDA export: round structure, directed adjacency and the 99-round bound confirmed; the consumer 0x44ae51 is no longer deferred (commit a7159da).*
 
 ## 160. The unrest pass warns a human realm exactly once, and the warning latch can leave a low-approval realm permanently calm
 
@@ -5649,8 +5594,8 @@ two non-obvious behaviours.
 **(a) One warning per "spell", cleared only by a real recovery.**  The first
 turn a human realm's approval (+0x0c) dips below 30 it posts a single warning
 (event 0x92) and sets the latch — and does *nothing else* that turn (no unrest
-change).  The latch is cleared only when approval climbs back above 29.  So the
-player is warned once as the realm slips, not every turn.
+change).  The latch is cleared only when approval climbs back to 30 or more.  So
+the player is warned once as the realm slips, not every turn.
 
 **(b) The escalation threshold (25) is below the warning threshold (30), so a
 realm parked in [25, 29] is calm forever after its one warning.**  Once latched,
@@ -5661,122 +5606,158 @@ unrest back to 0.  A realm hovering at 25–29 approval is below the warning lin
 revolting, never re-flagged.  Only a drop below 25 starts the band climb
 (0x96→0x99 notifications) toward a rebellion.
 
+**(c) The rebellion is attempted only on the turn unrest RISES to 4.**  Both
+branches reach the shared tail (0x44adf3: `unrest >= 4 && FUN_004ac185(realm)` →
+unrest = 0) only when the new level is above the turn's starting level.  Unrest
+is capped at 4 and climbs by 1, so the rebellion spawn is tried exactly once, on
+the turn the band first hits 4; if `FUN_004ac185` returns 0 the realm sits at 4
+with no retry until the band falls and climbs back.
+
 AI realms use neither the latch nor the 0x92 warning — they drift purely on
-approval (≥41 calm, 11–40 ease, <1 climb).  Also note the decompile's
-`approval < 1 → unrest = 4` arm in the human branch is dead code: it sits under
-the `approval < 0x19` (< 25) test in the `else` of `approval < 0x19`, which can
-never be entered, so the port elides it.  Ported as
-`engine_realm_escalate_unrest` (engine_realm.c); the rebellion trigger
-`FUN_004ac185` is a deferred bound seam (it reaches combat-init).
+approval (≥41 calm, 11–40 ease, <1 climb).  The human branch's
+`approval <= 0 → unrest = 4` arm (0x44abcf..0x44abeb) is dead code: it is the
+`else` of the `approval < 25` test nested inside the `approval < 25` arm, so it
+can never be entered, and the port elides it.  Ported as
+`engine_realm_escalate_unrest` (src/engine_realm.c); the rebellion trigger
+`FUN_004ac185` is now ported and wired (`engine_combat_spawn_rebellion`,
+src/engine_combat.c — it used to be an unbound seam, quirk #228).  rhost hook
+`realm_escalate_unrest` 0x44aa41 (tools/rhost/rh_hooks_ai.c).
+
+*Re-checked 2026-11-18 against the IDA export: 0x4ac185 is no longer a deferred seam; added (c) — the rebellion tail runs only on a rising turn; latch clears at ≥ 30.*
 
 ## 161. The player-aggregate recompute averages the per-realm "standing" byte in 8-bit arithmetic, so a populous player's average can wrap
 
 `FUN_0049d1e0` (ported as `engine_ranking_recompute_player_aggregate`,
-engine_ranking.c) recomputes one player's standings inputs from the realms it
-owns: army count (+0x29), total/avg/previous troop strength (+0x10/+0x14/+0x18),
-an averaged rating (+0x0c) and standing (+0x58), realm-share percent (+0x60),
-and territory count/value (+0x2c/+0x54).
+src/engine_ranking.c) recomputes one player's standings inputs from what it
+owns: the owned-COUNTY count (+0x29 — the port's legacy "army count": the
+counties are the `g_per_army_768` records, see game-state-map.md "Naming trap"),
+total/avg/previous county strength (+0x10/+0x14/+0x18, from county +0x24), an
+averaged rating (+0x0c, from county +0x0c approval) and standing (+0x58, from
+county +0x0b), county-share percent (+0x60 = `FUN_00404dc1(+0x29, county count)`),
+and the count of the player's live army pieces (+0x2c, map pieces with kind
++0x08 == 1) and their summed men (+0x54, piece +0x168).
 
 Two of those averages accumulate into **byte** fields before the divide, and the
 binary does the running sum in 8-bit registers:
 
 - The standing accumulator at +0x58 is a `byte += byte` (AL) add, so once the
-  per-realm standing values sum past 255 it **wraps mod 256** — and the average
-  is then taken of the *wrapped* value.  A player with two realms at standing
+  per-county standing values sum past 255 it **wraps mod 256** — and the average
+  is then taken of the *wrapped* value.  A player with two counties at standing
   200 sums to 400 → byte 144 → averaged /2 = 72, not 200.  This is not a sign
   bug to "fix": the resulting save byte is what retail writes, so the port keeps
   the 8-bit add (`p[0x58] = (uint8_t)(p[0x58] + r[0x0b])`).  The rating
   accumulator, by contrast, is a real `int` (sign-extended `(char)` adds), so it
   does not wrap in practice.
 
-- All four divides are guarded on the army count: a zero-owned player gets every
-  average set to 0 rather than dividing by zero.  Player 0 (the neutral/unowned
-  slot) is special-cased even earlier — it only clears the four head fields
-  (+0x29/+0x18/+0x10/+0x0c/+0x58) and returns before any averaging or the
-  territory loop, so its +0x14/+0x60/+0x2c/+0x54 keep whatever they held.
+- All four divides are guarded on the county count: a zero-owned player gets
+  every average set to 0 rather than dividing by zero.  Player 0 (the
+  neutral/unowned slot) is special-cased even earlier — after the head stores
+  (+0x29/+0x10/+0x0c/+0x58 cleared, +0x18 ← old +0x10) it returns before any
+  averaging or the piece loop, so its +0x14/+0x60/+0x2c/+0x54 keep whatever
+  they held.
 
 The previous-turn strength snapshot (+0x18 ← old +0x10) is taken *unconditionally*
 at the top, before the player==0 / zero-owned gates, so even an empty slot rolls
-its strength history forward.  Validated 192/192 byte-exact vs retail
-(`player_aggregate` diff target, 64 @ seed0 + 128 @ seed7).
+its strength history forward.  rhost hook 0x49d1e0 in tools/rhost/rh_hooks_ai.c
+(the earlier Frida `player_aggregate` 192/192 diff predates the rhost method).
+
+*Re-checked 2026-11-18 against the IDA export: field roles corrected (+0x29 = owned counties, +0x2c/+0x54 = army pieces / their men, not territories); player-0 head stores listed exactly; verification pointer → rhost.*
 
 ## 162. Player elimination shares the victory message's rotating counter, advances it even when no message is shown, and only opens the game-over screen in multiplayer
 
-`FUN_0049b42b` (ported as `engine_ranking_check_elimination`, engine_ranking.c)
+`FUN_0049b42b` (ported as `engine_ranking_check_elimination`, src/engine_ranking.c)
 is the exact structural mirror of the victory branch inside the standings
 recompute (quirk-free `engine_ranking_recompute` Phase G): same per-player
-rotating counter at +0x159, same `(rot − 4) + opp_type·4` payload, just the
-defeat codes 0xe0/0xc2 in place of victory's 0xe1/0xc3.
+rotating counter at +0x159, same `(rot − 4) + opp_type·4` payload (on the 0xc2
+post), just the defeat codes 0xe0/0xc2 in place of victory's 0xe1/0xc3.  It acts
+only on a player 1..5 whose +0x04 is still non-zero on entry.
 
 Three non-obvious behaviours:
 
-**(a) Liveness is weighted 3:1.**  A player is "alive" iff +0x04 (which doubles
-as the active-slot flag the recompute reads) is nonzero, and it is rebuilt each
-call as `3·(owned armies) + 1·(owned settled territories, kind +0x08 == 1)`.  So
-a single army outweighs two territories for survival purposes; only a player
-with *no* armies and *no* settled territory is eliminated.
+**(a) Liveness is weighted 3:1 — counties over armies.**  A player is "alive"
+iff +0x04 (which doubles as the active-slot flag the recompute reads) is
+nonzero, and it is rebuilt each call as `3·(owned counties, +0x05 of the
+0x53f9b0 records) + 1·(owned army pieces, map-piece kind +0x08 == 1)`.  So one
+county outweighs two field armies; only a player with *no* county and *no*
+army piece is eliminated.  (The port's names are swapped: its "armies" are the
+county records, its "territories" the map pieces — game-state-map.md.)
 
 **(b) The rotating counter advances on every elimination, even silent ones.**
 The `+0x159 += 1` (wrap 0..3) sits *outside* the notification if/else, so it
 ticks whenever the player is eliminated — including the third case where nobody
 is notified at all (a non-local human player: not the local slot, so no 0xe0,
-and +0x05 has-data != 0, so no 0xc2).  The counter and the local human therefore
-drift out of step with the messages actually shown.
+and +0x05 != 0, so no 0xc2).  The counter and the local human therefore drift
+out of step with the messages actually shown.
 
 **(c) The game-over screen is multiplayer-only.**  The local-defeat screen
-(`FUN_0043eda0(0x24, 0)`, a bound NULL seam in the port) fires only when the
-eliminated player is the local slot *and* `DAT_00553030` (g_sim_mp_active,
-threaded as `mp_active`) is nonzero.  In single-player a local elimination posts
-the 0xe0 notification but does **not** trigger this screen here — that path is
-handled elsewhere.
+(`FUN_0043eda0(0x24, 0)`) fires only when the eliminated player is the local
+slot *and* `DAT_00553030` (g_sim_mp_active, threaded as `mp_active`) is
+nonzero.  In single-player a local elimination posts the 0xe0 notification but
+does **not** trigger this screen here — that path is handled elsewhere.  In the
+port it is the `s_game_over_fn` hook, bound to `seam_game_over` in
+src/rl_link_logic.c.
 
-Validated 192/192 byte-exact vs retail (`elimination` diff target, 64 @ seed0 +
-128 @ seed7); because the readback is the strategic block after the internal
-re-rank, the diff also re-validates `engine_ranking_recompute` byte-for-byte.
+rhost hook 0x49b42b in tools/rhost/rh_hooks_combat.c (the earlier Frida
+`elimination` 192/192 diff predates the rhost method).
+
+*Re-checked 2026-11-18 against the IDA export: liveness weights restated (3 per county, 1 per army piece); game-over hook is bound now (rl_link_logic.c), not a NULL seam.*
 
 ## 163. The post-battle condition recompute returns garbage (the caller ignores it), and the survivor percent is written before being clamped
 
-`FUN_004a80db` (ported as `engine_combat_recompute_condition`, engine_combat.c)
-recomputes a battle survivor's supply condition from 3 groups (count +0x182 /
-out% +0x184 / stock +0x186) against the rate table `DAT_004de440 = {200,200,400}`,
-storing the shortfall averaged over the head-count (+0x168, rounded up) into the
-condition byte +0x19c.
+`FUN_004a80db` (ported as `engine_combat_recompute_condition`, src/engine_combat.c)
+recomputes an army piece's **siege-engine build state**, not a supply condition:
+for each of the 3 engine slots (count +0x182 / percent built +0x184 / build
+progress +0x186, i16 triples) against the per-engine work table
+`DAT_004de440 = {200,200,400}` (`k_siege_engine_work`, docs/data/catalog.tsv), it
+stores the unfinished work averaged over the piece's men (+0x168, rounded up)
+into +0x19c — the "seasons until the assault" byte.  It is the same arithmetic as
+the per-turn build step `FUN_004a8507` (quirk #182) without the build pour.
 
 Two oddities:
 
-**(a) The return value is dead.**  The function is declared `int` but its two
-call sites (both in the aftermath `FUN_004ab383`) invoke it as a statement.  The
-returned value is `shortfall / head` — except when there is a nonzero remainder,
-in which case it is *overwritten* with `rec * 0x54` (the byte-stride of an
-unrelated record table) right before returning.  Pure garbage; the port returns
-`void`.
+**(a) The return value is dead.**  The function is declared `int`, but none of
+its callers uses the result: `FUN_00437fd7`, `FUN_0043b7c4`, `FUN_004aa181`
+(merge) and `FUN_004ab383` (aftermath, twice) call it as a statement, and
+`FUN_004a7eb5` tail-returns it to `FUN_004a7e0a`, which discards it.  The
+returned value is `work / men` — except when there is a nonzero remainder, in
+which case it is *overwritten* with `rec * 0x54` (0x4a8287..: the record index ×
+the 0x1a4/5 stride factor the address arithmetic left in eax) right before
+returning.  Pure garbage; the port returns `void`.
 
-**(b) out% is written, then conditionally re-written.**  For each group the
-percent `stock*100/(rate*count)` is stored into +0x184 first; only then is it
-compared against 100 and, if it reached or exceeded 100, overwritten with exactly
-100.  The intermediate write is invisible (same field), but it means an
-over-supplied group lands on a flat 100, never its true ratio.
+**(b) The percent is written, then conditionally re-written.**  For each slot
+the percent `progress*100/(work*count)` is stored into +0x184 first; only then is
+it compared against 100 and, if it reached or exceeded 100, overwritten with
+exactly 100.  The intermediate write is invisible (same field), but it means an
+over-built slot lands on a flat 100, never its true ratio.  A slot with count ≤ 0
+gets percent and progress zeroed.
 
-Validated 64/64 byte-exact vs retail (`combat_condition` diff target, seed 7).
+rhost hook 0x4a80db in tools/rhost/rh_hooks_combat.c (the earlier Frida
+`combat_condition` 64/64 diff predates the rhost method).
+
+*Re-checked 2026-11-18 against the IDA export: the fields are the siege-engine build slots (+0x19c = seasons to assault), not supply groups; the callers are five functions (0x437fd7, 0x43b7c4, 0x4a7eb5, 0x4aa181, 0x4ab383), not "two in the aftermath".*
 
 ## 164. The combat-aftermath diplomacy hit double-counts the loser via the broadcast penalty, and its war-declaration escalation only ever fires against a human
 
-`FUN_004a1ee1` (ported as `engine_diplomacy_battle_adjust`, engine_diplomacy.c)
-is the post-battle relations adjustment — AI-only (it no-ops unless the actor
-+0x04 is set and +0x05 is clear).
+`FUN_004a1ee1` (ported as `engine_diplomacy_battle_adjust`, src/engine_diplomacy.c)
+is the post-battle relations adjustment of player `a1` toward `a2` — AI-only (it
+no-ops unless `a1` +0x04 is set and +0x05 is clear; both 1..5 and distinct).
 
-**(a) The actor's own relation toward the loser is decremented twice on a
-betrayal.**  When the loser was the AI's vassal, the function calls
-`engine_diplomacy_broadcast_penalty(loser, 15)`, which loops *every* other realm
-— including the actor itself — and subtracts 15 from its relation toward the
-loser.  Then the main hit subtracts the (now +15-bumped) delta a second time.  So
-the actor takes a −15 broadcast hit *plus* the −(amount+15) direct hit in one
-call.
+**(a) The actor's own relation toward the other side is decremented twice on a
+betrayal.**  When `a2`'s alliance partner (+0x81, game-state-map.md) is `a1` —
+i.e. the AI was attacked by / fought its own ally — the function clears the
+treaty (`FUN_004a1a54`), flags the pair (+0x88, and +0xeb if unset) unless the
+personality (+0x07) is 4, posts 0xb6, and calls
+`engine_diplomacy_broadcast_penalty(a2, 15)` (`FUN_004a24d1`), which loops *every*
+other player 1..5 — including `a1` itself — and subtracts 15 (floor −30) from its
+relation (+0x84 + a2·0x10) toward `a2`.  Then the main hit subtracts the (now
++15-bumped) amount a second time.  So the actor takes a −15 broadcast hit *plus*
+the −(amount+15) direct hit in one call.
 
 **(b) The escalating war-declaration sequence is gated on a HUMAN opponent.**
 The 0xbd → 0xbe → 0xbf escalation (driven by the per-pair counter +0x87) only
-runs when the bottomed-out (-30) opponent's +0x05 is nonzero — i.e. a human.  Two
-AIs that hate each other never walk this ladder; they just sit pinned at −30.
+runs when the pair flag +0x88 is clear, the relation sits at the −30 floor, and
+`a2`'s +0x05 is nonzero — i.e. a human.  Two AIs that hate each other never walk
+this ladder; they just sit pinned at −30.
 
 **(c) The notification variant is sampled before the mood counter advances.**
 Each notification's payload is `(mood-cycle − 4) + personality·4` read from the
@@ -5784,94 +5765,101 @@ current +0x159, which is only bumped (wrap 0..3) *after* the post — the same
 rotating-counter pattern as quirks #162/#147, here shared across all four
 diplomacy codes (0xb6/0xbd/0xbe/0xbf).
 
-Validated 64/64 byte-exact vs retail (`diplomacy_adjust` diff target, seed 7),
-which also covers the two callees `engine_diplomacy_clear_treaty` (4a1a54) and
-`engine_diplomacy_broadcast_penalty` (4a24d1).
+rhost hook 0x4a1ee1 in tools/rhost/rh_hooks_combat.c (the earlier Frida
+`diplomacy_adjust` 64/64 diff predates the rhost method).
 
-## 165. The combat-init SCC resolves into the UI-selected territory's region, clears quick-resolve on every dispatch, and lets a winner immediately lose a too-distant conquest
+*Re-checked 2026-11-18 against the IDA export: +0x81 is the alliance partner, not a lord/vassal link; the +0x88 gate on (b) added.*
+
+## 165. The combat-init SCC resolves into the region of the last-classified cell's occupant, clears quick-resolve on every dispatch, and lets a winner immediately lose a too-distant conquest
 
 The strategic-combat chokepoint is a 5-function mutually-recursive cluster
 (`FUN_004ac3c6` demolish → `FUN_00437535` transfer → `FUN_004a7158` dispatch →
 `FUN_004ab383` aftermath → `FUN_004a72fe` ownership-transfer → back to demolish),
-ported as one unit into `engine_combat.c`.  Four non-obvious behaviours:
+ported into src/engine_combat.c.  Four non-obvious behaviours:
 
-1. **The aftermath transfers the region named by the UI selection, not the
-   marching army.**  `FUN_004a7158` seeds the combat region scalar
-   `DAT_0056822c` from `(&DAT_0052f0c0)[DAT_00553f8c * 0x1a4]` — the `+0x10`
-   region key of the *currently selected* territory (`DAT_00553f8c`).  On the
-   auto-resolve path `FUN_004a7158` returns 0, so the `DAT_0056822c = key`
-   correction in `FUN_00437535` is skipped, and the aftermath's
-   `FUN_004a72fe(winner_owner, DAT_0056822c)` hands over *that* region.  The
-   transferred region is therefore coupled to the UI cursor, not to the
-   battle's own location — a port that "fixes" this to use the battle region
-   diverges from retail.
+1. **The county handed over is the +0x10 county of `DAT_00553f8c`, the occupant
+   the movement classifier last met — not necessarily this battle's.**
+   `FUN_004a7158` seeds the combat county scalar `DAT_0056822c` from
+   `(&DAT_0052f0c0)[DAT_00553f8c * 0x1a4]`, piece +0x10 of piece
+   `DAT_00553f8c`.  That global is not a UI selection: it is the occupant of the
+   cell being stepped into, written by the move evaluator `FUN_00466893` (cleared)
+   / `FUN_00466c3c` (cell +5) and by the AI nearest-army scans
+   `FUN_004673b8` / `FUN_00467532`.  On the normal march path
+   (`FUN_004658c1` → `FUN_004a7158(mover, DAT_00553f8c)`) it IS the defender, so
+   the county is the defender's.  On the transfer path (`FUN_00437535` →
+   `FUN_004a7158(piece, piece+0x19a)`, reached from demolish) it is whatever the
+   last classification left; only a non-zero dispatch return (the interactive
+   battle) overwrites `DAT_0056822c = county`, so on auto-resolve the aftermath's
+   `FUN_004a72fe(winner_owner, DAT_0056822c)` hands over that stale county.  The
+   port keeps the same global (`g_combat_active_terr`, src/engine_combat.c /
+   engine_army_move.c).
 
 2. **`FUN_004a7158` clears `DAT_0053e8fc` (quick-resolve) to 0 unconditionally
    at entry**, before both the resolver and the aftermath run.  So the
    difficulty multiplier (quirk in `combat_resolve`) and the aftermath's
    `DAT_0053e8fc != 0` quick-paths *never* fire when combat is reached through
-   the turn driver — those are a separate "resolve all battles" UI entry.  The
-   dispatch path always takes the `recompute_condition` (FUN_004a80db) arm.
+   dispatch — those belong to the aftermath's other callers.  The dispatch path
+   always takes the `recompute_condition` (`FUN_004a80db`) arm.
 
-3. **The two aftermath win-branches are asymmetric.**  Attacker-win runs the
-   ownership transfer (`FUN_004a72fe`) and bumps `+0x153` by 8 then, if the
-   winner is ungarrisoned, resets it to `+0x154 − 1`; defender-win does *no*
-   ownership transfer and bumps `+0x153` by only 7 (ungarrisoned).  The
-   quick-path field clears also differ between the branches.  They are written
-   out explicitly rather than factored, to preserve the byte sequence.
+3. **The two aftermath win-branches are asymmetric.**  Attacker-win may run the
+   ownership transfer (`FUN_004a72fe`, only when the loser had +0x198 garrison or
+   +0x167 set) and adds 8 to the winner's moves-used +0x153, then, if the winner
+   is ungarrisoned (+0x01 == 0), resets it to `+0x154 − 1`; defender-win does *no*
+   ownership transfer and adds 7 (ungarrisoned only).  The quick-path field
+   clears also differ between the branches.  They are written out explicitly
+   rather than factored, to preserve the byte sequence.
 
 4. **A winner can immediately lose a too-distant conquest — and "already
-   conquered" really means "already owns a realm".**  `FUN_004a72fe` first calls
+   conquered" really means "already owns a county".**  `FUN_004a72fe` first calls
    the standings aggregate `FUN_0049d1e0`, which *overwrites* the player's
-   `+0x29` byte with the number of realms it currently owns.  The very next
-   can-hold test reads that freshly-recomputed `+0x29`: if it is non-zero (the
-   player already holds ≥1 realm) *and* the player owns no neighbour of the
-   region (`FUN_00467eb0` == 0), the just-won region is demolished
-   (`FUN_004ac3c6`, recursing the cycle) instead of held — modelling supply
-   lines, you cannot annex a region you cannot reach.  So `+0x29` is not a
-   persistent "times conquered" counter here; it is the live realm-ownership
-   count the aggregate just wrote.
+   `+0x29` byte with the number of counties it currently owns.  The very next
+   can-hold test reads that freshly-recomputed `+0x29`: if it is non-zero *and*
+   the player owns no neighbour of the county (`FUN_00467eb0` == 0), the
+   just-won county is demolished (`FUN_004ac3c6`, recursing the cycle; event 0x81
+   to the local player) instead of held — you cannot annex a county you cannot
+   reach.  So `+0x29` is not a persistent "times conquered" counter here; it is
+   the live ownership count the aggregate just wrote.
 
-The auto-resolve path is pure save-state logic and is the target of the retail
-diff; the interactive path (`DAT_004eac50` 0x12/0x13 screen-state, the
-s080/ff_lose/ff_batl WAV cues, the battlefield render handoff) is bound through
-NULL-default seams (`engine_combat_bind_wav_fn` / `_click_fn` / `_clock_fn`) and
-needs human A/V verification.
+The interactive path (`DAT_004eac50` 0x12/0x13 screen state, the
+s080/ff_lose/ff_batl WAV cues, the battlefield render handoff) goes through the
+seams `engine_combat_bind_wav_fn` / `_click_fn` / `_clock_fn`, now bound in
+src/rl_link_logic.c.  All five functions are rhost hooks
+(tools/rhost/rh_hooks_combat.c); the earlier Frida `combat_ownership` 32/32 diff
+predates the rhost method.
 
-The **`combat_ownership` diff target** (FUN_004a72fe, can-hold path: region
-unowned, new owner holds no realms, local ≠ new owner) is **32/32 byte-exact**
-(seed 7) across the army + strat + territory blocks — covering the up-front
-aggregate, the region reassign, the popularity decay, and the conquest-counter
-bump.  Constraining the new owner to own no realms is what keeps it off the
-non-diffable demolish branch (point 4 above).
+*Re-checked 2026-11-18 against the IDA export: DAT_00553f8c is the movement classifier's met occupant (0x466893 / 0x466c3c), not the UI-selected territory; transfer is conditional on the loser's +0x198/+0x167; +0x153 is moves used; seams are bound.*
 
-## 166. Coalition consolidation walks a hardcoded 5 player slots (not the dynamic realm count), gates on the +0x04 slot byte, and breaks strength ties toward the later group
+## 166. Coalition consolidation walks player slots 1..5, gates on the +0x04 slot byte, and breaks strength ties toward the later group
 
 `FUN_0044ae51` (the consumer half of the turn-driver's coalition pass
 `FUN_0044ae3c`, which first rebuilds the group table via `FUN_0044b042`) keeps
-each player's strongest coalition group and demolishes every member army of all
-the player's weaker groups (`FUN_004ac3c6`), so a player whose armies split into
-disconnected clusters loses all but the largest cluster each turn.  Three
-details are worth pinning:
+each player's strongest coalition group (17 groups × 0x1c at 0x568240: strength
+i32 +0x00, owner +0x04, up to 20 member counties +0x05..) and demolishes every
+member county of all the player's weaker groups (`FUN_004ac3c6`), so a player
+whose counties split into disconnected clusters loses all but the strongest
+cluster each turn.  Three details are worth pinning:
 
-1. **The player loop is hardcoded `1..5`** (`cmp 6` / `jge`), *not* the dynamic
-   realm count `s_slot_0056d5dc` that every other per-realm turn pass iterates.
-   Slots beyond 5 are never consolidated by this pass.
+1. **The player loop is `1..5`** (`cmp 6` / `jge` at 0x44ae69) — the five
+   player slots of the 6-slot strategic block, like every per-player pass.  (An
+   earlier note contrasted it with the county count `s_slot_0056d5dc`; that is a
+   different axis — counties, not players — so nothing is skipped.)
 2. **The in-game gate reads strategic `+0x04`** (`0x57bf04 + slot*0x160`), the
-   slot-active byte — a *different* byte from the `+0x05` has-data byte that the
+   slot-active byte — a *different* byte from the `+0x05` human byte that the
    event-queue filter (`engine_event_queue_post`) consults for the same slot.
-3. **The strongest-group search compares with `jg`**, i.e. it updates the
-   winner on `max <= strength`, so equal-strength groups resolve to the *later*
-   group in the table.  (`best_group` is never explicitly initialised, but a
-   live player always has at least one matching group, so it is always set
-   before the demolish pass reads it.)
+3. **The strongest-group search compares with `jg`** (0x44af02), i.e. it
+   updates the winner on `max <= strength`, so equal-strength groups resolve to
+   the *later* group in the table.  (`best_group` is never explicitly
+   initialised, but a live player always has at least one matching group, so it
+   is always set before the demolish pass reads it.)
 
 The notification is posted only when the affected player is the local POV
 (`s_slot_0057c8cc`) *and* they held more than one group: code `0x7f` (with the
-lost army id in `flag6`) when exactly one army was demolished, else code `0x80`.
-Demolish's economy re-plan hits the price-scalar wall (same as the other AI
-passes), so the pass is host-test verified — demolish's unconditional `+0x05`
-owner-zeroing is the observable hook the tests assert on.
+lost county id in `flag6`) when exactly one county was demolished, else code
+`0x80`.  Ported as `engine_realm_consolidate_coalitions` (src/engine_realm.c) and
+the retail-layout `rl_44ae51` (src/rl_ctl.c); rhost hook 0x44ae51 in
+tools/rhost/rh_hooks_rl_ctl.c (no longer host-test-only).
+
+*Re-checked 2026-11-18 against the IDA export: members are counties (demolish_realm), the 1..5 loop is the player range (not a missed county range); verification is now rhost.*
 
 ## 167. The player-resign routine recounts a player's surviving realms/units AFTER it has already destroyed them, so its "resigned with assets" notification is dead code
 
@@ -5906,37 +5894,33 @@ are redundant), and the interactive on-screen cleanup (`FUN_0047fe0b`, a
 
 ## 168. The army-stack merge inherits the absorbed unit's mercenary contract, then frees that contract's pool slot out from under the survivor
 
-`FUN_004aa181` (the army-stack merge run when a unit stacks onto an occupied
-territory, reached via the garrison-placement path `FUN_004a79a3`) folds
-occupant `src` into `dst`.  When `src` is the one carrying a mercenary
-contingent (the merge only runs when *at most one* side has one), it copies
-src's contract triple — class `+0x195`, head-count `+0x196`, **pool slot
-`+0x197`** — onto `dst`, then unconditionally disbands `src`
-(`FUN_004aa039`).
+`FUN_004aa181` (the army-stack merge, `engine_combat_merge_stack`) folds piece
+`src` into `dst`.  It is reached from the march evaluator `FUN_004658c1` (an
+army stepping onto a same-owner kind-1/2 piece) and from the garrison-placement
+path `FUN_004a79a3`; it is a no-op when the combined men exceed 1500, and posts
+0xa7 and refuses when both sides carry a mercenary contingent.  When `src` is the
+one carrying the contingent, it copies src's contract triple — class `+0x195`,
+head-count `+0x196`, **band index `+0x197`** — onto `dst`, sums the men / troop
+classes / siege slots, then unconditionally disbands `src` (`FUN_004aa039`).
 
 The disband routes through `FUN_0046f0a9` → `FUN_004ac6fe`
-(`engine_unit_clear_contract`), which frees `g_unit_table_20[src.+0x197]` —
-*src's* pool slot.  But the merge never cleared src's `+0x197` after copying it,
-so src still names the slot at disband time.  The result: `dst` ends the merge
-holding a mercenary contract (`+0x195/+0x196/+0x197` all set) whose backing
-g_unit_table_20 entry has just been zeroed.  The survivor's merc slot index is
+(`engine_unit_clear_contract`), which subtracts src's +0x196 from *src's* men and
+zeroes the hired-by back-reference `word_568DC0[src.+0x197 * 10]` — freeing
+*src's* mercenary band.  But the merge never cleared src's `+0x197` after copying
+it, so src still names the band at disband time.  The result: `dst` ends the
+merge holding a mercenary contract (`+0x195/+0x196/+0x197` all set, and the merc
+men counted in its +0x168) whose band (`0x568dc0 + b*20`) now reads as free
+(hired-by 0) and can be offered / hired again.  The survivor's band index is
 dangling.
 
-Ported verbatim (the merge copies the triple, the disband frees the slot) and
-pinned by `test_engine_combat_merge_inherits_src_merc`, which seeds the pool
-slot and asserts it reads 0 after the merge.
+Ported verbatim (the merge copies the triple, the disband frees the band) and
+pinned by `test_engine_combat_merge_inherits_src_merc`
+(tests/test_engine_combat.c).  The merge is now also an rhost hook
+(`combat_merge_stack` 0x4aa181, tools/rhost/rh_hooks_combat.c), which supersedes
+the old "host-unit-tested only, the price-scalar wall keeps it off the retail
+diff" note.
 
-Verification note: `FUN_004aa181` is **host-unit-tested only**, not retail-diff
-gated.  Its disband tail reaches `engine_realm_collect_territory_income`
-(`FUN_004ad6c0`), which unconditionally runs the per-realm production planners
-(`FUN_0044df5f`/`FUN_0044d374`/`FUN_0044dd4d`) for all 16 realms — the same
-price-scalar-dependent path the `upkeep` diff target had to carve out (the diff
-lib's fixed prices vs retail's live ones diverge, and the planners can divide by
-zero on un-set-up menu-state realm records).  The merge's own writes land in
-`g_per_territory_420`, whose field offsets are already retail-validated by the
-`combat_resolve` / `combat_condition` / `combat_halve` diff targets sharing that
-record layout; the five host tests pin every summed field, the linkage folds,
-and this quirk.
+*Re-checked 2026-11-18 against the IDA export: added the main caller 0x4658c1 and the 1500-men / both-merc gates; only the band's hired-by word is cleared; verification is rhost now.*
 
 ## 169. The settlement-spawn cluster has no audio — and a race-0 (independent) garrison spawns with owner 6, which the income pass reads one slot past the strategic array
 
@@ -5945,53 +5929,48 @@ spawn subtree (`FUN_004a551b` find-slot → `FUN_004a9a9a` spawn → `FUN_004a79
 place-garrison, plus the four pure leaves `FUN_004a9f18` provision-debit /
 `FUN_004a9f72` roster-load pick / `FUN_004a9eb1` cashflow-debit / `FUN_004ac7f3`
 muster-attach) were long deferred as "spawn + SFX" pending audible verification.
-**On decompiling the whole chain there is no WAV / sound call anywhere in it** —
-the only side effects beyond record mutation are two render-dirty signals
-(`FUN_0046e067` draw-box + `FUN_0045240a` full-screen, fired only when the spawn
-belongs to the viewing player; and `DAT_005530d0` view-dirty in place-garrison).
-The cluster is pure logic + render-dirty flags, so it is host-testable and
-retail-diffable without an A/V gate.  (Audio for *new-game* troop spawns lives
-elsewhere; this turn-pass spawn path is silent.)
+**There is no WAV / sound call anywhere in the chain** (no `FUN_00427990` among
+the callees in functions_ida.tsv) — the only side effects beyond record mutation
+are two render-dirty signals (`FUN_0046e067` draw-box + `FUN_0045240a`
+full-screen, fired only when the spawn belongs to the viewing player; and
+`DAT_005530d0` view-dirty in place-garrison).  The cluster is pure logic +
+render-dirty flags.  (Audio for *new-game* troop spawns lives elsewhere; this
+turn-pass spawn path is silent.)
 
 The second half is a faithful out-of-bounds read.  `FUN_004a9a9a` sets a fresh
-occupant's owner byte (`+0x00`) to **6** when its `owner`/race argument is 0
-(an independent / neutral settlement).  The pass then calls
-`engine_realm_collect_territory_income` (`FUN_004ad6c0`), whose pass-2 reads
-`STRAT_REC(terr_owner)[0x81]` for every counted territory — i.e.
-`g_player_strategic_352[6 * 0x160 + 0x81]`.  The strategic array is only six
-slots (`2112 = 6 × 0x160`, save entry 3), so slot 6 is one past the end.  Retail
-reads whatever global the linker placed next (harmless in its flat address
-space); under ASan the host build flags it.  This is not introduced by the port
-— `collect_territory_income` already had the read — but the race-0 spawn is what
-feeds an owner-6 occupant into it.  Consequently the owner-0 spawn path is **not
-host-unit-tested** (it would need a 7-slot strategic array); the owner≠0 spawn,
-the four leaves, and the place-garrison cap/role logic are pinned by the eight
-host tests in `test_engine_combat.c` / `test_engine_realm.c`, and the owner-6
-field assignment is trivially correct by inspection.
+piece's owner byte (`+0x00`) to **6** when its `owner` argument is 0 (a neutral
+county; 6 is the owner id the merchants also use — game-state-map.md).  The
+spawn then calls `engine_realm_collect_territory_income` (`FUN_004ad6c0`), whose
+pass 2 reads the owner's alliance partner `STRAT_REC(piece_owner)[0x81]` for every
+kind-1/2 piece standing in a county it does not own — i.e.
+`g_player_strategic_352[6 * 0x160 + 0x81]` = 0x57c7c1.  The strategic array is
+only six slots (`2112 = 6 × 0x160`, save entry 3), so slot 6 is one past the
+end.  Retail reads whatever the linker placed there (harmless in its flat address
+space); under ASan the host build flags it.  This is not introduced by the port —
+`collect_territory_income` already had the read — but the race-0 spawn is what
+feeds an owner-6 piece into it.  The owner-0 spawn path is therefore not
+host-unit-tested (it would need a 7-slot strategic array).
 
-`FUN_004a9a9a` also re-runs the per-realm economy trio
+`FUN_004a9a9a` also re-runs the per-county economy trio
 (`FUN_0044f6e7`/`FUN_0044df5f`/`FUN_004485a5`) **twice, back to back, verbatim**
 — ported as a 2-iteration loop, not deduplicated.
 
-Verification: `engine_combat_place_garrison` (`FUN_004a79a3`) is **retail-diff
-gated** — new diff target `place_garrison`, **96/96 byte-exact** (48 seed0 + 48
-seed7).  It dodges the economy-re-plan wall the same way `combat_ownership`
-does: only the occupant block (`g_per_territory_420`) is read back, and the
-place branch's `collect_territory_income` tail writes only `g_per_army_768`, so
-the readback stays a pure save-state diff.  The diff covers the within-cap place
-branch (role 5 + seat coords + cell offset + `+0x153 += 5` + `+0x151` / `+0x198`)
-and the over-cap reject branch (role 2), including the pending-garrison
-head-count summing in the cap check.  `engine_combat_spawn_unit` and the four
-leaves are host-unit-tested (the spawn's economy tail + the race-0 `strat[6]`
-read keep them off the diffable path); their occupant-field writes share the
-already-diffed `g_per_territory_420` layout.
+Verification: `FUN_004a9a9a` (tools/rhost/rh_hooks_ai.c) and `FUN_004a551b` /
+`FUN_004a79a3` (tools/rhost/rh_hooks_combat.c) are rhost hooks now; the old
+Frida `place_garrison` 96/96 diff and the "spawn is host-unit-tested only" note
+predate the rhost method.
+
+*Re-checked 2026-11-18 against the IDA export: owner-6 read is at 0x4ad6c0 pass 2 (only for pieces in a foreign county); verification paragraph replaced (rhost hooks exist for the spawn chain).*
 
 ## 170. The year-rollover CD-audio probe's path-template `memcpy` overruns the `"c:.\wav"` literal into the adjacent pooled string literals — and every flag write stores the same value, so the file checks are dead
 
-The turn-advance engine `FUN_00448440` calls `FUN_004aef7e` once per year on the
-winter→spring rollover (`season == 4` branch) to probe the CD for its full audio
+The turn-advance engine `FUN_00448440` calls `FUN_004aef7e` once per year, on the
+autumn→winter rollover (the branch taken when the new current season
+`DAT_0057c934` is 4 = Winter; seasons run 1 Spring .. 4 Winter and the year
+rolls entering Winter — game-state-map.md) to probe the CD for its full audio
 set.  Two faithful oddities, both reproduced verbatim in
-`io_path_probe_cd_audio` (`src/io_path.c`):
+`io_path_probe_cd_audio` (`src/io_path.c`) and in the retail-layout
+`rl_4aef7e` (src/rl_host.c, rhost hook 0x4aef7e):
 
 **(a) string-pool overrun.**  The function builds the probe path with
 `FUN_00401136(0x4df3ac, 0x5cd490, 0x1e)` — a 30-byte (`0x1e`) bounded copy.  But
@@ -6009,9 +5988,10 @@ Byte 0 is then overwritten with the CD drive letter (`DAT_0053f200`,
 **(b) the availability gate is always 1.**  `FUN_004aef7e`'s only persistent
 output besides the path buffer is the single-player / CD-audio availability gate
 `DAT_005c9a74` (the gate `engine_menu_input` reads to route "Single player" to
-page 2 vs the deferred profile page).  Retail stores **1** in four places: the
-unconditional store at entry, the redundant `if (DAT_0053f684 == 1)` branch, and
-both `filelength >= 151 MB` ("full audio CD present") branches.  Every store is
+page 2 vs the deferred profile page).  Retail stores **1** in four places (four `mov dword_5C9A74, 1` in
+0x4aef7e): the unconditional store at entry, the redundant
+`if (DAT_0053f684 == 1)` branch, and both `filelength >= 151000000` ("full audio
+CD present") branches.  Every store is
 the same value, so the elaborate `swor_p2.wav` / `pumkin.wav` / `pumkin2.wav`
 open + size-check sequence **can never change the gate** — it is dead with
 respect to the observable state.  The port collapses it to one
@@ -6029,10 +6009,12 @@ target: the output is fully determined by static `rdata` (the 30-byte template
 read directly from the image) and the constant gate, so a Frida diff would only
 re-confirm static bytes while running real `chdir`/file-IO in the retail process.
 
+*Re-checked 2026-11-18 against the IDA export: the probe runs on the autumn→winter rollover (season 4 = Winter), not winter→spring; template bytes at 0x4df3ac and the four gate stores confirmed; rl_4aef7e pointer added.*
+
 ## 171. The very first turn-driver run of every new game takes the year-rollover branch, so the CD-audio probe fires on turn 1
 
-The new-game initialiser `FUN_00497ced` seeds the calendar (in
-`engine_game_init_seed_scalars`) to turn 0 with the season triple
+The new-game initialiser `FUN_00497ced` seeds the calendar (inline in
+0x497ced; port `engine_game_init_seed_scalars`, src/game_init.c) to turn 0 with the season triple
 `{prev 2, cur 3, next 4}` (`s_slot_00554470`/`0057c934`/`0057c92c`), then calls
 the turn-advance engine `FUN_00448440` once to tick the fresh world to turn 1.
 But the calendar block's year-rollover predicate (quirk #170's caller) is "the
@@ -6040,15 +6022,18 @@ just-consumed season-next was 4" — and the seed *is* 4.  So the first advance
 **always** rotates the year: rollover counter `s_slot_0055cd5c` 0→1, year triple
 1267→1268, and `io_path_probe_cd_audio` (`FUN_004aef7e`) runs.  In other words
 the seasonal CD-audio re-probe is not a once-a-year-from-now event — it fires on
-literally the first turn of a brand-new game (season then reads cur=4 / winter,
-next wraps 5→1).  The seed `next == 4` is deliberate: it makes turn 1 land on the
-winter→spring boundary so year 1268 begins immediately.
+literally the first turn of a brand-new game (season then reads cur=4 / Winter,
+next wraps 5→1).  The seed (cur 3 = Autumn, next 4 = Winter) makes turn 1 the
+autumn→winter boundary, so the game opens in Winter 1268 — the year rolls on
+entering Winter (game-state-map.md: Winter 1268 → Spring 1268 → …).
 
 Verification: the host test `game_init_turn_driver_advances_to_turn_1`
 (`test_game_init.c`) binds the assembled driver into the new-game initialiser's
 step-17 seam and runs a full new game over the real L2_maps world, asserting the
 exact post-state — turn 1, season `{prev 3, cur 4, next 1}`, rollover counter 1,
 year 1268 — which is only reachable through the rollover branch.
+
+*Re-checked 2026-11-18 against the IDA export: the boundary is autumn→winter (season 4 = Winter), not winter→spring; seeds 1266/1267/1268, season {2,3,4}, turn 0 confirmed in 0x497ced.*
 
 ## 172 — strategic cattle/livestock render in the OVERLAY pass, AFTER terrain (z-order bug surfaced by --newgame)
 
@@ -6096,7 +6081,7 @@ no longer over a mountain (user-confirmed).  The overlay-after-terrain z-order
 observation above is faithful retail behaviour — the bug was *where* the pasture
 was, not *when* it drew.
 
-## 173 — the new-game player roster is config-screen output, not init output; +0x07 is the NPC work-location (NOT an opponent-type), and the AI count gate is `DAT_0053f268`
+## 173 — the new-game player roster is config-screen output, not init output; +0x07 is the AI lord's identity / personality (assigned only to the first `DAT_0053f268` AI slots), and the AI count gate is `DAT_0053f268`
 
 The `--newgame` drop-in seat seeds map + economy presets but the **config screen**
 (`FUN_00499dc3` finalise + the screen-entry default population, both unported)
@@ -6114,31 +6099,42 @@ facts (frida ground truth: `newgame-preinit1` at the config screen,
    only the player *types*; the roster (army ids + seats) comes from the map and
    is then permuted by the seat-shuffle `0x497e65`.
 
-2. **player_strategic `+0x07` is the NPC scheduler's work-location, not an AI
-   "opponent-type".**  `engine_npc_schedule_init` (`0x49caaa`, init step 4)
-   CLEARS `+0x07` for every slot, then assigns a work-location to the first
-   `s_slot_0053f268` *unowned* (has_data==0) slots.  Phase 2 / the inactive-purge
-   (`0x49b35e`) later read that same `+0x07` as the active-or-empty test.  So an
-   AI slot is "active" iff the scheduler gave it a work-location.
+2. **player_strategic `+0x07` is the AI lord's identity (personality 1..4) —
+   the "NPC work-location" name the port gave it is wrong.**  `FUN_0049caaa`
+   (`engine_npc_schedule_init`, init step 4) CLEARS `+0x07` for every slot 1..5,
+   then, for the first `s_slot_0053f268` non-human (`+0x05 == 0`) slots, first
+   gives the slot a free colour/seat index `+0x0a` (1..5, skipping the humans'),
+   then picks `+0x07` from the 4-entry candidate row `DAT_004dc17c[+0x0a*4]` (MP /
+   `DAT_0055302c == 1`) or `DAT_004dc180[(map&3)*20 − 4 + +0x0a*4]` (SP), first one
+   not yet taken, and loads that lord's name via `localization_seek_skip(7, +0x07)`
+   into the slot's name (`0x553d54 + slot*0x2c`).  AI slots beyond the count get
+   `+0x04 = 0`.  Everything downstream reads `+0x07` as the personality index:
+   `DAT_004d8a58[(+0x07)*0xf0 − 0xf0]` rows (quirks #188/#191/#193), the
+   `+0x07 != 4` test in `FUN_004a1ee1` (#164), the notification payload
+   `(rot − 4) + +0x07·4` (#162/#164/#190).  The inactive-purge (`0x49b35e`) wipes a
+   slot unless it is active and (human or `+0x07 != 0`) — so an AI slot survives
+   iff it was given a lord.
 
 3. **The AI count is `DAT_0053f268`, computed by the unported `FUN_00499dc3`**
    as `(DAT_0053f288 + 2) - DAT_00553f98` = total_players - humans.  The seat
-   never set it → it stayed 0 → the scheduler assigned NO work-locations → every
+   never set it → it stayed 0 → `FUN_0049caaa` assigned no lord (`+0x07`) → every
    AI slot read as empty and got purged, leaving a 1-player (human-only) world.
 
 The fix (`engine_game_init_set_player_config`): seed per-slot `+0x05` has_data /
-`+0x0a` job-slot / `+0xee` player-bit, the local player `DAT_0057c8cc`, the AI
-count `DAT_0053f268`, and the human's aux job reservation
+`+0x0a` seat (colour) / `+0xee` player-bit, the local player `DAT_0057c8cc`, the AI
+count `DAT_0053f268`, and the human's aux seat reservation
 (`g_player_aux_44[+0x25/+0x27]`, retail's SP `player_seat_assign`) so the
-scheduler schedules the AI players *around* the human's fixed job — without it
-the AI work-locations shift and diverge.  Also corrected the map-0 presets to
+assignment hands the AI players the seats / lords *around* the human's — without
+it the AI `+0x0a` / `+0x07` picks shift and diverge.  Also corrected the map-0 presets to
 the captured retail values (economy 1 / resource 2 / gold 1000 / keep 3, NOT the
 scenario-table values assumed earlier).  Result: post-init `player_strategic`
 matches retail 2108/2112 bytes (the 4 residual = AI `+0x130` strategy field,
 shared root with ~90 `per_army` AI-economy bytes — a separate turn-driver/AI
-byte-completeness frontier), `cur_player`/roster/armies/work-locations exact, and
+byte-completeness frontier), `cur_player`/roster/armies/AI lords (+0x07) exact, and
 a retail LOAD of the resulting save sits stable (no turn spam — `year`/`season`
 set once and hold; run `newgame-loadverify1`).
+
+*Re-checked 2026-11-18 against the IDA export (0x49caaa, 0x49b35e, 0x499dc3): +0x07 is the AI lord / personality id picked from DAT_004dc17c / DAT_004dc180 and named from text group 7, not a work-location; points 1 and 3 stand.*
 
 ## 174 — `place_army_starts` reads the per-army capital cursor at `record[id]+0x6c` (stride `0x300`), populated by the ported `setup_capitals` — there is NO unported coord-table populator (RESOLVED)
 
@@ -6183,6 +6179,17 @@ the probe find each capital's adjacent feature.
 6 and entry **5** (per-territory capital records, ~119 B) drop out of the
 `save_diff` vs `lastturn.sav`; entry 4 shrinks 41→23 B; total 251→101 B; 1871/1871
 host tests green.  See docs/findings/new-game-save-parity.md #1.
+
+**Role correction (2026-11-18).**  The pieces `place_army_starts` (`FUN_00427ed0`)
+places are the **merchants**, not armies: for each of the ≤ 6 bucket rows it takes
+the row's digest county `DAT_00569518[i]`, probes around that county's capital
+cursor (+0x6c/+0x6d, the stride-0x300 read above), and calls
+`FUN_0046e1b0(3, col, row, 6)` — map-piece kind 3, owner 6 (merchant;
+game-state-map.md) — stamping +0x10 / +0x167 = the county, +0x166 markup 100,
++0x1ff = row i; `DAT_005530b4` (save entry 78) is the merchant count.  It is the
+only kind-3 placement in the binary.  Read "armies" above as merchants.
+
+*Re-checked 2026-11-18 against the IDA export (0x427ed0, 0x428007, 0x468d4f): the stride-0x300 fix stands; the placed pieces are kind-3 merchants (owner 6), not armies.*
 
 ## 175 — `engine_map_query`'s cell grid (`g_cells`) had no `src/` binder — the army-proximity probes were silent no-ops in every live build
 
@@ -6282,8 +6289,9 @@ turn-spam), confirming it is a valid retail game state.
 
 Retail's new-game randomiser `FUN_00497e65` (`engine_game_init_seat_shuffle`)
 draws from the **global** double-LFSR `DAT_0058fe28/0058fe08` by calling the
-shared stir `FUN_00404a46` (3 advances per loop iteration — once in each of its
-three phases).  It is the **only** consumer of that global on the new-game init
+shared stir `FUN_00404a46` (one stir per iteration of its three loops: the
+`active`-seat roster shuffle, the 48-entry permutation `DAT_0057cae0`, and the
+48-entry value table `DAT_00553080`).  It is the **only** consumer of that global on the new-game init
 path before the turn driver (verified: of the seven `FUN_00404a46` callers, only
 `497e65` and the turn driver `448440` are reachable from `497ced`; the value
 table `42847c` does NOT stir).  So after seat_shuffle the global has advanced by
@@ -6321,6 +6329,8 @@ global reader diverges.  Grep for a seeder threading a private `engine_rng_in_t`
 seeded to an InitInstance constant: if retail's original calls `FUN_00404a46`
 (or any shared-global mutator) rather than a local stepper, the global must be
 threaded through, not copied.
+
+*Re-checked 2026-11-18 against the IDA export (0x497e65, 0x404a46): one stir per iteration across three loops (active + 48 + 48), not three per iteration; the active + 96 total stands.*
 
 ## 179 — the AI resource-demand pool `DAT_0057c020` is the SAME memory as the player-strategic commodity pools `+0x120/+0x128/+0x130` (overlapping global; scalar-wall again, family #175/#176/#178)
 
@@ -6379,14 +6389,18 @@ proportional slice of that region's stockpile (`decay_region_cell` /
 `FUN_00469e5b`) and flattens the tile to terrain 0
 (`engine_territory_set_cell_type`).  So by the time `commit_step` relinks the
 stack, the cell IS passable.  This is the strategic-map "raze your way in"
-mechanic, not a bug.
+mechanic, not a bug.  (If the mover is human, the county owner's attitude toward
+it also drops 10 via `FUN_004a1ee1`.)  Outside that case — own county, or a tile
+outside terrain 2..0x16, or a kind-3/4 piece — the blocked branch razes nothing,
+yet the code is still rewritten to 1 and the step committed.
 
 Two secondary gotchas in the same function:
 
-- **The path-progress accumulator (+0x153) is bumped twice on an impassable
-  step**: once inside the blocked branch (`+= 3`) and again in the classifier's
-  common tail (`+= 3`, since the rough flag was just cleared) — net +6, vs +3
-  for a plain open step.  Not a double-count bug; retail does exactly this.
+- **The moves-used counter (+0x153; moves left = 15 − it, game-state-map.md) is
+  bumped twice on an impassable step**: once inside the blocked branch (`+= 3`,
+  kind ≠ 3/4) and again in the classifier's common tail (`+= 3`, since the rough
+  flag was just cleared) — net 6 moves, vs 3 for a plain open step and 1 for a
+  rough one.  Not a double-count bug; retail does exactly this.
 - **The retry budget reads the PREVIOUS step's rough flag** (+0x14d): a stack
   that stepped onto rough terrain last tick gets budget 0 (wraps its retry
   counter immediately, ramping the stall accumulator faster) instead of the
@@ -6394,40 +6408,43 @@ Two secondary gotchas in the same function:
   `commit_step` writes from the entered cell and the classifier both reads (for
   the budget) and rewrites (from the new step outcome).
 
-## 181 — the movement executor `FUN_00465d28` reads an UNINITIALISED waypoint on its disarmed first pass (harmless because the disarmed classifier ignores the direction)
+*Re-checked 2026-11-18 against the IDA export (0x46634d, 0x46673c, 0x469e5b → set_cell_type(cell,0,0)): +0x153 is moves used, not path progress; the raze only fires for a foreign county on land terrain, the commit always.*
 
-`engine_army_move_run` only assigns its `wp_col`/`wp_row` locals (retail stack
-slots `var_ch`/`var_10h`) inside the **step-eval-armed** branch (+0x14b bit0).
-But the common tail after that branch unconditionally evaluates a direction from
-them (`engine_path_direction_8way`, `FUN_0046f434`) and feeds it to the
-classifier.  On the very first executor pass for an army the flag is still
-disarmed, so retail reads whatever those stack slots last held — genuine
-read-before-write UB.
+## 181 — the movement executor `FUN_00465d28` reads an UNINITIALISED waypoint on its disarmed first pass (NOT harmless — see #229)
 
-It's benign in practice for two reasons:
+`engine_army_move_run` only assigns its waypoint locals (retail stack slots
+`[ebp-0xc]` col / `[ebp-0x10]` row) inside the **step-eval-armed** branch
+(+0x14b bit0).  But the common tail after that branch unconditionally evaluates a
+direction from them (`engine_path_direction_8way`, `FUN_0046f434`) and, unless it
+is 8, feeds it to the classifier.  On a pass where the flag is disarmed, retail
+reads whatever those stack slots last held.
+
+What the garbage does:
 
 1. The **disarmed** classifier path (`engine_army_move_classify_step` with
    +0x14b bit0 = 0) runs only the stall/retry hysteresis and **never reads its
-   direction argument** — so the garbage direction is computed and discarded.
-2. The only other use of that garbage is the `dir == 8` (already-on-cell) early
-   return guarding the classifier call.  `FUN_0046f434` returns 8 only when the
-   "from" and "to" coordinates are equal, which for a real stack position
-   requires the garbage waypoint to exactly equal the stack's own (col,row) — it
-   essentially never does, and a stack can't legitimately sit at the (0,0) grid
-   corner where the zero-init equivalent would trip.
+   direction argument** — so on that path the direction is discarded.
+2. But the `dir == 8` ("standing on the waypoint") exit before the classifier
+   call is live: it sets +0x14c = 0, +0x150 = 1 and the army stops.  The slots
+   hold the previous call's residue at the same stack depth — in practice the
+   previous `move_run`, usually for ANOTHER army — so an army standing on the
+   cell that army just entered stops for the tick.  The earlier reading here
+   ("the garbage essentially never equals the army's own cell; the port
+   zero-initialises it, observationally identical") was wrong: rhost caught it
+   (`--trap 466116`, bot-s15-t20 f16450), quirk #229.
 
-The port zero-initialises `wp_col`/`wp_row` for a defined first pass; this is
-observationally identical to retail except in the impossible (0,0)-corner case,
-and the disarmed classifier discards the value regardless.  Same "faithfully
-reproduce retail's control flow, tighten only the genuinely-unreachable UB"
-posture as elsewhere.
+The port no longer zero-initialises: the waypoint is explicit state
+`g_army_move_wp_col` / `_row` (src/engine_army_move.c), kept across calls and, in
+the hybrid host, loaded from / stored back to retail's stack residue.
+
+*Re-checked 2026-11-18 against the IDA export (0x465d28) and #229: the dir == 8 exit makes the stale waypoint observable; the port's zero-init was replaced.*
 
 ## 182 — siege-engine construction (`FUN_004a8507`) splits the besieger's head-count as the per-turn build budget; assault launches the tick all ordered engines hit 100%
 
 The strategic turn driver's phase-2 callee `FUN_004a84ba`
-(`engine_army_state_scan_siege_built`) scans the 150 per-territory occupant
-records and, for each **besieging** stack (live, state 1, `+0x199` siege link
-set), advances its siege-engine construction one tick via `FUN_004a8507`
+(`engine_army_state_scan_siege_built`) scans the 150 map-piece records
+(from the cursor up) and, for each **besieging** army (owner set, kind +0x08 == 1,
+`+0x199` siege link set, men > 0), advances its siege-engine construction one tick via `FUN_004a8507`
 (`engine_army_state_siege_build_step`).  The build state is three i16 slots
 `{ count, pct, value }` at `+0x182` (stride 6) — `count` engines of that type
 ordered, `value` build progress, `pct` = `value` as a percent of the target.
@@ -6446,12 +6463,13 @@ Mechanics worth recording:
   `target[slot] * count`, i.e. ordering two of engine-type 0 needs 400 build,
   not 200.
 
-- **The completion signal is an aggregate remaining-work byte** (`+0x19c`):
+- **The completion signal is an aggregate remaining-work byte** (`+0x19c`, the
+  "seasons until the assault" figure the panel shows):
   `ceil(sum_of_unfinished_gaps / head)`.  `FUN_004a8507` returns 1 the tick that
   byte reaches 0 — every ordered engine at 100% — and the scanner then parks its
   persistent cursor (`s_slot_0057cad4`) on that record so the driver can launch
-  the assault on it (`FUN_004a8aab`, the A/V assault trigger — sounds + combat
-  render, not yet ported).  A non-zero remaining byte (or any failed gate)
+  the assault on it (`FUN_004a8aab`, the assault trigger — sounds + combat
+  render; now ported as `rl_4a8aab`, rhost hook in tools/rhost/rh_hooks_battle.c).  A non-zero remaining byte (or any failed gate)
   returns 0 and the cursor steps to the next record.
 
 - **The "pct < 100" gate is read pre-recompute in every pass.**  All three
@@ -6463,15 +6481,21 @@ Mechanics worth recording:
 
 - **The cursor is resumable, not reset here.**  `FUN_004a84ba` only ever
   *increments* `s_slot_0057cad4`; the reset to 1 lives in the phase-2 entry init
-  `FUN_004a82b9` (unported).  The driver calls the scan once per 100 sub-ticks,
-  so the cursor walks the record block at one assault-check per ~100 ticks and is
-  re-armed to 1 each time phase 2 is re-entered.
+  `FUN_004a82b9` (run by the turn driver `0x49a010` at phase tick
+  `DAT_0053f658 == 1`; it also drops siege links whose besieged county no longer
+  points back, and is ported — src/rl_turn.c / src/engine_army_state.c).  The
+  driver calls the scan when `DAT_0053f658 % 100 == 2`: a hit (return 1) launches
+  `FUN_004a8aab(cursor)` and phase 2 continues, so the next scan, 100 ticks
+  later, resumes AT that same record (the cursor is not stepped past a hit); a full walk with no hit (return 0) ends
+  phase 2 (`engine_turn_advance_phase`).
 
 The remaining-byte ceiling is inlined in retail (`div` + `mod != 0 ? +1`) rather
 than routed through the ported `engine_math_div_ceil` (`FUN_00404e03`); the port
 mirrors the inline form to stay byte-faithful.
 
-## 183 — the mercenary-offer rotation (`FUN_004aca2b`) publishes each offer for exactly one turn; the cursor double-steps on publish so consecutive offers never repeat
+*Re-checked 2026-11-18 against the IDA export (0x4a84ba, 0x4a8507, 0x4a82b9, 0x49a010 phase 2): 0x4a82b9 and 0x4a8aab are ported now; scan cadence is phase tick % 100 == 2 and a no-hit walk ends phase 2.*
+
+## 183 — the mercenary-offer rotation (`FUN_004aca2b`) publishes each offer for exactly one turn; the cursor double-steps on publish (no repeat guarantee)
 
 A phase-7 (turn-rollover) callee of the strategic turn driver `0x49a010`.  Each
 free merc-pool slot (`g_unit_table_20`, stride 0x14, back-ref `+0x00` == 0)
@@ -6493,9 +6517,12 @@ Two consequences worth recording:
 - **The publish path steps the cursor twice** (once in the common per-turn step,
   once inside the expiry block) and does *not* re-clamp after the second step.
   So the cursor can transiently sit at `realms + 1`; the next turn's ordinary
-  step+clamp folds it back to 1.  This is deliberate — it guarantees the value
-  published next period differs from the one just published (no back-to-back
-  identical offers to the same realm).
+  step+clamp folds it back to 1.  It does not guarantee a different county next
+  time: whether the next publish repeats depends on the period +0x07 and the
+  county count n (the unclamped `n + 1` state also folds to 1, losing a step).
+  Simulating the loop: n = 4 with period 3, or n = 6 with period 5, publishes
+  the SAME county every period; n = 5 with period 5 settles on county 5 after
+  four publishes.
 
 The countdown decrement is a raw byte `dec` followed by a *signed* `< 1` test,
 so a slot already at 0 wraps to 0xff and reads as `-1` → immediately "expired".
@@ -6503,46 +6530,60 @@ The port mirrors the unsigned-decrement / signed-compare pair exactly.  In-use
 slots (back-ref `!= 0`) are skipped wholesale and never match as an offer holder
 even if their stale `+0x03` happens to line up with a realm.
 
-## 184 — lord/vassal treaty reconciliation (`FUN_004a1847`) is order-dependent: a dead or contested lord only severs the bond when it has the lower player index
+*Re-checked 2026-11-18 against the IDA export (0x4aca2b): mechanics confirmed; the "consecutive offers never repeat" guarantee does not hold for every period / county count.*
 
-The phase-7 reconciler snapshots every player's declared lord (+0x81) into a
-local array *before* the pass, then validates players 1..5 in ascending order.
+## 184 — alliance reconciliation (`FUN_004a1847`) is order-dependent: a dead or contested partner only severs the bond when it has the lower player index
+
+The phase-7 reconciler (`engine_diplomacy_reconcile_treaties`) rebuilds the
+"allied with" matrix (+0x85 + q·0x10, wiped first) from each player's declared
+alliance partner (+0x81 — game-state-map.md; the earlier "lord/vassal" reading
+was wrong: the bond it writes is mutual).  It snapshots every player's +0x81 into
+a local array *before* the pass, then validates players 1..5 in ascending order.
 Two consequences fall out of "ascending order + pre-pass snapshot":
 
 - **The "settled" (inactive/severed) flag is only reliable for lower indices.**
-  A player's settled flag is set during *its own* iteration, so when player `i`
-  inspects its lord `p`, `settled[p]` reflects reality only if `p < i`.  A bond
-  onto a *dead higher-indexed* lord therefore is NOT severed by the dead-check —
-  it falls through to the mutual branch and the bond gets imposed onto the
-  corpse.  The game avoids visible breakage because the inactive record is inert
-  elsewhere, but the asymmetry is real and faithfully reproduced.
+  A player's settled flag is set during *its own* iteration (inactive: +0x04 ==
+  0; or severed), so when player `i` inspects its partner `p`, `settled[p]`
+  reflects reality only if `p < i`.  A bond onto a *dead higher-indexed* partner
+  is therefore NOT severed by the dead-check — it falls through to the mutual
+  branch and the alliance is re-imposed onto the corpse (both +0x81 written, both
+  matrix cells set).  The game avoids visible breakage because the inactive
+  record is inert elsewhere, but the asymmetry is real and faithfully reproduced.
 
-- **A one-sided declaration onto a live, *unbonded* player imposes the bond.**
-  Severance fires only when the lord is settled OR already bonded to a *third*
-  player (`lord[p] != 0 && lord[p] != i`).  If the target simply has no lord
-  (`lord[p] == 0`), the else-branch pins `target.lord = i` and sets the matrix
-  both ways — vassalizing the target.  Because the lord array is a pre-pass
-  snapshot, the freshly-imposed `target.lord` is not seen when the target's own
-  (later) iteration runs (it still reads the snapshot 0), so the imposed bond is
-  not re-processed and survives the pass.
+- **A one-sided declaration onto a live, *unallied* player imposes the bond.**
+  Severance fires only when the partner is settled OR already declared toward a
+  *third* player (`snap[p] != 0 && snap[p] != i`).  If the target simply has no
+  partner (`snap[p] == 0`), the else-branch pins `target.+0x81 = i` and sets the
+  matrix both ways — a mutual alliance.  Because the partner array is a pre-pass
+  snapshot (only the severed branch updates it), the freshly-imposed
+  `target.+0x81` is not seen when the target's own (later) iteration runs (it
+  still reads the snapshot 0), so the imposed bond is not re-processed and
+  survives the pass.
 
 The port mirrors the snapshot + ascending-order exactly (the matrix wipe, the
-settled/lord local arrays, the lower-index-only reliability).  Same family as
-the other "scalar snapshot vs live store" ordering quirks.
+settled/partner local arrays, the lower-index-only reliability); retail-layout
+`rl_4a1847` (src/rl_turn.c), rhost hook in tools/rhost/rh_hooks_rl_turn.c.  Same
+family as the other "scalar snapshot vs live store" ordering quirks.
+
+*Re-checked 2026-11-18 against the IDA export (0x4a1847): mechanics confirmed; +0x81 is the alliance partner and the bond is mutual, not lord/vassal.*
 
 ## 185 — raider target assignment (`FUN_004ac5ba`) recomputes the destination from the SHARED realm cursor, not the stack's stored target — so a kept target can point at the wrong capital
 
-The phase-5 raider planner gives each settling stack a target realm via a single
-global round-robin cursor (`DAT_004e59dc`, `g_raider_target_cursor`).  The
-reassignment block (entered when the planner is in force-mode 2 *or* the stack
-has no target yet) steps the cursor, skips the stack's own region, and writes the
-result into the per-record target byte (`+0x151`).
+The phase-5 raider planner `FUN_004ac499` walks the rebel bands (map pieces of
+kind +0x08 == 2) and gives each a target county via a single global round-robin
+cursor (`DAT_004e59dc`, `g_raider_target_cursor`).  The reassignment block
+(entered when the current season `DAT_0057c934` is 2 = Summer *or* the band has
+no target yet) steps the cursor, skips the band's own county (+0x10), and writes
+the result into the per-record target byte (`+0x151`).  So every Summer all rebel
+bands are re-targeted; the port's comment calling this "force-mode 2" misnames the
+season global (the code reads `s_slot_0057c934` correctly,
+src/engine_army_state.c).
 
 The bug-shaped detail: the *destination* write that follows reads the capital
 through the **cursor** (`g_per_army_768[cursor*0x300 + 0x6c/0x6d]`), not through
 the per-record target byte.  These agree on the turn a target is freshly
-assigned (cursor == target), but a stack that re-enters with a target already set
-(mode != 2) **skips the reassignment** yet still recomputes its destination from
+assigned (cursor == target), but a band that re-enters with a target already set
+(outside Summer) **skips the reassignment** yet still recomputes its destination from
 whatever realm the cursor currently points at — which, mid-sweep, is the target
 of the most recently *reassigned* stack, not this stack's own.  So a stack can
 keep target realm N in `+0x151` while its destination coords point at realm M's
@@ -6555,90 +6596,113 @@ port reproduces the cursor-sourced destination verbatim rather than "fixing" it
 to read the target byte — same faithful-to-retail posture as the other
 snapshot/shared-cursor quirks (#183/#184).
 
-## 186 — phase-3 march planner (`FUN_00429418`) floods conservatively first, then permissively only on a degenerate route
+*Re-checked 2026-11-18 against the IDA export (0x4ac5ba, 0x4ac499): the re-target gate is season == 2 (Summer), not a planner force-mode; the pieces are kind-2 rebels.*
 
-The phase-3 turn-driver callee routes every idle (state 4) stack toward its
-target realm's (+0x167) capital.  It floods the path-field cost map with
-`blocked_mode = 1` (costly-but-passable cells clamped to cost 100 — heavily
-penalised), traces to the capital, and commits the route only when the trace
-lands in **under 150 waypoints**.  150 is the path-field's hard trace cap
-(`engine_path_field` writes at most 0x96 waypoints), so a path of exactly 150
-is the engine's "didn't actually reach / had to give up" sentinel, not a real
-route.  On that sentinel it re-floods with `blocked_mode = 0` (no cost clamp,
-costly terrain freely traversable) and traces once more, committing whatever
-that yields.
+## 186 — phase-3 supply-cart planner (`FUN_00429418`) floods conservatively first, then permissively only on a degenerate route
 
-Net effect: stacks prefer routes that avoid expensive terrain, and fall back to
-"go through the swamp/forest" only when the cheap-terrain route can't be found
-within the waypoint budget.  The waypoint-count gate reads slot 0's count
+The phase-3 turn-driver callee (`engine_army_state_plan_capital_marches`) routes
+every **supply cart** — map piece of kind +0x08 == 4 (game-state-map.md; not an
+"idle state-4 stack") — toward the capital (+0x6c/+0x6d) of its destination
+county (+0x167), writing the goal into +0x14/+0x15 and +0x16/+0x17, +0x151, and
+clearing +0x150 / +0x14e.  It floods the path-field cost map with
+`blocked_mode = 1` (every cell cost > 1 clamped to 100 — heavily penalised, still
+passable), traces to the capital, and commits the route (+0x14c = 1) only when
+the trace succeeds in **under 150 waypoints** (`DAT_0053f070 < 0x96`).  150 is the
+path-field's hard trace cap (`engine_path_field` writes at most 0x96 waypoints),
+so a path of 150 is the engine's "had to give up" sentinel, not a real route.  On
+that sentinel it re-floods with `blocked_mode = 0` (the cells' real costs) and
+traces once more, committing whatever that yields.  A first trace that fails
+outright (returns 0) gets no retry — the clamp never blocks a cell, so mode 0
+could not reach it either.
+
+Net effect: carts prefer routes that avoid expensive terrain, and fall back to
+the true-cost route only when the clamped route cannot be traced within the
+waypoint budget.  The waypoint-count gate reads slot 0's count
 (`DAT_0053f070[0]`, the value later copied into the record's +0x1c waypoint
-counter) — the same slot the two floods/traces use.  The phase-6 planner
-(`FUN_004280e9`) shares this exact dual-flood tail.
+counter) — the same slot the two floods/traces use.  The phase-6 merchant planner
+(`FUN_004280e9`, #187) shares this exact dual-flood tail.
 
-## 187 — phase-6 settle planner (`FUN_004280e9`) indexes the 6-row category-bucket table by per-region (i-1), sliding past row 5 into BSS slack
+*Re-checked 2026-11-18 against the IDA export (0x429418, 0x46f700): the pieces are kind-4 supply carts; mode 0 uses the real costs (not "free"); no fallback after a failed first trace.*
 
-The phase-6 turn-driver callee, when an idle (state 3) stack is flagged
-"arrived" (+0x150), scans up to 16 entries of a category-bucket row for a
-neighbour realm to settle toward.  The bucket table is `DAT_00567970`, which the
-rest of the engine treats as `buckets[6][16]` — a fixed 6-category × 16-entry
-list (built by FUN_004290d0/FUN_00429153, read by FUN_0042925e; the save schema
-persists exactly its 96 bytes, entry 138).
+## 187 — phase-6 merchant planner (`FUN_004280e9`) picks the route row by the merchant's PIECE SLOT (i-1), not by the route index it carries
 
-But phase-6 indexes it as `buckets[(i-1)*0x10 + cursor]` where **i is the
-per-territory record index 1..150**, not a category 1..6.  For records 1..6 this
-reads a real bucket row; for i >= 7 it reads off the end of the 96-byte table.
-The next BSS global (`DAT_00567d10`, save entry 149) does not start until
-+0x3a0 (928 B), so rows 6..57 are uninitialised BSS — they read as zero, the
-loop finds no in-range realm, and the stack is left unchanged.  Only a state-3 +
-arrived record at i >= 58 would reach `DAT_00567d10`'s live data; that the
-engine never corrupts the save in practice means such records do not occur at
-high indices (state 3 + arrived is effectively a low-index / player-row event).
+The phase-6 turn-driver callee (`engine_army_state_plan_settle_marches`) handles
+the **merchants** — map pieces of kind +0x08 == 3 (game-state-map.md; not "idle
+state-3 stacks").  When a merchant is flagged arrived (+0x150), it scans up to 16
+entries of a route row for its next county, starting at its cursor (low byte of
++0x164, wrapping at 16), skipping entries above the county count, then aims at
+a feature cell near that county's capital (`FUN_00428007`) and runs the #186
+dual-flood route.  The route table is `DAT_00567970`, `buckets[6][16]`: cleared
+6×16 by `FUN_004290d0`, filled by `FUN_00429153(county, row)` from the map's
+plane-4 bytes while `FUN_00467770` loads the map, digested by `FUN_004291b3`;
+the save persists exactly its 96 bytes (entry 138).
 
-The port reproduces the exact `(i-1)*0x10 + cursor` arithmetic.  To read the
-same zeros retail reads for rows 6..57 without an out-of-bounds access, the
-in-memory backing of `s_slot_00567970` is widened to 150*16 B (the save still
-serialises only the first 96).  Behaviour matches retail for every index a
-legitimate game state can produce; the only divergence (port reads zero vs
-retail reading `DAT_00567d10`) is confined to indices retail itself could not
-survive.
+Phase 6 indexes it as `buckets[(i-1)*0x10 + cursor]` with **i the piece slot
+1..150**.  That works because the merchants are created only by
+`FUN_00427ed0` (the port's `place_army_starts`, #174) at new-game step 8, one per
+non-empty route row, into the lowest free slots of an empty piece table — so the
+merchants hold slots 1..k (k ≤ 6) and `i-1` stays inside rows 0..5.  The quirk is
+the mismatch: `FUN_00427ed0` records each merchant's own row in +0x1ff and
+breaks at the first empty row but SKIPS a row whose capital has no adjacent
+feature, so after a skip the next merchant sits in a lower slot than its row and
+phase 6 walks the neighbouring row's route (the +0x1ff it carries is never read
+here).
 
-## 188 — phase-1 AI grant (`FUN_0049d638`): higher AI levels get the BIGGER cash table but NO resource topups, and one ration ladder is dead code
+Rows ≥ 6 are not reached by retail in practice.  If they were, they are not
+"zero BSS slack": `DAT_005679d0` (a 0/1 flag written by 0x4190db / 0x43ae30 /
+0x4aa90a / 0x4aabd8) sits at +0x60 = row 6 offset 0, `DAT_00567d00..0c` at
++0x390.. (row 57) and `DAT_00567d10` (save entry 149) at +0x3a0.  The standalone
+port backs `s_slot_00567970` with 150*16 zero bytes (the widened storage of #194),
+so it would read 0 there; under rhost the symbol aliases retail's 0x567970
+(tools/rhost/rh_hooks_ai.c `A(s_slot_00567970,0x567970)`) and reads the same
+bytes retail does.
 
-The phase-1 per-player AI init (`FUN_0049d638` → `engine_army_ai_set_rations_and_grant`,
-strategic FSM `FUN_0049a581` dispatch step 3) does two passes: a per-realm
-approval→ration-setting (+0xb9) ladder, then a difficulty cash/resource grant.
-Three counterintuitive facts:
+*Re-checked 2026-11-18 against the IDA export (0x4280e9, 0x427ed0, 0x4290d0, 0x429153, 0x467770, data_xrefs): the pieces are kind-3 merchants placed in slots 1..6 at new game, so i-1 is a merchant→row map, not a slide into BSS; the memory past row 5 holds live globals (0x5679d0, 0x567d00..), not 928 B of zero slack.*
 
-1. **The grant scales inversely to what the table sizes suggest.**  The cash
-   grant is read from one of two adjacent const tables keyed by the player's AI
-   level (+0x29): level `< 3` draws `DAT_004dc230` (small — max 600), level
-   `>= 3` draws `DAT_004dc1e0` (large — max 1800).  So the *higher* AI levels
-   receive the *bigger* treasury injection.  But the per-realm resource topups
-   (population +0x24 & its +0x30 mirror, stock +0x250, provisions +0x224) run the
-   *opposite* way: level 1-2 get the big step set (diff×{20,5,40}), level 3-4 the
-   small set (diff×{10,2,20}), and **level ≥ 5 get the cash grant but every
-   per-realm step stays 0**.  Net: top-level AI is funded by cash alone, low-level
-   AI is padded with both cash and raw resources.  Both tables are indexed
-   `base + difficulty(s_slot_0053f23c)*4 + personality*0x10`; row 0 (personality
-   0) is unused.
+## 188 — phase-1 AI grant (`FUN_0049d638`): bigger empires get the BIGGER cash table but NO resource topups, and one ration ladder is dead code
+
+The per-player AI step 3 (`FUN_0049d638` → `engine_army_ai_set_rations_and_grant`,
+strategic FSM `FUN_0049a581` dispatch step 3) does two passes: a per-county
+approval→ration-setting (+0xb9) ladder, then a cash/resource grant.  Three
+counterintuitive facts:
+
+1. **The grant is keyed by how many counties the AI owns — the cash rises with
+   size, the resource topups fall.**  The selector is the player's +0x29, which is
+   the owned-county count (recomputed by `FUN_0049d1e0`, bumped on conquest by
+   `FUN_004a72fe`, seeded 1 by `FUN_0049caaa`) — not an "AI level".  The cash
+   grant (added to +0x118) reads `DAT_004dc230` (max 600) when the AI owns ≤ 2
+   counties and `DAT_004dc1e0` (max 1800) when it owns ≥ 3.  The per-county
+   resource topups run the opposite way: ≤ 2 counties get the big step set
+   (`s_slot_0053f23c`×{20, 5, 40}), 3–4 counties the small set (×{10, 2, 20}), and
+   **≥ 5 counties get the cash grant but every per-county step stays 0**.  The
+   steps go to population +0x24 (and its +0x30 mirror) when > 20, stock +0x250
+   when > 10, provisions +0x224 when > 50.  Net: a large AI empire is funded by
+   cash alone, a small one is padded with both cash and raw resources (catch-up).
+   Both tables are dword-indexed `base + s_slot_0053f23c*4 + personality*0x10`
+   (personality = +0x07, quirk #173); row 0 (personality 0) is all zero.  The
+   grant only runs for an active (+0x04), AI (+0x05 == 0) player owning ≥ 1 county.
 
 2. **The ration ladder's selector-0 branch is dead code in retail.**  Pass 1
    picks one of three approval ladders by the int at +4 of the AI's personality
-   row (retail `DAT_004d8a5c`-based read).  The four shipped personalities have
+   row (`DAT_004d8a5c[(+0x07)*0x3c − 0x3c]`).  The four shipped personalities have
    selector values {2, 2, 2, 1} — none select 0, so the harshest ladder
    (`<30→0, <50→2, <65→4, <80→10, else→15`) never fires for any retail AI.  The
    port keeps the branch faithfully; only a hypothetical 5th personality (or an
    edited tuning table) would reach it.
 
 3. **Pass 1 runs for player 0 too.**  Called with `player == 0` it sets every
-   *independent* realm's ration via a distinct fixed 8-step ladder; pass 2 then
-   falls out immediately (strat slot 0 is inactive).  So the same function both
-   manages AI economies and reposts independent-realm rations each turn.
+   *independent* county's ration via a distinct fixed 8-step ladder
+   (<20→0 … ≥90→12); pass 2 then falls out immediately (strat slot 0 is
+   inactive).  So the same function both manages AI economies and reposts
+   independent-county rations each turn.
 
 All three tables are baked verbatim from the image (`g_ai_cash_grant` 0xa0 B;
-the personality block was already baked as `g_ai_personality`).  Host tests
-exercise both rations ladders that fire, the player-0 ladder, and all three grant
-regimes (level 2 / 4 / 5) plus the active/eliminated/level-0 gating.
+the personality block was already baked as `g_ai_personality`).  The port's
+comments (src/engine_army_ai.c, "AI level < 3 / >= 3") carry the old misreading;
+the code reads the same +0x29 byte.  rhost hook 0x49d638 in
+tools/rhost/rh_hooks_ai.c.
+
+*Re-checked 2026-11-18 against the IDA export (0x49d638, 0x49d1e0, 0x4a72fe, data_xrefs 0x57bf29): the selector +0x29 is the owned-county count, not an AI level; topup gates and table values (0x4dc1e0 / 0x4dc230, selectors {2,2,2,1}) confirmed.*
 
 ## 189 — independent realms run a SEPARATE AI dispatch table and self-fund provisions from their own gold pool
 
@@ -6693,21 +6757,25 @@ notification ring rather than mutating diplomacy state inline.  Its own shape:
    (`+0x2b`, `engine_ranking` F_RANK) is `< 2` — i.e. the current leader
    (rank 1) or an unranked slot (rank 0).
 2. **Alternate two proposal modes** via the `+0xea` phase flag, each fired once
-   the per-tick cooldown `+0xe9` reaches 8 (incremented only after the mode's
-   own gauge gate passes):
-   - **phase 0 (alliance):** once the diplomacy-readiness gauge `+0x60` tops
-     `0x28`, broadcast code `0xc1` to every other in-game human slot, then flip
-     the phase to 1.
-   - **phase 1 (war):** once `+0x60` tops `0x1c`, send code `0xc0` to the
+   the counter `+0xe9` reaches 8 (incremented only after the mode's own gate
+   passes).  The gate value `+0x60` is the player's **share of the counties in
+   percent** (`FUN_00404dc1(+0x29 owned counties, county count)`, written only by
+   `FUN_0049d1e0` and `FUN_0049bd99`) — not a "diplomacy-readiness gauge":
+   - **phase 0:** once the AI holds ≥ 40 % of the counties (`+0x60 >= 0x28`),
+     post code `0xc1` to every other in-game human slot, then flip the phase to 1.
+   - **phase 1:** once it holds ≥ 28 % (`+0x60 >= 0x1c`), send code `0xc0` to the
      **last-ranked (weakest)** player `s_slot_00522d90` — provided that player
-     is human and is not already this AI's lord (`+0x81`) — then flip back to 0.
+     is human and is not this AI's alliance partner (`+0x81`) — then flip back
+     to 0.
    The proposal variant selector reuses the shared notification rotation:
    `(mood-cycle[+0x159] − 4) + personality[+0x07]·4`, identical to
    `engine_diplomacy.c`'s `diplo_notify`, advancing `+0x159` (wrap 0..3) per
-   post.
+   post (per recipient in phase 0).
 
 Brain step 8 (`FUN_0049f96c`, `engine_army_ai_step_noop`) is an empty function
 — a live slot in the dispatch ladder with no shipped body.
+
+*Re-checked 2026-11-18 against the IDA export (0x49a581, 0x4a13a6, 0x49d1e0, data_xrefs 0x57bf60): +0x60 is the county-share percent (thresholds 40 % / 28 %), +0x81 the alliance partner; the +5 = human reading stands.*
 
 ## 191 — AI brain step 0xc (`FUN_0049e77d`) reads its per-realm build orders from columns BAKED INTO the personality table, cycling 10 rotation codes over only 6 distinct columns
 
@@ -6766,7 +6834,7 @@ uses for the loop-counter reuse, quirk #130).  The distance itself is retail's
 `FUN_00404ead` (`engine_path_manhattan_distance`); only its `|dx|+|dy|` return is
 consumed here (the dx/dy side-effect globals go unread), so it is inlined.
 
-## 193 — AI brain step 0xa (attack launch) raises its force from the RICHEST realm but marches it at an enemy realm near that muster point, throttled by a personality-column cooldown
+## 193 — AI brain step 0xa (attack launch) raises its force from its best-scored MUSTER county but marches it at an enemy county near that muster point, throttled by a personality-column cooldown
 
 The AI offensive (`FUN_004a0015`, `engine_army_ai_launch_attack`, dispatch step
 0xa) is a multi-stage pipeline assembled from a 9-function chain:
@@ -6780,10 +6848,13 @@ The AI offensive (`FUN_004a0015`, `engine_army_ai_launch_attack`, dispatch step
    realms (forced-owner mode) for the best one near the muster realm — scored by
    chebyshev distance + a defended-keep penalty − stock/provision wealth bonuses
    — and stores it in `+0x4b`.
-4. **Gate on the muster realm.**  The force is raised from the player's **richest**
-   realm (`+0xe5`, chosen earlier by `pick_muster_realms` `FUN_004a0aaa`), but
-   only if that realm is prosperous: provision `+0x24` ≥ 400 **and** approval
-   `+0xc` ≥ 25.
+4. **Gate on the muster county.**  The force is raised from the player's muster
+   county (`+0xe5`, chosen earlier by `pick_muster_realms` `FUN_004a0aaa`: the max
+   of `2·(population/500)`, −1 below approval 40 / +1 above 80, +1 when stock
+   > 4× population, −2 when population exceeds stock; ties to the later county,
+   a county needs a score ≥ 0),
+   but only if that county is populous and content: population `+0x24` ≥ 400
+   **and** approval `+0xc` ≥ 25.
 5. **Raise + order the march.**  `raise_region_unit` (`FUN_004a5003`) musters a
    ~50-head field unit; the new occupant is stamped with order code 7 (`+0x1a`),
    pointed at the deploy cell `find_deploy_cell` (`FUN_004a689d`) picks inside the
@@ -6796,63 +6867,71 @@ The AI offensive (`FUN_004a0015`, `engine_army_ai_launch_attack`, dispatch step
    columns.
 
 The split in step 4 is the notable design quirk: the AI does **not** attack from
-the realm nearest the enemy — it always musters from its wealthiest realm and
-accepts whatever march distance that implies, which is exactly why
+the county nearest the enemy — it always musters from its best-scored (populous,
+well-stocked) county and accepts whatever march distance that implies, which is exactly why
 `select_target` scores candidates from the muster realm's capital rather than a
 frontier.
 
 (Caveat for future porters: the Ghidra decompile of `pick_muster_realms`
-`FUN_004a0aaa` transposes its two score variables — the r2 ground truth has the
-stockpile-below-provision realm feeding the `+0xe6` score, not `+0xe5`.)
+`FUN_004a0aaa` transposes its two score variables — the IDA export agrees with r2: the
+population-above-stock bonus (+2) feeds the `+0xe6` score, not `+0xe5`.)
 
-## 194 — tools gotcha: `gen_save_schema.py` is STALE vs the committed schema headers (clobbers entry 138's widened storage)
+*Re-checked 2026-11-18 against the IDA export (0x4a0015, 0x4a0aaa; cooldown bytes 6/10/5/10 at 0x4d8acc + p·0xf0): the +0x24 gate is population, not provisions; the muster county is a score, not "richest".*
+
+## 194 — tools gotcha: `gen_save_schema.py` is STALE vs the committed schema headers (clobbers entry 138's widened storage and entry 10's renamed buffer)
 
 Running `tools/gen_save_schema.py` regenerates `save_schema_table.h` /
-`save_schema_globals.{h,c}` from its CSV — but the committed headers carry a
-LATER hand-adjustment the generator does not know about: entry 138's storage
-was widened from its saved 96 bytes to `s_slot_00567970[150*16]`
-(`buckets[6][16]`; the save still persists exactly 96 bytes — quirk above).
-Re-running the generator silently narrows it back to `[96]`, which compiles
-fine and then corrupts the category-bucket plane at runtime. Until the
-generator/CSV is taught the widened storage, treat the three schema files as
+`save_schema_globals.{h,c}` from `docs/findings/save-schema-table.csv` — but the
+committed files carry LATER hand edits the generator does not know about:
+
+- entry 138's storage was widened from its saved 96 bytes to
+  `s_slot_00567970[150 * 16]` (the save still persists exactly 96 bytes — quirk
+  #187); the generator emits `[96]` again, which compiles and silently changes
+  what the standalone merchant planner reads past row 5;
+- entry 10 (retail 0x0056d8c0, 51200 B) now points at `g_realm_history`; the
+  generator still emits `g_castles_shadow`, which no longer links.
+
+Until the generator/CSV is taught both, treat the three schema files as
 hand-maintained: do NOT re-run the generator blind; if you do, restore with
 `git checkout -- src/save_schema_*.{h,c} src/save_schema_table.h`.
 
-## 195 — the sub-step duty-cycle LUT (`DAT_004e3260`) is 11 rows but MP hints ≥ 110 index rows 11..14 — an as-shipped OOB read into the next .data object
+*Re-checked 2026-11-18 by running a copy of the generator against the CSV in a scratch tree: still emits `s_slot_00567970[96]`, and also reverts entry 10 to g_castles_shadow.*
 
-> **Correction (2026-11-07, data catalog):** the table is **15 rows** (0x960 B, 0x4e3260..0x4e3bc0): rows 10..14 hold
-> 8 / 4 / 2 / 1 / 0 ones, the text starts at row 15. Hint ≤ 140 → row ≤ 14 never leaves the table: no OOB read. The
-> port images the bytes verbatim, so behaviour was never affected. (`docs/data/catalog.tsv` k_sim_duty_lut.)
+## 195 — the sub-step duty-cycle LUT (`DAT_004e3260`) is 15 rows of linear decay; hints up to 140 stay inside it (no OOB read)
 
 The rate controller `FUN_004bb978` gates each sim sub-step on
-`DAT_004e3260[phase + (hint/10)*0xa0]` after clamping the scenario hint to
-0x8c (140) — so the row index reaches 14, while the shipped duty table is
-11 rows (0x6e0 bytes).  The table is a clean LINEAR-DECAY duty mask:
-**row 0 = all 160 ones** (full duty — step every iteration), row 1 = 144,
-row 2 = 128, … row 9 = 16, then 8/4/2/1/0 for rows 10..14.  Rows 11..14 read
-PAST the table into the adjacent .data (the "ERR:…reloading data" ASCII +
-i32 bytes), which is mostly ZERO with a few non-zero — so a high MP hint
-degrades toward "skip almost every iteration", not the reverse.  SP pins the
-hint at 1 → hint/10 == 0 → **row 0, full duty**: SP steps every iteration that
-clears the slider gate (rate is gate/freeze-limited, NOT LUT-limited).
+`DAT_004e3260[phase + (hint/10)*0xa0]` (phase `DAT_004d2164` cycles 0..159) after
+clamping the scenario hint to 0x8c (140), so the row index reaches 14.  The table
+is **15 rows** (0x960 B, 0x4e3260..0x4e3bc0; `k_sim_duty_lut` in
+docs/data/catalog.tsv), a clean LINEAR-DECAY duty mask: **row 0 = all 160 ones**
+(full duty — step every iteration), row 1 = 144, row 2 = 128, … row 9 = 16, then
+8 / 4 / 2 / 1 / 0 for rows 10..14.  The "ERR:…reloading data" text starts at row
+15, which no hint reaches — the earlier "11 rows, MP hints ≥ 110 read rows 11..14
+out of bounds" reading was wrong.  A high hint simply degrades toward "skip almost
+every iteration" (row 14 never steps).  A negative hint is treated as 0 (row 0)
+and allows 2 sub-steps when `DAT_0057c998 >= 100`.  SP pins the hint at 1 →
+hint/10 == 0 → **row 0, full duty**: SP steps every iteration that clears the
+slider gate (rate is gate/freeze-limited, NOT LUT-limited).
 
 **Port-bug correction (2026-06-10 session 5, commit e179d8a):** the prior
 `g_engine_rate_lut` image had a BOGUS row 0 (`1,1,0,…` ~2/3 duty, wrong file
 offset) that capped the port at ~0.67 sub-steps/tick vs retail's ~0.95 — the
 entire end-turn rate offset.  Re-imaged verbatim from VA 0x4e3260; live retail
 `--watch` (hint=1, phase +1/frame, sub-step 0.95/frame) confirms the all-ones
-row 0.  The port now images the full 0xe60 bytes verbatim so the OOB rows
-behave byte-identically.
+row 0.
 
 Related find, same chase (the grid_load_probe load-flip bisect): retail's
-game-speed slider default is 90 (`FUN_004ae310` seeds `_DAT_0053f230 =
-0x5a`), and the slider is NOT a save-schema slot — a boot→load session
-plays at 90 regardless of the loaded save.  At 90 the slider gate needs
-12 ms wall-clock between sub-steps, which is precisely why the turbo'd
-retail seat runs exactly ONE sub-step at the load flip (elapsed-since-boot
-huge) and zero during idle (sub-ms frames).  A port default of 100 (2 ms
-gate) sub-stepped nearly every frame and would have drifted the LFSR
-arbitrarily far from retail.
+game-speed slider default is 90 (`FUN_004ae310` seeds `DAT_0053f230 = 90`), and
+the slider is NOT a save-schema slot — a boot→load session plays at 90 regardless
+of the loaded save.  The gate is `v = (100 − slider)/10`; `v >= 10` never steps,
+and otherwise a sub-step needs `10·v + 2` ms since the last one — 12 ms at 90 —
+except `v == 0` in MP, which steps unconditionally.  That is why the turbo'd
+retail seat runs exactly ONE sub-step at the load flip (elapsed-since-boot huge)
+and zero during idle (sub-ms frames).  A port default of 100 (2 ms gate)
+sub-stepped nearly every frame and would have drifted the LFSR arbitrarily far
+from retail.
+
+*Re-checked 2026-11-18 against the IDA export (0x4bb978, 0x4ae310) and the image bytes at 0x4e3260 (rows 0..14 = 160,144,…,16,8,4,2,1,0 ones; text at row 15): the table is 15 rows and the index never leaves it; title and body rewritten around the 2026-11-07 catalog correction.*
 
 ## 196 — an open event scroll IS the sim freeze: the consumer parks the event code in `DAT_0053e910`, the rate controller's extended-pause input
 
@@ -6917,19 +6996,37 @@ re-ensured every tick (free after the first).  Consequences:
   flips it to 1, so every later per-tick ensure no-ops on a garbage
   blob.  Latent in retail (the file always exists); mirrored verbatim.
 
-## 199 — `DAT_005aeb68` is BOTH the sprite-render error latch and the main-loop run-state: error code 4 == the deferred-shutdown value
+## 199 — `DAT_005aeb68` is BOTH the render error latch and the main-loop run-state: code 1 quits, code 4 (sprite error) triggers a sheet reload
 
-`FUN_00408fb0` (the 27-byte error latch the sprite-render descriptor
-gates call with code 4) stores into `DAT_005aeb68` — the SAME global
-WinMain's loop polls for deferred shutdown (== 4) and the scroll
-dismiss writes 3 into on game-end events (0xef/0xee/0x9f/0x9e arm of
-0x476768).  So a corrupt sprite descriptor doesn't just log: it
-REQUESTS APPLICATION SHUTDOWN (latch 4 == shutdown 4).  The port keeps
-them as two storages today (gfx_sprite_render's g_last_error vs the
-engine's shutdown latch) — safe while nothing corrupts descriptors, but
-the unification (one global, both meanings) is required before the
-game-end flow ports.  Run-state value map so far: 1 = quit (menu Exit),
-3 = game-end handoff, 4 = deferred shutdown / sprite error.
+`FUN_00408fb0` (the 27-byte latch setter, `byte_5AEB68 = code`) is called by the
+sprite / frame drawers (0x40946d, 0x4097c5, 0x409934, 0x409c93, 0x409e09,
+0x40a127, 0x40a21a, 0x40a3d0, 0x40a567, 0x40a682, 0x40a80e, 0x40a9b0) with two
+codes, and the byte is the same global the main loop polls.  Run-state value map
+(IDA export):
+
+- **1 = quit.**  WinMain `0x40e9ab` (and the message pump `0x40ec2c`) post
+  `WM_CLOSE` when it reads 1 and clear it.  Writers: the menu Exit / Escape paths
+  and file-IO failures, and `FUN_00408fb0(1)` from the generic-frame drawers on a
+  bad frame offset ("ERR: gen frame bad", offset > 310000 or ≤ 0) — so a corrupt
+  generic frame DOES request application shutdown.
+- **3 = game-end handoff.**  The scroll dismiss `0x476768` writes 3 on events
+  0xef/0xee/0x9f/0x9e; the tick guard `0x40e8bb` turns 3 into 1 (→ quit).
+- **4 = sprite error → reload, not shutdown.**  `FUN_00408fb0(4)` comes from the
+  sprite writers on a bad descriptor ("ERR: write sprite…").  `engine_tick`
+  (`0x4b99c0`, tail) consumes it: `== 4` → clear to 0, log "ERR: sprite error"
+  and, unless screen `DAT_004eac50 == 34`, reload the sheet set (in game:
+  `FUN_004987b7` + `FUN_00480f8b` in tactical mode, else `FUN_004984dc`;
+  out of game: `gfx_load_misc_sheet`).  The earlier "latch 4 == deferred shutdown"
+  reading was wrong.
+
+Port: the latch is `g_gfx_last_error` (src/gfx_globals.c; set by
+src/gfx_sprite_render.c, src/engine_overlay_render.c), aliased to retail
+0x5aeb68 under rhost (tools/rhost/rh_hooks_gfx.c); the standalone build still
+keeps a separate run-state (`g_shutdown_request`, src/engine.c).  Unifying them
+(one byte, all three meanings) is required before the standalone game-end and
+sprite-error recovery paths can match retail.
+
+*Re-checked 2026-11-18 against the IDA export (0x408fb0 callers, 0x40e9ab, 0x40ec2c, 0x40e8bb, 0x4b99c0, 0x476768): code 4 is consumed by engine_tick as a sheet reload; 1 is the shutdown value (also written for a bad generic frame).*
 
 ## 200 — the open scroll re-renders EVERY frame and beats its one-shots off exact consumer-cooldown values (frame-locked, not wall-clock)
 
@@ -6980,23 +7077,26 @@ InitInstance (0x34518632) and advanced by every puller since boot
 RELOAD retail re-runs classify with `DAT_00591564` at its
 boot+menu+load-advanced state, so the isolated-feature cells (the arm
 where `DAT_0057c8a4 == 0x16` pulls the LFSR) get FRESH variants that
-differ from the ones the .sav stored.  The port re-runs the same
-classify but reseeds a LOCAL single-RNG to the fixed 0x34518632 —
-reproducing the .sav's ORIGINAL new-game variants byte-exact (which is
-why block 0 == .sav), but not retail's reload re-roll.
+differ from the ones the .sav stored.  The legacy port
+(`main.c` `engine_map_post_load`) re-ran the same classify but reseeded a
+LOCAL single-RNG to the fixed 0x34518632 — reproducing the .sav's ORIGINAL
+new-game variants byte-exact (which is why block 0 == .sav), but not
+retail's reload re-roll.
 
 Consequence: this byte band can NEVER round-trip even in retail —
 load→save→load→save re-rolls the variants every time, because the RNG
-that drives them isn't persisted.  The port's fixed-seed choice is
-arguably MORE faithful to the saved file than retail's re-roll.  The
-downstream pixel cost is 273 px (0.089 %), the handful of re-rolled
-variants that happen to be on-screen under the load camera; most of
-records 512..1279 (rows ~8..19) sit outside the viewport.  Treated as
-an accepted cosmetic divergence, NOT a bug.  To bit-match retail
-under a FIXED seat one could capture retail's live `DAT_00591564` at
-load-classify time and seed the port's classify with it — deterministic
-per-seat but fragile (any seat/RNG-pull change shifts it) and
-cosmetic-only, so deferred.
+that drives them isn't persisted.  The legacy port's fixed-seed
+choice was arguably MORE faithful to the saved file than retail's
+re-roll, and it cost 273 px (0.089 %) on that seat.  The retail-layout
+port no longer diverges: `rl_4976a1` (src/rl_turn.c, the load tail) calls
+`rl_46dbf5` / `rl_46dd34` (src/rl_terr.c), which step the shared LFSR
+`rl_404b2c` on retail's `DAT_00591564` (`g_bf_591564`, seeded 0x34518632
+by `rl_4b2258`, src/rl_main.c) and write the feature / variant registers
+`DAT_0057c8a4` / `DAT_00568200` — the same re-roll retail does, from the
+same state.  Only the legacy `main.c` load path still uses the local
+fixed seed.
+
+*Re-checked 2026-11-18 against the IDA export: classify 0x46dbf5 (+3 = DAT_0057c8a4 + DAT_00568200, LFSR 0x404b2c only when DAT_0057c8a4 == 22), seed 0x34518632 at 0x4b2258 confirmed; the port paragraph now describes rl_4976a1 → rl_46dbf5 on retail's LFSR (the fixed-seed divergence is legacy main.c only).*
 
 ## 202 — the AI pathfinder's move-cost grid base (0x4f3ffe) is the cost cells (0x4f4080) MINUS 0x41 int16; it must be bound, or the first AI army to move NULL-derefs
 
@@ -7006,12 +7106,37 @@ its move-cost input at `g_terrain[cell + dir]` for the nine direction offsets
 **`COST_DIAG == +0x41` is the cell ITSELF**.  So the grid's NW-sub-table base
 (retail 0x4f3ffe) is the per-cell cost grid (retail `DAT_004f4080` =
 `g_strat_move_cost`) **minus 0x41 int16**, and the grid needs a **0x41-entry skirt
-on each side** so edge cells' off-map neighbours read cost 0 (impassable).  The
+on each side** (fill 0x46f700 reads `word_4F3FFE` / `4F4000` / `4F4002` /
+`4F407E` / `4F4080` / `4F4082` / `4F40FE` / `4F4100` / `4F4102` [cell]: the cost
+of the neighbour it is about to enqueue).  In retail that skirt is NOT dedicated
+zero storage: 0x4f3ffe..0x4f407f is ordinary .data and holds `DAT_004f4070` — the
+fill's own source-cell index (`a2 + (a3 << 6)`), so row-0 cells at columns 55..58
+would read that index as a north / diagonal neighbour's cost.  A cell is enqueued only when its
+own cost is non-zero, so this matters only on a map whose row-0 cells there are
+passable (edge cells are normally sea, cost 0 — not checked on every map); the
+legacy padded zero skirt (`src/engine_strat_cost.c`) differs only then, and under
+rhost / the data image the pathfinder runs on retail's own bytes.  The
 port had `g_strat_move_cost` as a bare `[4096]` array and never bound it — binding
 the pathfinder to it directly is doubly wrong (off by 0x41 AND runs off the
 unpadded end).  Fix: `g_strat_move_cost` is now a `+0x41` view into a padded
 backing; `engine_strat_cost_pathfield_base()` returns the 0x4f3ffe base, bound in
 `engine_game_init_bind_runtime_tables`.
+
+The gap stayed latent until the brain dispatcher was completed: at the time the
+port's ONLY on-engine caller of the pathfinder was the AI brain (steps 6/9/0xb
+deployment; retail has eight callers of 0x46f700 — 0x4280e9, 0x429418, 0x43723a,
+0x437fd7, 0x467196, 0x4a5667, 0x4a98fe, 0x4ac499), and in a turn-1 headless SP world
+steps 9/0xb find no field armies to move (reached-but-input-empty, like step 1).
+**Brain step 7's keep-garrison muster (commit fd50752) creates the first AI army
+that actually moves**, so it was the first code to invoke the pathfinder on-engine —
+and it crashed (access violation in `engine_path_field_fill`) until the grid was
+bound (commit f6e77d5).  Corollary: that crash is positive proof step 7 is live +
+active on the real new-game world.
+
+> 📍 `src/engine_strat_cost.c` (`g_strat_cost_grid`, `engine_strat_cost_pathfield_base`),
+> `src/game_init.c` (`engine_path_field_bind_terrain`), `src/engine_path_field.c`.
+
+*Re-checked 2026-11-18 against the IDA export: base 0x4f3ffe = 0x4f4080 − 0x41 int16 confirmed (0x46fe2e `movsx eax, word_4F3FFE[eax*2]`); added that retail's lower skirt holds DAT_004f4070 (not zeros); moved here the "latent until step 7" paragraph that had landed at the end of #203; retail caller list.*
 
 ## 203 — terrain drawer-B kind-2 **phase-4** (right-edge overhang, FUN_00456fd8) was unported → the "blacksmith forge" top dropped on right-column tiles
 
@@ -7032,24 +7157,26 @@ capture; the overhang is terrain pass-1, not the overlay/army/feature passes).
 Mis-attributed twice before settling: it is NOT the cat-7 army unit at that cell
 (`tile_army` cat 7 → return, faithful to retail FUN_004071a0 `0x40786f`), NOT a
 feature-pass head-link (cell +5 == 0 in save AND retail render dump), NOT the
-overlay city/army pass.  Fix: extracted `456fd8`'s branch-B strip table
+overlay city/army pass.  Fix (then): extracted `456fd8`'s branch-B strip table
 (stride 0x3a, 28 zero-skip copies, init_off 0 — same shape as 455f04) via
 `tools/extract_drawb_stripB.py 456fd8` → `src/gen/drawb_stripb_456fd8.h`, added the
-`kind == 2 && phase == 4` dispatch case in `drawer_b`.  Verified: grid_load_dense
+`kind == 2 && phase == 4` dispatch case in `drawer_b`.  (Retail: `drawer_b` 0x406673
+param `a1` is the phase, `byte_591568` the kind; phase 4 calls `sub_456FD8` for kind 2,
+then re-tests the kind global for kind 3 → 0x4580a9.)  Verified: grid_load_dense
 blacksmith box 157→17 px, whole-frame mean parity 0.116%→0.058% (the same right-edge
 overhang recurs on cells 3640/7280 across all frames).  Residual 17 px = the
 forge-fire anim phase (8 px, port renders anim frame 0) + a pre-existing 9-px
-left-edge terrain clip diff (unrelated, `oldport == port`).  Still skipped: kind-3/4
+left-edge terrain clip diff (unrelated, `oldport == port`).  Still skipped then: kind-3/4
 **edge** phases (param_5=2) — one off-blacksmith cell (4160) in this frame.
 
-The gap stayed latent until the brain dispatcher was completed: the ONLY on-engine
-caller of the pathfinder is the AI brain (steps 6/9/0xb deployment), and in a
-turn-1 headless SP world steps 9/0xb find no field armies to move
-(reached-but-input-empty, like step 1).  **Brain step 7's keep-garrison muster
-(commit fd50752) creates the first AI army that actually moves**, so it was the
-first code to invoke the pathfinder on-engine — and it crashed (access violation in
-`engine_path_field_fill`) until the grid was bound (commit f6e77d5).  Corollary:
-that crash is positive proof step 7 is live + active on the real new-game world.
+Now: every overhang strip is ported — `src/engine_map_terrain.c` `drawer_b` dispatches
+all kinds × phases × the three views to the instruction-for-instruction blitters
+`src/gen/mapblit_<va>.h` (`tools/gen_mapblit.py`; 456fd8 → `engine_map_terrain_strip_456fd8`,
+wrapped as `rl_456fd8` in `src/rl_link_mapview.c`); `g_n_drawb_skipped` is gone
+(`engine_map_terrain_drawb_skipped()` returns 0) and `drawb_stripb_*.h` is no longer
+included.
+
+*Re-checked 2026-11-18 against the IDA export: drawer_b 0x406673 → sub_456FD8 on phase 4 / kind 2 confirmed; pointers moved to the generated mapblit headers; the trailing "latent until step 7" paragraph belonged to #202 and moved there.*
 
 ## 204 — the multi-line event scroll (types 5–9) lays its objectives out through a SHARED y-accumulator that the wrap renderer advances per WRAPPED line — not a fixed per-block stride
 
@@ -7058,7 +7185,7 @@ in-game welcome/objectives + combat hints 0xc8..0xda) stacks N word-wrapped body
 sub-strings.  Each block's height is DATA-dependent — a long objective wraps to >1
 line — so the panel height and the next block's Y can't be pre-computed.  Retail
 threads this through a **shared module global `DAT_005cd4f8`** (= the gfx_text
-`line_y_acc`, `g_line_y_acc` in the port): the wrap renderer `FUN_0040328e`
+`line_y_acc`, `g_gfx_line_y_acc` in the port): the wrap renderer `FUN_0040328e`
 (`gfx_wrap_localized`) bumps it by the per-line height (`0x18` tall font / `0x10`
 else) for **every wrapped line it emits** (its lines 71–78, alongside the local
 cursor), and the caller seeds it + adds a flat `0x10` gap between blocks.  So the
@@ -7069,12 +7196,15 @@ used a fixed per-block stride (`row += 0x10` or `0x20`) instead of the shared
 accumulator **collapsed a wrapping objective onto the next one** ("them multiply"
 overprinting "Make weapons…") AND mis-sized the panel — because with a fixed stride
 `body_h` no longer reflects the real wrap, which also flips the `body_h < 0x61`
-y-bump.  Fix (commit pending): drive the arm off `gfx_text_{,set_}line_y_acc`
-exactly like retail.  Verified on `endturn_seal` t030 (welcome objectives 0xc8,
+y-bump.  Fix: drive the arm off `gfx_text_{,set_}line_y_acc`
+exactly like retail (now also `rl_47309e`, src/rl_turn.c, on retail's own
+`DAT_005cd4f8`).  Verified on `endturn_seal` t030 (welcome objectives 0xc8,
 type 7): objectives-frame diff 43%→14.8%, and the objectives panel proper
 (x[16,464) y[64,232)) is now **0-px byte-exact** vs retail.  The 14.8% residual is
 the SEPARATE stale-256-warning block (y[272,383], below the panel) — the dismiss
 doesn't repaint the map there (the "256-warning dismiss-tick" follow-up).
+
+*Re-checked 2026-11-18 against the IDA export: 0x40328e bumps DAT_005cd4f8 by 24 / 16 per wrapped line; 0x47309e's final arm seeds 32 (measure, +16 a block, `<= 96` bump) then 64 (render) — confirmed; port names updated (g_gfx_line_y_acc, rl_47309e).*
 
 ## 205 — the in-game dispatcher's view-mode-2 LMB path BARE-RETURNS, skipping the tail edge latch (the one asymmetric exit)
 
@@ -7116,18 +7246,28 @@ calls `gfx_panel_draw` directly; ~1.2 KB of blit code (00409934/9c93) needs no
 separate port.  (The clip-mode dispatch DAT_005cdd20/DAT_0058fe18 in 00409934 maps
 to gfx_panel.c's `blit_border_tile` clip_x_mode/clip_y_mode 1:1.)
 
-## 208 — FUN_00426216 inside the terrain-info render is a DirectSound SFX-cue seam, not a render/state mutation (a no-op under audio-off)
+## 208 — FUN_00426216 inside the terrain-info render is a DirectSound SFX cue (restart effect buffer k), not a render mutation (a no-op with sound off)
 
 `FUN_0041c208`'s army-stats arm (`flags&0x80 && terrain_type<0xd`) calls
-`FUN_00426216(10/8/9)`.  It is easy to read as part of the stat layout, but the
-decompile shows it indexes a COM-object table `&DAT_00522afc + arg*4` and invokes
-two vtable slots (+0x48 then +0x30) — an IDirectSoundBuffer status query / restore
-(the army-info UI sound cue).  It is the same `army_move_alert` seam the port maps
-FUN_00426216 to (it dispatches to the unbound `g_alert_fn`).  Because drop-in audio
-is off by default (feedback_mute_and_skip_intro), it is a no-op, so the port records
-the cue arg in the classifier (`alert_arg`) for fidelity but the draw driver elides
-the call — matching the project-wide deferred-SFX convention (cf. the event-scroll
-renderer's TODO(sfx) sites).  Not load-bearing for the panel pixels.
+`FUN_00426216(10/8/9)`.  It is easy to read as part of the stat layout, but it
+indexes the effect-buffer table `DAT_00522afc[arg]` (IDirectSoundBuffer pointers)
+and calls two vtable slots: +0x48 = `Stop`, then +0x30 = `Play(0, 0, 0)` — it
+restarts effect `arg` from the top (the army-info UI sound cue), storing each
+HRESULT in `DAT_00522b58` and returning `Play == DS_OK`.  It returns 0 with no call
+when DirectSound is absent (`ppDS == 0`), the buffer slot is empty, or the effects
+switch `DAT_0053f214` is off — so with sound off it touches nothing; with sound on
+its only state write is `DAT_00522b58`.  Not load-bearing for the panel pixels.
+The same function is retail's `army_move_alert` (callers 0x40d6ad / 0x40d7b8 /
+0x40da1e / 0x412b33 / 0x41c208 / 0x438b02 / 0x43a997 / 0x46673c / 0x46873f /
+0x468ae2: button presses, blocked army steps, plunder).
+
+Port: `rl_426216` (src/rl_io.c) is the port; the terrain-info classifier still
+records the cue (`alert_arg`, src/engine_terrain_info.c) and its env seam
+`seam_ti_alert` (src/rl_link_mapview.c) calls `rl_426216`, so the cue is no longer
+elided; the legacy `engine_army_move.c` `g_alert_fn` seam is bound the same way
+(`seam_alert`, src/rl_link_logic.c).
+
+*Re-checked 2026-11-18 against the IDA export: 0x426216's vtable slots are Stop (+0x48) and Play (+0x30), not a status query / restore; gates ppDS / buffer / DAT_0053f214, HRESULT in DAT_00522b58; port now rl_426216, called through the terrain-info seam.*
 
 ## 209 — the strategic map needs the EVERY-FRAME composite (FUN_004050c0, tick line 42), not just the demand-redraw render (FUN_0040f1a0, line 36)
 
@@ -7141,8 +7281,14 @@ if (DAT_0056d650 == 0 && DAT_0057c8fc == 0 &&
     (DAT_004eac50 == 0 || DAT_004eac50 == 0x10)) FUN_004050c0();
 ```
 
-FUN_004050c0 (53 B) bumps the 0..3 redraw phase + calls FUN_004cfb08 (the 16 ms-
-gated anim-counter advance + the 3-cluster map-scene render).  The port had ONLY
+FUN_004050c0 (`engine_map_scene_tick`, 493 B in IDA) bumps the 0..3 redraw phase
+`DAT_0057d380`, advances the anim counters `DAT_0057d378` (mod 128) / `DAT_0057d388`
+(mod 96) — gated by the GOG 2.0.0.3 patch's jmp-detour 0x4050f0 → stub
+0x4cfb08..0x4cfb48: advance only when ≥ 0x10 ms (`GetTickCount`) passed since the
+PREVIOUS call (`DAT_005ceffc` is re-stamped every call, `DAT_005ceff8` keeps the
+prior stamp) — then renders the 3-cluster map scene (0x40526e terrain, 0x405602
+overlay, 0x405487 map) and re-picks the dominant county `DAT_0057c93c`.  (Ghidra
+showed the 53-byte head and the stub as separate functions.)  The port had ONLY
 the demand-redraw seam, so the map was static between redraws and the anim
 counters were pinned at (0,0).  Consequences, all one root cause:
 
@@ -7162,7 +7308,7 @@ counters were pinned at (0,0).  Consequences, all one root cause:
   terrain) — the every-frame composite re-reads the season banks each frame, so
   a bank reload shows on the next frame.
 
-Drop-in deviation: the port composes the FULL strat frame each in-game frame
+Drop-in deviation (legacy own-layout tick, engine.c): the port composed the FULL strat frame each in-game frame
 (engine_screen_strat_render) rather than retail's incremental map-scene-only
 (FUN_004050c0 leaves the HUD untouched).  The port already memset-clears +
 fully redraws each strategic frame, so a full repaint is simpler, has no
@@ -7172,11 +7318,17 @@ keeps the single-shot seats (--strat-map/--strat-load/--ti-cell) + the
 capture-parity harness at anim frame 0 for byte-exactness; only the in-game
 tick (g_engine_state==3) sets LIVE.
 
-Turbo-capture caveat: the 16 ms anim gate (FUN_004cfb08, now_ms delta) barely
+The retail-layout frame driver `rl_4b99c0` (src/rl_host.c) has no such deviation:
+it calls `rl_40f1a0` (demand redraw) and then `rl_4050c0` under retail's exact
+condition, map-scene only, in retail's order.
+
+Turbo-capture caveat (legacy Frida captures): the 16 ms anim gate (stub 0x4cfb08, delta since the previous call) barely
 advances under --turbo on BOTH engines, so cattle/castle stay near frame 0 on
 both sides — which is exactly why grid_load_dense parity stays clean (0.055%
 mean).  The animation is a real-time-gameplay effect; a season change (a STATE
 change, not anim-gated) shows immediately on the next frame regardless.
+
+*Re-checked 2026-11-18 against the IDA export: 0x4b99c0's `56D650 == 0 && 57C8FC == 0 && (4EAC50 == 0 || 4EAC50 == 0x10)` → 0x4050c0 confirmed; 0x4050c0's size / patch-stub gate corrected; the full-frame deviation is the legacy engine.c tick, rl_4b99c0 follows retail.*
 
 ## 210 — the "+0x1c0/+0x1c1 dual-use byte" scare was a false alarm: it's one concept (keep level) read by two formulas, not two meanings
 
@@ -7369,7 +7521,7 @@ runs; the clear then restored a backdrop captured on the PREVIOUS
 screen onto the fresh frame — stamping old-panel pixels (the 65♥
 rectangle) over the new panel.
 
-Port compensation (kept local, same pattern as the widget-repaint
+Legacy port compensation (engine.c's own-layout tick; kept local, same pattern as the widget-repaint
 note): `g_canvas_repainted_this_tick` — raised by every full-frame
 paint arm (screen-0 / screen-4 / county-panel demand arms + the
 every-frame composite), reset at the tick top.  The tooltip treats a
@@ -7379,6 +7531,16 @@ RE-CAPTURES before re-rendering.  Visible pixels match retail.  If the
 port's input dispatch is ever moved to retail's tick position, this
 compensation becomes inert (the flag is never set when the clear runs)
 and can be removed.
+
+The retail-layout frame driver `rl_4b99c0` (src/rl_host.c) calls `rl_40f1a0` →
+`rl_4050c0` → `rl_4ba26e` → `rl_476e95` → `rl_42ff10` in retail's order, so on that
+path the compensation is moot; `g_canvas_repainted_this_tick` lives only in the
+legacy engine.c tick.  (The "line N" numbers above are Ghidra's 4b99c0.c lines; in
+the IDA export the same calls are `engine_screen_dispatch`, `engine_map_scene_tick`,
+`engine_diplomacy_action_refresh` (= 0x4ba26e, misnamed there), `engine_tooltip_tick`,
+`engine_ingame_input_dispatch`.)
+
+*Re-checked 2026-11-18 against the IDA export: 0x4b99c0 order 0x40f1a0 → 0x4050c0 → 0x4ba26e → 0x476e95 → 0x42ff10 confirmed; port note updated (rl_4b99c0 dispatches input at retail's position).*
 
 ---
 
@@ -7464,13 +7626,16 @@ popup-timing story can't explain.  No fix needed; severity cosmetic.
 > (`stateDumpOnce`), `tools/traces/slot_triage_probe.jsonl`, Ghidra
 > `FUN_00467770` (plane unpack) / `FUN_004063c1` (dirty-bit render).
 
-## 217 — the trade grid (0x0c) computes its figures ONLY on the open render; the per-frame refresh redraws content+arrows with NO compute, so a purchase in progress survives the redraws its own arrows drive
+## 217 — the trade grid (0x0c) computes its figures only in its render 0x416308 (open + demand redraw); the per-frame refresh redraws content+arrows with NO compute, so a purchase in progress survives the redraws its own arrows drive
 
 `FUN_00428daf` (the trade-figure compute) unconditionally zeroes the running
 buy/sell net (`DAT_00554170`), total (`DAT_00553f64`), and ale delta
-(`DAT_0053e8c0`) at its top.  Retail runs it exactly once per grid open — from
-`FUN_0043530e` → `FUN_00416308` (the OPEN render) — and then never again while
-the grid is up: the per-tick refresh is `FUN_004ba26e`'s 0x0c arm, which draws
+(`DAT_0053e8c0`) at its top.  Its only caller is the grid render
+`FUN_00416308`, which runs on the open (`FUN_0043530e` → `FUN_00416308`) AND on
+every demand redraw while the grid is up (`FUN_0040f1a0` case 0x0c → `FUN_00416308`,
+whenever something sets `DAT_0057d340`) — a demand redraw mid-trade DOES zero the
+net.  The arrows never request one (no `DAT_0057d340` write in `FUN_00435339` etc.),
+and the per-tick refresh is `FUN_004ba26e`'s 0x0c arm, which draws
 `FUN_0041635f` (content) + `FUN_0040cfd2(0x30,0x50,…)` (the arrow strip) but
 does NOT call the compute.  So the arrows (`FUN_00435339` etc.) mutate the net,
 and every subsequent frame repaints the new figure without wiping it.
@@ -7478,11 +7643,15 @@ and every subsequent frame repaints the new figure without wiping it.
 The trap for a drop-in that folds the render into a single demand-redraw arm:
 if that arm calls the compute, then clicking an arrow (which requests a
 redraw) recomputes → net snaps back to 0 → the panel is frozen at "Buying 0 /
-Total 0" no matter how many times you click.  The port splits it exactly like
-retail: `engine_trade_render` (open, computes once behind a one-shot guard) +
+Total 0" no matter how many times you click.  The legacy port split it as
+`engine_trade_render` (open, computes once behind a one-shot guard) +
 `engine_trade_refresh` (the per-frame content+arrows, no compute), the latter
 run from the UNCONDITIONAL per-frame render seam (same tier as the county
-0x15/0x19 arrow refresh), and the arrow actions request no redraw at all.
+0x15/0x19 arrow refresh), and the arrow actions request no redraw at all.  The one-shot guard was
+narrower than retail (a demand redraw on 0x0c did not recompute); the
+retail-layout entry `rl_416308` (src/rl_link_screens.c) sets
+`g_trade_needs_compute = 1` before every render, so it recomputes on the open and
+on every demand redraw, as retail does.
 
 Corollary — the merchant zone hit-test `FUN_004357a6` (screen 8) also runs
 every frame in the router and sets the hovered good (`DAT_0056d8ac =
@@ -7493,6 +7662,8 @@ a rug good; porting it as click-only leaves the good stale after a trade.
 > the arrow arms), `src/engine.c` (`ti_ui_router` trade arm, the per-frame
 > `engine_tick_trade_render(0)` seam, `ti_merchant_zone` hover), Ghidra
 > `FUN_00416308` / `FUN_00428daf` / `FUN_004ba26e` (0x0c) / `FUN_004357a6`.
+
+*Re-checked 2026-11-18 against the IDA export: 0x428daf zeroes DAT_00554170 / DAT_00553f64 / DAT_0053e8c0 and has the one caller 0x416308, whose callers are 0x43530e AND 0x40f1a0 case 12 — "only once per open" corrected; 0x4ba26e case 12 = 0x41635f + 0x40cfd2(0x30, 0x50, 0x4dd838, …) with no compute, and 0x4357a6's unconditional DAT_0056d8ac write, confirmed.*
 
 ## 218 — the Court/Treasury (0x09) opens over the MAP from the strategic bottom-right tab strip, NOT the merchant; and its .rdata "button table" 0x4dc680 is a short[] HOTSPOT table, not a sprite-button record table
 
@@ -7527,14 +7698,19 @@ merchant/palette load (the port's `engine_dev_force_treasury_render` just
 paints over the retained map), and wire the organic open by un-narrowing the
 already-ported End-Turn strip hit-test (`engine_endturn_hit_test` = the
 `0x4dc680` walker) to also fire the Court tab.  The seal's real exit is Rankings
-`0x20` (`FUN_004351c4`), not the map — deferred until 0x20 renders; RMB closes
-to the map in the meantime (retail's own close arm, `42ff10` @ `0x430757`).
+`0x20` (`FUN_004351c4`), not the map — deferred then until 0x20 rendered; RMB
+closes to the map (retail's own close arm, `42ff10` @ `0x430757`).  Now ported on
+retail's layout: `rl_4351c4` (src/rl_ctl.c), the screen-9 per-frame strip
+(`FUN_004ba26e` case 9 = `FUN_0040cfd2` over `DAT_004dd928`) in `rl_4ba26e`
+(src/rl_host.c).
 
 > 📍 `src/engine_treasury.c` (`FUN_00416925`), `src/engine.c`
 > (`engine_tick_treasury_render`, the screen-9 demand + per-frame seams,
 > `k_treasury_tab` in `engine_endturn_hit_test`, `engine_dev_force_treasury_render`),
 > `src/engine_ingame_input.c` (screen-9 close), Ghidra `FUN_00416925` /
 > `FUN_0040f1a0` case 9 / `FUN_0043ae30` / `FUN_00432967` / table `0x4dc680`.
+
+*Re-checked 2026-11-18 against the IDA export: 0x432967 = 0x40e3ee(0x1de, 0x1ae, 0x4dc680, 6); 0x43ae30 case 2 → screen 9; 0x40f1a0 case 9 = bare 0x416925 (no file / palette load) — confirmed; port status updated (Rankings exit ported).*
 
 ## 219 — a type-5 (press-latch) router seal FIRES from pass 1 of the button dispatch, ~0x14 frames after the click, on a frame where the dispatch RETURNS 0 — so a follow-up transition must key off the action flag, NOT the dispatch's `hit`
 
@@ -7681,6 +7857,7 @@ The shared phase-cadence counters (`_DAT_004e5b10` last-base-timestamp +
 `DAT_005aea54/44/48/4c`) drive every ambient animation: torch flames
 (0..0xc), the armory demo figures (0..0x17), flag waves, the troop-march
 move/walk cadence (20 ms / 80 ms flags).  They are pure functions of the
+`timeGetTime` sequence the ticks sample — with a fixed virtual-clock step, of the
 ENGINE-TICK COUNT since boot — and the two engines spend a different number
 of ticks inside boot/menu/load, so at anchor+offset captures every ambient
 animation samples a different frame even when all pixel-producing state is
@@ -7705,9 +7882,13 @@ flip.  Three traps found calibrating it against the armory troop march
    input before its render seam, so a same-tick step must be skipped
    (engine_armory.c's arm-tick skip latch) or the animation leads by one
    move permanently.
-3. **The 20 ms base tick is an ACCUMULATOR, not a last=now timer** — at the
-   17 ms turbo step it fires ~6 of every 7 ticks (not every other), which is
-   why a one-tick skew shows up as a CONSTANT pixel offset instead of noise.
+3. **(corrected) The 20 ms base tick is a last=now timer, not an accumulator** —
+   `FUN_004bbc80`: `d = timeGetTime() − DAT_004e5b10; if (d >= 0x14 || d < 0)
+   { DAT_004e5b10 = now; ++DAT_005aeb2c; DAT_0058fcb0 = 1; }` (0x4bbce5..0x4bbd10).
+   The base re-stamps to NOW, so the remainder is dropped: at a 17 ms step it
+   fires every other tick (34 ms), not ~6 of 7.  The measured CONSTANT pixel
+   offset from a one-tick skew stands; the original "accumulator" explanation
+   of it was wrong.
 
 With the pin + skip latch the armory_family olv3 lands 9 of 11 frames at
 index-diff 0 — including a mid-march frame — with only ~10 px of
@@ -7720,6 +7901,13 @@ PostMessage latency — measured inert here, kept for seat fidelity.)
 > `tools/frida/openlords2-agent.js` (`pinPhaseCounters`),
 > `tools/trace_studio_v3/olv3_capture.py` (default-on), Ghidra tick lines
 > 99/192, `src/engine_phase.c` for the counter map.
+
+Under rhost the question is gone: retail and the port run on the same virtual
+clock in one process, so the counters agree without a pin; `--phase-pin` is a legacy
+Frida / olv3 capture device.  The retail-layout port of the counter step is
+`rl_4bbc80` (src/rl_host.c).
+
+*Re-checked 2026-11-18 against the IDA export: 0x4bbc80's base tick re-stamps DAT_004e5b10 = now (`d >= 0x14 || d < 0`) — trap 3's "accumulator / 6 of 7" claim was wrong and is corrected; counter list (DAT_005aeb2c, DAT_0058feb4/b0/b8, DAT_005aea54 /13, 44 /16, 48 /24, 4c /32) confirmed.*
 
 ## 223 — Send Supplies (0x18) doesn't transfer goods; it SPAWNS A CARAVAN through the AI's own dispatcher — and its staging array IS the AI's, so the two paths are byte-identical
 
@@ -7756,8 +7944,12 @@ now handled in `engine_sendsupplies.c` + `engine.c`:
    (sprite 0x1f) = param 0 = Cancel.  Both are type-5 press-latch seals, so —
    like the Court→Rankings seal (quirk #219) — the transition must be driven off
    the action flag, not the dispatch's `hit` return (the latch fires from pass 1
-   where the dispatch returns 0).  Send with target==source pops a "can't send to
-   self" scroll (FUN_0040e6f2) — deferred; the port stays on the screen.  The 2
+   where the dispatch returns 0).  Send with target==source opens a confirm dialog
+   (`FUN_0040e6f2(14, 160, 160, FUN_0043b101)` — dialog 14, not a scroll) whose
+   callback `FUN_0043b101` returns to the map on param 1 and stays on 0x18 otherwise;
+   in MP (`DAT_00553030`) Send posts message 47 (`FUN_0043eda0(47, 0)`) instead of
+   committing locally.  (Deferred in the legacy port; `rl_43b04c` (src/rl_ctl.c) /
+   `rl_43b101` (src/rl_ui4.c) now port both.)  The 2
    "send-all / return-all" boxes over the goods rows are a SEPARATE FUN_0040e3ee
    hotspot table (DAT_004dc7e8 at origin 0x40,0x30 → FUN_0043b32a).
 
@@ -7786,6 +7978,8 @@ quirk #216/#222 — NOT a Send-Supplies pixel).
 > close case).  Retail FUN_0041ad5d / FUN_0041aea2 / FUN_0043ae30 / FUN_0043b04c
 > / FUN_0043b145 / FUN_004292af / FUN_0043b1ca-b32a / FUN_0043b412.
 
+*Re-checked 2026-11-18 against the IDA export: 0x43b04c → 0x43b145 → 0x4292af (→ 0x46e1b0) and 0x43b145's provision + 2 × (workforce / grade / plan) tail confirmed; the self-send arm is confirm dialog 14 with callback 0x43b101 (was "a scroll"), plus the MP message-47 arm; port status updated.*
+
 ## 224 — Noble Faces (0x0b) is the 5th county-action tab (param 5, NOT owner-gated), draws over the retained map with NO recomposite, and is byte-exact only with BOTH the demand render AND the per-frame button strip
 
 Porting the Noble Faces / diplomacy partner-select screen (0x0b, FUN_00416cf3 +
@@ -7797,7 +7991,7 @@ county-action strip.  Five facts pinned it down, all handled in
    — the strip is 6 records (5 action tabs + End-Turn), each 0x18 B:
    {x0,y0,x1,y1 s16; action fn @0x08; type @0x0f; DAT_0059154c param @0x10}.  The
    tabs dispatch through FUN_0043ae30(DAT_0059154c): param 1 → Armory 0x17, 2 →
-   Court 0x09, 3 → Send-Supplies 0x18, 4 → **Castle 0x1b** (still unported), 5 →
+   Court 0x09, 3 → Send-Supplies 0x18, 4 → **Castle 0x1b** (`FUN_00436a88`; unported then, now `rl_436a88` in src/rl_ctl.c), 5 →
    **Diplomacy 0x0b**.  Diplomacy's box is [0x82,0]-[0xa1,0x1d] at origin
    (0x1de,0x1ae) → screen (608..639,430..459).  UNLIKE the armory/send-supplies
    tabs (owner-gated, post a 0x70 scroll on a foreign county), FUN_0043611b is a
@@ -7847,8 +8041,10 @@ opponents (Knight/Baron/Bishop/Countess) with faces, mood/relation meters, shiel
 + status icons, the centered partner name "The Knight", and the state-0 action
 set (gift/compliment/insult/alliance) with the arrow sprites — pixel-identical to
 retail.  The action-button clicks (→ the 0x1a diplomacy-action screens,
-FUN_00436141…FUN_0043631e) are the widget-router's 0x0b arm — DEFERRED; they
-render but don't navigate (a button click at x=0x190 misses the seal test at
+FUN_00436141…FUN_0043631e) are the widget-router's 0x0b arm — DEFERRED at the
+time (since ported on retail's layout: `rl_436141` (src/rl_ctl.c) … `rl_43618b` / `rl_43631e` (src/rl_glue.c), the 0x0b
+strip in `rl_4ba26e` src/rl_host.c); in that legacy port they
+rendered but didn't navigate (a button click at x=0x190 misses the seal test at
 x=0x1a8, so it neither acts nor closes).  Residual diff is only OUTSIDE the
 panel: `map_before` catches retail's Game-Objectives hint scroll still open
 (trace timing, quirk #222 tail), `map_resettled` is the load-flip cosmetic
@@ -7861,6 +8057,8 @@ panel: `map_before` catches retail's Game-Objectives hint scroll still open
 > param 5 / FUN_004ba26e case 0x0b / FUN_0040cfd2 over DAT_004dd940 /
 > FUN_004a1e6c.
 
+*Re-checked 2026-11-18 against the IDA export: 0x43ae30 case 4 → 0x436a88, case 5 → 0x43611b (= screen 0x0b, DAT_0057a0f8 = 0, DAT_0057d340 = 2, no owner gate); 0x40f1a0 case 11 = bare 0x416cf3 (not a caller of 0x4050c0); 0x4ba26e case 11 = 0x40cfd2(0, 0, 0x4dd940, DAT_00553ee8) — confirmed; port status updated.*
+
 ## 225 — the diplomacy-action GIFT screen (0x1a mode 0) commits by ENQUEUING into the AI's own diplomacy inbox (not an instant effect) + transfers the gold immediately; and its panel text is byte-exact ONLY with the illuminated-drop-cap flag (DAT_0058fe2c) that colours every leading A..Z red
 
 Porting the first diplomacy-action sub-screen — the GIFT panel (screen 0x1a, the
@@ -7870,7 +8068,9 @@ DAT_005651cc (0..6) and screen 0x1a, and the render dispatch FUN_0041789b
 switches on it — mode 0 = gift (FUN_00417960), 1..4 = message screens
 (FUN_00417aef, compliment/insult/…), 5..6 = ask-ally-to-attack (FUN_00417cef).
 Only mode 0 is self-contained; the others need the runtime message buffer
-(0x53f1e0, all-zero statically) / a target list (0x5530b0) and are DEFERRED.
+(0x53f1e0, all-zero statically) / a target list (0x5530b0) and were DEFERRED in the
+legacy port (now `rl_41789b` → `rl_417960` / `rl_417aef` / `rl_417cef`, src/rl_ui4.c /
+src/rl_render.c).
 Three facts pinned the gift port:
 
 1. **The confirm is a PRODUCER, not an instant effect — the same shape as trade
@@ -7882,7 +8082,9 @@ Three facts pinned the gift port:
    diplomacy action exactly as the AI does; the AI reacts at end-turn.  A gift
    ALSO moves the gold immediately inside FUN_004a2621 (local +0x118 −= amt,
    partner += amt, clamped to the giver's cash), while the inbox keeps the
-   original (unclamped) value.  Ported as `engine_diplomacy_queue_action`.  (The
+   original (unclamped) value.  (Precisely: the transfer runs for ANY action with a
+   non-zero value, and only once a free inbox slot was found — a partner whose five
+   slots are all taken gets neither the message nor the gold.)  Ported as `engine_diplomacy_queue_action`.  (The
    +0x89 compliment counter bump is mode-1 only; +0x90 is the pending scratch the
    AI resets.)  The Yes seal is a type-5 latch → drive the transition off the
    action flag, not `hit` (quirk #219); the No seal returns to the roster (0x0b),
@@ -7915,7 +8117,8 @@ after the arrow matches; and — the conclusive interaction proof — the HUD "9
 Crowns" readout after confirm is byte-exact (0 diff in the whole HUD band), so the
 10-crown transfer landed identically on both engines.  All residual diff is the
 quirk-#216 map layer outside the panel.  Modes 1..6 (message / ally-attack) and
-the portrait partner-select (FUN_004369bd) are DEFERRED.
+the portrait partner-select (FUN_004369bd) were DEFERRED then; both are ported now
+(`rl_417aef` / `rl_417cef`, src/rl_render.c; `rl_4369bd`, src/rl_glue.c).
 
 > 📍 `src/engine_diplomacy_action.c/.h` (the 0x1a render + gift arrow + confirm),
 > `src/engine_diplomacy.c/.h` (`engine_diplomacy_queue_action` = FUN_004a2621),
@@ -7923,6 +8126,8 @@ the portrait partner-select (FUN_004369bd) are DEFERRED.
 > builder), `src/engine_ingame_input.c` (0x1a close case).  Retail FUN_0041789b /
 > FUN_00417960 / FUN_00436372 / FUN_00436408 / FUN_004a2621 / FUN_0040cfd2 over
 > DAT_004dd9d0.
+
+*Re-checked 2026-11-18 against the IDA export: 0x41789b mode switch (0 → 0x417960, 1..4 → 0x417aef(0..3), 5..6 → 0x417cef(0..1)), 0x417960's DAT_0058fe2c = 1 / 0 bracket and 0x4a2621's inbox append (+0x89 bump for type 1, +0x90 = 1) confirmed; added that the gold moves only after a free slot is found (any action with a value); port status updated.*
 
 ## 226 — retail's scratch globals are live state: the distance helpers' |dx|/|dy| (DAT_00591560 / DAT_0058fea0) and the shared cell cursor (DAT_00569570 / DAT_00569578) must be written where retail writes them
 
@@ -7936,7 +8141,7 @@ out-param convention, and "only the distance is consumed, so it is inlined"):
   (FUN_004a0649 / FUN_004a03f2) and the cell finders (FUN_004a65a3 / FUN_004a6735 /
   FUN_004a689d) inlined the distance → `ai_select_target`, `ai_run_campaign`,
   `ai_run_garrison` diverged on exactly those two dwords.
-* **DAT_00569570 / DAT_00569578** is ONE cursor pair shared by ~55 retail functions:
+* **DAT_00569570 / DAT_00569578** is ONE cursor pair shared by 78 retail functions (45 of them write it):
   the box scans (FUN_0046cfbd / FUN_0046d130) and FUN_0046d2a3 use it as their loop
   counters (a hit leaves the cell, a miss the scan's end position), the AI cell
   finders and FUN_004a689d leave their result in it, and FUN_004a65a3's caller
@@ -7949,10 +8154,13 @@ and `g_cell_cursor_col/row` (engine_map_query.c), written exactly where retail
 writes them; the AI finders and the deploy-cell finder use them (out-params kept).
 Nothing in retail reads these values without re-writing them first, so no gameplay
 changed — but the shadow cannot tell dead state from live state, and neither should
-the port.  The other ~45 retail writers of the cursor pair (territory / render loops)
-still count in locals; each needs the same treatment when it is shadow-verified
-(done so far: the box scans, FUN_0046d2a3, FUN_0046e067 `mark_draw_box`, the AI and
-deploy-cell finders).
+the port.  The other retail writers of the cursor pair (territory / render loops) counted
+in locals at the time; each needed the same treatment when shadow-verified (done
+then: the box scans, FUN_0046d2a3, FUN_0046e067 `mark_draw_box`, the AI and
+deploy-cell finders; later #235 and the battlefield ports in `src/engine_bf_*.c`).
+The retail-layout `rl_*` ports run on retail's data image, so they write
+0x569570 / 0x569578 (and 0x591560 / 0x58fea0 through `rl_404f4c` / `rl_404ead`)
+by construction (e.g. `rl_46902a`, src/rl_terr.c).
 
 The cost-field pathfinder (FUN_0046f700 fill / FUN_004701ac trace, AI brain step 0xb)
 is the same story at a larger scale: retail keeps its source cell (DAT_00504020 /
@@ -7967,6 +8175,8 @@ that the AI's step-0xb nearest-army scanners (FUN_00467f2e family) use as their 
 variable and result.  The AI kept a private `s_nearest_occ`; it now counts in the
 shared global (the shadow of `ai_run_per_tick` / `ai_run_movement` showed retail
 leaving 5/6 there in 30 of 33 scenarios).
+
+*Re-checked 2026-11-18 against the IDA export: 0x404f4c / 0x404ead store |dx| / |dy| in DAT_00591560 / DAT_0058fea0 on every call — confirmed; the cursor pair's reach corrected from "~55 functions" to 78 referencing / 45 writing (data_xrefs.tsv); port progress note updated.*
 
 ## 227 — the spawned occupant's roster slot (FUN_004a9f72) is keyed by the OWNER, not the realm
 
@@ -8142,11 +8352,17 @@ OWNED counties):
 
 Fixed: the box scan counts in `g_cell_cursor_col/row`, the scanners call `engine_path_dist_chebyshev`.  No gameplay
 change (nothing reads these without rewriting them first).  `rhost.py verify --only bot2` (3 scenarios): 0
-divergences, hybrid PASS.  Still inlined / unhooked: the battlefield's distance callers (FUN_0047a814, FUN_00489a62,
-FUN_0048b5fc … FUN_00497437, FUN_004843bc, FUN_00484bf9, FUN_0048ef45 …) and the castle-border placer FUN_0046902a.
+divergences, hybrid PASS.  Still inlined / unhooked then: the battlefield's distance callers (FUN_0047a814, FUN_00489a62,
+FUN_0048b5fc … FUN_00497437, FUN_004843bc, FUN_00484bf9, FUN_0048ef45 …) and FUN_0046902a — which is the capital's
+PORT (harbour) placer `engine_territory_place_capital_port` (the water-adjacent plain cell nearest the capital, by
+chebyshev from the cell cursor), not a castle-border placer.  Both are done since: the battlefield ports
+(`src/engine_bf_*.c`) use `g_path_dist_dx / _dy`, and `rl_46902a` (src/rl_terr.c) calls `rl_404f4c` with the cursor
+pair.
 
 > 📍 `src/engine_combat.c` (engine_combat_find_capital_defender), `src/engine_army_ai.c`
 > (nearest_enemy_army / nearest_engageable_army); evidence: rows combat_capital_defender, ai_run_movement.
+
+*Re-checked 2026-11-18 against the IDA export: 0x46d42c's 4×4 box (cap−2 .. cap+1) leaves the cursor at (cap_col+2, cap_row+2); 0x4673b8 / 0x467532 call 0x404f4c — confirmed; 0x46902a's role corrected (capital port placer) and the "still inlined" list marked done.*
 
 ## 236 — the economy screens' scratch is retail .data too: the caravan staging order and the trade grid's figures
 
@@ -8184,11 +8400,15 @@ key cells) over the 64×64 grid (→ 0x1000), FUN_0046dbf5 / FUN_0046dd34 / FUN_
 calls, so the port had modelled it as a local (#130's out-param habit, retired by #226) — but it is .data, the
 shadow compares it, and a hybrid run's state hash includes it.
 
-Not yet written: the feature picker's scratch DAT_0057c8a4 and the variant register DAT_00568200 (FUN_0046dbf5 /
-FUN_0046dd34) — new-game map setup only, which no hook reaches; write them when those functions are hooked.
+Not yet written then: the feature picker's scratch DAT_0057c8a4 and the variant register DAT_00568200 (FUN_0046c2de /
+FUN_0046dbf5 / FUN_0046dd34).  These run not only in new-game map setup but also on every load (the load tail
+FUN_004976a1 calls 0x46dbf5 / 0x46dd34, #201).  Written now: `rl_46c2de` / `rl_46dbf5` / `rl_46dd34` (src/rl_terr.c)
+store `g_bf_57c8a4` / `g_bf_568200` and count in `g_cell_sweep_counter`.
 
 > 📍 `src/engine_territory_globals.c` (`g_cell_sweep_counter`, aliased at 0x53e974 by `tools/rhost/rh_hooks_ai.c`),
 > `src/engine_territory.c`, `src/engine_map_init.c`.
+
+*Re-checked 2026-11-18 against the IDA export: DAT_0053e974's six referencing functions (0x467770, 0x46797d, 0x46dbf5, 0x46dd34, 0x46df51, 0x46dfd5) confirmed; "new-game only / not yet written" corrected (load tail 0x4976a1; rl_terr.c writes both registers).*
 
 ## 238 — the march executor's waypoint residue is the AI step's frame imprint: saved registers, not the last waypoint
 
@@ -8259,7 +8479,7 @@ body esp − 92 (rhost: 0x58fffd60; entry esp 0x58fffd6c).  Measured in pure ret
 `--watch-write 58fffd60`): its last writer before the read is the map scene 0x4b9ce4 → 0x4050c0 → render_frame 0x405487
 → row_phase0 / row_phase1 (0x4059af), whose `call engine_map_render_tile` pushes its return address on that very slot;
 the frame's last one is 0x405ac5 (phase1's last tile, 0x405ac0).  So on the map screens the check sees a code address and
-the liege dismiss never fires.  After the read 0x475e07 stores its kind there (0x475e9a), then 0x47309e's common tail
+the liege dismiss never fires.  After the read 0x475e07 stores its kind there (0x475e97, `DAT_0053e910 − 0xf5`), then 0x47309e's common tail
 pushes DAT_00553064 (the box y, 0x475b23) as the dirty mark's 4th argument onto it.
 
 The port had modelled the read as "the previous call's kind": under the standalone the slot is the port's native stack
@@ -8275,6 +8495,8 @@ scene (the slot then holds the previous popup's box y, never 3 either), render_f
 24/25 = pure retail (mp-trio-p3 fixed; was 23/25).
 
 > 📍 `src/rl_mpnet.c/.h` (rl_475e07, rl_475e07_res_in), `src/rl_turn.c` (rl_47309e), `src/rl_host.c` (rl_4b99c0).
+
+*Re-checked 2026-11-18 against the IDA export: 0x475e10 `cmp [ebp-8], 3` → liege test (player +0x81) → dismiss before any store, 0x474c5f / 0x4b9ef4 / 0x405ac0 / 0x475b23 confirmed; the kind store is at 0x475e97 (0x475e9a is the next instruction, `DAT_00553060 = 0x10`).*
 
 ## 241 — the delayed-action handlers share one frame slot: 0x4479e9's uninitialized local is the pass's carry
 
@@ -8298,3 +8520,28 @@ handlers: 6/6 reached, 0 divergences (4472ce 647,437 calls shadowed at depth 1 =
 hybrid PASS; standalone `--only '^mp-'` 39/39 = pure retail with 0 rl_va misses (was 29 sides via the thunk).
 
 > 📍 `src/rl_ctl.c` (da_run, s_da_res), `src/rl_mpmsg2.c` (rl_4479e9_res, rl_448339_res), `src/rl_mpmsg3.c` (rl_447e0b_res).
+
+## 242 — retail faults at its first paint unless its window starts in the foreground
+
+0x4b2258 creates the main window visible (`CreateWindowExA` style 0x90080000, no ShowWindow) and calls `UpdateWindow`
+before any DirectDraw object exists (0x42e5c0 comes later; 0x4b2258 itself zeroes the primary / back pointers
+`DAT_004eabd0` / `DAT_004eafac` afterwards). The WndProc 0x4b29be:
+- `WM_ACTIVATEAPP` sets the active flag `DAT_004e65a8 = wParam && GetForegroundWindow() == hWnd && !IsIconic(hWnd)`;
+- `WM_PAINT` (no movie open) does BeginPaint / EndPaint and, **if `DAT_004e65a8 == 0`**, 0x451f70: mark the whole
+  screen dirty (0x45240a) and 0x452160(1) — which Blts through `DAT_004eabd0`'s vtable (`BltFast` +0x1c in full-screen).
+
+So when the new window is not the foreground window — the process was started by one that may not take the foreground
+(a background launcher, a scheduled task, another app holding the focus lock) — WM_ACTIVATEAPP leaves the flag 0 (or is
+never sent), the first WM_PAINT calls 0x452160 with `DAT_004eabd0 == 0`, and the game dies on a NULL vtable read before
+its first frame. Launched normally (Explorer / GOG Galaxy: the foreground process starts it) the window is activated
+inside CreateWindowExA and the flag is 1 by the paint.
+
+Found 2026-11-18 by the product build (`openlords2.exe`, the port on real DirectDraw, started from rhost's job runner on
+Windows 11): AV in `rl_452160` ← `rl_451f70` ← `rl_4b29be` at frame 0. The port keeps retail's behaviour; the product's
+host layer (`tools/rhost/rh_real.c`, `real_CreateWindowExA`) makes the window foreground before CreateWindowExA returns
+(input attached to the foreground thread, `SetForegroundWindow`), and its compat-layer parent grants the child
+`AllowSetForegroundWindow`.
+
+> 📍 IDA `0x4b2258` (window bring-up), `0x4b29be` (WndProc: WM_ACTIVATEAPP / WM_PAINT arms), `0x451f70`, `0x452160`;
+> `src/rl_ctl.c` (`rl_452160`), `tools/rhost/rh_real.c`.
+
