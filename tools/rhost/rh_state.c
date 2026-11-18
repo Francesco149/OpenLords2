@@ -53,6 +53,15 @@ static int state_ranges(uint32_t (*r)[2])
     r[0][0] = RT_DATA_LO; r[0][1] = RT_DATA_HI & ~3u;
     return 1 + rh_heap_ranges(r + 1, MAXR - 1);
 }
+/* the shadow's ranges: the state's, .data to its page end. The page's tail past VirtualSize (0x5cee60..0x5cf000) holds
+ * the GOG patch's map-animation stamps 0x5ceff8 / 0x5ceffc: the copy shadow left them at retail's values for the port
+ * pass (rl_4788c6 / rl_448027 skipped the 16 ms step). Not in the hash: the blessed state_sem stays. */
+static int shadow_ranges(uint32_t (*r)[2])
+{
+    int n = state_ranges(r);
+    r[0][1] = (r[0][1] + 0xfffu) & ~0xfffu;
+    return n;
+}
 
 void rh_state_hash(rh_hash_t *h)
 {
@@ -231,7 +240,7 @@ static int copy_commit_tail(const char *name, void (*port)(void *), void *ctx, c
     port(ctx);
     g_shadow_depth--;
     poison(media);
-    int n3 = add_media(r3, state_ranges(r3), media);
+    int n3 = add_media(r3, shadow_ranges(r3), media);
     long diff = 0, px = 0; int k = 0;
     int w = snprintf(why, whyn, "%s:", name);
     if (n3 != n2 || memcmp(r3, r2, (size_t)n2 * 8)) {   /* the port committed other pages than retail */
@@ -269,7 +278,7 @@ static int shadow_copy(const char *name, void (*retail)(void *), void (*port)(vo
 {
     static uint32_t r[MAXR][2], r2[MAXR][2];
     sp_mark(-1); g_spcalls++;
-    int n = add_media(r, state_ranges(r), media);
+    int n = add_media(r, shadow_ranges(r), media);
     sp_mark(SP_RANGES);
     size_t tot = 0;
     for (int i = 0; i < n; i++) tot += r[i][1] - r[i][0];
@@ -285,7 +294,7 @@ static int shadow_copy(const char *name, void (*retail)(void *), void (*port)(vo
     retail(ctx);
     g_shadow_depth--;
     sp_mark(SP_RETAIL);
-    int n2 = add_media(r2, state_ranges(r2), media);
+    int n2 = add_media(r2, shadow_ranges(r2), media);
     if (n2 != n || memcmp(r, r2, n * 8))
         return copy_commit_tail(name, port, ctx, why, whyn, media, r, n, r2, n2, meta, clk0, cw);
     COPY_OUT(g_ret);
@@ -437,7 +446,7 @@ static int shadow_paged(const char *name, void (*retail)(void *), void (*port)(v
         AddVectoredExceptionHandler(1, shadow_veh);
     }
     sp_mark(-1); g_spcalls++;
-    int n = add_media(r, state_ranges(r), media);
+    int n = add_media(r, shadow_ranges(r), media);
     sp_mark(SP_RANGES);
     int pages = 0;
     for (int i = 0; i < n; i++) pages += (int)((((r[i][1] + 0xfffu) & ~0xfffu) - (r[i][0] & ~0xfffu)) >> 12);
@@ -460,7 +469,7 @@ static int shadow_paged(const char *name, void (*retail)(void *), void (*port)(v
     retail(ctx);
     g_shadow_depth--;
     sp_mark(SP_RETAIL);
-    int n2 = add_media(r2, state_ranges(r2), media);
+    int n2 = add_media(r2, shadow_ranges(r2), media);
     if (n2 != n || memcmp(r, r2, n * 8)) {   /* the commit path: the pre-state back, retail rerun on the copy path */
         set_commit(r, n, r2, n2);
         for (int i = 0; i < g_nsp; i++) memcpy((void *)(uintptr_t)(g_spg[i] << 12), g_spre + (size_t)i * 4096, 4096);
@@ -497,14 +506,14 @@ static int shadow_paged(const char *name, void (*retail)(void *), void (*port)(v
     sp_mark(SP_PORT);
     g_armed = 0;
     static uint32_t r3[MAXR][2];
-    int n3 = add_media(r3, state_ranges(r3), media);
+    int n3 = add_media(r3, shadow_ranges(r3), media);
     int cdiff = n3 != n || memcmp(r, r3, (size_t)n * 8);   /* the port changed the commit pattern, retail did not */
     if (cdiff) set_commit(r, n, r3, n3);
     protect_ranges(r, n, 0);
     g_sppages += g_nsp;
     for (int i = 0; i < g_nsp; i++) ord[i] = i;
     qsort(ord, g_nsp, sizeof *ord, cmp_spg);   /* report differences in address order, like shadow_copy */
-    uint32_t data_end = RT_DATA_HI & ~3u;
+    uint32_t data_end = (RT_DATA_HI + 0xfffu) & ~0xfffu;   /* shadow_ranges */
     long diff = 0, px = 0; int k = 0;
     int w = snprintf(why, whyn, "%s:", name);
     if (cdiff) { w += snprintf(why + w, whyn - w, " commit pattern differs (port: %d ranges, retail %d)", n3, n); diff++; }
