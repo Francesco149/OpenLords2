@@ -1,108 +1,131 @@
 # OpenLords2
 
-An open-source reimplementation of **Lords of the Realm II**
-(Impressions Games / Sierra On-Line, 1996).
+An open-source reimplementation of **Lords of the Realm II** (Impressions Games / Sierra On-Line, 1996),
+written in C and checked against the original game function by function.
 
-This is an **educational reverse-engineering and game-preservation
-project**.  The goal is a drop-in replacement for `Lords2.exe` that
-behaves indistinguishably from the original for a user who owns a
-legitimate copy of the game.
+The goal is **full behavioural parity** with the user's own `Lords2.exe` (GOG 2.0.0.3). That means the same game state,
+the same random numbers and the same picture on every frame, for the same input. It is not meant to be a byte-identical
+recompile, and it is not a "close enough" remake. Parity is proven by running the original and the port on identical
+state and comparing them, not by eye.
 
-**Not distributed:** no game assets, no decompiled binary code, no
-copyrighted content of any kind.  You supply your own copy of the game
-(GOG, retail CD, …).
+<p align="center">
+  <img src="docs/media/strategic-map.png" width="49%" alt="The strategic map, Winter 1268">
+  <img src="docs/media/siege.png" width="49%" alt="A siege on the battlefield">
+  <img src="docs/media/battle.png" width="49%" alt="A field battle">
+  <img src="docs/media/county.png" width="49%" alt="A county screen">
+</p>
+<p align="center"><sub>Frames presented by the port running alone (<code>rhost --standalone</code>, no original code),
+identical to the original's frames for the same input. Game art © its owners, shown from the author's own copy.</sub></p>
+
+**Nothing from the game is distributed.** There are no game assets, no decompiled code and no copyrighted content here.
+You supply your own copy (GOG, retail CD …).
 
 ## Status
 
-See [`docs/STATUS.md`](docs/STATUS.md) for a 60-second orientation
-(port coverage %, current phase, top blocker — derived, never stale),
-[`docs/PLAN.md`](docs/PLAN.md) for the roadmap,
-[`docs/PROGRESS.md`](docs/PROGRESS.md) for the dated changelog, and
-[`docs/port-ledger.md`](docs/port-ledger.md) for per-function port
-status.
+**[`docs/STATUS.md`](docs/STATUS.md) is the single source of truth on progress.** It is regenerated on every commit from
+the active front ([`docs/FRONT.md`](docs/FRONT.md)), the verification evidence and a scan of `src/`.
 
-## Getting started (NixOS / WSL2)
+In short (2026-11-18):
 
-```fish
-nix develop
-./tools/setup.sh        # symlinks game into vendor/, prepares analysis dirs
+- The port plays the whole game with no original code running. All 121 recorded scenarios produce the original's exact
+  frames, RNG and state: single player, battles, sieges, movies and 39 multiplayer sides.
+- 1519 functions have been verified against the original on identical state, with 0 divergences.
+- `openlords2.exe` runs the port on real DirectDraw / DirectSound, full screen, and is being play-tested.
+
+## How it works
+
+Everything rests on **rhost** ([`tools/rhost/`](tools/rhost/README.md)), an in-process host for the original game:
+
+- **The original runs inside our process.** `Lords2.exe` is mapped at its own base address and run against a software
+  DirectDraw / DirectSound / window layer, a virtual clock and a virtual message queue fed by an input trace.
+- **Runs are reproducible.** A run is deterministic, headless and fast (thousands of frames a second). Windows and wine
+  give identical results, bit for bit.
+- **One trace, one end state.** A recorded input trace always reproduces the same state hash.
+
+Each function is ported in the same loop:
+
+1. **Read** the original: IDA pseudocode and disassembly (Ghidra is secondary).
+2. **Write** the C port with the original's semantics, on the original's data layout.
+3. **Shadow** it. On every call the original runs, then the port runs from the same pre-state, and every byte of state is
+   compared. Then the **hybrid** pass replaces every ported function at once, and the scenario corpus must still match
+   frame for frame.
+4. **Commit** with the evidence line (calls, scenarios, divergences).
+
+Three ways of running the port follow from this loop:
+
+| Mode | What runs | What it proves |
+|---|---|---|
+| **Hybrid** | Port functions replace the original's inside rhost | Each function, in context |
+| **Standalone** (`rhost --standalone`) | Only the port runs; the exe's code is never executed, and the data image is built from the port's own definitions | The whole port, no original code |
+| **Product** (`openlords2.exe`) | The standalone on the real platform (DirectDraw full screen, DirectSound, real clock and files) | Playable; see the human queue in FRONT.md |
+
+Scenarios (`tests/scenarios/*/trace.jsonl`) come from four sources:
+
+- human play (`rhost.py record`, or the "Lords II capture" desktop shortcut)
+- hand-authored scripts (`rhbot.py`)
+- an LLM autoplay bot (`tools/bot/`)
+- agent-driven exploration of the live game with in-process savestates (`./rd`, [`tools/drive/`](tools/drive/README.md))
+
+The methodology and why it replaced the earlier Frida harness:
+[`docs/audits/2026-10-23-methodology-reset.md`](docs/audits/2026-10-23-methodology-reset.md).
+
+## What we learned about the game
+
+[`docs/findings/engine-quirks.md`](docs/findings/engine-quirks.md) documents 242 behaviours of the original engine, each
+checked against the original binary. Some examples:
+
+- **Siege damage is remembered.** Damage to a castle carries over to the next siege, but only if the battle's closing
+  scroll runs out.
+- **Random events don't come from a fresh roll each time.** They are a walk through a fixed 256-slot deck, they only
+  ever hit human players, and they start in 1269.
+- **The AI economy is subsidised.** Every turn a computer lord gets free cash (up to 1800), and small AI realms also
+  get free people and provisions. On the two hardest settings the AI pays a tenth of a unit's value in wages, where
+  you pay a quarter.
+- **Marching through foreign land wrecks it.** Terrain the map calls impassable doesn't stop an army: it flattens the
+  tile, drains part of that county's stockpile, and pays double movement.
+
+Per-subsystem write-ups are indexed in [`docs/findings/INDEX.md`](docs/findings/INDEX.md).
+
+## Getting started
+
+You need the GOG release of the game (the setup checks `Lords2.exe`'s sha256) and Nix. Windows 11 or wine runs the
+32-bit binaries.
+
+```sh
+nix develop                     # or prefix commands with tools/dev (a cached dev env, lighter on memory)
+./tools/setup.sh                # symlinks your game into vendor/, prepares analysis dirs
+tools/dev make -C src -j16      # the port's modules (mingw32)
+tools/dev make -C tests run -j16                        # host unit tests (gcc + ASan/UBSan)
+python3 tools/rhost/rhost.py setup                      # build rhost, stage a pristine game copy
+python3 tools/rhost/rhost.py corpus --check --target wine               # every scenario vs its blessed hashes
+python3 tools/rhost/rhost.py corpus --check --standalone --target wine  # … and again with no original code
+python3 tools/rhost/rhost.py verify --target wine                       # shadow every ported function + hybrid pass
+python3 tools/rhost/rhost.py product --install                          # openlords2.exe (Windows)
 ```
 
-This enters a dev shell with the full RE toolchain (Ghidra, radare2,
-mingw-w64 32-bit cross-compiler, Frida, Pillow/numpy/scikit-image, …)
-and prepares the game files for analysis.
+To record a gameplay video of a scenario with sound and captions, write a spec in the format given in
+[`tools/rhost/film.py`](tools/rhost/film.py)'s docstring, then run:
 
-The game's `Lords2.exe` (GOG release, sha256 checked at setup time) is
-a **clean 32-bit MSVC PE** (linker 4.20, 1996 era) — no DRM wrapper,
-no Steamless/UPX/etc. — so the decompile pipeline runs against the
-original bytes directly.  Imports include `DDRAW.dll` (DirectDraw
-rendering), `DSOUND.dll` (DirectSound), `DPLAYX.dll` (DirectPlay
-multiplayer), `WINMM.dll`, and `smackw32.DLL` (Smacker video for
-cutscenes).
+```sh
+tools/dev python3 tools/rhost/film.py spec.json
+```
 
 ## Layout
 
 ```
-docs/         design notes, file-format specs, progress log, engine quirks
-src/          our C reimplementation (cross-compiled with mingw32)
-tests/        unit suite + scenario harness (golden BMP + audio/input traces)
-tools/        setup, build, extract, capture, contact-sheet, ghidra-headless,
-              Frida agent + driver, launcher wrapper
-vendor/       game files (gitignored) — symlink into the user's GOG install
-ghidra/       Ghidra projects (gitignored — derived from the original binary)
-runs/         test artifacts (gitignored)
+src/          the port (C, gnu11, mingw32): rl_*.c = retail-layout ports, rl_link*.c = the link layer
+tools/rhost/  the in-process host: fake platform layers, hook tables (rh_hooks*.c), rhost.py driver
+tools/drive/  agent-driven play (rd): live sessions, savestates, exploration search
+tools/bot/    LLM autoplay through rhost
+tools/ida/    IDA 9.4 export pipeline (output gitignored)
+tests/        host unit tests, scenarios/ (input traces + blessed hashes), probes/ (synthetic carriers)
+docs/         STATUS (derived), FRONT, PROGRESS, findings/, data ledger, audits
+vendor/       your game files (gitignored)
 ```
 
-## Workflow (methodology reset 2026-10-23)
-
-Retail runs **inside our own process** — `tools/rhost/` ("rhost"): the user's `Lords2.exe` is mapped
-at its base address and run against a software DirectDraw / DirectSound / window layer, a virtual
-clock and a virtual message queue fed by an input trace. Runs are deterministic (identical state on
-every run, and on Windows and wine alike), headless (never fullscreen, no display needed) and fast
-(thousands of frames per second). Port functions are verified against retail **on identical state**:
-shadow execution per call, and hybrid runs where the port replaces retail's function.
-
-- `python3 tools/rhost/rhost.py corpus --check` — every scenario in `tests/scenarios/` vs its blessed hashes.
-- `python3 tools/rhost/rhost.py verify` — every ported-function hook shadowed over the corpus.
-- `python3 tools/rhost/rhost.py record NAME` — play on the Windows desktop; the input becomes a scenario.
-- `python3 tools/rhost/rhbot.py "run 600; click 320 107; …"` — drive a live run from a script.
-- `tools/bot/` — an LLM (TypeSafe's Jev decision model) plays the strategy game through rhost to
-  generate scenarios.
-
-See [`docs/audits/2026-10-23-methodology-reset.md`](docs/audits/2026-10-23-methodology-reset.md) and
-[`tools/rhost/README.md`](tools/rhost/README.md). The earlier Frida-based harness is kept as legacy.
-
-## Tests
-
-Pure-C parsers and decoders carry unit tests under host gcc +
-ASan/UBSan.  Win32-surface modules (gfx, audio, main) are smoke-
-tested in-process via `tools/run-openlords2.sh`.
-
-```fish
-nix develop
-make -C tests run          # unit tests
-make -C src                # cross-compile drop-in (mingw32)
-tools/run-openlords2.sh --frames 50
-```
-
-Shape mirrored from `/opt/src/openrecet/tests/` — single statically
-linked test binary, X-macro test registry in `tests/test_main.c`,
-tiny assertion macros in `tests/t.h`.
-
-## Sibling projects
-
-OpenLords2 shares conventions with two other RE projects living in
-`/opt/src/`:
-
-- **[openrecet]** — the first decomp project; established the
-  Ghidra-headless / Frida-harness / co-author-trailer commits style.
-- **[OpenMare]** — newer, refined workflow; the launcher Job-Object
-  pattern, single-TU C builds, MessageBox redirect hooks, and turbo
-  v2 virtual clock all originate there.
-
-Cross-pollinate freely; never copy code across projects.
+The Frida-era tools (`tools/frida/`, `probe_daemon.py`, `film_*.py`, `tools/traces/`) are legacy. They are kept for
+reference and no longer extended.
 
 ## License
 
-MIT.  See [`LICENSE`](LICENSE).  The license covers OpenLords2's own
-code only; no rights are granted to the original game.
+MIT, see [`LICENSE`](LICENSE). The license covers OpenLords2's own code only; no rights are granted to the original game.

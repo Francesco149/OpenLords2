@@ -1,6 +1,13 @@
 # FRONT — the active front (hand-edited; resolved arcs move to PROGRESS.md)
 
 <!-- status:begin -->
+- **Headline (2026-11-18):** the port plays the whole game with **no retail code**: `rhost --standalone` runs all 121
+  corpus scenarios (single player, 39 multiplayer sides, battles, sieges, movies) = pure retail in frame / tick / RNG /
+  every presented frame / state hash, and opens no `Lords2.exe` (its data image is the port's own definitions).
+  **1519 functions verified against retail on identical state** (rhost shadow, 0 divergences); full hybrid PASS.
+  The product `openlords2.exe` runs the port on real DirectDraw / DirectSound, full screen (first boot → campaign map
+  verified; owner play-testing). Corpus reaches 82.6 % of retail code bytes; the rest is dead code, multiplayer
+  transports or long setups (★6). Left: owner play-testing of the product, unreached code, multiplayer over a real network.
 - **Phase 0 — methodology reset (2026-10-23):** rhost is the verification foundation
   (`docs/audits/2026-10-23-methodology-reset.md`). Built + proven: deterministic boot → new game → turns,
   Windows ≡ wine bit for bit, control channel, porting loop (`rng_step`), IDA export, game-state reader,
