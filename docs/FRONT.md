@@ -250,6 +250,10 @@
 - [ ] re-verify earlier "1:1" claims under rhost (batches)
 
 ## Human queue (ranked by what it unblocks)
+0a. **New (2026-11-18): Desktop "OpenLords2"** = the product `openlords2.exe` — the port alone, FULL SCREEN on real
+   DirectDraw / DirectSound (`C:\ol2-rhost\product\`, its own saves; not recorded). Play a while; look for: the
+   screen mode switch, sound / music, the mouse cursor, alt-tab and back, anything unlike the original. If it stops,
+   `C:\ol2-rhost\product\openlords2\rhost.log` says why.
 0. **Free play, whenever you have a moment:** double-click **"Lords II capture"** on cutestation's desktop and play
    (close the window to finish; the next session can Load your save). Nothing else to do — agents import the sessions
    (`rhost.py play-fetch`).
