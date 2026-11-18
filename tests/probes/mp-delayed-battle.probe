@@ -1,0 +1,43 @@
+# Synthetic carriers for the delayed-action handlers no filer reaches (table 0x4d5c98; rl-mpmsg3.md §The last 24
+# handlers; src/rl_mpmsg3.c): the battlefield ones. Record fields as in mp-delayed-county.probe (+4 DAT_005158e8,
+# 0x5158a4.. = +0xc, +8, +0x14, +0x10, +0x1c, (0x5158b8, not a field: its own value), +0x18). mp-desync-p1 at f25050:
+# p1 (host) on the battlefield (DAT_0057c8fc = 2, screen 0x29), 4 frames before the end.
+scenario mp-desync-p1
+
+# ---- action 32 (0x448037): the box reselect 0x43c247(player, 1, col, row, x0, y0, x1, y1): the whole view for p1,
+# a reversed box (both swaps) for p2, a scrolled box for p1
+25050 poke 0x5158e8 1
+25050 poke 0x5158a4 0 0 0 0 479 [0x5158b8] 639
+25050 rl_448037
+25050 poke 0x5158e8 2
+25050 poke 0x5158a4 0 0 300 400 50 [0x5158b8] 100
+25050 rl_448037
+25050 poke 0x5158e8 1
+25050 poke 0x5158a4 1 2 100 100 200 [0x5158b8] 200
+25050 rl_448037
+
+# ---- action 35 (0x448244): 0x43c55c(player): the selection of p1, p2
+25050 poke 0x5158e8 1
+25050 rl_448244
+25050 poke 0x5158e8 2
+25050 rl_448244
+
+# ---- action 15 (0x447ced): screen 46, 0x42c64f (the battle's tally), DAT_0057c8fc = 0, DAT_0052af94 = 2
+25050 rl_447ced
+# ---- action 31 (0x448027): the battlefield's end 0x43be65, back on the field first (DAT_0057c8fc 2, DAT_0052af94 3):
+# a siege battle (DAT_0057a0f0 1: screen 46, 0x42c64f), then a field battle (0: the aftermath, back to the map 0x4788c6).
+# Harness: the map scene's pacer stamps DAT_005ceff8 / DAT_005ceffc (the GOG patch stub's, 0x4cfb08) lie past .data's
+# VirtualSize (ends 0x5cee60): outside rhost's state range, so the shadow does not roll them back — the port would
+# see retail's fresh stamp and skip the 16 ms bump of DAT_0057d378 retail made. The stamp is preset to this frame's
+# clock (0x15cf0a) so neither side bumps.
+25050 poke 0x512fa0 [0x57a0f0]
+25050 poke 0x57a0f0 1
+25050 poke 0x57c8fc 2
+25050 poke 0x52af94 3
+25050 rl_448027
+25050 poke 0x57a0f0 0
+25050 poke 0x57c8fc 2
+25050 poke 0x52af94 3
+25050 poke 0x5ceffc 0x15cf0a
+25050 rl_448027
+25050 poke 0x57a0f0 [0x512fa0]

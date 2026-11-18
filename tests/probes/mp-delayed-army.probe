@@ -1,0 +1,45 @@
+# Synthetic carriers for the delayed-action handlers no filer reaches (table 0x4d5c98; rl-mpmsg3.md §The last 24
+# handlers; src/rl_mpmsg3.c): the army / siege ones. Record fields as in mp-delayed-county.probe (+4 DAT_005158e8,
+# +8 DAT_005158a8, +0xc DAT_005158a4, +0x10 DAT_005158b0). mp-siege-p1 at f22490: p1 local (DAT_0057c8cc = 1) on the
+# map; armies (420 B at 0x52f0b0): 10 = p1's (0x530118: owner 1, +1 = 1), 8 / 9 = p2's / p3's, all three besieging
+# (+8 = 1); 1 = owner 6, +1 = 0, not besieging, at (0x38, 0x26) (+0xa / +0xb); army 10 at (0x2a, 0x1d).
+scenario mp-siege-p1
+
+# ---- action 28 (0x447fca): 0x43b7c4(army, row, n): p1's army (DAT_0057d340 = 1 arm), others
+22490 poke 0x5158e8 10
+22490 poke 0x5158a4 5 0
+22490 rl_447fca
+22490 poke 0x5158e8 9
+22490 poke 0x5158a4 -3 1
+22490 rl_447fca
+22490 poke 0x5158e8 8
+22490 poke 0x5158a4 7 2
+22490 rl_447fca
+22490 poke 0x5158e8 1
+22490 poke 0x5158a4 2 0
+22490 rl_447fca
+
+# ---- action 17 (0x447d41): 0x4a98fe(+0x10, army, x, y, +0x10): a reachable target for a besieging army (the siege
+# link broken), for army 1 (no siege), an unreachable one (0, 0: the trace fails)
+22490 poke 0x5158e8 10
+22490 poke 0x5158a4 0x1d 0x2b 0 3
+22490 rl_447d41
+22490 poke 0x5158e8 1
+22490 poke 0x5158a4 0x26 0x3a 0 2
+22490 rl_447d41
+22490 poke 0x5158e8 9
+22490 poke 0x5158a4 0 0 0 1
+22490 rl_447d41
+
+# ---- action 25 (0x447f63): siege setup 0x4a7e0a(army, county): p1's army (+1 set: no board; local → screen 29),
+# army 1 (+1 = 0: the board, owner 6), p1's army again with +1 cleared (the board, local)
+22490 poke 0x5158e8 10
+22490 poke 0x5158a8 5
+22490 rl_447f63
+22490 poke 0x5158e8 1
+22490 poke 0x5158a8 3
+22490 rl_447f63
+22490 poke 0x530118 [0x530118]-0x100
+22490 poke 0x5158e8 10
+22490 poke 0x5158a8 5
+22490 rl_447f63

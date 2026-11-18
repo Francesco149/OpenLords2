@@ -1,0 +1,173 @@
+# Synthetic carriers for the delayed-action handlers no filer reaches (table 0x4d5c98; rl-mpmsg3.md §The last 24
+# handlers; src/rl_mpmsg3.c): the county / economy ones. A handler takes no arguments: it reads the record fields the
+# dispatcher 0x4472ce copied out — +4 DAT_005158e8, +8 DAT_005158a8, +0xc DAT_005158a4, +0x10 DAT_005158b0,
+# +0x14 DAT_005158ac, +0x18 DAT_005158bc, +0x1c DAT_005158b4 (0x5158a4..0x5158bc contiguous; 0x5158b8 is not a field,
+# poked back with its own value). mp-labor-p1 at f4770: p1 local (DAT_0057c8cc = 1) on the map, county 8 selected
+# (DAT_0057c93c) and owned by p1 (+1 = 0x53f9b5 + 768 c), county 4 owned by 4, county 2 neutral; county 8: tax 0
+# (+0x53fa69), wanted 3 (+0x53fb0e), rations 100 (+0x53fb0f), task 4 flag 1 (+0x53fb60); p1's gold 1000 (0x57c018 + 352 p).
+scenario mp-labor-p1
+
+# ---- action 4 / 5 (0x447b31 / 0x447b50): wanted level of county 8 3 → 5, the cap (stays 5), down to 0, the floor;
+# once on a county that is not the selected one
+4770 poke 0x5158e8 8
+4770 rl_447b31
+4770 rl_447b31
+4770 rl_447b31
+4770 rl_447b50
+4770 rl_447b50
+4770 rl_447b50
+4770 rl_447b50
+4770 rl_447b50
+4770 rl_447b50
+4770 poke 0x5158e8 4
+4770 rl_447b31
+4770 rl_447b50
+
+# ---- action 8 / 9 (0x447bce / 0x447be7): tax of county 8 0 → floor (stays 0), +1; set 49 → 50 → the cap; −1
+4770 poke 0x5158e8 8
+4770 rl_447be7
+4770 rl_447bce
+4770 poke 0x541268 [0x541268]+0x3000
+4770 rl_447bce
+4770 rl_447bce
+4770 rl_447be7
+4770 poke 0x5158e8 4
+4770 rl_447bce
+4770 rl_447be7
+
+# ---- action 6 (0x447b6f): 0x43a997(county, b): p1's county (smithy panel + alert arm), county 4 (owner ≠ local)
+4770 poke 0x5158e8 8
+4770 poke 0x5158a8 3
+4770 rl_447b6f
+4770 poke 0x5158a8 4
+4770 rl_447b6f
+4770 poke 0x5158e8 4
+4770 poke 0x5158a8 2
+4770 rl_447b6f
+
+# ---- action 10 (0x447c00): 0x439b52(county, row from, row to, n): selected + owned (the hud arm), then county 4
+4770 poke 0x5158e8 8
+4770 poke 0x5158a4 1 0 0 5
+4770 poke 0x5158a8 0
+4770 rl_447c00
+4770 poke 0x5158a4 0 0 0 3
+4770 poke 0x5158a8 2
+4770 rl_447c00
+4770 poke 0x5158e8 4
+4770 poke 0x5158a4 2 0 0 4
+4770 poke 0x5158a8 0
+4770 rl_447c00
+
+# ---- action 14 (0x447cce): 0x439edb(county, category): 6 = every row off then on; single rows
+4770 poke 0x5158e8 8
+4770 poke 0x5158a8 6
+4770 rl_447cce
+4770 poke 0x5158a8 0
+4770 rl_447cce
+4770 poke 0x5158a8 2
+4770 rl_447cce
+4770 poke 0x5158e8 4
+4770 poke 0x5158a8 1
+4770 rl_447cce
+
+# ---- action 22 (0x447de6): rations 0x43a5a9(county, level, keep): unchanged (100), down, up with keep, 0, other counties
+4770 poke 0x5158e8 8
+4770 poke 0x5158a4 0
+4770 poke 0x5158a8 100
+4770 rl_447de6
+4770 poke 0x5158a8 50
+4770 rl_447de6
+4770 poke 0x5158a4 1
+4770 poke 0x5158a8 70
+4770 rl_447de6
+4770 poke 0x5158a4 0
+4770 poke 0x5158a8 0
+4770 rl_447de6
+4770 poke 0x5158e8 4
+4770 poke 0x5158a8 50
+4770 rl_447de6
+4770 poke 0x5158e8 2
+4770 poke 0x5158a4 1
+4770 poke 0x5158a8 30
+4770 rl_447de6
+
+# ---- action 27 (0x447fa1): DAT_0052afcc = 1, 0x43933b(county, b): selected + owned, county 4, neutral 2
+4770 poke 0x5158e8 8
+4770 poke 0x5158a8 0x1a
+4770 rl_447fa1
+4770 poke 0x5158e8 4
+4770 poke 0x5158a8 10
+4770 rl_447fa1
+4770 poke 0x5158e8 2
+4770 poke 0x5158a8 5
+4770 rl_447fa1
+
+# ---- action 29 (0x447fef): task 0x43d309(county, task): 4 (flag 1 → 0 → 1), 0, 1, 3, 2 (the other arm); p1's county
+# posts the event, county 4 does not
+4770 poke 0x5158e8 8
+4770 poke 0x5158a8 4
+4770 rl_447fef
+4770 rl_447fef
+4770 poke 0x5158a8 0
+4770 rl_447fef
+4770 poke 0x5158a8 1
+4770 rl_447fef
+4770 poke 0x5158a8 3
+4770 rl_447fef
+4770 poke 0x5158a8 2
+4770 rl_447fef
+4770 poke 0x5158e8 4
+4770 poke 0x5158a8 1
+4770 rl_447fef
+4770 poke 0x5158a8 4
+4770 rl_447fef
+
+# ---- action 11 (0x447c2b): the trade 0x4284ce(+4 unused, n (< 0 sells), commodity, buy price, sell price, player, county)
+# fields: poke 0x5158a4 = commodity, n, sell price, buy price, county, (0x5158b8), player
+# n = 0: nothing
+4770 poke 0x5158e8 0
+4770 poke 0x5158a4 2 0 3 4 8 [0x5158b8] 1
+4770 rl_447c2b
+# sells: commodity 2 (county stock 0x6f), commodity 1 (stock 0: refused), 6 (player stock 0x7a), 8 (0x0b: 100 refused),
+# 7, 9, 12; player 0 (county gold, no stock check)
+4770 poke 0x5158a4 2 -10 3 4 8 [0x5158b8] 1
+4770 rl_447c2b
+4770 poke 0x5158a4 1 -10 3 4 8 [0x5158b8] 1
+4770 rl_447c2b
+4770 poke 0x5158a4 6 -5 2 3 8 [0x5158b8] 1
+4770 rl_447c2b
+4770 poke 0x5158a4 8 -100 2 3 8 [0x5158b8] 1
+4770 rl_447c2b
+4770 poke 0x5158a4 7 -3 2 3 8 [0x5158b8] 1
+4770 rl_447c2b
+4770 poke 0x5158a4 9 -1 2 3 8 [0x5158b8] 1
+4770 rl_447c2b
+4770 poke 0x5158a4 12 -1 2 3 8 [0x5158b8] 1
+4770 rl_447c2b
+4770 poke 0x5158a4 1 -4 2 3 8 [0x5158b8] 0
+4770 rl_447c2b
+# buys: commodity 2 (+ the recensus), 7 for more gold than p1 has (refused), 4 (the tier advance), 1 with player 0,
+# 10, 13, 14, 11
+4770 poke 0x5158a4 2 5 3 4 8 [0x5158b8] 1
+4770 rl_447c2b
+4770 poke 0x5158a4 7 1000 3 10 8 [0x5158b8] 1
+4770 rl_447c2b
+4770 poke 0x5158a4 4 1 3 2 8 [0x5158b8] 1
+4770 rl_447c2b
+4770 poke 0x5158a4 1 6 3 2 8 [0x5158b8] 0
+4770 rl_447c2b
+4770 poke 0x5158a4 10 2 3 5 8 [0x5158b8] 1
+4770 rl_447c2b
+4770 poke 0x5158a4 13 2 3 5 8 [0x5158b8] 1
+4770 rl_447c2b
+4770 poke 0x5158a4 14 2 3 5 8 [0x5158b8] 1
+4770 rl_447c2b
+4770 poke 0x5158a4 11 2 3 5 4 [0x5158b8] 1
+4770 rl_447c2b
+
+# ---- 21 / 45 / 47 (nothing), 48 (DAT_00554038 + 1, twice)
+4770 rl_447ddb
+4770 rl_4483f0
+4770 rl_448406
+4770 rl_448411
+4770 rl_448411
